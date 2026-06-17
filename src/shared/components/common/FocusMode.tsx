@@ -29,11 +29,9 @@ const LABELS: Record<Phase, string> = { focus: '专注', shortBreak: '短休息'
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = Math.min(width * 0.7, 320);
 const STROKE = 8;
-const RADIUS = (CIRCLE_SIZE - STROKE) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export function FocusMode({ visible, onClose, taskTitle, onComplete }: FocusModeProps) {
-  const { theme, addSession } = useAppStore();
+  const { addSession } = useAppStore();
   const [phase, setPhase] = useState<Phase>('focus');
   const [remaining, setRemaining] = useState(DURATIONS.focus);
   const [running, setRunning] = useState(false);
@@ -139,7 +137,6 @@ export function FocusMode({ visible, onClose, taskTitle, onComplete }: FocusMode
 
   const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
   const ss = String(remaining % 60).padStart(2, '0');
-  const progress = (DURATIONS[phase] - remaining) / DURATIONS[phase];
   const phaseColor = phase === 'focus' ? '#10b981' : phase === 'shortBreak' ? '#3b82f6' : '#8b5cf6';
 
   const breatheScale = breathe.interpolate({
@@ -218,7 +215,7 @@ export function FocusMode({ visible, onClose, taskTitle, onComplete }: FocusMode
           >
             <View
               style={[
-                StyleSheet.absoluteFillObject,
+                { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
                 styles.ringTrack,
                 {
                   borderRadius: CIRCLE_SIZE / 2,

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { NavigationContainer, DefaultTheme, DarkTheme, useNavigation } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -140,7 +140,7 @@ function CreatePlaceholder() {
   return <View />;
 }
 
-function getTabBarIcon(routeName: string, focused: boolean, color: string, size: number) {
+function getTabBarIcon(routeName: string, focused: boolean, color: string, _size: number) {
   let iconName: keyof typeof MaterialIcons.glyphMap = 'circle';
 
   switch (routeName) {
@@ -258,7 +258,7 @@ export default function App() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const navigationTheme = useMemo(() => {
     const isDark = theme.type === 'dark';

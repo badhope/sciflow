@@ -5,13 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppStore } from '../../store';
 import { Task, Priority, TaskStatus } from '../../types';
-
-const { width } = Dimensions.get('window');
 
 interface Column {
   key: string;
@@ -41,7 +38,6 @@ export const TableView: React.FC<TableViewProps> = ({ tasks, onTaskPress }) => {
   const { theme, projects, categories, tags, toggleTaskComplete } = useAppStore();
   const [sortBy, setSortBy] = useState<string | null>('dueDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
 
   const sortedTasks = useMemo(() => {
     const result = [...tasks].filter((t) => !t.isDeleted);
@@ -57,15 +53,17 @@ export const TableView: React.FC<TableViewProps> = ({ tasks, onTaskPress }) => {
           case 'status':
             comparison = a.status.localeCompare(b.status);
             break;
-          case 'priority':
+          case 'priority': {
             const priorityOrder = { critical: 0, urgent: 1, high: 2, medium: 3, low: 4 };
             comparison = priorityOrder[a.priority] - priorityOrder[b.priority];
             break;
-          case 'dueDate':
+          }
+          case 'dueDate': {
             const aDate = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
             const bDate = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
             comparison = aDate - bDate;
             break;
+          }
           default:
             comparison = 0;
         }
@@ -83,24 +81,6 @@ export const TableView: React.FC<TableViewProps> = ({ tasks, onTaskPress }) => {
     } else {
       setSortBy(columnKey);
       setSortOrder('asc');
-    }
-  };
-
-  const handleSelectTask = (taskId: string) => {
-    const newSelected = new Set(selectedTasks);
-    if (newSelected.has(taskId)) {
-      newSelected.delete(taskId);
-    } else {
-      newSelected.add(taskId);
-    }
-    setSelectedTasks(newSelected);
-  };
-
-  const handleSelectAll = () => {
-    if (selectedTasks.size === sortedTasks.length) {
-      setSelectedTasks(new Set());
-    } else {
-      setSelectedTasks(new Set(sortedTasks.map((t) => t.id)));
     }
   };
 
@@ -185,7 +165,6 @@ export const TableView: React.FC<TableViewProps> = ({ tasks, onTaskPress }) => {
   );
 
   const renderRow = (task: Task) => {
-    const isSelected = selectedTasks.has(task.id);
     const project = projects.find((p) => p.id === task.projectId);
     const category = categories.find((c) => c.id === task.categoryId);
     const taskTags = tags.filter((t) => task.tags.includes(t.id));
@@ -200,7 +179,6 @@ export const TableView: React.FC<TableViewProps> = ({ tasks, onTaskPress }) => {
         style={[
           styles.tableRow,
           { backgroundColor: theme.colors.surface },
-          isSelected && { backgroundColor: theme.colors.primary + '10' },
         ]}
       >
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>

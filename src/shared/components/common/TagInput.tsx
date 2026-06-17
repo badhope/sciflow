@@ -21,7 +21,7 @@ export const TagInput: React.FC<TagInputProps> = ({
   value,
   onChange,
   label,
-  placeholder = '添加标签...',
+  placeholder: _placeholder = '添加标签...',
 }) => {
   const { theme, tags } = useAppStore();
   const [showModal, setShowModal] = useState(false);
@@ -47,13 +47,6 @@ export const TagInput: React.FC<TagInputProps> = ({
     if (!searchQuery.trim()) return;
     
     const newTagId = `tag-${Date.now()}`;
-    const newTag = {
-      id: newTagId,
-      name: searchQuery.trim(),
-      color: '#3b82f6',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     
     onChange([...value, newTagId]);
     setSearchQuery('');

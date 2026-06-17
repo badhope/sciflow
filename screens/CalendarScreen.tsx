@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -24,12 +24,11 @@ type CalendarView = 'day' | 'week' | 'month';
 
 export default function CalendarScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { theme, tasks, events, projects, categories } = useAppStore();
+  const { theme, tasks } = useAppStore();
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [calendarView, setCalendarView] = useState<CalendarView>('month');
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showEventModal, setShowEventModal] = useState(false);
 
   const getDaysInMonth = (date: Date): Date[] => {
     const year = date.getFullYear();
@@ -83,18 +82,6 @@ export default function CalendarScreen() {
     });
   };
 
-  const getEventsForDate = (date: Date) => {
-    return events.filter((event) => {
-      if (!event.startDate) return false;
-      const eventDate = new Date(event.startDate);
-      return (
-        eventDate.getDate() === date.getDate() &&
-        eventDate.getMonth() === date.getMonth() &&
-        eventDate.getFullYear() === date.getFullYear()
-      );
-    });
-  };
-
   const monthNames = [
     '一月', '二月', '三月', '四月', '五月', '六月',
     '七月', '八月', '九月', '十月', '十一月', '十二月'
@@ -129,7 +116,6 @@ export default function CalendarScreen() {
   };
 
   const selectedDateTasks = getTasksForDate(selectedDate);
-  const selectedDateEvents = getEventsForDate(selectedDate);
 
   const isToday = (date: Date): boolean => {
     const today = new Date();
@@ -161,19 +147,6 @@ export default function CalendarScreen() {
       critical: '#dc2626',
     };
     return colors[priority] || theme.colors.primary;
-  };
-
-  const getStatusColor = (status: string): string => {
-    const colors: Record<string, string> = {
-      'todo': '#6b7280',
-      'in-progress': '#3b82f6',
-      'waiting': '#8b5cf6',
-      'delegated': '#f59e0b',
-      'completed': '#10b981',
-      'cancelled': '#ef4444',
-      'on-hold': '#6b7280',
-    };
-    return colors[status] || theme.colors.primary;
   };
 
   const renderHeader = () => (
@@ -342,7 +315,6 @@ export default function CalendarScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {weekDays.map((date, index) => {
             const dayTasks = getTasksForDate(date);
-            const dayEvents = getEventsForDate(date);
             
             return (
               <View key={index} style={styles.weekDayColumn}>

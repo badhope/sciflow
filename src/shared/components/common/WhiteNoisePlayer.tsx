@@ -10,7 +10,6 @@ import {
   Vibration,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAppStore } from '../../store';
 import { toast } from './Toast';
 
 export interface NoiseTrack {
@@ -119,7 +118,6 @@ export const WhiteNoisePlayer = forwardRef<WhiteNoisePlayerHandle, {
   onStateChange?: (state: { playing: boolean; trackId: string }) => void;
   compact?: boolean;
 }>(({ autoStart = false, onStateChange, compact = false }, ref) => {
-  const { theme } = useAppStore();
   const [currentTrackId, setCurrentTrackId] = useState('white');
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(0.4);
@@ -136,6 +134,7 @@ export const WhiteNoisePlayer = forwardRef<WhiteNoisePlayerHandle, {
       }, 200);
     }
     return () => stopAudio();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -168,7 +167,9 @@ export const WhiteNoisePlayer = forwardRef<WhiteNoisePlayerHandle, {
     const { ctx, gain } = audioRef.current;
     if (ctx.state === 'suspended') ctx.resume();
     if (audioRef.current.source) {
-      try { audioRef.current.source.stop(); } catch {}
+      try { audioRef.current.source.stop(); } catch {
+        // ignore stop errors
+      }
     }
     const track = NOISE_TRACKS.find((t) => t.id === currentTrackId) ?? NOISE_TRACKS[0];
     const buffer = createNoiseBuffer(ctx, track.generator);
@@ -184,7 +185,9 @@ export const WhiteNoisePlayer = forwardRef<WhiteNoisePlayerHandle, {
 
   const stopAudio = useCallback(() => {
     if (audioRef.current?.source) {
-      try { audioRef.current.source.stop(); } catch {}
+      try { audioRef.current.source.stop(); } catch {
+        // ignore stop errors
+      }
       audioRef.current.source = null;
     }
     setPlaying(false);
@@ -202,7 +205,9 @@ export const WhiteNoisePlayer = forwardRef<WhiteNoisePlayerHandle, {
         setTimeout(() => {
           setCurrentTrackId(id);
           if (audioRef.current?.source) {
-            try { audioRef.current.source.stop(); } catch {}
+            try { audioRef.current.source.stop(); } catch {
+        // ignore stop errors
+      }
           }
           startAudio();
         }, 50);

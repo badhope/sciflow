@@ -5,16 +5,12 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppStore } from '../../store';
 import { Task } from '../../types';
 
-const { width } = Dimensions.get('window');
-
 const DAY_WIDTH = 40;
-const HOUR_WIDTH = 20;
 const ROW_HEIGHT = 50;
 
 interface GanttViewProps {
@@ -33,7 +29,7 @@ export const GanttView: React.FC<GanttViewProps> = ({
   const { theme } = useAppStore();
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('week');
 
-  const { startDate, endDate, days, tasksWithDates } = useMemo(() => {
+  const { days, tasksWithDates } = useMemo(() => {
     const tasksWithDueDates = tasks.filter((task) => task.dueDate && !task.isDeleted);
 
     if (tasksWithDueDates.length === 0) {
@@ -47,8 +43,6 @@ export const GanttView: React.FC<GanttViewProps> = ({
       }
       
       return {
-        startDate: start,
-        endDate: end,
         days,
         tasksWithDates: [],
       };
@@ -82,8 +76,6 @@ export const GanttView: React.FC<GanttViewProps> = ({
     });
 
     return {
-      startDate: minDate,
-      endDate: maxDate,
       days: allDays,
       tasksWithDates: tasksData,
     };

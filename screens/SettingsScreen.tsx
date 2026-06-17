@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Switch,
   SafeAreaView,
-  Platform,
   Alert,
   Linking,
 } from 'react-native';
@@ -15,7 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppStore } from '../src/shared/store';
-import { RootStackParamList, Theme, ThemePreset, NotificationPreferences, DisplaySettings, PrivacySettings } from '../src/shared/types';
+import { RootStackParamList, Theme } from '../src/shared/types';
 import { toast } from '../src/shared/components/common/Toast';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Settings'>;
@@ -38,7 +37,6 @@ export default function SettingsScreen() {
     updateNotificationSettings,
     updateDisplaySettings,
     updatePrivacySettings,
-    updateUserPreferences,
   } = useAppStore();
 
   const notif = userPreferences?.notifications;
@@ -58,7 +56,7 @@ export default function SettingsScreen() {
               const dataStr = await exportData();
               const data = JSON.parse(dataStr);
               Alert.alert('导出成功', `数据已导出，共 ${data.tasks?.length || 0} 个任务、${data.projects?.length || 0} 个项目`);
-            } catch (error) {
+            } catch {
               Alert.alert('导出失败', '导出数据时发生错误，请重试。');
             }
           },
@@ -85,7 +83,7 @@ export default function SettingsScreen() {
               });
               await importData(sampleData);
               toast.success('数据已成功导入');
-            } catch (error) {
+            } catch {
               toast.error('导入数据失败，请检查文件格式是否正确');
             }
           },

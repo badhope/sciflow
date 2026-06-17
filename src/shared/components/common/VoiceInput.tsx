@@ -73,7 +73,9 @@ export function VoiceInput({ onResult, size = 48, color, hint = '点击开始语
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
-      } catch {}
+      } catch {
+        // ignore stop errors
+      }
       recognitionRef.current = null;
     }
     setListening(false);

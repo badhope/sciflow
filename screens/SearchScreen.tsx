@@ -7,16 +7,14 @@ import {
   TouchableOpacity,
   TextInput,
   SafeAreaView,
-  Platform,
-  Alert,
   ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppStore } from '../src/shared/store';
-import { RootStackParamList, Task, Priority, TaskStatus, FilterCondition } from '../src/shared/types';
-import { TaskCard, Button } from '../src/shared/components/common';
+import { RootStackParamList, Task, Priority, TaskStatus } from '../src/shared/types';
+import { TaskCard } from '../src/shared/components/common';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Search'>;
 
@@ -94,15 +92,17 @@ export default function SearchScreen() {
         case 'title':
           comparison = a.title.localeCompare(b.title);
           break;
-        case 'dueDate':
+        case 'dueDate': {
           const aDate = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
           const bDate = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
           comparison = aDate - bDate;
           break;
-        case 'priority':
+        }
+        case 'priority': {
           const priorityOrder = { critical: 0, urgent: 1, high: 2, medium: 3, low: 4 };
           comparison = priorityOrder[a.priority] - priorityOrder[b.priority];
           break;
+        }
         case 'createdAt':
           comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
           break;
@@ -158,18 +158,20 @@ export default function SearchScreen() {
         case 'isOverdue':
           fieldValue = task.dueDate && new Date(task.dueDate) < new Date() && !task.completed;
           break;
-        case 'dueToday':
+        case 'dueToday': {
           const today = new Date();
           fieldValue = task.dueDate &&
             new Date(task.dueDate).toDateString() === today.toDateString();
           break;
-        case 'dueThisWeek':
-          const today2 = new Date();
-          const nextWeek = new Date(today2.getTime() + 7 * 24 * 60 * 60 * 1000);
+        }
+        case 'dueThisWeek': {
+          const today = new Date();
+          const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
           fieldValue = task.dueDate &&
-            new Date(task.dueDate) >= today2 &&
+            new Date(task.dueDate) >= today &&
             new Date(task.dueDate) <= nextWeek;
           break;
+        }
         default:
           return true;
       }
@@ -249,7 +251,7 @@ export default function SearchScreen() {
     let valueDisplay = '';
     
     switch (filter.field) {
-      case 'status':
+      case 'status': {
         const statusLabels: Record<string, string> = {
           'todo': '待办',
           'in-progress': '进行中',
@@ -261,7 +263,8 @@ export default function SearchScreen() {
         };
         valueDisplay = statusLabels[filter.value] || filter.value;
         break;
-      case 'priority':
+      }
+      case 'priority': {
         const priorityLabels: Record<string, string> = {
           'low': '低',
           'medium': '中',
@@ -271,14 +274,17 @@ export default function SearchScreen() {
         };
         valueDisplay = priorityLabels[filter.value] || filter.value;
         break;
-      case 'project':
+      }
+      case 'project': {
         const project = projects.find((p) => p.id === filter.value);
         valueDisplay = project?.name || filter.value;
         break;
-      case 'category':
+      }
+      case 'category': {
         const category = categories.find((c) => c.id === filter.value);
         valueDisplay = category?.name || filter.value;
         break;
+      }
       default:
         valueDisplay = String(filter.value);
     }

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useAppStore } from '../store';
-import { Task, Project, Note, Goal, Habit, View, Category, Tag, Template, AutomationRule } from '../types';
+import { Task, Project, Note, Goal, Habit } from '../types';
 import { toast } from '../components/common/Toast';
 
 type UndoableAction = {

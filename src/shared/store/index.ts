@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Task,
@@ -1958,13 +1957,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  executeAutomation: async (ruleId, context) => {
+  executeAutomation: async (ruleId, _context) => {
     const rule = get().automationRules.find((r) => r.id === ruleId);
     if (!rule || !rule.isEnabled) return;
 
     try {
       // Execute actions based on rule
-      rule.actions.forEach((action) => {
+      rule.actions.forEach((_action) => {
         // Action execution logic would go here.
         // The shape of `action` is intentionally left to product requirements;
         // intentionally NOT logging to avoid noisy devtools in production builds.

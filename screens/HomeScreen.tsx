@@ -43,7 +43,6 @@ export default function HomeScreen() {
     tasks,
     categories,
     activeView,
-    setActiveView,
     selectedCategory,
     setSelectedCategory,
     loadData,
@@ -131,10 +130,10 @@ export default function HomeScreen() {
     bulk.exit();
   };
 
-  const openReorder = () => {
+  const openReorder = useCallback(() => {
     setReorderList([...sortedTasks]);
     setShowReorder(true);
-  };
+  }, [sortedTasks]);
 
   const handleReorder = (from: number, to: number) => {
     setReorderList((prev) => {
@@ -226,7 +225,7 @@ export default function HomeScreen() {
         onSwipeRight={(task) => toggleTaskComplete(task.id)}
       />
     );
-  }, [navigation, toggleTaskComplete, deleteTask, bulk, updateTask, theme]);
+  }, [navigation, toggleTaskComplete, deleteTask, bulk, theme]);
 
   const bulkActions: MultiSelectAction[] = [
     {

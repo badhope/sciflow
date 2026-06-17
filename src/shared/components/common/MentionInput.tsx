@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Platform,
   ScrollView,
-  Keyboard,
   StyleProp,
   ViewStyle,
   TextStyle,

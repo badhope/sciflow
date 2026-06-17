@@ -1,12 +1,10 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Platform,
-  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppStore } from '../../store';

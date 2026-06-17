@@ -12,12 +12,11 @@ export interface TaskDependenciesProps {
 export function TaskDependencies({ task, onPressTask }: TaskDependenciesProps) {
   const { theme, tasks } = useAppStore();
 
-  const { blockedBy, blocking, dependsOn } = useMemo(() => {
+  const { blockedBy, blocking } = useMemo(() => {
     const all = new Map(tasks.map((t) => [t.id, t]));
     const blockedBy = (task.blockedBy || []).map((id) => all.get(id)).filter(Boolean) as Task[];
     const blocking = (task.dependencies || []).map((id) => all.get(id)).filter(Boolean) as Task[];
-    const dependsOn = blockedBy;
-    return { blockedBy, blocking, dependsOn };
+    return { blockedBy, blocking };
   }, [task, tasks]);
 
   if (blockedBy.length === 0 && blocking.length === 0) {
@@ -120,7 +119,7 @@ interface DependencyGraphProps {
 
 export function DependencyGraph({ taskIds, onPressTask }: DependencyGraphProps) {
   const { theme, tasks } = useAppStore();
-  const idSet = new Set(taskIds);
+  const idSet = useMemo(() => new Set(taskIds), [taskIds]);
   const subset = tasks.filter((t) => idSet.has(t.id));
   const edges = useMemo(() => {
     const e: { from: string; to: string }[] = [];

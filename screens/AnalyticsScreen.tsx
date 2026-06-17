@@ -13,7 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppStore } from '../src/shared/store';
-import { RootStackParamList, Task } from '../src/shared/types';
+import { RootStackParamList } from '../src/shared/types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Analytics'>;
 
@@ -28,10 +28,9 @@ const getDaysBetween = (start: Date, end: Date): number => {
 
 export default function AnalyticsScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { theme, tasks, projects, categories, goals, habits } = useAppStore();
+  const { theme, tasks, projects, goals, habits } = useAppStore();
 
   const [timeRange, setTimeRange] = useState<TimeRange>('week');
-  const [selectedMetric, setSelectedMetric] = useState<string>('overview');
 
   const getDateRange = (range: TimeRange): { start: Date; end: Date } => {
     const end = new Date();
@@ -128,11 +127,6 @@ export default function AnalyticsScreen() {
     const hours = Math.round(totalTime / tasksWithCompletionTime.length / (1000 * 60 * 60));
     return `${hours}小时`;
   }, [completedTasks]);
-
-  const getDaysBetweenLocal = (start: Date, end: Date): number => {
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  };
 
   const tasksByStatus = useMemo(() => {
     const stats: Record<string, number> = {

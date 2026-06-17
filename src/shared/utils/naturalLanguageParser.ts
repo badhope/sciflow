@@ -16,11 +16,6 @@ const ZH_NUM_MAP: Record<string, number> = {
   '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
 };
 
-const HOUR_PATTERNS = [
-  /(\d{1,2})[点时]/g,
-  /([一二两三四五六七八九十])[点时]/g,
-];
-
 const RELATIVE_DAYS: Record<string, () => Date> = {
   '今天': () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; },
   '明天': () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(0, 0, 0, 0); return d; },
@@ -74,22 +69,6 @@ function nextWeekday(target: number, thisWeek = false): Date {
   d.setDate(d.getDate() + daysUntil);
   d.setHours(0, 0, 0, 0);
   return d;
-}
-
-function getTimeModifier(hourKeyword: string, currentHour: number): number {
-  if (/明早|明晨|明上午/.test(hourKeyword)) {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(9, 0, 0, 0);
-    return d.getTime();
-  }
-  if (/明晚|明晚间/.test(hourKeyword)) {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(19, 0, 0, 0);
-    return d.getTime();
-  }
-  return currentHour;
 }
 
 export function parseNaturalLanguage(input: string): ParsedTask {
@@ -153,26 +132,22 @@ export function parseNaturalLanguage(input: string): ParsedTask {
   }
 
   // 6. Date - relative day
-  let dateMatched = false;
   for (const [keyword, getDate] of Object.entries(RELATIVE_DAYS)) {
     if (title.includes(keyword)) {
       const baseDate = getDate();
       result.dueDate = baseDate;
       title = title.replace(keyword, '').trim();
-      dateMatched = true;
       break;
     }
   }
 
   // 7. Time - keyword based (上午/下午/晚上)
-  let timeMatched = false;
   for (const { pattern, hour } of TIME_KEYWORDS) {
     if (pattern.test(title)) {
       const baseDate = result.dueDate || new Date();
       baseDate.setHours(hour, 0, 0, 0);
       result.dueDate = baseDate;
       title = title.replace(pattern, '').trim();
-      timeMatched = true;
       break;
     }
   }
@@ -188,7 +163,6 @@ export function parseNaturalLanguage(input: string): ParsedTask {
     baseDate.setHours(hour, minute, 0, 0);
     result.dueDate = baseDate;
     title = title.replace(m[0], '').trim();
-    timeMatched = true;
   }
 
   // 9. Chinese time
@@ -200,7 +174,6 @@ export function parseNaturalLanguage(input: string): ParsedTask {
     baseDate.setHours(hour, 0, 0, 0);
     result.dueDate = baseDate;
     title = title.replace(m[0], '').trim();
-    timeMatched = true;
   }
 
   // 10. Specific dates (12/25, 2026-06-15, 6月15日)

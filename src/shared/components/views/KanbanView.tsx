@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -35,7 +35,7 @@ interface KanbanViewProps {
 }
 
 export const KanbanView: React.FC<KanbanViewProps> = ({ tasks, onTaskPress }) => {
-  const { theme, updateTask } = useAppStore();
+  const { theme } = useAppStore();
 
   const tasksByStatus = useMemo(() => {
     const grouped: Record<TaskStatus, Task[]> = {
@@ -56,10 +56,6 @@ export const KanbanView: React.FC<KanbanViewProps> = ({ tasks, onTaskPress }) =>
 
     return grouped;
   }, [tasks]);
-
-  const handleTaskDrop = (taskId: string, newStatus: TaskStatus) => {
-    updateTask(taskId, { status: newStatus });
-  };
 
   const renderTaskCard = (task: Task) => {
     const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && !task.completed;

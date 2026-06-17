@@ -3,21 +3,19 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
   TextInput,
   SafeAreaView,
-  Platform,
   Alert,
   Modal,
   ScrollView,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppStore } from '../src/shared/store';
 import { RootStackParamList, Note } from '../src/shared/types';
-import { Button } from '../src/shared/components/common';
+
 import { toast } from '../src/shared/components/common/Toast';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Notes'>;

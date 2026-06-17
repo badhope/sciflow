@@ -7,12 +7,11 @@ import {
   TouchableOpacity,
   TextInput,
   SafeAreaView,
-  Platform,
   Alert,
   Modal,
   ScrollView,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppStore } from '../src/shared/store';
@@ -32,11 +31,9 @@ const TEMPLATE_TYPES = [
 
 export default function TemplatesScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { theme, templates, addTemplate, updateTemplate, deleteTemplate, applyTemplate } = useAppStore();
+  const { theme, templates, addTemplate, deleteTemplate, applyTemplate } = useAppStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [newTemplate, setNewTemplate] = useState<Partial<Template>>({
     name: '',
     description: '',
@@ -46,6 +43,8 @@ export default function TemplatesScreen() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [, setSelectedTemplate] = useState<Template | null>(null);
+  const [, setShowEditModal] = useState(false);
 
   const filteredTemplates = templates.filter((template) => {
     if (selectedType && template.type !== selectedType) return false;

@@ -12,14 +12,13 @@ import {
   Modal,
   ScrollView,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppStore } from '../src/shared/store';
 import {
   RootStackParamList,
   AutomationRule,
-  AutomationTrigger,
   AutomationCondition,
   AutomationAction,
   AutomationTriggerType,
@@ -86,13 +85,9 @@ export default function AutomationScreen() {
     theme,
     automationRules,
     addAutomationRule,
-    updateAutomationRule,
     deleteAutomationRule,
     toggleAutomationRule,
     executeAutomation,
-    projects,
-    tags,
-    categories,
   } = useAppStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -225,12 +220,6 @@ export default function AutomationScreen() {
       order: newRule.actions.length,
     };
     setNewRule({ ...newRule, actions: [...newRule.actions, newAction] });
-  };
-
-  const updateAction = (index: number, updates: Partial<AutomationAction>) => {
-    const updated = [...newRule.actions];
-    updated[index] = { ...updated[index], ...updates };
-    setNewRule({ ...newRule, actions: updated });
   };
 
   const removeAction = (index: number) => {
@@ -591,7 +580,7 @@ export default function AutomationScreen() {
                   <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>
                     条件 ({selectedRule.conditions.length})
                   </Text>
-                  {selectedRule.conditions.map((condition, index) => {
+                  {selectedRule.conditions.map((condition, _index) => {
                     const fieldInfo = CONDITION_FIELDS.find((f) => f.field === condition.field);
                     const operatorInfo = CONDITION_OPERATORS.find((o) => o.value === condition.operator);
                     return (
@@ -611,7 +600,7 @@ export default function AutomationScreen() {
                   <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>
                     动作 ({selectedRule.actions.length})
                   </Text>
-                  {selectedRule.actions.map((action, index) => {
+                  {selectedRule.actions.map((action, _index) => {
                     const actionInfo = ACTION_TYPES.find((a) => a.type === action.type);
                     return (
                       <View key={action.id} style={[styles.actionDisplay, { backgroundColor: theme.colors.background }]}>

@@ -5,13 +5,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppStore } from '../../store';
 import { Task } from '../../types';
 
-const { width } = Dimensions.get('window');
 const HOUR_HEIGHT = 60;
 const TIME_COLUMN_WIDTH = 60;
 

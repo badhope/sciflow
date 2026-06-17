@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
   TextInput,
   SafeAreaView,
@@ -13,7 +12,7 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppStore } from '../src/shared/store';
@@ -47,7 +46,6 @@ export default function ProjectsScreen() {
     updateProject,
     deleteProject,
     tasks,
-    setActiveView,
   } = useAppStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -179,7 +177,7 @@ export default function ProjectsScreen() {
     }
   };
 
-  const handleViewProject = (projectId: string) => {
+  const handleViewProject = (_projectId: string) => {
     navigation.navigate('Home');
   };
 

@@ -18,7 +18,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppStore } from '../src/shared/store';
-import { RootStackParamList, Priority, TaskStatus, Task, RecurrenceRule, Comment, Attachment, ChecklistItem } from '../src/shared/types';
+import { RootStackParamList, Priority, TaskStatus, Task } from '../src/shared/types';
 import { Button } from '../src/shared/components/common';
 import { toast } from '../src/shared/components/common/Toast';
 import { Pomodoro } from '../src/shared/components/common/Pomodoro';
@@ -53,13 +53,11 @@ export default function TaskDetailScreen() {
     updateTask,
     deleteTask,
     toggleTaskComplete,
-    addTagToTask,
     removeTagFromTask,
     addSubtask,
     updateSubtask,
     deleteSubtask,
     addComment,
-    addAttachment,
     addChecklistItem,
     toggleChecklistItem,
     deleteChecklistItem,
@@ -73,20 +71,19 @@ export default function TaskDetailScreen() {
   const [editedTask, setEditedTask] = useState<Task | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [showPriorityPicker, setShowPriorityPicker] = useState(false);
-  const [showStatusPicker, setShowStatusPicker] = useState(false);
-  const [showProjectPicker, setShowProjectPicker] = useState(false);
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
-  const [showTagPicker, setShowTagPicker] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [showSubtasks, setShowSubtasks] = useState(true);
   const [showPomodoro, setShowPomodoro] = useState(false);
-  const [showNLInput, setShowNLInput] = useState(false);
   const [showChecklist, setShowChecklist] = useState(true);
   const [showComments, setShowComments] = useState(true);
   const [showAttachments, setShowAttachments] = useState(true);
+  const [, setShowProjectPicker] = useState(false);
+  const [, setShowCategoryPicker] = useState(false);
+  const [, setShowTagPicker] = useState(false);
+  const [, setShowStatusPicker] = useState(false);
+  const [, setShowPriorityPicker] = useState(false);
 
   useEffect(() => {
     if (task) {
@@ -219,13 +216,6 @@ export default function TaskDetailScreen() {
 
   const handleDeleteChecklistItem = (itemId: string) => {
     deleteChecklistItem(task.id, itemId);
-  };
-
-  const handleAddTag = (tagId: string) => {
-    if (!task.tags.includes(tagId)) {
-      addTagToTask(task.id, tagId);
-    }
-    setShowTagPicker(false);
   };
 
   const handleRemoveTag = (tagId: string) => {

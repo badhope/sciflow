@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Modal,
-  Platform,
   Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -62,6 +61,7 @@ export function Pomodoro({ visible, onClose, taskTitle, onComplete }: PomodoroPr
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running]);
 
   useEffect(() => {
@@ -113,13 +113,6 @@ export function Pomodoro({ visible, onClose, taskTitle, onComplete }: PomodoroPr
   const secs = secondsLeft % 60;
   const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   const modeColor = mode === 'focus' ? theme.colors.primary : mode === 'shortBreak' ? theme.colors.success : theme.colors.info;
-
-  const radius = 110;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = progressAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [circumference, 0],
-  });
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
