@@ -79,3 +79,19 @@ scripts/inject-cache-buster.js
 # Prebuilt native directories
 android/
 ios/
+
+# Python (backend)
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.eggs/
+*.egg
+backend/data/*.db
+backend/logs/*.log
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
