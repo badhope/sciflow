@@ -40,7 +40,7 @@
     "msw": "^3.0.3",
     "nestjs-pino": "^5.3.1",
     "node-llama-cpp": "^3.12.0",
-    "p-limit": "^6.0.0",
+    "p-limit": "^7.3.3",
     "p-retry": "^6.2.0",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",
