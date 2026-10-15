@@ -56,7 +56,7 @@
     "@types/node": "^22.10.0",
     "autoevals": "^0.4.0",
     "drizzle-kit": "^0.31.11",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   }
 }
