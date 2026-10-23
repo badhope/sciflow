@@ -120,7 +120,10 @@ jobs:
           tail -50 /tmp/server.log; exit 1
       - name: Start web dev server
         run: |
-          pnpm --filter @sciflow/web dev -- --host 127.0.0.1 --port 5173 > /tmp/web.log 2>&1 &
+          # 注意：`pnpm --filter ... dev -- --host` 会把 `--` 原样传给 vite（实测日志 `vite -- --host`），
+          # --host/--port 被忽略 → 只监听 localhost(::1)，CI 里 curl 127.0.0.1 永远 000。
+          # 用 `pnpm exec` 直接调用可执行文件，参数才会正确透传。
+          (cd apps/web && pnpm exec vite --host 127.0.0.1 --port 5173 > /tmp/web.log 2>&1 &)
           for i in $(seq 1 60); do
             if curl -sf http://127.0.0.1:5173 > /dev/null; then echo "web up"; exit 0; fi
             sleep 1
