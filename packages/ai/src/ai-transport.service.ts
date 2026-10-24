@@ -154,10 +154,23 @@ export class AiTransportService {
   /** 最近一次调用的总 token 数（流水线预算器打点用；每次调用覆盖） */
   lastTotalTokens = 0;
 
+  /**
+   * 按 caller 维度的最近一次 token 合计。
+   * 用于并发场景（分章起草 p-limit 并行后逐个打点）——全局单值会被最后一次调用覆盖，
+   * 导致预算系统性漏计 / 多任务串账。
+   */
+  private readonly lastTokensByCaller = new Map<string, number>();
+
+  /** 读取某 caller 最近一次调用的 token 合计（未调用过返回 0） */
+  lastTokensFor(caller: string): number {
+    return this.lastTokensByCaller.get(caller) ?? 0;
+  }
+
   /** LLM 调用成本追踪（token 用量审计，落 llm_call_log 表） */
   protected logLlmCall(opts: { caller: string; model: string; promptTokens: number; completionTokens: number; latencyMs: number; success: boolean; error?: string }): void {
     try {
       this.lastTotalTokens = opts.promptTokens + opts.completionTokens;
+      this.lastTokensByCaller.set(opts.caller || 'general', this.lastTotalTokens);
       db.insert(llmCallLogs)
         .values({
           id: randomUUID(),
@@ -204,11 +217,50 @@ export class AiTransportService {
     return /\(429\)|\b429\b|rate.?limit|too many requests|quota|速率限制|限流|限额/i.test(msg);
   }
 
-  /** AI SDK usage（对象/数值两种版本兼容）→ 平铺 token 数 */
-  private usageTokens(usage: LanguageModelUsage | undefined): { prompt: number; completion: number } {
+  /**
+   * 是否超时类错误：AbortError/TimeoutError 且耗时接近上限（区分客户端主动断连）。
+   */
+  static isTimeoutError(err: unknown, elapsedMs: number, timeoutMs = AiTransportService.requestTimeoutMs()): boolean {
+    if (timeoutMs <= 0) return false;
+    const name = String((err as { name?: string })?.name || '');
+    const msg = String((err as { message?: string })?.message || (err as unknown as string) || '');
+    const looksTimeout = /abort|timeout|timed out|ETIMEDOUT|空闲超时/i.test(`${name} ${msg}`);
+    return looksTimeout && elapsedMs >= timeoutMs * 0.9;
+  }
+
+  /** AI SDK usage（对象/数值两种版本兼容）→ 平铺 token 数 */  private usageTokens(usage: LanguageModelUsage | undefined): { prompt: number; completion: number } {
     if (!usage) return { prompt: 0, completion: 0 };
     const num = (v: unknown): number => (typeof v === 'number' ? v : typeof (v as { total?: unknown })?.total === 'number' ? (v as { total: number }).total : 0);
     return { prompt: num(usage.inputTokens), completion: num(usage.outputTokens) };
+  }
+
+  /**
+   * 请求级超时（毫秒）：`AI_REQUEST_TIMEOUT_MS`，默认 180s，0=禁用。
+   * 历史事故：网关建立连接后不返回数据，fetch 永不结束；abortSignal 只来自客户端断连，
+   * 无浏览器请求（流水线/CLI/MCP）时永不触发 → 流水线卡死在 running 无法自愈。
+   */
+  static requestTimeoutMs(): number {
+    return envInt('AI_REQUEST_TIMEOUT_MS', 180_000, { min: 0, max: 3_600_000 });
+  }
+
+  /**
+   * 合并「外部断连信号」与「请求超时信号」：任一触发即中止上游。
+   * 超时 = 0 且无外部信号时返回一个永不 abort 的信号，保持调用方语义统一。
+   */
+  static withTimeout(signal: AbortSignal | undefined, timeoutMs = AiTransportService.requestTimeoutMs()): AbortSignal {
+    if (timeoutMs <= 0) return signal ?? new AbortController().signal;
+    const timeout = AbortSignal.timeout(timeoutMs);
+    if (!signal) return timeout;
+    if (typeof AbortSignal.any === 'function') return AbortSignal.any([signal, timeout]);
+    // 运行时无 AbortSignal.any（Node < 20.3）时手工桥接
+    const ctrl = new AbortController();
+    const abort = (reason: unknown) => {
+      if (!ctrl.signal.aborted) ctrl.abort(reason);
+    };
+    if (signal.aborted) abort(signal.reason);
+    else signal.addEventListener('abort', () => abort(signal.reason), { once: true });
+    timeout.addEventListener('abort', () => abort(timeout.reason), { once: true });
+    return ctrl.signal;
   }
 
   /** 构造 AI SDK 模型实例（每次调用读取当前 baseUrl/key，保证设置页切换立即生效） */
@@ -241,7 +293,7 @@ export class AiTransportService {
             model: this.buildModel(model),
             temperature: opts.temperature ?? 0.7,
             maxOutputTokens: opts.maxTokens ?? 4096,
-            abortSignal: opts.signal,
+            abortSignal: AiTransportService.withTimeout(opts.signal),
             instructions,
             messages: rest,
           };
@@ -285,6 +337,10 @@ export class AiTransportService {
       this.logLlmCall({ caller, model, promptTokens: 0, completionTokens: 0, latencyMs: Date.now() - t0, success: false, error: err?.message });
       if (err instanceof HttpException) throw err;
       if (AiTransportService.isRetriableLimit(err)) throw new HttpException('AI 限流 (429)：上游速率限制，请降低 AI_RPM_CAP 或升级模型配额', 429);
+      const timeoutMs = AiTransportService.requestTimeoutMs();
+      if (AiTransportService.isTimeoutError(err, t0, timeoutMs)) {
+        throw new HttpException(`AI 请求超时（${Math.round(timeoutMs / 1000)}s 无响应，可通过 AI_REQUEST_TIMEOUT_MS 调整）：上游端点无响应，任务已中止以免永久挂起`, HttpStatus.GATEWAY_TIMEOUT);
+      }
       throw new HttpException(`AI 服务调用失败: ${String(err?.message || err).slice(0, 300)}`, HttpStatus.BAD_GATEWAY);
     });
   }
@@ -303,7 +359,7 @@ export class AiTransportService {
             model: this.buildModel(model),
             temperature: opts.temperature ?? 0.3,
             maxOutputTokens: opts.maxTokens ?? 4096,
-            abortSignal: opts.signal,
+            abortSignal: AiTransportService.withTimeout(opts.signal),
             schema,
             instructions,
             messages: rest,
@@ -405,7 +461,9 @@ export class AiTransportService {
             model: streamModel,
             temperature: opts.temperature ?? 0.7,
             maxOutputTokens: opts.maxTokens ?? 4096,
-            abortSignal: opts.signal,
+            // 工具回退是一次性完整生成（可能含多步工具循环），按步数放宽总时长；
+            // 单步仍受限，避免整个循环被一个挂起步骤拖死。
+            abortSignal: AiTransportService.withTimeout(opts.signal, AiTransportService.requestTimeoutMs() * Math.max(1, opts.maxSteps ?? 1)),
             instructions,
             messages: rest,
             tools: opts.tools,
@@ -450,11 +508,23 @@ export class AiTransportService {
   ): Promise<ReadableStream<Uint8Array>> {
     return this.limit(async () => {
       const { instructions, rest } = this.splitSystemMessages(messages);
+      // 流式用「空闲看门狗」而不是总时长：正常长文流可以跑几分钟，
+      // 但上游一旦停止出包（挂起/半死连接）必须及时中止，否则流水线永久卡 running。
+      const idle = new AbortController();
+      const idleMs = AiTransportService.requestTimeoutMs();
+      let idleTimer: NodeJS.Timeout | undefined;
+      const armIdle = () => {
+        if (idleMs <= 0) return;
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => idle.abort(new Error(`AI 流式空闲超时（${idleMs}ms 无数据）`)), idleMs);
+        idleTimer.unref?.();
+      };
+      armIdle();
       const result = streamText({
         model: this.buildModel(model, opts.signal),
         temperature: opts.temperature ?? 0.7,
         maxOutputTokens: opts.maxTokens ?? 4096,
-        abortSignal: opts.signal,
+        abortSignal: AiTransportService.withTimeout(idle.signal, idleMs),
         instructions,
         messages: rest,
         // AI SDK v7 用 stopWhen: stepCountIs(n) 控制多步工具循环（v6 的 maxSteps 已移除且会被静默忽略）
@@ -466,6 +536,7 @@ export class AiTransportService {
           const enqueue = (obj: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
           try {
             for await (const part of result.stream) {
+              armIdle();
               switch (part.type) {
                 case 'text-delta': {
                   const text = part.text ?? '';
@@ -513,6 +584,7 @@ export class AiTransportService {
             selfLog({ caller, model, promptTokens: 0, completionTokens: 0, latencyMs: Date.now() - t0, success: false, error: err?.message });
             if (!opts.signal?.aborted) enqueue({ error: String(err?.message || err) });
           } finally {
+            if (idleTimer) clearTimeout(idleTimer);
             controller.close();
           }
         },
@@ -548,6 +620,7 @@ export class AiTransportService {
         model: this.buildModel(target),
         temperature: 0,
         maxOutputTokens: 512,
+        abortSignal: AiTransportService.withTimeout(undefined),
         messages: [{ role: 'user', content: '请只回复两个字：正常' }],
       });
       const reply = text.trim() || '（空回复）';

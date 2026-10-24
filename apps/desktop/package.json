@@ -1,6 +1,6 @@
 {
   "name": "@sciflow/desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "SciFlow 桌面端（Electron 封装：内嵌 NestJS 后端 + 本地 SQLite，离线可用）",
   "main": "dist-electron/main.js",
@@ -20,7 +20,7 @@
     "dist:mac": "pnpm build:main && pnpm prepare:resources && electron-builder --mac --publish never",
     "dist:linux": "pnpm build:main && pnpm prepare:resources && electron-builder --linux --publish never",
     "build:web": "pnpm --filter @sciflow/web exec vite build --base=./ --outDir dist-desktop",
-    "test": "vitest run --config ../../apps/server/vitest.config.ts src"
+    "test": "pnpm --filter @sciflow/server exec vitest run --config ../../apps/server/vitest.config.ts ../desktop/src"
   },
   "dependencies": {
     "electron-updater": "^6.3.9"

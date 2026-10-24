@@ -9,6 +9,7 @@ import { sqlite } from '../db/database';
 import { AiService } from '../ai/ai.service';
 import { ReferencesService } from '../references/references.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
+import { APP_VERSION } from '../common/version';
 
 /** MCP 工具定义（符合 Model Context Protocol 2026 的 Tool 结构：name/description/inputSchema） */
 interface McpTool {
@@ -302,7 +303,7 @@ export class McpService {
    */
   buildSdkServer(): Server {
     const server = new Server(
-      { name: 'sciflow', version: '0.3.0' },
+      { name: 'sciflow', version: APP_VERSION },
       { capabilities: { tools: {}, resources: {} } },
     );
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -380,7 +381,7 @@ export class McpService {
     if (!guard.ok) {
       throw new HttpException(`外部 MCP 地址被拒绝：${guard.reason}`, HttpStatus.BAD_REQUEST);
     }
-    const client = new Client({ name: 'sciflow', version: '0.4.0' });
+    const client = new Client({ name: 'sciflow', version: APP_VERSION });
     const transport = new StreamableHTTPClientTransport(new URL(base));
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_r, rej) => {

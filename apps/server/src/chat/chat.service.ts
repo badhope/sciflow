@@ -6,6 +6,7 @@ import { KnowledgeService } from '../knowledge/knowledge.service';
 import { ChatSessionService } from './chat-session.service';
 import { WebSearchService } from '../websearch/websearch.service';
 import { AgentToolBridge } from '../agent/agent-tool-bridge';
+import { AgentTraceService } from '../agent/agent-trace.service';
 import { db } from '../db/database';
 import { projects } from '../db/schema';
 import { envInt } from '../../../../packages/core/src/env';
@@ -64,6 +65,7 @@ export class ChatService {
     private readonly chatSession: ChatSessionService,
     private readonly websearch: WebSearchService,
     private readonly tools: AgentToolBridge,
+    private readonly trace: AgentTraceService,
   ) {}
 
   /** 组装项目上下文：程序/情景记忆 + 知识库检索片段（NotebookLM 式 RAG 注入）；同时返回去重后的来源列表
@@ -187,9 +189,19 @@ export class ChatService {
       // Agent 工具：开启时把 MCP 工具集注入本轮请求，模型可自主决定检索文献/查知识库。
       // projectId 一并注入，保证工具只在当前项目范围内检索（避免跨项目数据泄露）。
       const useTools = this.tools.isEnabled() && Boolean(projectId);
-      const toolSet = useTools ? this.tools.buildToolSet(projectId) : undefined;
+      // chat 会话建一次 agent_execution：工具调用能真正落到 agent_step（此前 chat 路径 runId 恒空，
+      // 工具调用只在 llm_call_log 里有一条 kind='tool'，前端「Agent 执行历史」完全看不到）
+      let runId: string | undefined;
+      if (useTools && projectId) {
+        try {
+          runId = this.trace.startRun({ projectId, source: 'chat', input: message, model: opts.model || this.ai.config.model });
+        } catch {
+          runId = undefined;
+        }
+      }
+      const toolSet = useTools ? this.tools.buildToolSet(projectId, runId) : undefined;
       const toolNames = toolSet ? Object.keys(toolSet) : [];
-      this.logger.log(`[agent] useTools=${useTools} tools=${toolNames.length}`);
+      this.logger.log(`[agent] useTools=${useTools} tools=${toolNames.length}${runId ? ` run=${runId.slice(0, 8)}` : ''}`);
       const streamOpts: ChatStreamOptions = {
         modelName: opts.model,
         enableThinking: opts.enableThinking,
@@ -199,6 +211,13 @@ export class ChatService {
       const stream = context
         ? await this.ai.streamChatWithContext(message, history, context, streamOpts)
         : await this.ai.streamChat(message, history, streamOpts);
+      if (runId) {
+        // 流已返回（SSE 转发在 controller 层完成）：这里只负责收尾执行记录，
+        // 失败/中断也标记 done，避免执行历史长期停在 running。
+        try {
+          this.trace.finishRun(runId, { status: 'done', outputSummary: `chat 工具会话（${toolNames.length} 个工具可用）` });
+        } catch { /* 轨迹收尾失败不影响对话 */ }
+      }
       return { stream, sources };
     });
   }

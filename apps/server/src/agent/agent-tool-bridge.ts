@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { tool as aiTool, jsonSchema } from 'ai';
 import type { ToolSet } from 'ai';
 import { McpService } from '../mcp/mcp.service';
+import { AgentTraceService } from './agent-trace.service';
 import { db } from '../db/database';
 import { appSettings, llmCallLogs } from '../db/schema';
 import { eq } from 'drizzle-orm';
@@ -13,7 +14,8 @@ import { envInt } from '../../../../packages/core/src/env';
  *
  * 设计要点：
  *  - 工具定义单一来源：复用 McpService.tools（REST / MCP 协议 / Agent 三条入口同一份实现）。
- *  - 每个工具调用都落 agent_step，形成可回溯的执行轨迹（此前 trace 表全是死数据）。
+ *  - 每次工具调用都留痕：有 runId（流水线）时写 agent_step 形成可回溯轨迹，
+ *    否则写 llm_call_log（kind='tool'）供用量看板统计次数/耗时/失败率。
  *  - 参数先过 MCP 的 guardrail（zod 校验），畸形参数不进入业务逻辑。
  *  - 调用数量与总时长有硬上限，避免模型陷入工具循环烧 token。
  */
@@ -32,7 +34,10 @@ const TOOL_TIMEOUT_MS = envInt('AGENT_TOOL_TIMEOUT_MS', 20_000, { min: 1_000, ma
 export class AgentToolBridge {
   private readonly logger = new Logger(AgentToolBridge.name);
 
-  constructor(private readonly mcp: McpService) {}
+  constructor(
+    private readonly mcp: McpService,
+    private readonly trace?: AgentTraceService,
+  ) {}
 
   /** 本轮对话是否启用工具（app_setting agent_tools=on，默认开启） */
   isEnabled(): boolean {
@@ -116,14 +121,27 @@ export class AgentToolBridge {
   }
 
   /**
-   * 工具轨迹落库（kind='tool'）。
+   * 工具调用留痕。
    *
-   * 与模型调用共用 llm_call_log 表，但用 kind 区分：
-   *  - 用量看板按 kind='llm' 统计 token 与调用次数（工具没有 token，混进去会让成本曲线失真）
-   *  - 工具调用另按 kind='tool' 汇总次数/耗时，供"工具是否被频繁触发"排查
+   * - 有 runId（流水线图内）：写 agent_step，前端「Agent 执行历史」可见完整工具链；
+   * - 无 runId（chat 会话）：写 llm_call_log（kind='tool'），供用量看板统计
+   *   （chat 每次对话都是独立请求，不建 agent_execution，避免历史表被会话淹没）。
    */
   private recordStep(runId: string | undefined, rec: AgentToolCallRecord): void {
     try {
+      if (runId && this.trace) {
+        this.trace.addStep(runId, {
+          kind: 'tool',
+          title: `tool:${rec.name}`,
+          input: JSON.stringify(rec.args).slice(0, 4000),
+          output: typeof rec.error === 'string' ? rec.error : '',
+          durationMs: rec.durationMs,
+          toolName: rec.name,
+          status: rec.ok ? 'ok' : 'error',
+          error: rec.error,
+        });
+        return;
+      }
       db.insert(llmCallLogs)
         .values({
           id: randomUUID(),

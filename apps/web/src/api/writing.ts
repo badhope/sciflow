@@ -75,6 +75,8 @@ export const writing = {
       request<PipelineTask>(`/api/pipeline/${id}/confirm-outline`, { method: 'POST', body: JSON.stringify({ outline }) }),
     /** 差距#9a：删除任务记录（DELETE /api/pipeline/:id，后端已就绪；失败/interrupted 任务同样可删） */
     remove: (id: string) => request<{ ok: boolean }>(`/api/pipeline/${id}`, { method: 'DELETE' }),
+    /** 停止运行中的任务（POST /api/pipeline/:id/stop；上游挂起时不再只能重启服务） */
+    stop: (id: string) => request<PipelineTask>(`/api/pipeline/${id}/stop`, { method: 'POST' }),
   },
   chat: {
     answer: (message: string, history: { role: string; content: string }[] = [], projectId?: string) =>

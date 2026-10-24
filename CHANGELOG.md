@@ -2,12 +2,44 @@
 
 本项目格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，语义化版本号。以下按 `git log` 自底向上归纳历轮功能与修复，未含真实密钥。
 
+## [1.0.1] - 2026-10-24
+
+发布后真实性检查驱动的缺陷修复批次：真实模型运行暴露的挂起死锁、联网检索未接入流水线，以及一轮数据口径与重复实现清理。
+
+### Fixed（阻断级）
+- **上游挂起导致流水线永久卡死**：`packages/ai/src/ai-transport.service.ts` 此前只有「客户端断连」信号，无浏览器请求（流水线/CLI/MCP）时上游不回包会无限等待（真实事故：quality-gate 卡死 17.5 分钟）。新增请求级超时 `AI_REQUEST_TIMEOUT_MS`（默认 180s，0=禁用）：非流式按总时长、流式按「空闲无数据」判定，超时抛 504 并写明可调参数。
+- **运行中的流水线无法停止**：新增 `POST /api/pipeline/:id/stop`（`pipeline.controller.ts` / `pipeline.service.ts:stop`）。停止置 `cancelled`，运行中步骤标 `cancelled`、未执行步骤标 `skipped`，并阻止在途节点把状态改回 running；停止后 `DELETE` 不再被「请先停止」阻塞。流水线页新增「停止」按钮（二次确认）。
+
+### Added
+- **流水线联网检索**（默认关闭）：`apps/server/src/pipeline/pipeline-websearch.ts` 把 WebSearchService 的五 provider 结果转成 `PaperHit`（按 URL 去重、上限 6 条、匹配度 0.9→0.5 递减），并入文献步骤的检索摘要与起草 prompt（标注为「未入库、不可直接引用」）。开关：`WEBSEARCH_IN_PIPELINE=on` 或 app_setting `websearch_in_pipeline=on`；失败静默降级不影响流水线。
+- **Agent 工具调用可视化**：chat 会话建立 `agent_execution` run，工具调用落 `agent_step`（此前 chat 路径 runId 恒空，前端看不到）；前端 `MessageList` 新增「工具调用 · N 次」折叠卡（`chat-session.ts` 不再丢弃 `tool_calls` 事件）。
+- **judgment 层 provider 可插拔真正接线**：`JUDGMENT_BASE_URL` / `JUDGMENT_API_KEY` / `JUDGMENT_MODEL` / `JUDGMENT_TIMEOUT_MS` 生效，判别请求可脱离主生成模型。
+
+### Changed
+- **分数口径统一**：chat 的 `sources[].score` 统一为 0-100 百分制；前端删除 `score > 1 ? score : score*100` 的量纲猜测（低相关命中会被放大 100 倍）。
+- **版本单一来源**：新增 `apps/server/src/common/version.ts`（运行时向上查找 package.json），MCP `serverInfo` 与外部 MCP Client 自报版本从写死的 0.3.0/0.4.0 收敛到包版本；CLI 同步。
+- **文档校准**：README 导出能力（LaTeX/HTML 已接）、测试数（server 139 / web 73）、回归条数（184）；CHANGELOG 工作台深度选择器表述；`scripts/full_regression.py` 头注基线。
+
+### Fixed（数据口径与重复实现）
+- **知识库匹配度归一错误**：检索分是百分制（1-100），流水线按 `/8` 归一 → 任何 ≥8 分都夹到 1.0，跨库匹配度失去区分度；改为 `normalizeKnScore()`（`pipeline-metrics.ts`）。
+- **token 预算漏计/串账**：`lastTotalTokens` 是实例级单值，并行起草后逐个读取只能拿到最后一个调用；新增 `lastTokensFor(caller)` 按调用方取值，`trackBudget(taskId, caller)` 显式传参与评审/润色共用。
+- **用量平均时延失真**：失败调用以几十毫秒快速失败，混入 `AVG(latency_ms)` 会把真实耗时压到极低；改为只统计成功调用（`usage.service.ts`）。
+- **Agent 用量按日聚合时区错位**：`toISOString()`（UTC）与 SQL 报表 `localtime` 口径不一致；统一为本地日界（`normalizeAgentDate()`）。
+- **尾部块正则重复实现**：`documents.service.ts:polish` 自写 `indexOf('## 参考文献'/'## 图表')`，不认识「## 研究资料」→ 知识库参考块被送进润色；改用 `tail-blocks.ts` 单一来源。
+- **步骤标签重复定义**：`WorkspacePage.tsx` 自写 `STEP_LABELS`，与 `packages/core/pipeline-steps` 漂移（如 `outline: '大纲'` vs `'大纲生成'`）；改用 core 单一来源。
+- **桌面端 test 脚本不可用**：`apps/desktop` 未装 vitest，`pnpm --filter @sciflow/desktop test` 必然失败；改为经 server 的 vitest 配置运行（5 条桌面契约测试真跑通）。
+- **web 测试缺 `@sciflow/core` 别名**：vitest 配置未同步 vite 的别名，导致 import core 的组件测试直接解析失败；已补齐。
+
+### Tests
+- 新增：`ai-transport.timeout.spec.ts`（4）、`ai-transport.tokens.spec.ts`（3）、`pipeline-stop.spec.ts`（6）、`pipeline-websearch.spec.ts`（5）、`pipeline-metrics.spec.ts`（4）、`usage.service.spec.ts`（3）；回归脚本新增 6 条停止接口断言（178 → 184）。
+- 门禁：server 139 / web 73 / 桌面 5、`final_acceptance.py` 21/21、回归 PASS 184 / FAIL 0。
+
 ## [1.0.0] - 2026-10-24
 
 首个正式版：深度研究能力（对标 deep research 类工具）+ 反同质化 + 实验设计助手，外加 CLI headless 全流程与一批工程收尾。竞品调研对标 Stanford STORM / Elicit / NotebookLM / GPT-Researcher / PaperQA2（2026-10-24，结论沉淀于本批架构文档与 README）。
 
 ### Added（深度研究与差异化）
-- **研究深度参数（depth 1-3）**：文献调研按轮递归——第 2+ 轮由 Planner 依据上一轮发现给出新检索词，命中跨轮去重合并、零新增自动收敛；流水线页/工作台均可切换（标准/深入/彻底），全局设置落 `pipeline_research_depth`。
+- **研究深度参数（depth 1-3）**：文献调研按轮递归——第 2+ 轮由 Planner 依据上一轮发现给出新检索词，命中跨轮去重合并、零新增自动收敛；流水线页可切换（标准/深入/彻底），全局设置落 `pipeline_research_depth`，工作台按同一设置运行。
 - **反共识大纲变体（F2 反同质化引擎）**：大纲阶段一次产出「主推方案 + 2 个反共识变体」（挑战主流假设 / 另起组织框架），工作台确认卡与流水线大纲弹窗均可一键切换对比后采用；模型不支持时自动回退单大纲，流程永不中断。
 - **实验设计助手（F3）**：研究问题 → 结构化实验设计稿（自变量/因变量/控制变量、对照组、样本量与统计功效提示、实验流程、分析计划、效度风险），落库可复看可删除；入口在「实验记录」页。
 - **步骤耗时时间线（F-2.7）**：流水线详情新增甘特式耗时条（真实 startedAt/endedAt），哪一步最烧时间一眼可见。

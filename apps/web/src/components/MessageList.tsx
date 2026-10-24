@@ -3,7 +3,7 @@ import { Streamdown } from 'streamdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { Brain, Check, Copy, FileText, Loader2, PlayCircle, Quote, RotateCcw, Square, Trash2 } from 'lucide-react';
+import { Brain, Check, Copy, FileText, Loader2, PlayCircle, Quote, RotateCcw, Square, Trash2, Wrench } from 'lucide-react';
 import type { ChatMessage } from '../lib/chat-session';
 import { IconButton } from './ui';
 
@@ -11,6 +11,24 @@ import { IconButton } from './ui';
 function AssistantBody({ m }: { m: ChatMessage }) {
   return (
     <div className="markdown-body text-[14px] leading-relaxed text-slate-700 dark:text-slate-200">
+      {m.toolCalls && m.toolCalls.length > 0 ? (
+        <details className="mb-2" open={m.streaming}>
+          <summary className="cursor-pointer select-none list-none text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+            <Wrench size={12} aria-hidden="true" /> 工具调用 · {m.toolCalls.length} 次{m.streaming ? '（进行中）' : ''}
+          </summary>
+          <ul className="mt-1.5 space-y-1">
+            {m.toolCalls.map((t, i) => (
+              <li key={i} className="flex items-start gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                <Check size={11} className="mt-0.5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                <span className="font-mono">{t.name}</span>
+                {t.arguments && t.arguments !== '{}' ? (
+                  <span className="truncate text-slate-400 dark:text-slate-500">{t.arguments.slice(0, 120)}</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
       {m.reasoning ? (
         <details open={m.streaming} className="mb-2">
           <summary className="cursor-pointer select-none list-none text-[11px] font-medium text-teal-700 dark:text-teal-300 flex items-center gap-1">
@@ -55,7 +73,9 @@ function Sources({ sources, onCite }: { sources: NonNullable<ChatMessage['source
   return (
     <div className="mt-2 space-y-1.5">
       {sources.map((s, i) => {
-        const pct = Math.round(s.score > 1 ? s.score : s.score * 100);
+        // score 契约：后端统一 0-100（知识库命中为 RRF 百分制，联网来源占位 0）；
+        // 旧实现用 `score > 1 ? score : score*100` 猜量纲，低相关命中（≤1 分）会被放大 100 倍。
+        const pct = Math.round(Math.min(100, Math.max(0, s.score)));
         const hasChunk = !!(s.chunkText && s.chunkText.trim());
         return (
           <div key={i}>

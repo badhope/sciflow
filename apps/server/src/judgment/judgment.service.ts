@@ -143,7 +143,13 @@ export class JudgmentService {
     return { intent: 'qa', label: '科研问答', confidence: 0.5, topic: this.extractTopic(text), route: '/chat', matchedBy: 'llm' };
   }
 
-  /** LLM 判别兜底（结构化输出 + zod 校验） */
+  /**
+   * LLM 判别兜底（结构化输出 + zod 校验）。
+   *
+   * provider 可插拔：设置 JUDGMENT_BASE_URL + JUDGMENT_API_KEY（+ 可选 JUDGMENT_MODEL）
+   * 后，判别请求改发到该 OpenAI 兼容端点（Jev 类判别器 / 本地小模型），
+   * 与生成模型解耦——高频判断不再消耗昂贵生成配额；任一项缺失则沿用主 AI 服务。
+   */
   private async llmJudgment(text: string, context: string = ''): Promise<IntentResult | null> {
     // LLM 兜底（结构化输出 + zod 校验）
     try {
@@ -159,7 +165,7 @@ export class JudgmentService {
 - 用户只是提问/闲聊时选 qa；无法判断时选 other
 - 输出 JSON：{"intent":"候选key","confidence":0.0-1.0,"topic":"从消息中提取的研究主题（无则空字符串）"}
 只输出 JSON，不要其他文字。`;
-      const raw = await this.ai.complete([{ role: 'user', content: prompt }], { temperature: 0, context: 'judgmentIntent' });
+      const raw = await this.completeJudgment(prompt);
       const parsed = this.ai.safeParse(raw, schema);
       if (parsed) {
         const it = this.mergedIntents().find((i) => i.key === parsed.intent);
@@ -178,6 +184,28 @@ export class JudgmentService {
       /* LLM 不可用时降级为通用问答 */
     }
     return { intent: 'qa', label: '科研问答', confidence: 0.5, topic: '', route: '/chat', matchedBy: 'llm' };
+  }
+
+  /**
+   * 判别器调用：配置了 JUDGMENT_BASE_URL + JUDGMENT_API_KEY 则走独立端点，
+   * 否则回落到主 AI 服务（保持历史行为不变）。
+   */
+  private async completeJudgment(prompt: string): Promise<string> {
+    const baseUrl = (process.env.JUDGMENT_BASE_URL || '').replace(/\/$/, '');
+    const apiKey = process.env.JUDGMENT_API_KEY || '';
+    if (!baseUrl || !apiKey) {
+      return this.ai.complete([{ role: 'user', content: prompt }], { temperature: 0, context: 'judgmentIntent' });
+    }
+    const model = process.env.JUDGMENT_MODEL || 'judgment';
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0 }),
+      signal: AbortSignal.timeout(Number(process.env.JUDGMENT_TIMEOUT_MS) || 15_000),
+    });
+    if (!res.ok) throw new Error(`判别器 HTTP ${res.status}`);
+    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    return String(data.choices?.[0]?.message?.content || '').trim();
   }
 
   private extractTopic(text: string): string {

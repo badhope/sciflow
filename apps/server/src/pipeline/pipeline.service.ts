@@ -15,6 +15,9 @@ import { AgentTraceService } from '../agent/agent-trace.service';
 import { reflexionLogs } from '../db/schema';
 import { buildPipelineGraph, type PipelineGraphDeps, type StepStatusWire } from './pipeline.graph';
 import type { Outline, PipelineTaskRow, ResearchPlan } from './pipeline-state';
+import { WebSearchService } from '../websearch/websearch.service';
+import { buildWebHits, isWebSearchEnabled } from './pipeline-websearch';
+import { normalizeKnScore } from './pipeline-metrics';
 import { envInt } from '../../../../packages/core/src/env';
 
 /** UI 步骤条（单一来源：packages/core/pipeline-steps） */
@@ -55,7 +58,7 @@ export function applyStepWire(
   if (retryCount !== undefined) s.retryCount = retryCount;
   if (extra?.variants?.length) s.variants = extra.variants;
   if (status === 'running' && s.startedAt === undefined) s.startedAt = now;
-  if (status === 'done' || status === 'failed' || status === 'skipped') {
+  if (status === 'done' || status === 'failed' || status === 'skipped' || status === 'cancelled') {
     s.endedAt = now;
     if (s.startedAt === undefined) s.startedAt = now;
   }
@@ -72,12 +75,15 @@ export class PipelineService implements OnModuleInit {
   private readonly traceRuns = new Map<string, string>();
   /** runId → 本轮图调用开始时间（按时间窗聚合 LLM token，避免 total_tokens 恒 0） */
   private readonly runStartedAt = new Map<string, number>();
+  /** taskId → 用户主动停止标记（区分「用户停止」与「执行失败」，避免 catch 把 cancelled 覆盖成 failed） */
+  private readonly stoppedTasks = new Set<string>();
 
   constructor(
     private readonly ai: AiService,
     private readonly references: ReferencesService,
     private readonly knowledge: KnowledgeService,
     private readonly trace: AgentTraceService,
+    private readonly websearch: WebSearchService,
   ) {}
 
   onModuleInit() {
@@ -122,17 +128,40 @@ export class PipelineService implements OnModuleInit {
         const summary = refs.length
           ? await this.ai.summarizeLiterature(topic, refs.slice(0, 10).map((r, i) => `[Ref:${i + 1}] ${r.title}（${r.authors}，${r.year || 'n.d.'}，${r.venue}）`).join('\n'))
           : '（未检索到文献，将按通用学术结构起草）';
+        // 联网检索（默认关闭，WEBSEARCH_IN_PIPELINE=on 或设置页开启）：
+        // 本地库/知识库 0 命中时提供真实外部线索，避免完全依赖模型内部知识。
+        let webHits: PaperHit[] = [];
+        if (isWebSearchEnabled((k) => this.readSetting(k))) {
+          try {
+            const results = await this.websearch.search(`${topic} ${(plan.searchStrategy?.keywords || []).slice(0, 2).join(' ')}`.trim());
+            webHits = buildWebHits(results);
+          } catch (e: any) {
+            this.logger.warn(`流水线联网检索失败（已忽略，不影响流程）: ${e?.message || e}`);
+          }
+        }
         const totalFound = enriched.libraryHits.length + enriched.knowledgeHits.length;
+        // 线索只对「本次运行」有效：每轮覆盖写入，并限制 Map 规模（项目数无上限，避免长跑内存滞留）
+        this.webHintForProject.delete(projectId);
+        if (webHits.length) {
+          this.webHintForProject.set(projectId, webHits);
+          while (this.webHintForProject.size > 50) {
+            const oldest = this.webHintForProject.keys().next().value;
+            if (oldest === undefined) break;
+            this.webHintForProject.delete(oldest);
+          }
+        }
+        const webNote = webHits.length ? `\n联网检索补充 ${webHits.length} 条公开网页线索（仅作背景参考，未入库，引用前请自行核验）。` : '';
         return {
           libraryHits: enriched.libraryHits,
           knowledgeHits: enriched.knowledgeHits,
+          webHits,
           notice: enriched.notice,
           meta: enriched.meta,
-          summary: `检索到 ${totalFound} 条（文献 ${enriched.libraryHits.length} / 知识 ${enriched.knowledgeHits.length}）\n${summary.slice(0, 500)}`,
+          summary: `检索到 ${totalFound} 条（文献 ${enriched.libraryHits.length} / 知识 ${enriched.knowledgeHits.length}）${webNote}\n${summary.slice(0, 500)}`,
         };
       },
       notify: (taskId, key, status, output, retryCount, extra) => this.notify(taskId, key, status, output, retryCount, extra),
-      trackBudget: (taskId) => this.trackBudget(taskId),
+      trackBudget: (taskId, caller) => this.trackBudget(taskId, caller),
       stepEnabled: (key) => this.stepEnabled(key),
       researchDepth: () => this.researchDepth(),
       logger: this.logger,
@@ -143,8 +172,9 @@ export class PipelineService implements OnModuleInit {
   // ─── 公开 API（controller 调用） ──────────────────────────────
   /** H2：任务级 token 预算器（task → 累计 tokens）。默认 300k，app_setting pipeline_token_budget 可调，0=关闭 */
   private budget = new Map<string, number>();
-  private trackBudget(taskId: string): void {
-    const spent = (this.budget.get(taskId) || 0) + this.ai.lastTotalTokens;
+  private trackBudget(taskId: string, caller: string): void {
+    // 按 caller 读取（不是全局 lastTotalTokens）：并行起草时全局值会被最后一个完成者覆盖 → 预算漏计
+    const spent = (this.budget.get(taskId) || 0) + this.ai.lastTokensFor(caller);
     this.budget.set(taskId, spent);
     let cap = 300_000;
     try {
@@ -224,6 +254,46 @@ export class PipelineService implements OnModuleInit {
     return this.get(taskId);
   }
 
+  /**
+   * 停止运行中的流水线（用户主动中止）。
+   *
+   * 背景：此前没有停止入口，上游网关挂起时任务永久 running，DELETE 又要求「先停止」，
+   * 用户唯一出路是重启服务（真实事故：quality-gate 卡死 17.5 分钟）。
+   *
+   * 语义：
+   *  - 只允许 running / awaiting_confirmation → cancelled；其他状态 400。
+   *  - 内存标记 stoppedTasks 让 invokeGraph 的 catch 不再把它改写成 failed。
+   *  - 运行中的步骤标 cancelled（保留 startedAt/endedAt 供时间线展示），未开始的标 skipped。
+   *  - 实际的上游 LLM 请求由请求级超时（AI_REQUEST_TIMEOUT_MS）兜底结束，不阻塞接口返回。
+   */
+  stop(id: string) {
+    const task = this.get(id);
+    if (task.status !== 'running' && task.status !== 'awaiting_confirmation') {
+      throw new BadRequestException(`流水线不在运行中（当前状态：${task.status}），无需停止`);
+    }
+    // 只有图确实在跑时才需要「阻止在途节点回写」的标记（该标记由 invokeGraph 的 finally 清理）。
+    // 若只是库里残留 running（服务重启后未续跑），无条件写入会永久残留并阻断该任务后续 notify。
+    const inFlight = this.traceRuns.has(id);
+    if (inFlight) this.stoppedTasks.add(id);
+    const steps = task.steps as PipelineStepState[];
+    for (const s of steps) {
+      if (s.status === 'running' || s.status === 'awaiting_confirmation' || s.status === 'retry') {
+        applyStepWire(s, 'cancelled', '用户已停止', undefined, undefined, Date.now());
+      } else if (s.status === 'pending') {
+        s.status = 'skipped';
+      }
+    }
+    db.update(pipelineTasks)
+      .set({ steps: JSON.stringify(steps), status: 'cancelled', currentStep: '', lastError: '用户停止：任务已中止（可删除后重新运行）', updatedAt: Date.now() })
+      .where(eq(pipelineTasks.id, id))
+      .run();
+    const runId = this.traceRuns.get(id);
+    if (runId) this.trace.finishRun(runId, { status: 'done', outputSummary: '用户停止' });
+    this.budget.delete(id);
+    this.logger.warn(`流水线 ${id} 已被用户停止`);
+    return this.get(id);
+  }
+
   resumeInterrupted() {
     const rows = db.select().from(pipelineTasks).where(eq(pipelineTasks.status, 'running')).all();
     for (const t of rows) {
@@ -263,6 +333,13 @@ export class PipelineService implements OnModuleInit {
       this.runStartedAt.set(runId, Date.now());
       const cfg = { configurable: { thread_id: taskId } };
       const result = await this.graph.invoke(input as never, cfg as never);
+      // 用户在本次图执行期间点了停止：图可能正常返回（例如恰好走到 interrupt），
+      // 此时绝不能把终态改回 awaiting_confirmation/completed —— 用户意图优先。
+      if (this.stoppedTasks.has(taskId)) {
+        this.logger.warn(`流水线 ${taskId} 已按用户停止处理（图正常返回，终态保持 cancelled）`);
+        if (runId) this.trace.finishRun(runId, { status: 'done', outputSummary: '用户停止', totalTokens: this.tokensSince(this.runStartedAt.get(runId) || Date.now()) });
+        return;
+      }
       const interrupts = (result as { __interrupt__?: unknown[] } | undefined)?.__interrupt__;
       const tokens = this.tokensSince(this.runStartedAt.get(runId) || Date.now());
       if (interrupts && interrupts.length > 0) {
@@ -273,6 +350,12 @@ export class PipelineService implements OnModuleInit {
         this.trace.finishRun(runId, { status: 'done', outputSummary: '流水线完成', totalTokens: tokens });
       }
     } catch (e: any) {
+      if (this.stoppedTasks.has(taskId)) {
+        // 用户主动停止：abort 会让图抛错，这里不得把 cancelled 改写成 failed
+        this.logger.warn(`流水线 ${taskId} 因用户停止而中止（${String(e?.message || e).slice(0, 120)}）`);
+        if (runId) this.trace.finishRun(runId, { status: 'done', outputSummary: '用户停止', totalTokens: this.tokensSince(this.runStartedAt.get(runId) || Date.now()) });
+        return;
+      }
       this.logger.error(`流水线 ${taskId} 执行失败: ${e.message}`);
       const steps = this.loadSteps(taskId);
       const cur = steps.find((s) => s.status === 'running' || s.status === 'awaiting_confirmation');
@@ -283,6 +366,7 @@ export class PipelineService implements OnModuleInit {
     } finally {
       this.traceRuns.delete(taskId);
       if (runId) this.runStartedAt.delete(runId);
+      this.stoppedTasks.delete(taskId);
     }
   }
 
@@ -300,6 +384,15 @@ export class PipelineService implements OnModuleInit {
     db.update(pipelineTasks).set({ status, currentStep: currentStep || undefined, lastError: lastError || '', updatedAt: Date.now() }).where(eq(pipelineTasks.id, id)).run();
   }
 
+  /** 读取 app_setting（表未建/键不存在返回空串；供联网开关等运行参数使用） */
+  private readSetting(key: string): string {
+    try {
+      return db.select().from(appSettings).where(eq(appSettings.key, key)).get()?.value ?? '';
+    } catch {
+      return '';
+    }
+  }
+
   private stepEnabled(key: string): boolean {
     if (!PIPELINE_STEP_KEYS.has(key)) {
       // 未知 key 说明调用方与清单脱节：显式告警，默认放行（不因配置缺失阻断流水线）
@@ -315,6 +408,8 @@ export class PipelineService implements OnModuleInit {
   }
 
   private async notify(taskId: string, key: string, status: StepStatusWire, output?: string, retryCount?: number, extra?: { variants?: string[] }) {
+    // 用户已停止：图里在途节点仍可能推状态，忽略之，避免把 cancelled 改回 running
+    if (this.stoppedTasks.has(taskId)) return;
     const steps = this.loadSteps(taskId);
     const s = steps.find((x) => x.key === key);
     if (!s) return;
@@ -382,7 +477,7 @@ export class PipelineService implements OnModuleInit {
   }
 
   private static normalizeKnScore(score: number): number {
-    return Math.min(1, Math.round(Math.max(0, score) / 8 * 100) / 100);
+    return normalizeKnScore(score);
   }
 
   private async crossEnrichResearch(projectId: string, topic: string, plan: ResearchPlan, libraryHits: PaperHit[]): Promise<{ libraryHits: PaperHit[]; knowledgeHits: PaperHit[]; notice: string | null; meta: ResearchMeta }> {
@@ -430,7 +525,7 @@ export class PipelineService implements OnModuleInit {
         this.draftingLimit(async () => {
           const sectionTitle = typeof sec === 'string' ? sec : sec.title;
           const content = await this.ai.draftSection(sectionTitle, outlineJson, ctx);
-          this.trackBudget(taskIdRef); // H2：起草成本打点（起草占全流程 token 大头）
+          this.trackBudget(taskIdRef, 'draftSection'); // H2：起草成本打点（起草占全流程 token 大头）
           done += 1;
           onProgress?.(done, sections.length);
           return { i, text: `## ${sectionTitle}\n\n${content}` };
@@ -446,9 +541,21 @@ export class PipelineService implements OnModuleInit {
     return meta.sort((a, b) => (b.citationCount || 0) - (a.citationCount || 0)).slice(0, 20);
   }
 
+  /** 项目 → 最近一次联网检索线索（只用于起草 prompt 的背景参考，不落文献库） */
+  private readonly webHintForProject = new Map<string, PaperHit[]>();
+
   private referencesForPrompt(projectId: string, refs?: ReturnType<PipelineService['refsForDraft']>): string {
     const pool = refs ?? this.refsForDraft(projectId);
-    return pool.map((r, i) => `[Ref:${i + 1}] ${r.title}（${r.authors}，${r.year || 'n.d.'}，${r.venue}${r.doi ? `，DOI:${r.doi}` : ''}）`).join('\n');
+    const lines = pool.map((r, i) => `[Ref:${i + 1}] ${r.title}（${r.authors}，${r.year || 'n.d.'}，${r.venue}${r.doi ? `，DOI:${r.doi}` : ''}）`);
+    // 联网检索线索（未入库）单列，明确标注「不可直接引用」：避免模型把网页摘要当同行评议文献
+    if (this.webHintForProject.size) {
+      const hints = this.webHintForProject.get(projectId) || [];
+      if (hints.length) {
+        lines.push('', '以下为联网检索线索（公开网页，未入文献库，仅作背景参考，不得作为 [Ref:N] 引用）：');
+        hints.forEach((h, i) => lines.push(`[Web:${i + 1}] ${h.title} —— ${h.url}`));
+      }
+    }
+    return lines.join('\n');
   }
 
   /** Fetch typed PipelineTaskRow (without parsed steps array) */

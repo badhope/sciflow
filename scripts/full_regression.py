@@ -3,7 +3,7 @@ import os
 """SciFlow 全量回归测试 v6 — 覆盖全部 66 个路由（含 guardrail 拒参 / RAG 混合检索 / usage 成本统计专项）
 
 基线数字（本机全新库 + AI_MOCK=1 实测）：
-  **PASS 161 / FAIL 0 / KNOWN 0**（P1/P2 平台化替换 + R1-R8 存量缺口修复后的当前契约）。
+  **PASS 184 / FAIL 0 / KNOWN 0**（v1.0.1：P1/P2 平台化替换 + R1-R8 存量缺口修复后的当前契约）。
   历史：替换期 KNOWN 11 项存量缺口（对象数组作者/指纹回填/BibTeX/RIS/中文 FTS/APA 排序/
   流水线 qualityReports/筛选回包/25.1 命中语义等）已全部修复，KNOWN_GAPS 机制保留（当前为空集）：
   新失败一律计入 FAIL 且 exit 1，不允许隐藏。
@@ -1094,6 +1094,29 @@ if p26id:
               st6 == 200 and db_.get("anchorTotal") == 0 and db_.get("score", 100) <= 60
               and any("未检测到引用" in str(i) for i in (db_.get("issues") or [])),
               f"body={str(db_)[:160]}")
+
+# ---------- 28. v1.0.1 停止接口 / 联网开关 / 分数口径 ----------
+st, d = req("POST", "/api/pipeline", {"projectId": pid, "topic": "停止接口回归验证"})
+stop_id = d.get("id") if st == 201 else None
+if stop_id:
+    st, d2 = req("POST", f"/api/pipeline/{stop_id}/stop", {})
+    check("28.1 停止运行中流水线 200/201", st in (200, 201), f"st={st} {str(d2)[:120]}")
+    # 停止后在图仍可能正常返回（例如恰好走到 interrupt），服务端已保证不被回写；
+    # 这里等 2s 再读，验证「终态稳定为 cancelled」而不是抢读瞬态。
+    time.sleep(2)
+    st, d3 = req("GET", f"/api/pipeline/{stop_id}")
+    check("28.2 停止后状态稳定为 cancelled", st == 200 and d3.get("status") == "cancelled", f"status={(d3 or {}).get('status')}")
+    steps3 = {s3.get("key"): s3 for s3 in (d3 or {}).get("steps", [])}
+    running_left = [k for k, v in steps3.items() if v.get("status") in ("running", "awaiting_confirmation")]
+    check("28.3 停止后无残留 running 步骤", not running_left, f"left={running_left}")
+    st, d4 = req("DELETE", f"/api/pipeline/{stop_id}")
+    check("28.4 停止后可删除（不再被「请先停止」阻塞）", st == 200 and d4.get("ok"), f"st={st} {str(d4)[:80]}")
+    st, d5 = req("POST", f"/api/pipeline/{stop_id}/stop", {})
+    check("28.5 停止不存在任务 404", st == 404, f"st={st}")
+else:
+    check("28.x 停止接口前置：创建任务失败", False, f"st={st} {str(d)[:120]}")
+st, d = req("POST", "/api/pipeline", {"projectId": pid, "topic": " "})
+check("28.6 空主题创建流水线 400", st == 400, f"st={st}")
 
 print("=" * 60)
 print(f"结果: PASS {PASS} / FAIL {FAIL} / KNOWN(存量缺口) {KNOWN}")

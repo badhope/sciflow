@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../db/database';
 import { agentExecutions, agentSteps } from '../db/schema';
+import { normalizeAgentDate } from '../pipeline/pipeline-metrics';
 
 export interface AgentStepInput {
   kind: 'llm' | 'tool' | 'search' | 'retrieve' | 'thinking';
@@ -116,7 +117,7 @@ export class AgentTraceService {
 
     const buckets = new Map<string, { tokens: number; runs: number }>();
     for (const r of runs) {
-      const date = new Date(r.createdAt).toISOString().slice(0, 10);
+      const date = normalizeAgentDate(r.createdAt);
       const b = buckets.get(date) || { tokens: 0, runs: 0 };
       b.tokens += r.totalTokens || 0;
       b.runs += 1;

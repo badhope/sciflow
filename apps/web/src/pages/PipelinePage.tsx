@@ -219,6 +219,9 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
   const toast = useContext(ToastContext);
   // 差距#9a：待删除的任务记录（二次确认后调用 DELETE /api/pipeline/:id；失败/中断任务同样可删）
   const [deletingTask, setDeletingTask] = useState<PipelineTask | null>(null);
+  // 待停止的运行中任务（二次确认后调用 POST /api/pipeline/:id/stop）
+  const [stoppingTask, setStoppingTask] = useState<PipelineTask | null>(null);
+  const [stopping, setStopping] = useState(false);
 
 
   /** 自定义模板按项目隔离加载：后端 templates 字段优先；后端为空且 localStorage 有旧值时一次性迁移写回后端 */
@@ -473,8 +476,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
   };
 
   /** 差距#9a：删除任务记录（DELETE /api/pipeline/:id）；删除后从列表移除并切换选中项 */
-  const confirmDeleteTask = async () => {
-    if (!deletingTask) return;
+  const confirmDeleteTask = async () => {    if (!deletingTask) return;
     try {
       await api.pipeline.remove(deletingTask.id);
       await refresh();
@@ -486,8 +488,23 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
     }
   };
 
-  const statusText: Record<string, { text: string; tone: 'blue' | 'amber' | 'green' | 'red' }> = {
-    running: { text: '执行中', tone: 'blue' },
+  /** 停止运行中的流水线（二次确认后 POST /api/pipeline/:id/stop） */
+  const confirmStopTask = async () => {
+    if (!stoppingTask) return;
+    setStopping(true);
+    try {
+      await api.pipeline.stop(stoppingTask.id);
+      await refresh();
+      toast('success', `已停止任务「${stoppingTask.topic}」`);
+    } catch (e: unknown) {
+      toast('error', '停止失败：' + errMsg(e));
+    } finally {
+      setStopping(false);
+      setStoppingTask(null);
+    }
+  };
+
+  const statusText: Record<string, { text: string; tone: 'blue' | 'amber' | 'green' | 'red' }> = {    running: { text: '执行中', tone: 'blue' },
     awaiting_confirmation: { text: '等待大纲确认', tone: 'amber' },
     completed: { text: '已完成', tone: 'green' },
     failed: { text: '失败', tone: 'red' },
@@ -645,6 +662,11 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge tone={statusText[active.status]?.tone || 'blue'}>{statusText[active.status]?.text || active.status}</Badge>
+                    {(active.status === 'running' || active.status === 'awaiting_confirmation') && (
+                      <Button variant="outline" className="text-xs" onClick={() => setStoppingTask(active)} title="中止当前流水线（上游挂起时不用重启服务）">
+                        停止
+                      </Button>
+                    )}
                     <button
                       onClick={() => setDeletingTask(active)}
                       title="删除此任务记录（失败/中断任务同样可删）"
@@ -1020,6 +1042,17 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
         danger
         onConfirm={confirmDeleteTask}
         onClose={() => setDeletingTask(null)}
+      />
+
+      {/* 停止运行中流水线二次确认（上游挂起时无需重启服务） */}
+      <ConfirmDialog
+        open={!!stoppingTask}
+        title="停止流水线"
+        description={stoppingTask ? `确定要停止任务「${stoppingTask.topic}」吗？已完成的步骤产物会保留，未执行的步骤将跳过；停止后可删除该任务记录并重新运行。` : undefined}
+        confirmText={stopping ? '停止中…' : '停止'}
+        danger
+        onConfirm={confirmStopTask}
+        onClose={() => (stopping ? undefined : setStoppingTask(null))}
       />
     </div>
   );

@@ -18,6 +18,8 @@ export interface ChatMessage {
   id?: string;
   /** 后续追问建议（科研问答页：模型按 FOLLOWUP_HINT 约定输出） */
   followUps?: string[];
+  /** Agent 工具调用记录（本轮模型检索文献/查知识库的步骤，供气泡内展示） */
+  toolCalls?: { name: string; arguments?: string }[];
 }
 
 /** 追加到请求 message 末尾的固定指令：诱导模型给出后续追问建议（不进入气泡显示） */
@@ -146,7 +148,7 @@ export function useChatSession(opts: {
         onReasoning: (full) => patchLast((m) => ({ reasoning: applyStreamDelta({ content: m.content, reasoning: m.reasoning ?? '' }, { reasoning: full }).reasoning })),
         onSources: (src) => patchLast({ sources: src }),
         onUsage: (u) => patchLast({ usage: u }),
-        onToolCall: () => undefined,
+        onToolCall: (call) => patchLast((m) => ({ toolCalls: [...(m.toolCalls || []), { name: call.name, arguments: call.arguments }] })),
         onDone: (full) => {
           if (!mountedRef.current) return;
           setStreaming(false);

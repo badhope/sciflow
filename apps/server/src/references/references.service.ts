@@ -64,8 +64,8 @@ export interface PaperHit {
   abstract: string;
   source: 'manual';
   citationCount: number;
-  /** 跨库检索增强：命中来源库（文献库 references / 知识库 knowledge）；未标视为文献库 */
-  origin?: 'library' | 'knowledge';
+  /** 跨库检索增强：命中来源库（文献库 references / 知识库 knowledge / 联网检索 web）；未标视为文献库 */
+  origin?: 'library' | 'knowledge' | 'web';
   /** 跨库检索增强：匹配度分数（0~1），产物参考文献块回标用 */
   matchScore?: number;
 }

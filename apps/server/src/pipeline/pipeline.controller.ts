@@ -26,6 +26,12 @@ export class PipelineController {
     return this.pipeline.confirmOutline(id, body.outline);
   }
 
+  /** 停止运行中的流水线（用户主动中止；此前无此入口，挂起任务只能重启服务） */
+  @Post(':id/stop')
+  stop(@Param('id') id: string) {
+    return this.pipeline.stop(id);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.pipeline.remove(id);

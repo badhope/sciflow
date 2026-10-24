@@ -10,6 +10,7 @@ import { documents, citations, references, polishRecords, qualityReports, review
 import { Document, Packer, Paragraph, HeadingLevel, AlignmentType } from 'docx';
 import { AiService } from '../ai/ai.service';
 import { ReferencesService } from '../references/references.service';
+import { splitTailBlock } from '../pipeline/tail-blocks';
 import { parseAuthors as parseAuthorArr, surnameOf } from '../common/authors';
 import { parseJson } from '../common/json-guard';
 import { toCslAuthors } from '../common/citation-csl';
@@ -287,12 +288,9 @@ export class DocumentsService {
   async polish(id: string, text: string, mode: 'polish' | 'reduce' = 'polish') {
     this.get(id);
     const content = String(text ?? '');
-    const refIdx = content.indexOf('\n\n## 参考文献');
-    const figIdx = content.indexOf('\n\n## 图表');
-    const cuts = [refIdx, figIdx].filter((i) => i >= 0);
-    const cut = cuts.length ? Math.min(...cuts) : -1;
-    const bodyPart = cut >= 0 ? content.slice(0, cut) : content;
-    const tailPart = cut >= 0 ? content.slice(cut) : '';
+    // 尾部块识别走单一来源（tail-blocks.ts）：此前这里自写 indexOf('## 参考文献'/'## 图表')，
+    // 不认识「## 研究资料」，导致知识库参考块被当正文送进润色（与 pipeline.graph 口径不一致）。
+    const { body: bodyPart, tail: tailPart } = splitTailBlock(content);
     const result = await this.ai.polish(bodyPart, mode);
     const polished = `${String(result.polished ?? '').trim()}\n\n${tailPart}`.trim();
     db.insert(polishRecords)

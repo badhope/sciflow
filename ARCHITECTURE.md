@@ -83,6 +83,19 @@
 | 6 | CLI：HTTP 一律原生 fetch（`AbortSignal.timeout`），**禁止再回 spawnSync('node','-e') 字符串拼接**；`sciflow run --topic … --auto --out <dir>` headless 全流程 = 建项目（可选）→ 建任务 → 轮询 → 自动确认大纲 → 导出 `<标题>.md`；exit 0 成功 / 2 业务中断 | `apps/server/src/cli.ts` | 冒烟：mock 服务下 `sciflow run --topic … --auto` 出 md 文件 |
 | 7 | 深度探针 `GET /api/health/deep` 三探针（db 往返时延 / vec0 计数 / AI 配置形态）只读不真发模型请求，单项失败不互相阻断 | `health.controller.ts` | 回归「深度探针」 |
 
+## §2.15 v1.0.1 可靠性契约（2026-10-24）
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **LLM 请求必有请求级超时**：非流式按总时长、流式按空闲无数据判定；`AI_REQUEST_TIMEOUT_MS`（默认 180s，0=禁用）。外部断连信号与超时信号用 `AbortSignal.any` 合并，任一触发即中止上游；超时抛 504 且错误文案含可调参数名 | `packages/ai/src/ai-transport.service.ts`（`withTimeout`/`requestTimeoutMs`/`isTimeoutError`） | `ai-transport.timeout.spec.ts` 4 条 |
+| 2 | **流水线可停止**：`POST /api/pipeline/:id/stop` 仅接受 running/awaiting_confirmation；停止置 `cancelled`，运行步骤 `cancelled`、未执行 `skipped`；`stoppedTasks` 内存标记阻止在途节点把状态改回 running/failed；停止后 DELETE 放行 | `pipeline.controller.ts` · `pipeline.service.ts:stop/invokeGraph/notify` · `PipelinePage` 停止按钮 | `pipeline-stop.spec.ts` 5 条 + 回归 28.x 6 条 |
+| 3 | **联网检索可选接入**：`buildWebHits` 按 URL 去重、上限 6、`origin='web'`、matchScore 0.9→0.5；仅进 summary 与起草 prompt 的「不可直接引用」区块，不写 references 表；默认关闭，失败静默降级 | `apps/server/src/pipeline/pipeline-websearch.ts` · `pipeline.service.ts:crossEnrich/referencesForPrompt` | `pipeline-websearch.spec.ts` 5 条 |
+| 4 | **分数口径单一**：知识库检索分为百分制（1-100），流水线归一为 0-1（`normalizeKnScore`）；chat `sources[].score` 对外统一 0-100，前端不得再猜测量纲 | `pipeline-metrics.ts` · `chat.service.ts` · `MessageList` | `pipeline-metrics.spec.ts` 4 条 |
+| 5 | **token 打点按 caller 隔离**：`lastTokensFor(caller)` 读取最近一次；`trackBudget(taskId, caller)` 显式传参，禁止在并行分支里读全局 `lastTotalTokens` | `ai-transport.service.ts` · `pipeline.service.ts` | `ai-transport.tokens.spec.ts` 3 条 |
+| 6 | **统计口径**：平均时延只统计成功调用；Agent 用量按本地日界聚合（`normalizeAgentDate`），与 SQL `localtime` 一致 | `usage.service.ts` · `agent-trace.service.ts` | `usage.service.spec.ts` 3 条 |
+| 7 | **尾部块识别单一来源**：`tail-blocks.ts` 是唯一实现（含「研究资料」），`documents.service.polish` 与 `pipeline.graph.polish` 必须共用，禁止自写 indexOf/正则 | `pipeline/tail-blocks.ts` | `documents.polish` 与 graph 同函数 |
+| 8 | **版本单一来源**：`common/version.ts` 运行时解析 package.json；MCP serverInfo / MCP client / CLI 全部引用 `APP_VERSION`，禁止写死 | `apps/server/src/common/version.ts` | 运行时 `node -e` 断言 + MCP 握手回归 |
+
 ---
 
 ## §2.9 模块化布局（M3，2026-10-18）

@@ -144,6 +144,9 @@ docker compose -f docker-compose.prod.yml up -d   # 生产配置
 | `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` | 无 | 三件套，缺一不可（零内置原则） |
 | `AI_MODEL_FAST` / `AI_MODEL_STRONG` | 同 `AI_MODEL` | 双档路由，强烈建议分开 |
 | `AI_RPM_CAP` | 8 | 每分钟 AI 调用上限（令牌桶），防 429 风暴 |
+| `AI_REQUEST_TIMEOUT_MS` | 180000 | **请求级超时**：上游不回包时中止，防流水线永久挂起（0=禁用；流式按空闲时长判定） |
+| `WEBSEARCH_IN_PIPELINE` | off | 流水线文献步骤是否并入联网检索线索（也可用设置页 `websearch_in_pipeline`） |
+| `JUDGMENT_BASE_URL` / `JUDGMENT_API_KEY` / `JUDGMENT_MODEL` / `JUDGMENT_TIMEOUT_MS` | 无 | 意图判别器独立端点（OpenAI 兼容）；不配则沿用主 AI 服务 |
 | `EMBEDDING_MODEL_PATH` | 无 | 自备 GGUF 嵌入模型路径，不配则全文检索 |
 | `SCIFLOW_MODEL_CACHE` | `~/.sciflow/models` | 模型缓存目录 |
 | `WEBSEARCH_PROVIDER` | duckduckgo | searxng / tavily / serper / brave |

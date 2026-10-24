@@ -35,7 +35,7 @@ export class UsageService {
              COALESCE(SUM(prompt_tokens),0) AS prompt_tokens,
              COALESCE(SUM(completion_tokens),0) AS completion_tokens,
              COALESCE(SUM(total_tokens),0) AS total_tokens,
-             COALESCE(CAST(AVG(latency_ms) AS INT), 0) AS avg_latency_ms,
+             COALESCE(CAST(AVG(CASE WHEN success = 1 THEN latency_ms END) AS INT), 0) AS avg_latency_ms,
              COALESCE(ROUND(100.0 * SUM(success) / NULLIF(COUNT(*), 0), 1), 0) AS success_rate
            FROM llm_call_log WHERE kind = 'llm'`,
         )
@@ -46,7 +46,7 @@ export class UsageService {
              COALESCE(SUM(prompt_tokens),0) AS prompt_tokens,
              COALESCE(SUM(completion_tokens),0) AS completion_tokens,
              COALESCE(SUM(total_tokens),0) AS total_tokens,
-             COALESCE(CAST(AVG(latency_ms) AS INT), 0) AS avg_latency_ms,
+             COALESCE(CAST(AVG(CASE WHEN success = 1 THEN latency_ms END) AS INT), 0) AS avg_latency_ms,
              COALESCE(ROUND(100.0 * SUM(success) / NULLIF(COUNT(*), 0), 1), 0) AS success_rate
            FROM llm_call_log WHERE kind = 'llm' GROUP BY caller ORDER BY total_tokens DESC`,
         )

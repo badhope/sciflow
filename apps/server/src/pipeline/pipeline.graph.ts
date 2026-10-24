@@ -28,6 +28,8 @@ export const PipelineAnnotation = Annotation.Root({
   researchTrace: Annotation<ResearchTraceEntry[]>({ reducer: (_a, b) => b, default: () => [] }),
   enrichedLibHits: Annotation<PaperHit[]>({ reducer: (_a, b) => b, default: () => [] }),
   enrichedKnHits: Annotation<PaperHit[]>({ reducer: (_a, b) => b, default: () => [] }),
+  /** 联网检索线索（默认关闭；仅进 summary/展示，不入参考文献库） */
+  enrichedWebHits: Annotation<PaperHit[]>({ reducer: (_a, b) => b, default: () => [] }),
   researchNotice: Annotation<string | undefined>({ reducer: (_a, b) => b, default: () => undefined }),
   literatureSummary: Annotation<string>({ reducer: (_a, b) => b, default: () => '' }),
   outline: Annotation<Outline | undefined>({ reducer: (_a, b) => b, default: () => undefined }),
@@ -38,7 +40,7 @@ export const PipelineAnnotation = Annotation.Root({
 
 export type PipelineGraphState = typeof PipelineAnnotation.State;
 
-export type StepStatusWire = 'pending' | 'running' | 'awaiting_confirmation' | 'done' | 'scored' | 'retry' | 'failed' | 'skipped';
+export type StepStatusWire = 'pending' | 'running' | 'awaiting_confirmation' | 'done' | 'scored' | 'retry' | 'failed' | 'skipped' | 'cancelled';
 
 export interface PipelineGraphDeps {
   ai: {
@@ -54,7 +56,7 @@ export interface PipelineGraphDeps {
     generateFigures(topic: string, outline: string, content: string): Promise<{ title: string; caption: string; mermaid: string }[]>;
   };
   /** H2 预算器：LLM 调用后累计该任务 token，超限抛错终止流水线 */
-  trackBudget(taskId: string): void;
+  trackBudget(taskId: string, caller: string): void;
   /** 研究深度（1-3）：literature 节点按轮递归检索；实现方读 app_setting pipeline_research_depth */
   researchDepth(): number;
   /** 分章起草（服务层实现，内部并行；onProgress 用于逐节进度通知）。 */
@@ -71,12 +73,12 @@ export interface PipelineGraphDeps {
   buildRefsPrompt(projectId: string): string;
   /** 引用锚点渲染（citation-js CSL）：正文 [n] 锚点 + 文末参考文献块。 */
   renderCitations(projectId: string, docId: string, content: string, meta: { lib: { title: string; score: number }[]; kn: PaperHit[] }): string;
-  /** 跨库检索增强（文献 + 知识库）。 */
+  /** 跨库检索增强（文献 + 知识库 + 可选联网检索）。 */
   crossEnrich(
     projectId: string,
     topic: string,
     plan: ResearchPlan,
-  ): Promise<{ libraryHits: PaperHit[]; knowledgeHits: PaperHit[]; notice: string | null; meta: { lib: { title: string; score: number }[]; kn: PaperHit[] }; summary: string }>;
+  ): Promise<{ libraryHits: PaperHit[]; knowledgeHits: PaperHit[]; webHits?: PaperHit[]; notice: string | null; meta: { lib: { title: string; score: number }[]; kn: PaperHit[] }; summary: string }>;
   /** 每步状态落库（保持 pipeline_task.steps JSON 前端契约不变；extra 增量合并新字段如 variants）。 */
   notify(taskId: string, key: string, status: StepStatusWire, output?: string, retryCount?: number, extra?: { variants?: string[] }): Promise<void>;
   /** 步骤开关。 */
@@ -111,6 +113,7 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
       const depth = Math.max(1, Math.min(3, Math.floor(deps.researchDepth() || 1)));
       const seenLib = new Map<string, PaperHit>();
       const seenKn = new Map<string, PaperHit>();
+      const seenWeb = new Map<string, PaperHit>();
       let notice: string | null = null;
       let summary = '';
       let plan = s.plan;
@@ -125,7 +128,7 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
           if (!kws.length) break; // 规划器没有新词 → 无法继续深挖
           plan = { searchStrategy: { keywords: kws } };
         }
-        const before = seenLib.size + seenKn.size;
+        const before = seenLib.size + seenKn.size + seenWeb.size;
         const enriched = await deps.crossEnrich(s.task.projectId, s.task.topic, plan);
         for (const h of enriched.libraryHits) {
           const key = h.id || `${h.title}:${h.year ?? ''}`;
@@ -134,21 +137,25 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
         for (const h of enriched.knowledgeHits) {
           if (!seenKn.has(h.title)) seenKn.set(h.title, h);
         }
+        for (const h of enriched.webHits ?? []) {
+          const key = h.url || h.title;
+          if (!seenWeb.has(key)) seenWeb.set(key, h);
+        }
         if (enriched.notice) notice = enriched.notice;
         if (enriched.summary) summary = enriched.summary;
         const keywords = (plan.searchStrategy?.keywords || [s.task.topic]).filter(Boolean).slice(0, 4);
         for (const q of keywords) {
           const needle = q.toLowerCase();
-          const found = [...seenLib.values(), ...seenKn.values()].filter((h) => `${h.title} ${h.abstract || ''}`.toLowerCase().includes(needle)).length;
+          const found = [...seenLib.values(), ...seenKn.values(), ...seenWeb.values()].filter((h) => `${h.title} ${h.abstract || ''}`.toLowerCase().includes(needle)).length;
           researchTrace.push({
             round: researchTrace.length + 1,
-            thought: round > 1 ? `第 ${round} 轮：围绕「${q}」补充检索本地文献库与知识库` : `围绕「${q}」检索本地文献库与知识库`,
+            thought: round > 1 ? `第 ${round} 轮：围绕「${q}」补充检索本地文献库、知识库与联网搜索` : `围绕「${q}」检索本地文献库、知识库与联网搜索`,
             action: 'search',
             query: q,
             found,
           });
         }
-        if (round > 1 && seenLib.size + seenKn.size === before) break; // 本轮零新增，收敛
+        if (round > 1 && seenLib.size + seenKn.size + seenWeb.size === before) break; // 本轮零新增，收敛
       }
       // 跨轮合并 meta：同名取最高分（引用渲染池展示口径与单轮一致）
       const libMeta = new Map<string, number>();
@@ -157,6 +164,7 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
         if (!libMeta.has(h.title) || score > (libMeta.get(h.title) ?? 0)) libMeta.set(h.title, score);
       }
       const knMerged = [...seenKn.values()];
+      const webMerged = [...seenWeb.values()];
       const meta = { lib: [...libMeta.entries()].map(([title, score]) => ({ title, score })), kn: knMerged };
       // ReAct 轨迹（think → act → observe）：由本轮真实跨库命中派生，落 pipeline_task.trace 供前端展示
       db.update(pipelineTasks)
@@ -167,6 +175,7 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
       return {
         enrichedLibHits: [...seenLib.values()],
         enrichedKnHits: knMerged,
+        enrichedWebHits: webMerged,
         researchNotice: notice ?? undefined,
         researchTrace,
         literatureSummary: summary,
@@ -305,7 +314,7 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
           .run();
         const scored = Number(report.totalScore);
         if (scored > best.score) best = { score: scored, content: latest?.content ?? '', feedback: report.feedback };
-        deps.trackBudget(s.taskId); // H2：评审成本打点
+        deps.trackBudget(s.taskId, 'reviewPaper'); // H2：评审成本打点
         await deps.notify(s.taskId, 'quality-gate', 'scored', QUALITY_GATE_LABEL(report.totalScore));
         if (report.totalScore < QUALITY_THRESHOLD && retry < MAX_RETRY) {
           retry += 1;
@@ -335,7 +344,7 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
       // 识别规则收敛到 tail-blocks.ts（此前两处各写一份正则，且都不认识「研究资料」）。
       const { body: bodyPart, tail: tailPart } = splitTailBlock(content);
       const polished = await deps.ai.polish(bodyPart);
-      deps.trackBudget(s.taskId); // H2：润色成本打点
+      deps.trackBudget(s.taskId, 'polish'); // H2：润色成本打点
       db.insert(polishRecords)
         .values({ id: randomUUID(), documentId: docId, type: 'polish', original: polished.original, polished: polished.polished, reason: polished.reason, createdAt: Date.now() })
         .run();

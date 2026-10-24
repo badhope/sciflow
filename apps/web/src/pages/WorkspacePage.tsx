@@ -4,6 +4,7 @@ import {
   Brain, Check, Download, ExternalLink, FilePlus2, Globe, Loader2, MessageSquare, Navigation, Pencil,
   PlayCircle, Plus, Quote, Search, Send, Sparkles, Square, Trash2, Workflow,
 } from 'lucide-react';
+import { PIPELINE_STEPS } from '@sciflow/core/pipeline-steps';
 import { api } from '../api/client';
 import { MessageList } from '../components/MessageList';
 import { useSplitDrag } from '../lib/split-drag';
@@ -33,15 +34,8 @@ import { WritingPreview } from './writing/WritingPreview';
  * 意图识别、slash 快捷指令、followUps 追问、来源引用进草稿、Markdown 快照导出。
  */
 
-const STEP_LABELS: Record<string, string> = {
-  'topic-verify': '主题验证',
-  literature: '文献调研',
-  outline: '大纲',
-  'quality-gate': '起草+质量门',
-  polish: '润色',
-  'citation-format': '引用',
-  complete: '完成',
-};
+/** 步骤中文名：单一来源 packages/core/pipeline-steps（此前本页另写一份，标签与设置页漂移） */
+const STEP_LABELS: Record<string, string> = Object.fromEntries(PIPELINE_STEPS.map((s) => [s.key, s.label]));
 
 /** Slash 快捷指令（对话直达高频科研动作） */
 const SLASH_COMMANDS: { name: string; desc: string; template: string }[] = [
@@ -338,7 +332,7 @@ export function WorkspacePage({
         lines.push(m.content || '（空）', '');
         if (m.sources?.length) {
           lines.push('参考来源：');
-          for (const s of m.sources) lines.push(`- ${s.docName}（相关度 ${Math.round(s.score > 1 ? s.score : s.score * 100)}%）`);
+          for (const s of m.sources) lines.push(`- ${s.docName}（相关度 ${Math.round(Math.min(100, Math.max(0, s.score)))}%）`);
           lines.push('');
         }
       }

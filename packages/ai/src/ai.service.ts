@@ -18,6 +18,27 @@ import { parseJson } from '../../core/src/json-guard';
  *
  * 公共 API 保持逐字节兼容（方法名、参数、返回类型都和重构前一样）。
  */
+/**
+ * 质量总分加权（纯函数，读取端加固）。
+ *
+ * 写入端 `setQualityWeights` 校验 (0,5]，但旧库 / 手工改库 / 部分写入都可能留下非法值：
+ *  - 全部为 0 → 分母 0 → total = NaN（前端显示 NaN、质量门比较恒 false）
+ *  - 负数权重 → 总分可能越界（<0 或 >100），误导「达标」
+ * 这里把每个维度权重钳制到 (0,5]，非法值回落 1（等权），保证总分恒为 0-100 整数。
+ */
+export function weightedQualityTotal(scores: Record<string, number>, weights: Record<string, number>): number {
+  const dims = Object.keys(scores);
+  if (dims.length === 0) return 0;
+  const w = (d: string): number => {
+    const v = Number(weights[d]);
+    return Number.isFinite(v) && v > 0 && v <= 5 ? v : 1;
+  };
+  const denom = dims.reduce((sum, d) => sum + w(d), 0);
+  if (!(denom > 0)) return 0;
+  const total = Math.round(dims.reduce((sum, d) => sum + (Number(scores[d]) || 0) * w(d), 0) / denom);
+  return Math.min(100, Math.max(0, total));
+}
+
 @Injectable()
 export class AiService extends AiTransportService {
   /**
@@ -278,10 +299,7 @@ ${text}` : prompts.TRANSLATE(text, targetLang);
     } catch {
       /* 使用默认等权 */
     }
-    const total = Math.round(
-      dims.reduce((sum, d) => sum + scores[d] * (weights[d] ?? 1), 0) /
-        dims.reduce((sum, d) => sum + (weights[d] ?? 1), 0),
-    );
+    const total = weightedQualityTotal(scores, weights);
     return { scores, feedback: String(parsed.feedback || '').trim(), totalScore: total };
   }
 

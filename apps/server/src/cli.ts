@@ -24,7 +24,9 @@ loadEnv({ path: join(__dirname, '..', '.env') });
 import { Command } from 'commander';
 import { NestFactory } from '@nestjs/core';
 
-const CLI_VERSION = '1.0.0';
+import { APP_VERSION } from './common/version';
+
+const CLI_VERSION = APP_VERSION;
 
 /** 本地服务 REST 客户端（需后端已启动；--base 可覆盖） */
 function apiBase(): string {
