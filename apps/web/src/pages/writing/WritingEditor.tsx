@@ -4,6 +4,7 @@ import CodeMirror, { EditorView, type ReactCodeMirrorRef } from '@uiw/react-code
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import type { Doc } from '../../types';
 import { Badge, Card } from '../../components/ui';
+import { SplitPane } from '../../components/SplitPane';
 
 /**
  * WritingEditor — 中间编辑/预览主区。
@@ -87,6 +88,20 @@ export function WritingEditor({
     };
   }, []);
 
+  const editorNode = (
+    <CodeMirror
+      ref={cmRef}
+      value={content}
+      onChange={onChangeContent}
+      height="100%"
+      theme={dark ? 'dark' : 'light'}
+      extensions={[markdown({ base: markdownLanguage }), EditorView.lineWrapping]}
+      placeholder="在这里撰写论文正文（支持 Markdown）…下方「AI 工具」可做大纲生成、章节起草、润色、翻译、降重"
+      basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true, autocompletion: false }}
+      style={{ height: '100%' }}
+    />
+  );
+
   return (
     <Card className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-800 shrink-0">
@@ -127,33 +142,30 @@ export function WritingEditor({
           ))}
         </div>
       </div>
-      <div className={`flex-1 min-h-0 flex ${editorMode === 'split' ? 'flex-row' : 'flex-col'}`}>
-        {editorMode !== 'preview' && (
-          <div
-            id="sciflow-editor"
-            className={`relative flex-1 min-w-0 min-h-0 h-full overflow-hidden text-[13.5px] ${
-              editorMode === 'split' ? 'w-1/2 border-r border-slate-100 dark:border-slate-800' : 'w-full'
-            }`}
-          >
-            {/* CodeMirror 需要显式高度：父级 flex 高度不确定时 height:100% 会塌成一行。
-                这里用绝对定位铺满容器，保证编辑区始终占满可用高度。 */}
-            <div className="absolute inset-0">
-              <CodeMirror
-                ref={cmRef}
-                value={content}
-                onChange={onChangeContent}
-                height="100%"
-                theme={dark ? 'dark' : 'light'}
-                extensions={[markdown({ base: markdownLanguage }), EditorView.lineWrapping]}
-                placeholder="在这里撰写论文正文（支持 Markdown）…下方「AI 工具」可做大纲生成、章节起草、润色、翻译、降重"
-                basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true, autocompletion: false }}
-                style={{ height: '100%' }}
-              />
+      {editorMode === 'split' ? (
+        <SplitPane
+          storageKey="sciflow:writing-split"
+          initial={0.5}
+          min={0.25}
+          max={0.78}
+          left={
+            <div id="sciflow-editor" className="relative h-full min-h-0 min-w-0 flex-1 overflow-hidden text-[13.5px] border-r border-slate-100 dark:border-slate-800">
+              <div className="absolute inset-0">{editorNode}</div>
             </div>
-          </div>
-        )}
-        {editorMode !== 'edit' && <div className="flex-1 min-w-0 min-h-0 flex">{renderPreview}</div>}
-      </div>
+          }
+          right={<div className="flex h-full min-h-0 min-w-0 flex-1">{renderPreview}</div>}
+        />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col">
+          {editorMode === 'edit' ? (
+            <div id="sciflow-editor" className="relative h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden text-[13.5px]">
+              <div className="absolute inset-0">{editorNode}</div>
+            </div>
+          ) : (
+            <div className="flex min-h-0 min-w-0 flex-1">{renderPreview}</div>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

@@ -15,6 +15,20 @@
         ]
       }
     },
+    "/health/deep": {
+      "get": {
+        "operationId": "HealthController_healthDeep",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
     "/agent/executions": {
       "get": {
         "operationId": "AgentTraceController_listExecutions",
@@ -2067,6 +2081,64 @@
         ]
       }
     },
+    "/research/design": {
+      "post": {
+        "operationId": "ResearchController_designExperiment",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      },
+      "get": {
+        "operationId": "ResearchController_listDesigns",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/design/{id}": {
+      "delete": {
+        "operationId": "ResearchController_deleteDesign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
     "/research/review-comments": {
       "post": {
         "operationId": "ResearchController_addReviewComments",
@@ -2630,6 +2702,32 @@
         ]
       }
     },
+    "/customization/pipeline-settings": {
+      "get": {
+        "operationId": "CustomizationController_getPipelineSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Customization"
+        ]
+      },
+      "post": {
+        "operationId": "CustomizationController_setPipelineSettings",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Customization"
+        ]
+      }
+    },
     "/customization/quality-weights": {
       "get": {
         "operationId": "CustomizationController_listQualityWeights",
@@ -2868,7 +2966,16 @@
     "/dashboard/overview": {
       "get": {
         "operationId": "DashboardController_overview",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""

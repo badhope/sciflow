@@ -1,6 +1,7 @@
 import { useContext, useState } from 'react';
 import { ToastContext } from '../App';
-import { CheckCircle2, Database, FlaskConical, Loader2, Plug, Plus, Power, Server, Trash2, Wand2, Workflow, XCircle, Gauge } from 'lucide-react';
+import { CheckCircle2, Database, FlaskConical, Keyboard, Loader2, Plug, Plus, Power, Server, Trash2, Wand2, Workflow, XCircle, Gauge } from 'lucide-react';
+import { HOTKEY_DOCS, hotkeyLabel } from '../lib/hotkeys-docs';
 import { api } from '../api/client';
 import type { CustomPromptTool } from '../types';
 import { Badge, Button, Card, CollapsibleCard, ErrorBox, Input, Modal, SectionTitle, Select, Spinner, Textarea, errMsg } from '../components/ui';
@@ -66,7 +67,7 @@ function IntentEditor() {
             <option value="/writing">论文写作</option>
             <option value="/pipeline">全自动流水线</option>
             <option value="/quality">质量评分</option>
-            <option value="/chat">科研问答</option>
+            <option value="/workspace">工作台</option>
           </select>
           <Input placeholder="触发词，逗号分隔（如 meta分析,荟萃分析）" value={state.intentForm.keywords} onChange={(e: React.ChangeEvent<HTMLInputElement>) => dispatch({ type: 'SET_INTENT_FORM', form: { ...state.intentForm, keywords: e.target.value } })} />
         </div>
@@ -310,12 +311,32 @@ function SettingsLayout() {
     }
   };
 
+  const sections = [
+    { id: 'settings-ai', label: 'AI 服务' },
+    { id: 'settings-usage', label: '用量成本' },
+    { id: 'settings-providers', label: '模型路由' },
+    { id: 'settings-web', label: '联网搜索' },
+    { id: 'settings-check', label: '环境自检' },
+    { id: 'settings-mcp', label: 'MCP 工具' },
+    { id: 'settings-custom', label: '自定义' },
+  ];
+  const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
   return (
     <div className="page-container">
       <ErrorBox message={state.error} />
 
+      {/* 页内导航：设置页内容长（>3 屏），提供锚点直达与当前位置 */}
+      <nav aria-label="设置分组" className="settings-nav">
+        {sections.map((it) => (
+          <button key={it.id} type="button" onClick={() => jump(it.id)} className="settings-nav__item">
+            {it.label}
+          </button>
+        ))}
+      </nav>
+
       {/* AI 配置总览 */}
-      <Card className="p-5 mb-4">
+      <Card className="p-4 mb-4" id="settings-ai">
         <SectionTitle extra={<Button variant="outline" onClick={load}><Server size={14} /> 刷新</Button>}>
           <span className="flex items-center gap-2">
             <Plug size={16} className="text-teal-600" /> AI 服务配置
@@ -357,16 +378,16 @@ function SettingsLayout() {
       </Card>
 
       {/* Usage Stats */}
-      <UsageStats />
+      <div id="settings-usage"><UsageStats /></div>
 
       {/* Model Routing + Provider Manager */}
-      <ProviderManager settings={state.settings} />
+      <div id="settings-providers"><ProviderManager settings={state.settings} /></div>
 
       {/* F-3.4 联网搜索：provider 切换 + chat 兜底开关 */}
-      <WebSearchSettings />
+      <div id="settings-web"><WebSearchSettings /></div>
 
       {/* 环境自检 */}
-      <Card className="p-5 mb-4">
+      <Card className="p-4 mb-4" id="settings-check">
         <SectionTitle extra={<Button onClick={runCheck} disabled={state.checking}>{state.checking ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />} 运行自检</Button>}>
           <span className="flex items-center gap-2">
             <Database size={16} className="text-teal-600" /> 环境自检
@@ -408,6 +429,28 @@ function SettingsLayout() {
         )}
       </Card>
 
+      {/* 快捷键速查（F-3.2）：数据源 lib/hotkeys-docs，与真实注册一一对应（commands.test 锁定） */}
+      <Card className="p-4 mb-4" id="settings-hotkeys">
+        <SectionTitle>
+          <span className="flex items-center gap-2">
+            <Keyboard size={16} className="text-teal-600" /> 快捷键速查
+          </span>
+        </SectionTitle>
+        <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
+          {HOTKEY_DOCS.map((h) => (
+            <div key={`${h.combo}-${h.label}`} className="flex items-center justify-between gap-3 py-1 border-b border-slate-50 dark:border-slate-800/60 last:border-0">
+              <span className="text-xs text-slate-600 dark:text-slate-300 truncate">
+                {h.label}
+                <span className="ml-1.5 text-[11px] text-slate-400 dark:text-slate-500">{h.scope}</span>
+              </span>
+              <kbd className="shrink-0 text-[11px] text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 font-mono">
+                {hotkeyLabel(h)}
+              </kbd>
+            </div>
+          ))}
+        </div>
+      </Card>
+
       {/* 模型连接测试 */}
       <Card className="p-5">
         <SectionTitle extra={<Button onClick={testModel} disabled={testing || !model} variant="success">{testing ? <Loader2 size={14} className="animate-spin" /> : <FlaskConical size={14} />} 测试模型</Button>}>
@@ -441,9 +484,10 @@ function SettingsLayout() {
       </Card>
 
       {/* MCP Tool List */}
-      <McpToolList />
+      <div id="settings-mcp"><McpToolList /></div>
 
       {/* ===== 自定义中心（默认折叠 · 渐进披露） ===== */}
+      <div id="settings-custom" />
       <IntentEditor />
       <PromptEditor />
       <PipelineEditor />

@@ -158,6 +158,19 @@ docker compose -f docker-compose.prod.yml up -d   # 生产配置
 
 ---
 
+## CLI headless 全流程（一条命令出论文）
+
+后端已启动时，CLI 可无人值守跑完整流水线：
+
+```bash
+node apps/server/dist/cli.js run --topic "图神经网络在生物医药中的应用" --auto --depth 2 --out ./paper/
+#   --auto      自动确认大纲（不加则在大纲确认点停下，exit 2）
+#   --depth 1-3 研究深度：文献调研按轮递归检索（更全，token 消耗更高）
+#   --out 目录  完成后把论文 Markdown 写入 ./paper/<论文标题>.md
+```
+
+研究深度也可以在「流水线页 / 工作台」用深度选择器切换（标准 / 深入 / 彻底），两者写同一个全局设置。
+
 ## 排障三连
 
 1. **AI 调用全 429** → 看 `AI_RPM_CAP`，免费档模型把数值调小；流水线并发起草天然是突发流量。

@@ -93,6 +93,10 @@ const ROUTE_TABLE: RouteRule[] = [
   { matches: (p) => p.includes('请只回复两个字：正常'), respond: () => '正常' },
   // 1) Planner 研究计划
   { matches: (p) => p.includes('科研规划专家') && p.includes('researchQuestions'), respond: () => j({ objective: '围绕给定主题完成一篇系统性综述，覆盖方法演进、代表工作与应用前景。', researchQuestions: ['该主题的核心方法演进脉络是什么？', '代表性模型/工作有哪些共性与差异？', '在目标场景下的应用价值与局限如何？'], searchStrategy: { keywords: ['graph neural network', '图神经网络', '消息传递', 'node classification'], minPapers: 8, depth: 'overview' }, draftingPlan: { sections: ['引言', '相关工作', '方法', '结果与讨论', '结论'], wordCount: 5000 }, risks: ['公开文献时效性不足', '跨领域术语口径差异'] }) },
+  // 1.5) F2 反共识大纲变体（必须在大纲规则之前匹配：prompt 同样包含「设计论文大纲」与 "sections"）
+  { matches: (p) => p.includes('反共识') && p.includes('"primary"'), respond: () => j({ primary: MOCK_OUTLINE, variants: [{ title: '主流范式的系统性缺陷：对消息传递统一框架的质疑', sections: [{ title: '引言：被掩盖的失败案例', subsections: ['主流叙事如何形成'] }, { title: '消息传递的表达力上界', subsections: ['理论反例'] }, { title: '反例与边界条件', subsections: ['异质图失效场景'] }, { title: '重构研究议程', subsections: ['超越消息传递'] }] }, { title: '以负结果为中心的图神经网络研究断代史', sections: [{ title: '引言：负结果的认识论价值', subsections: [] }, { title: '第一次浪潮及其退潮', subsections: ['谱方法为何沉寂'] }, { title: '断代框架', subsections: ['按学派论战重组'] }, { title: '对未来的启示', subsections: [] }] }] }) },
+  // 1.6) F3 实验设计助手
+  { matches: (p) => p.includes('实验设计') && p.includes('"sampleHint"'), respond: () => j({ objective: '验证时序感知聚合相对均匀采样能显著提升动态图节点分类性能', variables: { independent: ['邻居采样是否引入时序衰减因子（有/无）'], dependent: ['节点分类 Macro-F1'], controlled: ['训练轮数=200', '隐藏维度=64', '数据集划分固定种子'] }, groups: [{ name: '实验组', role: 'treatment', description: '时序感知采样聚合' }, { name: '对照基线', role: 'control', description: '标准 GraphSAGE 均匀采样' }], sampleHint: '每配置 5 个随机种子，报均值±标准差；配对 t 检验 α=0.05，power≥0.8', procedure: ['固定数据集与划分', '训练实验组与对照组', '汇总指标并做显著性检验'], analysisPlan: ['主指标 Macro-F1 对比表', '消融：去掉时序衰减因子'], risks: ['动态图数据集规模有限，方差可能偏大'] }) },
   // 2) 论文大纲
   { matches: (p) => p.includes('设计论文大纲') && p.includes('"sections"'), respond: () => j(MOCK_OUTLINE) },
   // 3) ReAct 思考步 —— 一律 done
@@ -202,12 +206,14 @@ function getLastUserContent(body: any): string {
 }
 
 const mockHandlers = [
-  // GET /v1/models — 模型列表
-  http.get('*/v1/models', () => {
+  // GET */models — 模型列表（* 不限路径前缀：ark /api/v3/models、openai /v1/models 都拦）
+  http.get('*/models', () => {
     return HttpResponse.json(MOCK_MODELS_BODY);
   }),
-  // POST /v1/chat/completions — 统一入口（流式 + 非流式）
-  http.post('*/v1/chat/completions', async ({ request }) => {
+  // POST */chat/completions — 统一入口（流式 + 非流式）。
+  // 历史缺陷（v1.0 修复）：只拦 */v1/chat/completions，而国内厂商多为 /v3 /v4 /compatible-mode/v1——
+  // 模式不匹配时 MSW 默认 bypass，请求会打穿到真实端点（假 mock + 真流量）。
+  http.post('*/chat/completions', async ({ request }) => {
     let parsed: any = {};
     try {
       parsed = await request.json();
@@ -255,12 +261,12 @@ let server: ReturnType<typeof setupServer> | null = null;
 export function startMockGateway(): string {
   if (!server) {
     server = setupServer(...mockHandlers);
-    // msw v3：未匹配请求默认放行（bypass 为默认行为，无需显式传参）
     server.listen();
     console.log('[mock-gateway] MSW mock 层已激活（拦截所有 fetch 请求，仅本机测试用）');
   }
-  // 返回一个虚拟 baseUrl（MSW 拦截所有请求，URL 不影响路由）
-  return process.env.AI_BASE_URL || 'http://mock.local/v1';
+  // 必须返回虚拟 /v1 baseUrl（v1.0 修复）：此前透传 AI_BASE_URL（如 ark 的 /v3），
+  // 与拦截模式 */v1/chat/completions 不匹配时 MSW bypass → 打穿真实端点。
+  return 'http://mock.local/v1';
 }
 
 /** 关闭 MSW 拦截层 */

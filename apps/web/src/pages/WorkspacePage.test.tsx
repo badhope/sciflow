@@ -37,8 +37,13 @@ vi.mock('../api/client', () => ({
       list: vi.fn(async () => [docA]),
       get: vi.fn(async () => docA),
       create: vi.fn(async () => docA),
+      update: vi.fn(async () => docA),
     },
     pipeline: { create: vi.fn(), get: vi.fn(), confirmOutline: vi.fn() },
+    settings: { get: vi.fn(async () => ({ ai: { models: [] } })) },
+    judgment: { intent: vi.fn(async () => null) },
+    chat: { sessions: vi.fn(async () => ({ sessions: [] })) },
+    knowledge: { list: vi.fn(async () => []) },
   },
   streamChat: (opts: Record<string, unknown>) => streamChatMock(opts),
 }));
@@ -58,6 +63,7 @@ function renderPage() {
 
 describe('WorkspacePage（对话+预览工作台）', () => {
   beforeEach(() => {
+    localStorage.clear();
     lastOpts = null;
     streamChatMock.mockClear();
   });
@@ -96,7 +102,9 @@ describe('WorkspacePage（对话+预览工作台）', () => {
     fireEvent.keyDown(ta, { key: 'Enter', ctrlKey: true });
 
     await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(1));
-    expect(lastOpts?.message).toBe('什么是图神经网络？');
+    // v0.11 起对话请求统一追加 FOLLOWUP_HINT 约定（followUps 追问建议），用户正文必须原样在前
+    expect(String(lastOpts?.message).startsWith('什么是图神经网络？')).toBe(true);
+    expect(String(lastOpts?.message)).toContain('---FOLLOWUPS---');
     expect(lastOpts?.projectId).toBe('p-1');
   });
 

@@ -45,6 +45,14 @@ pnpm doctor --json   # 机器可读（CI/桌面启动自检）
 pnpm doctor --fix    # 自动修复安全项（建目录、清理孤儿 WAL）
 ```
 
+### 深度探针 `GET /api/health/deep`（v1.0）
+
+三探针只读巡检，供监控/桌面托盘消费；单项失败不互相阻断，不发起真实模型请求：
+
+- `checks.db`：`SELECT 1` 往返时延（`latencyMs`）
+- `checks.vector`：sqlite-vec 扩展加载态与已嵌入块计数（未加载时 `ok=false`，属正常降级）
+- `checks.ai`：AI 端点配置形态（configured/model/baseUrl；连通性实测走设置页「测试模型」）
+
 ## 4. 日志
 
 | 位置 | 内容 | 保留 |

@@ -1,23 +1,47 @@
-# SciFlow · Fully Automatic AI Research Assistant
+# SciFlow · Local-First AI Research Workbench
 
-> **Local-First AI Research Workbench · single-user, single-machine**
+> **From a research topic to a submittable manuscript in one pipeline: literature survey → outline (with contrarian variants) → section-wise drafting → quality-gate rewriting → polishing → citations → submission assistance.**
+> Your data, model keys, literature and memory never leave your machine — no cloud, no multi-tenancy, no lock-in.
 
 [![CI](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![version](https://img.shields.io/badge/version-0.9.0-black.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.0.0-black.svg)](CHANGELOG.md)
 
 > **🌐 Language / 语言：[English](README.en.md) · [中文](README.md)**
 
 > **Repository mirrors (synced across 5 platforms)**
 > [GitCode](https://gitcode.com/badhope/sciflow) · [Gitee](https://gitee.com/badhope/sciflow) · [GitHub · badhope](https://github.com/badhope/sciflow) · [GitHub · X33834](https://github.com/X33834/sciflow) · [GitHub · Morningstar202604](https://github.com/Morningstar202604/sciflow)
-> The three GitHub mirrors run the same CI: lint · typecheck ×2 · vitest ×2 · build ×2 · full mock regression (167 checks) · promptfoo prompt-contract evals · Playwright smoke; GitCode and Gitee mirror the same release tree.
+> The three GitHub mirrors run the same CI: lint · typecheck ×2 · vitest ×2 · build ×2 · full mock regression (178 checks) · promptfoo prompt-contract evals · Playwright smoke; GitCode and Gitee mirror the same release tree.
 
-SciFlow is a **local-first, single-machine** AI research assistant: give it a research topic and it runs the whole academic lifecycle — **literature survey → research planning → outline generation (human confirmation) → section-wise drafting (Agentic RAG, search-while-writing) → 7-dimension quality gate (auto Reflexion rewrite below threshold) → polishing → citation formatting → submission assistance** — while accumulating process assets in a NotebookLM-style RAG knowledge base and a visual workbench.
+<!-- Architecture at a glance (Mermaid renders inline, no image assets needed) -->
 
-- **No external AI SaaS dependency**: AI goes exclusively through the **OpenAI-compatible protocol** (Vercel AI SDK transport layer) against your own model key — works with Ollama / LM Studio local endpoints too.
-- **Local-first**: SQLite single-file store, zero-config. Your literature, notes, memory and keys stay on your machine; no multi-tenancy, no third-party uploads.
+```mermaid
+flowchart LR
+    A[Research topic] --> B[Topic verification · Planner<br/>multilingual query planning]
+    B --> C[Literature survey · depth 1-3<br/>recursive retrieval · ReAct trace]
+    C --> D{Human outline gate}
+    D -->|Primary| E[Section drafting<br/>Agentic RAG]
+    D -->|Contrarian variants A/B| E
+    E --> F[7-dimension quality gate<br/>auto Reflexion below 80]
+    F --> G[Polish · citations<br/>8 CSL styles]
+    G --> H[Submission assist<br/>journal match / cover letter / tracking]
+    K[(Local SQLite<br/>literature · KB · memory · cost)] -.-> C
+    K -.-> E
+    L[Your model key<br/>any OpenAI-compatible endpoint] -.-> B
+    L -.-> E
+    L -.-> F
+```
+
+## 🗞 Latest news
+
+- **2026-10-24 · v1.0.0**: research-depth parameter (1–3 rounds of recursive retrieval), contrarian outline variants (anti-homogenization), experiment design assistant, per-step timing chart, headless CLI (`sciflow run`), MCP resources, deep health probe.
+- **2026-10-23 · v0.11.0**: new "Ink Current" brand mark; research chat merged into the workspace (single chat entry with local multi-session, slash commands, follow-up suggestions).
+- **2026-10-23 · v0.10.0**: unified chat kernel / global hotkey registry / project stage bar / draggable split panes.
+- **2026-10-23 · v0.9.0**: 35 findings fixed from a full-dimension audit (two Criticals: PATCH whitelist, CSL dedup) + brand/touch/contrast polish.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the full history.
 
 ## 📸 Screenshots
 
@@ -25,7 +49,7 @@ SciFlow is a **local-first, single-machine** AI research assistant: give it a re
 
 ![Chat Workspace](docs/screenshots/workspace.png)
 
-| Pipeline · multi-agent orchestration | Quality · 7-dimension radar |
+| Pipeline · depth selector + step timing | Quality · 7-dimension radar |
 | --- | --- |
 | ![Pipeline](docs/screenshots/pipeline.png) | ![Quality](docs/screenshots/quality.png) |
 
@@ -37,228 +61,159 @@ SciFlow is a **local-first, single-machine** AI research assistant: give it a re
 | --- | --- |
 | ![Knowledge](docs/screenshots/knowledge.png) | ![Dashboard](docs/screenshots/dash.png) |
 
-| Research chat · sessions & sources | Settings · usage & cost |
-| --- | --- |
-| ![Chat](docs/screenshots/chat.png) | ![Settings](docs/screenshots/settings.png) |
-
-| Experiments · local Python sandbox | Submission · journals / cover letter / tracking |
+| Experiments · sandbox + design assistant | Submission · journals / cover letter / tracking |
 | --- | --- |
 | ![Experiments](docs/screenshots/experiments.png) | ![Submission](docs/screenshots/submission.png) |
 
-| Memory center · episodic / procedural | Dark theme · follow system |
+| Memory center · episodic / procedural | Settings · hotkeys & usage cost |
 | --- | --- |
-| ![Memory](docs/screenshots/memory.png) | ![Dark theme](docs/screenshots/settings-dark.png) |
+| ![Memory](docs/screenshots/memory.png) | ![Settings](docs/screenshots/settings.png) |
 
-**24-second product tour**: [`docs/media/demo.mp4`](docs/media/demo.mp4) (recorded with Playwright against the real UI).
-
-### Design language
-
-| Dimension | Spec |
-| --- | --- |
-| Brand | One-stroke flowing "S" + research-fluid gradient (teal → cyan → sky), see [`docs/BRAND.md`](docs/BRAND.md) |
-| Color | All three gradient stops ≥ 4.5:1 with white text; `--on-brand` switches to deep ink in dark mode (≥ 6.8:1) |
-| Layout | One `--page-max: 1152px` container for all content pages |
-| Type | Body 14px / secondary 12px / minimum 11px; 1.6–1.75 line height for mixed CJK/Latin |
-| Theme | Light / Dark / Follow system (inline boot script, no white flash) |
-| A11y | Site-wide h1, focus rings, modal focus trap, Esc, touch-visible actions, confirm dialogs for destructive ops |
+**25-second product tour**: [`docs/media/demo.mp4`](docs/media/demo.mp4) (recorded with Playwright against the real UI).
 
 ## ✨ Features
 
-### Writing & Finalization
-- **Outline-first**: AI generates the research plan and section outline; the writing page has edit / preview / split modes.
-- **Section-wise drafting + Agentic RAG**: every section looks things up in the local knowledge base while writing; in-text `[n]` anchors match the reference list one-to-one.
-- **Academic polishing**: 3-stage polish (original + polished + reasoning), Chinese↔English translation, de-duplication rewriting; figures and the reference tail are protected from being washed out.
-- **Multi-version history + version diff**: each finalization stores a snapshot; versions are compared with LCS text diff (`VersionDiffModal`).
-- **One-click export**: Markdown / HTML / LaTeX (.tex) / Word (.docx).
+### Writing & finalizing
+- **Outline-first**: AI generates a research plan and section outline; edit / preview / split view; **contrarian variants** challenge the mainstream narrative so your draft is not yet another template paper.
+- **Section-wise drafting + Agentic RAG**: each section searches the local knowledge base while writing; `[n]` anchors map 1:1 to the reference list.
+- **Academic polishing**: three-part polish (original + polished + rationale), CN↔EN translation, paraphrasing; tail blocks (references / figures) are protected from rewriting.
+- **Version history + diff**: named snapshots, LCS text diff per version.
+- **One-click export**: Markdown / Word (.docx).
 
-### Citations & References
-- **8 citation styles**: APA / IEEE / Vancouver / **GB/T 7714** / Nature / Chicago / Springer / ACS.
-- **In-text anchor reordering**: numeric styles keep insertion order; author-year styles get automatic a/b suffix reordering by first appearance (`CiteReorderButton`).
-- **BibTeX / RIS import & export**: metadata dedup fingerprints, `reading_status` state machine (unread / reading / read / cited).
-- **PRISMA screening + coding matrix**: include/exclude criteria screening and structured extraction in the literature page.
-- **Force-directed citation network**: sigma.js + graphology + ForceAtlas2 (WebGL) interactive graph of reference relationships.
+### Citations & literature
+- **8 citation styles**: APA / IEEE / Vancouver / **GB/T 7714** / Nature / Chicago / Springer / ACS, re-rendered in place.
+- **Anchor-based renumbering**: numeric anchors keep insertion order; author-year styles get a/b suffixes by first appearance.
+- **BibTeX / RIS import-export**, fingerprint dedup, reading-status state machine.
+- **PRISMA screening + coding matrix**, force-directed citation network with community coloring.
 
-### Knowledge Base RAG (NotebookLM-style)
-- Local **sqlite-vec vector ANN + FTS5 trigram full-text** hybrid retrieval (falls back to full-text when the embedding model is unavailable; Chinese queries are expanded as 3-gram OR terms); knowledge documents and references are mutually bound, hits carry author/year source cards.
+### Knowledge base RAG (NotebookLM-style)
+- Local **sqlite-vec ANN + FTS5 trigram** hybrid retrieval (graceful FTS fallback without an embedding model); knowledge files bind to literature records; hits come with author/year source cards.
 
-### Fully Automatic Pipeline
-- **LangGraph-orchestrated pipeline with a human confirmation point**: topic verification → literature survey → outline generation → **outline confirmation (interrupt)** → section drafting (parallel, configurable concurrency) → **7-dimension quality gate** (<80 triggers a Reflexion rewrite, up to 3 rounds, best-scoring round wins) → polishing → citation formatting; confirm and resume right inside the chat workspace.
-- **Checkpoint resume**: after a service restart, interrupted tasks resume idempotently from the drafting stage.
-- **Model routing**: fast / strong tiers — Q&A and polishing use the fast model; planning, long-text drafting and review auto-switch to the strong model.
+### Fully automatic pipeline
+- **LangGraph orchestration + human confirmation**: topic verify → literature survey (research depth 1–3, recursive retrieval) → outline gate (primary + 2 contrarian variants) → parallel section drafting → **7-dimension quality gate** (auto Reflexion ≤3 rounds) → polish → citation formatting.
+- **Checkpoint resume** after service restarts; **per-step timing chart**.
+- **Model routing**: fast / strong tiers.
 
-### Quality & Review
-- **7-dimension quality scoring**: literature / logic / citation / language / novelty / figures / format (0–100), Recharts radar + historical comparison.
-- **Review loop**: structured parsing of reviewer comments, per-comment response templates, revision deadline countdown.
+### Experiments & memory
+- **Experiment design assistant**: research question → structured design (variables, control groups, sample-size/power hints, procedure, analysis plan, validity risks), persisted and reviewable.
+- **Experiment sandbox**: isolated local Python execution with timeouts and output caps.
+- **Memory center**: episodic + procedural memory injected into drafting.
 
-### Submission Assistance
-- Journal matching (by topic/scope), Cover Letter generation, submission status tracking (submitted → under review → revision → accepted/rejected → resubmission chain).
+### Experience details
+- **⌘K command palette** (registry-based fuzzy matching), global hotkey registry + cheat sheet in Settings, unified chat kernel with follow-ups and slash commands, MCP tools **and resources**, **headless CLI** (`sciflow run --topic … --auto --out ./paper/`), **deep health probe** (`GET /api/health/deep`).
+- Chinese-first error copy, mobile-aware layouts, AA-contrast brand system.
 
-### Experiments & Memory
-- **Experiment sandbox**: isolated `spawn` of Python scripts (`SANDBOX_PYTHON` / `SANDBOX_TIMEOUT_MS` configurable) with resource guards and clear fallbacks.
-- **Memory center**: episodic memory (auto-accumulated per project) + procedural memory (writing-style instructions auto-injected into drafting).
-- **Retro cards / mind maps**: pipeline retrospection points distilled into structured cards.
+## 🆚 How SciFlow differs
 
-### Experience Details
-- **⌘K command palette**: global navigation / new project / dark mode; deep links via `#/` hash routes.
-- **MCP toolbench**: AI capabilities exposed as standard MCP tools (official SDK, Streamable HTTP + stdio transports), individually invocable from Settings with dynamic JSON-Schema parameter validation (guardrail rejects are surfaced as errors).
-- Fully localized error copy, narrow-screen adaptation, branded gradient visual system.
+| | SciFlow | Stanford STORM | Elicit | GPT-Researcher | NotebookLM |
+| --- | --- | --- | --- | --- | --- |
+| Deployment | **Local single-machine** (SQLite / Docker / desktop) | Cloud + OSS lib | Cloud SaaS | Self-host / cloud | Cloud |
+| Models | **Bring your own key, any OpenAI-compatible endpoint (incl. Ollama)** | Fixed cloud models | Bundled | BYO key | Bundled |
+| Privacy | **Everything local, zero third-party upload** | Cloud | Cloud | Depends | Cloud |
+| Scope | Topic → literature → outline → drafting → quality gate → citations → **submission tracking** | Wiki-style report | Systematic review | Research report | Notebook Q&A |
+| Citations | **8 CSL styles live re-render + citation audit + fingerprint dedup** | Footnotes | Extraction table | Citation list | Source chips |
+| Anti-homogenization | **Contrarian outline variants + recursive research depth** | Multi-perspective QA | — | Recursive depth | — |
+| Submission | **Journal matching / cover letter / reviewer reply / tracking** | — | — | — | — |
+| CN academia | **GB/T 7714, CN journal library, Chinese-aware retrieval** | Weak | Weak | Weak | Weak |
 
-## 🏗 Tech Stack
+> STORM/Elicit/NotebookLM are excellent cloud services; SciFlow does not fight their data moats. It fights the **"local-first + full-lifecycle loop + AI failure-mode governance"** battle: traceable citations, auto-rewrite quality gates, and hard cost budgets.
 
-| Part | Stack |
+## 🏗 Tech stack
+
+| Tier | Technologies |
 | --- | --- |
-| Backend `apps/server` | NestJS 11 · TypeScript (strict) · Drizzle ORM · better-sqlite3 (WAL) · Vercel AI SDK (OpenAI-compatible) · LangGraph (orchestration / checkpoint resume / interrupts) · official MCP SDK · zod · helmet + pino · in-process MSW mock gateway |
-| Frontend `apps/web` | React 19 · Vite 6 · TypeScript · Tailwind CSS v4 · TanStack Query / Table · Recharts · sigma.js + graphology · streamdown (streaming Markdown) · CodeMirror 6 · react-markdown + KaTeX |
-| Desktop `apps/desktop` | Electron 41 (embedded Node 24, native `require(ESM)`) · embedded backend (`ELECTRON_RUN_AS_NODE`) · local SQLite (userData-isolated, native modules auto-rebuilt for the Electron ABI when packaging) · electron-builder · electron-updater (opt-in) |
-| Engineering | pnpm workspace · vitest (server 99 / web 62) · Playwright smoke · promptfoo prompt-contract evals · GitHub Actions with 3 jobs (types/unit/build · full regression · E2E+evals) · Python 3 regression script (167 checks) |
+| Server `apps/server` | NestJS 11 · TypeScript (strict) · Drizzle ORM · better-sqlite3 (WAL) · Vercel AI SDK (OpenAI-compatible) · LangGraph (orchestration / checkpoint / interrupt) · MCP official SDK · zod · helmet + pino · MSW in-process mock gateway |
+| Web `apps/web` | React 19 · Vite 6 · TypeScript · Tailwind CSS v4 · TanStack Query/Table · Recharts · sigma.js + graphology · streamdown · CodeMirror 6 · react-markdown + KaTeX |
+| Desktop `apps/desktop` | Electron 41 · embedded server · per-user SQLite · electron-builder · electron-updater (opt-in) |
+| Engineering | pnpm workspace · vitest (server 108 / web 73) · Playwright smoke · promptfoo contract evals · GitHub Actions (3 jobs) · Python regression (178 checks) |
 
-**Architecture overview**
+Data chain: `Project → Document (multi-version) → Citation → Reference (traceable)`; `PipelineTask / AgentExecution / ReflexionLog / MemoryLog / LlmCallLog` record pipeline state, agent traces, rewrite rounds, memory and token cost.
 
-```
-apps/server/src/   backend modules (NestJS)
-├── ai/            AI SDK model layer + prompt templates + MSW mock gateway + global token-bucket rate limit
-├── projects/      project management   ├── documents/   docs / polish / translate / citations / versions / export
-├── references/    reference library    ├── knowledge/   RAG knowledge base (vectors + FTS5 full-text)
-├── pipeline/      LangGraph orchestration (interrupt / checkpointer)  ├── agent/  agent execution traces
-├── research/      literature survey + quality scoring + submission assistance (controllers)
-├── judgment/      review loop          ├── experiments/ experiment sandbox
-├── chat/          SSE streaming Q&A    ├── memory/      episodic / procedural memory
-├── mcp/           MCP toolbench        ├── settings/    settings / model connectivity self-check
-├── dashboard/     workspace aggregation├── db/          Drizzle schema + SQLite
-└── common/        shared utilities
+## 🚀 Quick start
 
-apps/web/src/pages/  frontend pages
-Workspace · Dashboard · Writing · Literature · Knowledge
-Pipeline · Quality · Experiments · Memory · Submission · Settings
-```
-
-Data chain: `Project → Document (multi-version) → Citation → Reference (real, traceable)`; `PipelineTask` / `AgentExecution` / `ReflexionLog` / `MemoryLog` / `LlmCallLog` record pipeline state, agent traces, rewrite reflections, memory accumulation and token cost respectively.
-
-## 🚀 Quick Start
-
-Requirements: Node ≥ 20 (CI pins Node 22), pnpm ≥ 9 (this repo pins `pnpm@11.7.0`)
+Requires Node ≥ 20 (CI locks 22) and pnpm ≥ 9 (repo locks `pnpm@11.7.0`).
 
 ```bash
-# 1. Clone and install
-git clone <any mirror URL> sciflow && cd sciflow
+git clone <your-mirror-url> sciflow && cd sciflow
 pnpm install
-
-# 2. Configure AI (copy the template and fill in your own key; all vars are documented)
-cp apps/server/.env.example apps/server/.env
-#    Edit apps/server/.env: at least AI_BASE_URL / AI_API_KEY / AI_MODEL
-
-# 3. Build the backend
+pnpm doctor                                   # environment self-check with fix hints
+cp apps/server/.env.example apps/server/.env  # fill AI_BASE_URL / AI_API_KEY / AI_MODEL
 pnpm --filter @sciflow/server build
-
-# 4. Run (two terminals)
-#    backend :3000
-node apps/server/dist/apps/server/src/main.js
-#    frontend :5173
-pnpm --filter @sciflow/web dev
-
-# 5. Open in browser
-#    http://localhost:5173
+node apps/server/dist/apps/server/src/main.js # backend :3000
+pnpm --filter @sciflow/web dev                # frontend :5173 → http://localhost:5173
 ```
 
-> SQLite tables are created automatically on first boot (default `apps/server/data/sciflow.db`) — zero config.
-> The backend binds `127.0.0.1` only by default; set `HOST=0.0.0.0` explicitly to expose it on a LAN.
-
-### 🖥 Desktop app (optional)
+**No API key?** 30-second full-flow demo with the in-process mock gateway:
 
 ```bash
-pnpm install && pnpm build          # build backend + frontend first
-pnpm icons                          # generate app icons from the vector master (first time)
-pnpm desktop:dev                    # dev mode (web dev server + desktop shell)
-pnpm desktop:dist                   # package the installer for the current platform → apps/desktop/release/
+AI_MOCK=1 DATABASE_PATH=/tmp/sciflow_demo.db PORT=3000 node apps/server/dist/apps/server/src/main.js
+node scripts/seed-demo.mjs && RUN_PIPELINE=1 node scripts/seed-demo.mjs
 ```
 
-Data lives in the platform-standard directory (Windows `%APPDATA%\SciFlow`), fully offline; see [`apps/desktop/README.md`](apps/desktop/README.md) and [`docs/BRAND.md`](docs/BRAND.md).
-
-## 🔑 AI Configuration
-
-SciFlow works with **any OpenAI-compatible endpoint** — just `base_url` + `model` + `key`:
-
-| Variable | Description | Example (placeholder, not a real key) |
-| --- | --- | --- |
-| `AI_BASE_URL` | OpenAI-compatible endpoint | `https://api.deepseek.com/v1` |
-| `AI_API_KEY` | Your API key | `sk-your-api-key-here` |
-| `AI_MODEL` | Default model | `deepseek-chat` |
-| `AI_MODEL_FAST` | Fast tier (Q&A / polish / translate / review JSON) | falls back to `AI_MODEL` if unset |
-| `AI_MODEL_STRONG` | Strong tier (planning / long-text drafting) | falls back to `AI_MODEL` if unset |
-| `AI_RPM_CAP` | Max AI calls per minute (token bucket, 429-safe) | `8` (use 100+ for long pipelines) |
-| `AI_MOCK` | Set to `1` to enable the in-process mock gateway (MSW interception; full pipeline without a key / network) | `1` |
-| `CORS_ORIGIN` | Allowed frontend origins (comma-separated) | `http://localhost:5173` |
-
-Compatible endpoints (any of these, always `base_url` + model name): DeepSeek `https://api.deepseek.com/v1`, Volcano Ark `https://ark.cn-beijing.volces.com/api/v3`, Zhipu `https://open.bigmodel.cn/api/paas/v4`, Kimi `https://api.moonshot.cn/v1`, Ollama local `http://localhost:11434/v1`, etc.
-
-> Without a key, local features (project management / reference library / RAG) keep working; AI features show a clear configuration prompt and **never return fake data**.
-
-## 🧪 Testing & Regression
+### Desktop app (optional)
 
 ```bash
-# Type checks (both ends, enforced in CI)
-pnpm --filter @sciflow/server typecheck
-pnpm --filter @sciflow/web typecheck
+pnpm install && pnpm build && pnpm icons
+pnpm desktop:dev      # develop
+pnpm desktop:dist     # package installer → apps/desktop/release/
+```
 
-# Unit tests (vitest: server 99 + web 62)
-pnpm --filter @sciflow/server test
-pnpm --filter @sciflow/web test
+See [`apps/desktop/README.md`](apps/desktop/README.md) and [`docs/BRAND.md`](docs/BRAND.md).
 
-# Builds (both ends)
+## ⌨️ Headless CLI
+
+```bash
+node apps/server/dist/apps/server/src/cli.js run \
+  --topic "A survey of graph neural networks in biomedicine" \
+  --auto --depth 2 --out ./paper/
+# --auto      auto-confirm the outline (otherwise stops at the gate, exit 2)
+# --depth 1-3 research depth (recursive retrieval rounds)
+# --out dir   writes ./paper/<paper-title>.md on completion
+```
+
+Other commands: `health` / `project list` / `pipeline run|status` / `doc export` / `mcp serve` (stdio MCP server for Claude Desktop).
+
+## 🔑 AI configuration
+
+Any OpenAI-compatible endpoint works — fill `AI_BASE_URL` + `AI_API_KEY` + `AI_MODEL` in `apps/server/.env` (DeepSeek / Zhipu / Kimi / Ark / Qwen / Ollama local `http://localhost:11434/v1` …). `AI_MODEL_FAST` / `AI_MODEL_STRONG` route tiers; `AI_RPM_CAP` throttles; `AI_MOCK=1` enables the deterministic in-process mock gateway (no key, no network). Without a key, local features keep working and AI features show explicit configuration hints — **no fake data**.
+
+## 🧪 Testing & regression
+
+```bash
+pnpm --filter @sciflow/server typecheck && pnpm --filter @sciflow/web typecheck
+pnpm --filter @sciflow/server test          # vitest, 108 tests
+pnpm --filter @sciflow/web test             # vitest, 73 tests
 pnpm --filter @sciflow/server build && pnpm --filter @sciflow/web build
-
-# E2E smoke (Playwright; prerequisites: mock backend :3000 + web dev :5173 running)
 pnpm exec playwright test e2e/workspace-smoke.spec.ts
-# Real-model E2E (skipped by default; needs a real endpoint): E2E_REAL=1 pnpm exec playwright test e2e/real-chat.spec.ts
-
-# Prompt-contract evals (promptfoo, offline; prerequisites: server build + mock HTTP gateway below)
 pnpm exec promptfoo eval -c evals/promptfooconfig.yaml
-```
 
-### Built-in mock AI gateway (full pipeline without a key / network)
-
-With `AI_MOCK=1`, **MSW intercepts all AI calls in-process** (no port, no network) and returns **deterministic** responses by prompt keyword (research plan / outline JSON, Chinese sections with `[Ref:N]`, a ≈87/100 7-dimension review that does not trigger a rewrite, 3-stage polish, RAG answers, journal matching, …), with SSE chunking.
-
-```bash
-# backend (mock mode, relaxed rate limit)
+# Full blackbox regression (fresh DB + mock gateway): PASS 178 / FAIL 0
 AI_MOCK=1 AI_RPM_CAP=120 DATABASE_PATH=/tmp/sciflow_regression.db PORT=3000 \
   node apps/server/dist/apps/server/src/main.js
-
-# other terminal: full regression (all routes + one end-to-end pipeline with artifact assertions)
-SCIFLOW_BASE=http://localhost:3000 AI_MOCK=1 \
-  python3 scripts/full_regression.py
+SCIFLOW_BASE=http://localhost:3000 AI_MOCK=1 python3 scripts/full_regression.py
 ```
 
-> When an external tool (e.g. promptfoo) needs a real HTTP endpoint: `node apps/server/scripts/mock-openai-http.mjs` — it reuses the same route table and listens on `127.0.0.1:5099`.
+## 📚 Documentation
 
-Regression baseline (fresh database + mock gateway, see `scripts/full_regression.py`): **PASS 167 / FAIL 0 / KNOWN 0** (the KNOWN mechanism remains, currently empty — all 11 legacy gaps fixed). The mock gateway is for testing/demos only and does not represent real model capability.
-
-## 📚 Documentation Index
-
-| Document | Content |
+| Doc | Content |
 | --- | --- |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Single source of truth: dependency map / anti-reinvention rules / phase progress & backlog |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Architecture source of truth: dependency map, no-wheel-reinvention rules, contracts |
 | [`docs/product-roadmap.md`](docs/product-roadmap.md) | Product roadmap: capability matrix, design principles, gaps |
-| [`docs/index.html`](docs/index.html) | Project homepage (static single page, opens in a browser) |
-| [`docs/sciflow-code-tree.html`](docs/sciflow-code-tree.html) | Full-repo code tree visualization |
-| [`docs/screenshots/`](docs/screenshots/) | Real screenshots (workspace / pipeline / writing / quality / literature / knowledge) |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev environment, commit conventions, PR flow |
-| [`SECURITY.md`](SECURITY.md) | Security design notes and vulnerability disclosure |
-| [`CHANGELOG.md`](CHANGELOG.md) | Version history |
+| [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Scenario-based configuration guide (models, search, auth, CLI) |
+| [`docs/index.html`](docs/index.html) | Project site (static page; GitHub Pages home) |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) / [`SECURITY.md`](SECURITY.md) | Contribution flow / security disclosure |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Ops handbook: health probes, backup/restore, failure modes |
+| [`docs/QUALITY-BASELINE.md`](docs/QUALITY-BASELINE.md) | Quality baseline: coverage / complexity measured |
+| [`docs/AUDIT-2026-10-23.md`](docs/AUDIT-2026-10-23.md) | Full-dimension audit report (35 findings, competitor matrix) |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release history |
 
-## 🌱 Demo Data
-
-- On first boot the demo project seeds **1 example reference + 1 knowledge document** so you can immediately try reference binding, RAG retrieval and the pipeline;
-- All pipeline artifacts (documents / versions / citations / memory) live in the local SQLite file — delete the file at `DATABASE_PATH` to start clean.
-
-## 🐳 Docker Deployment
+## 🐳 Docker
 
 ```bash
-cp apps/server/.env.example .env   # fill AI_BASE_URL / AI_API_KEY / AI_MODEL per the comments
-docker compose up -d --build       # nginx-served frontend :8080 → backend :3000
-# for container deployment set CORS_ORIGIN=http://localhost:8080
+docker compose up --build          # dev
+docker compose -f docker-compose.prod.yml up --build   # production
 ```
 
-## 📜 License
+## 📄 License
 
-[MIT](LICENSE) © 2026 SciFlow Contributors
+MIT — see [`LICENSE`](LICENSE).

@@ -16,6 +16,7 @@ import {
   downloadBase64, downloadText, jsonText,
 } from '../components/ui';
 import { HBar } from '../components/charts';
+import { useHotkeys } from '../lib/hotkeys';
 import { BottomTabs, ShellDrawer } from '../components/AppShell';
 import { WritingEditor, getWritingEditorHandle } from './writing/WritingEditor';
 import { OUTLINE_TEMPLATES } from './writing/outline-templates';
@@ -218,22 +219,12 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
     return () => window.removeEventListener('beforeunload', onLeave);
   }, [dirty]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (!mod || !docId) return;
-      const k = e.key.toLowerCase();
-      if (k === 's') {
-        e.preventDefault();
-        saveNow(true);
-      } else if (k === 'b') {
-        e.preventDefault();
-        setBottomTab((t) => (t === 'outline' ? 'tools' : 'outline'));
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [docId, saveNow]);
+  // 写作页快捷键（统一注册表）：保存 / 折叠大纲面板
+  useHotkeys([
+    // 编辑器是 contenteditable，必须 allowInInput：否则输入区保护把 ⌘S/⌘B 拦死（v0.10 回归）
+    { combo: 'mod+s', allowInInput: true, handler: () => { if (docId) void saveNow(true); } },
+    { combo: 'mod+b', allowInInput: true, handler: () => setBottomTab((t) => (t === 'outline' ? 'tools' : 'outline')) },
+  ]);
 
   /* ============ 工具函数 ============ */
 

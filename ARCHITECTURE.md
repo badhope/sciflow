@@ -1,7 +1,7 @@
-# SciFlow 架构文档（v0.9 现状）
+# SciFlow 架构文档（v1.0 现状）
 
 > 本文档是唯一真理源。任何影响架构、接口、数据模型、依赖的代码变更，必须同步回写本文档。
-> 状态基线：v0.9.0（2026-10-23）。重构决策依据见 §6 ADR 索引；本版审查结论文档 `docs/AUDIT-2026-10-23.md`。
+> 状态基线：v1.0.0（2026-10-24）。重构决策依据见 §6 ADR 索引；本版审查结论文档 `docs/AUDIT-2026-10-23.md`。
 >
 > **本 §7「禁止重复造轮子守则」对所有后续开发会话生效**：动手前先查 §2.6 地图——能用成熟件的必须用，不允许在任务中途自造已有成熟替代的基建。
 
@@ -43,6 +43,47 @@
 | 环形图零值分段不占配色槽位 | `charts.tsx:normalizeDonutData` | `charts.test.tsx` 2 条 |
 | 图表配色 token 必须有定义 | `index.css` `--rose/amber/emerald/sky-500` | 脚本校验 var() 引用全集 |
 | CI 三 job 与 README 承诺一致 | `.github/workflows/ci.yml` | 命令与本机实测逐条对齐 |
+
+## §2.12 v0.10 前端交互契约（2026-10-23）
+
+对话三入口与交互基建收敛为单实现，确立 6 条契约：
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | 三处聊天入口（工作台/科研问答/写作抽屉）共用 `useChatSession` 内核；累积覆盖（`applyStreamDelta`）、停止保留已收文本、错误落 `message.error` 的语义只在内核实现一次 | `apps/web/src/lib/chat-session.ts` | `WorkspacePage.test.tsx` 8 条行为用例（含 D1 累积回归，走内核路径） |
+| 2 | 消息渲染唯一入口 `MessageList`（思考流/来源卡/用量/操作按钮/followUps 追问）；页面不得手写消息 DOM | `apps/web/src/components/MessageList.tsx` | 三入口同源渲染，能力漂移即回归 |
+| 3 | 全局快捷键唯一注册表：mod 归一化、输入框保护（`allowInInput` 显式开，编辑器/⌘K 类必须显式开）、后注册者优先、handler 返回 `false` 放行外层；全局导航类 keydown 一律走注册表（组件内局部焦点陷阱如 AppShell 抽屉/Esc 不在此列） | `apps/web/src/lib/hotkeys.ts` | App/WorkspacePage/WritingPage 三处已接入；⌘K/⌘N/⌘S/⌘B 均 allowInInput |
+| 4 | 异步动作三态（running/error/idle + 防重复提交）统一走 `useAsyncAction`，禁止手写 `setBusy/finally` 模式 | `apps/web/src/lib/async.ts` | ChatPanel 快捷动作 / WorkspacePage 发送到写作页已接入 |
+| 5 | 项目阶段条数据推断是纯函数 `deriveStages`（只有真实数据才算完成，空项目不全绿） | `apps/web/src/lib/stages.ts` | `stages.test.ts` 5 条 |
+| 6 | 可拖拽分栏统一 `SplitPane`（组件态）与 `useSplitDrag`（宽度态，localStorage 持久化） | `components/SplitPane.tsx` / `lib/split-drag.ts` | 写作编辑器/工作台预览已接入 |
+
+**已删除**：`lib/optimistic.ts`（`useOptimisticList`）——其撤销语义要求后端提供恢复接口，而服务端无任何 restore 端点，属无法真实接线的死代码（同 F-013「配了不生效」类缺陷），按纪律移除。
+
+## §2.13 v0.11 品牌与信息架构契约（2026-10-23）
+
+| 契约 | 落点 | 说明 |
+|---|---|---|
+| 品牌标志唯一矢量源 | `docs/brand/icon-master.svg`（1024 母版）+ `BrandMark.tsx` | 造型「墨流 S + 思想节点」；favicon/apple-touch/桌面 ICO·ICNS 一律由母版经 `pnpm icons` 再生成，禁止手改位图 |
+| 对话唯一入口 = 工作台 | `pages/WorkspacePage.tsx` | `ChatPage` 已删除；多会话/模型/思考/意图/slash/followUps/来源引用/导出全部在工作台；`#/chat` 深链由 `VIEW_KEYS` 白名单兜底回工作台（新增视图必须登记该白名单） |
+| 会话持久化 key | `pages/chat/chat-sessions.ts`（`sciflow.chat.sessions.*`） | 工作台沿用旧科研问答页同 key，用户会话跨版本无缝延续；更早的单线程 key 由工作台首载一次性迁移 |
+| 会话落盘不走 effect | 内核 `onMessagesChange` | effect 内同步 setState 触发 React Compiler lint（`set-state-in-effect`）；持久化/派生一律走内核回调或事件处理器 |
+| 品牌视觉纪律 | `index.css` | 背景不加网格纹理、Logo 不加釉面、按钮不常驻发光、卡片阴影中性色——「去 AI 通用感」四条已落地，后续改动不得回退 |
+
+---
+
+## §2.14 v1.0 深度研究与实验设计契约（2026-10-24）
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | F2 反共识大纲：outline-gen 优先产「主大纲+2 变体」（`writeOutlineVariants`），模型不支持时回退单大纲 `writeOutline`；变体走 `PipelineStep.variants`（Outline JSON 串数组）与 interrupt payload 下发，**不改变 `steps[].output`=主大纲 JSON 的既有契约** | `packages/ai/src/{prompts,mock-gateway,ai.service}.ts` · `pipeline.graph.ts` | `pipeline-variants.spec.ts` 5 条 + 回归「反共识大纲变体随步骤下发」 |
+| 2 | 研究深度 1-3：literature 节点按轮递归检索（第 2+ 轮由 `planResearch` 依上轮发现出新词），命中跨轮按 id/title 去重合并、meta 同名取最高分、零新增即收敛；配置存 `app_setting pipeline_research_depth`（1-3 钳制，非法静默回 1） | `pipeline.graph.ts` · `pipeline.service.researchDepth()` · `customization.pipeline-settings` | 回归「流水线设置·研究深度」3 条；`researchDepth()` 缺省=1 |
+| 3 | 步骤时间戳：`notify` 经纯函数 `applyStepWire` 投影——running 首次写 `startedAt`（进度通知不覆盖），done/failed/skipped 写 `endedAt`；前端甘特条只在 ≥2 步有真实时间戳时渲染 | `pipeline.service.ts applyStepWire` · `PipelinePage StepTimeline` | `pipeline-variants.spec` 时间戳用例 + 回归「步骤起止时间戳」 |
+| 4 | F3 实验设计：`POST /api/research/design` 只收 `{projectId,question,papers?}`，AI 输出经 zod `experimentDesignSchema` fail-closed（解析失败不落库）；设计稿存 `research_design` 表（listDesigns 倒序/单删） | `research.service.ts` · `research.controller.ts` · `packages/db schema` | `experiment-design.spec.ts` 4 条 + 回归 4 条 |
+| 5 | MCP resources：`buildSdkServer` 声明 `resources` 能力；静态 `sciflow://projects` + 模板 `sciflow://project/{projectId}/{documents|references}`，未知 URI 400、项目不存在 404；resource handler 只读 | `mcp.service.ts` | URI 正则与模板字面量同源（本表锁定） |
+| 6 | CLI：HTTP 一律原生 fetch（`AbortSignal.timeout`），**禁止再回 spawnSync('node','-e') 字符串拼接**；`sciflow run --topic … --auto --out <dir>` headless 全流程 = 建项目（可选）→ 建任务 → 轮询 → 自动确认大纲 → 导出 `<标题>.md`；exit 0 成功 / 2 业务中断 | `apps/server/src/cli.ts` | 冒烟：mock 服务下 `sciflow run --topic … --auto` 出 md 文件 |
+| 7 | 深度探针 `GET /api/health/deep` 三探针（db 往返时延 / vec0 计数 / AI 配置形态）只读不真发模型请求，单项失败不互相阻断 | `health.controller.ts` | 回归「深度探针」 |
+
+---
 
 ## §2.9 模块化布局（M3，2026-10-18）
 

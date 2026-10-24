@@ -26,6 +26,11 @@ export interface PipelineStepState {
   key: string; label: string;
   status: StepStatusWire;
   output?: string; retryCount: number;
+  /** F2 反共识大纲变体（仅 outline 步骤、awaiting_confirmation 时有值）：Outline JSON 串数组 */
+  variants?: string[];
+  /** F-2.7 时间线：步骤起止毫秒时间戳（running 首次写入 startedAt，终态写 endedAt） */
+  startedAt?: number;
+  endedAt?: number;
 }
 
 interface ResearchMeta { lib: { title: string; score: number }[]; kn: PaperHit[]; }
@@ -36,6 +41,26 @@ interface ResearchMeta { lib: { title: string; score: number }[]; kn: PaperHit[]
  * - 本类保留：公开 API（controller/cli 契约不变）、状态投影（pipeline_task.steps JSON 契约不变）、
  *   领域辅助（跨库检索增强、引用池构建、并行分章起草）。
  */
+/** 步骤状态投影纯函数：notify 与测试共用同一语义（时间戳只增不改，终态补 endedAt） */
+export function applyStepWire(
+  s: PipelineStepState,
+  status: StepStatusWire,
+  output: string | undefined,
+  retryCount: number | undefined,
+  extra: { variants?: string[] } | undefined,
+  now: number,
+): void {
+  s.status = status;
+  if (output !== undefined) s.output = output;
+  if (retryCount !== undefined) s.retryCount = retryCount;
+  if (extra?.variants?.length) s.variants = extra.variants;
+  if (status === 'running' && s.startedAt === undefined) s.startedAt = now;
+  if (status === 'done' || status === 'failed' || status === 'skipped') {
+    s.endedAt = now;
+    if (s.startedAt === undefined) s.startedAt = now;
+  }
+}
+
 @Injectable()
 export class PipelineService implements OnModuleInit {
   private readonly logger = new Logger(PipelineService.name);
@@ -60,6 +85,7 @@ export class PipelineService implements OnModuleInit {
       ai: {
         summarizeLiterature: (t, p) => this.ai.summarizeLiterature(t, p),
         writeOutline: (t, s) => this.ai.writeOutline(t, s),
+        writeOutlineVariants: (t, s) => this.ai.writeOutlineVariants(t, s),
         planResearch: (t) =>
           this.ai.writeSearchPlan(t).catch((e: any) => {
             this.logger.warn(`检索规划失败（回退主题词）: ${e?.message || e}`);
@@ -105,9 +131,10 @@ export class PipelineService implements OnModuleInit {
           summary: `检索到 ${totalFound} 条（文献 ${enriched.libraryHits.length} / 知识 ${enriched.knowledgeHits.length}）\n${summary.slice(0, 500)}`,
         };
       },
-      notify: (taskId, key, status, output, retryCount) => this.notify(taskId, key, status, output, retryCount),
+      notify: (taskId, key, status, output, retryCount, extra) => this.notify(taskId, key, status, output, retryCount, extra),
       trackBudget: (taskId) => this.trackBudget(taskId),
       stepEnabled: (key) => this.stepEnabled(key),
+      researchDepth: () => this.researchDepth(),
       logger: this.logger,
     };
     this.graph = buildPipelineGraph(deps);
@@ -287,13 +314,11 @@ export class PipelineService implements OnModuleInit {
     }
   }
 
-  private async notify(taskId: string, key: string, status: StepStatusWire, output?: string, retryCount?: number) {
+  private async notify(taskId: string, key: string, status: StepStatusWire, output?: string, retryCount?: number, extra?: { variants?: string[] }) {
     const steps = this.loadSteps(taskId);
     const s = steps.find((x) => x.key === key);
     if (!s) return;
-    s.status = status;
-    if (output !== undefined) s.output = output;
-    if (retryCount !== undefined) s.retryCount = retryCount;
+    applyStepWire(s, status, output, retryCount, extra, Date.now());
     this.saveSteps(taskId, steps);
     if (status === 'running') this.setStatus(taskId, 'running', key);
     else if (status === 'awaiting_confirmation') this.setStatus(taskId, 'awaiting_confirmation', key);
@@ -307,6 +332,18 @@ export class PipelineService implements OnModuleInit {
         toolName: key,
         status: status === 'failed' ? 'error' : 'ok',
       });
+    }
+  }
+
+  /** 研究深度（1-3，默认 1）：app_setting pipeline_research_depth，非法值静默回默认 */
+  private researchDepth(): number {
+    try {
+      const row = db.select().from(appSettings).where(eq(appSettings.key, 'pipeline_research_depth')).get();
+      const n = Math.floor(Number(row?.value));
+      if (!Number.isFinite(n)) return 1;
+      return Math.max(1, Math.min(3, n));
+    } catch {
+      return 1;
     }
   }
 

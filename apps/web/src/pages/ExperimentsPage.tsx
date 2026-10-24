@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { ToastContext } from '../App';
 import type { Doc, Experiment, Project } from '../types';
 import { Badge, Button, Card, ConfirmDialog, Empty, ErrorBox, Input, SectionTitle, Select, Textarea, errMsg } from '../components/ui';
+import { ExperimentDesignCard } from './experiments/DesignCard';
 
 const DEFAULT_CODE = `# 在本机沙箱中运行 Python（超时 10s，临时目录隔离）
 import math
@@ -207,6 +208,11 @@ export function ExperimentsPage({ project }: { project: Project }) {
             </div>
           </div>
         </Card>
+
+        {/* 左下：F3 实验设计助手（研究问题 → 结构化设计稿） */}
+        <div className="lg:col-span-2">
+          <ExperimentDesignCard project={project} />
+        </div>
 
         {/* 右：历史列表 + 详情 */}
         <div className="lg:col-span-3 space-y-4">

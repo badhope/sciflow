@@ -1,13 +1,13 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { z } from 'zod';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
-import { reviewComments, documents } from '../db/schema';
+import { reviewComments, documents, researchDesigns, projects } from '../db/schema';
 import { AiService } from '../ai/ai.service';
 import * as prompts from '../ai/prompts';
 
-/** 科研增强模块：研究设计诊断 / 多文献对比 / 多角色模拟审稿 */
+/** 科研增强模块：研究设计诊断 / 多文献对比 / 多角色模拟审稿 / 实验设计助手 */
 
 const designReviewSchema = z.object({
   noveltyScore: z.number(),
@@ -45,6 +45,24 @@ const simulatedReviewSchema = z.object({
   verdict: z.string(),
   overall: z.string(),
 });
+
+/** F3 实验设计助手：结构化实验设计稿 */
+export const experimentDesignSchema = z.object({
+  objective: z.string(),
+  variables: z.object({
+    independent: z.array(z.string()),
+    dependent: z.array(z.string()),
+    controlled: z.array(z.string()),
+  }),
+  groups: z
+    .array(z.object({ name: z.string(), role: z.string(), description: z.string() }))
+    .min(1),
+  sampleHint: z.string(),
+  procedure: z.array(z.string()).min(1),
+  analysisPlan: z.array(z.string()),
+  risks: z.array(z.string()),
+});
+export type ExperimentDesign = z.infer<typeof experimentDesignSchema>;
 
 export interface ResearchPaperInput {
   title: string;
@@ -123,6 +141,52 @@ export class ResearchService {
       return { error: '审稿意见解析失败，请重试' };
     }
     return parsed;
+  }
+
+  // ---------- F3 实验设计助手 ----------
+
+  /** 生成结构化实验设计稿（变量表/对照组/功效提示/流程/分析计划）并落库 */
+  async designExperiment(projectId: string, question: string, papers: ResearchPaperInput[] = []) {
+    if (!question?.trim()) return { error: '请先描述研究问题' };
+    const project = db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId.trim())).get();
+    if (!project) return { error: '项目不存在' };
+    const paperText = papers
+      .map((p, i) => `${i + 1}. ${p.title}${p.year ? `（${p.year}）` : ''}${p.method ? ` 方法：${p.method.slice(0, 120)}` : ''}${p.conclusion ? ` 结论：${p.conclusion.slice(0, 120)}` : ''}`)
+      .join('\n');
+    const custom = this.ai.getCustomPrompt('experimentDesign');
+    const raw = await this.ai.complete(
+      [{ role: 'user', content: custom ?? prompts.EXPERIMENT_DESIGN(question.trim(), paperText) }],
+      { temperature: 0.4, model: 'strong', context: 'experimentDesign' },
+    );
+    const parsed = this.ai.safeParse(raw, experimentDesignSchema);
+    if (!parsed) return { error: '实验设计解析失败，请重试' };
+    const row = {
+      id: randomUUID(),
+      projectId: projectId.trim(),
+      question: question.trim(),
+      design: JSON.stringify(parsed),
+      createdAt: Date.now(),
+    };
+    db.insert(researchDesigns).values(row).run();
+    return { id: row.id, question: row.question, design: parsed, createdAt: row.createdAt };
+  }
+
+  /** 某项目的历史实验设计稿（新→旧） */
+  listDesigns(projectId: string) {
+    return db
+      .select()
+      .from(researchDesigns)
+      .where(eq(researchDesigns.projectId, projectId))
+      .orderBy(desc(researchDesigns.createdAt))
+      .all()
+      .map((r) => ({ id: r.id, question: r.question, design: JSON.parse(r.design) as ExperimentDesign, createdAt: r.createdAt }));
+  }
+
+  deleteDesign(id: string) {
+    const existing = db.select().from(researchDesigns).where(eq(researchDesigns.id, id)).get();
+    if (!existing) throw new NotFoundException('实验设计稿不存在');
+    db.delete(researchDesigns).where(eq(researchDesigns.id, id)).run();
+    return { ok: true };
   }
 
   // ---------- 审稿意见闭环 ----------

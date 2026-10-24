@@ -28,6 +28,24 @@ export class ResearchController {
     return this.assertNoError(await this.research.simulatedReview(body?.title || '', body?.content || ''));
   }
 
+  /* —— F3 实验设计助手 —— */
+
+  /** 研究问题 → 结构化实验设计稿（落库，可在实验页复看） */
+  @Post('design')
+  async designExperiment(@Body() body: { projectId: string; question: string; papers?: any[] }) {
+    return this.assertNoError(await this.research.designExperiment(body?.projectId || '', body?.question || '', body?.papers));
+  }
+
+  @Get('design')
+  listDesigns(@Query('projectId') projectId: string) {
+    return this.research.listDesigns(projectId || '');
+  }
+
+  @Delete('design/:id')
+  deleteDesign(@Param('id') id: string) {
+    return this.research.deleteDesign(id);
+  }
+
   /* —— 审稿意见闭环 —— */
 
   /** 批量录入审稿意见 */

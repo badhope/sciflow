@@ -20,6 +20,10 @@ const shots = [
   { name: 'literature.png', hash: '#/literature', wait: 2000, label: '文献库' },
   { name: 'knowledge.png', hash: '#/knowledge', wait: 1500, label: '知识库 RAG' },
   { name: 'dash.png', hash: '#/dashboard', wait: 2500, label: '项目总览' },
+  { name: 'experiments.png', hash: '#/experiments', wait: 2000, label: '实验沙箱与设计助手' },
+  { name: 'submission.png', hash: '#/submission', wait: 2000, label: '投稿辅助' },
+  { name: 'memory.png', hash: '#/memory', wait: 1500, label: '记忆中心' },
+  { name: 'settings.png', hash: '#/settings', wait: 2000, label: '设置' },
 ];
 
 async function main() {
@@ -63,6 +67,15 @@ async function main() {
     const kb = (fs.statSync(file).size / 1024).toFixed(0);
     console.log(`OK  ${s.name.padEnd(18)} ${s.label}  (${kb} KB)`);
   }
+
+  // 深色主题（跟随系统态）：settings-dark.png
+  currentShot = 'settings-dark.png';
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto(`${BASE}/#/settings`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(2000);
+  await page.screenshot({ path: path.join(OUT, 'settings-dark.png'), fullPage: false });
+  console.log(`OK  settings-dark.png   深色主题 (${(fs.statSync(path.join(OUT, 'settings-dark.png')).size / 1024).toFixed(0)} KB)`);
+  await page.emulateMedia({ colorScheme: 'light' });
 
   if (docId) {
     currentShot = 'writing.png';

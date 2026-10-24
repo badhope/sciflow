@@ -95,6 +95,10 @@ print("=" * 60)
 # ---------- 0. 健康与配置 ----------
 st, d = req("GET", "/api/health")
 check("健康检查 /api/health", st == 200 and d.get("status") == "ok", f"{st} {d}")
+st, d = req("GET", "/api/health/deep")
+check("深度探针 /api/health/deep（Q-10.3 三探针）",
+      st == 200 and d.get("checks", {}).get("db", {}).get("ok") is True and "vector" in d.get("checks", {}) and "ai" in d.get("checks", {}),
+      f"st={st} {str(d)[:160]}")
 st, d = req("GET", "/api/settings")
 check("设置 /api/settings", st == 200 and d.get("ai") and d.get("env"), f"{st}")
 st, d = req("GET", "/api/settings/check")
@@ -242,6 +246,10 @@ if runid:
             return None
         outline_p = wait_pipeline({"awaiting_confirmation"})
         check("流水线 e2e·Planner/Research→大纲待确认", outline_p is not None, "等待大纲确认超时")
+        outline_step_v = next((s for s in (outline_p or {}).get("steps", []) if s.get("key") == "outline"), {})
+        check("流水线 e2e·F2 反共识大纲变体随步骤下发",
+              isinstance(outline_step_v.get("variants"), list) and len(outline_step_v.get("variants")) >= 2,
+              f"variants={str(outline_step_v.get('variants'))[:80]}")
         # 人工确认大纲（Human-in-the-loop 节点）→ 进入起草→评审→润色→引用→完成
         stc, _ = req("POST", f"/api/pipeline/{runid}/confirm-outline", {})
         check("流水线 e2e·confirm-outline 201", stc in (200, 201), f"st={stc}")
@@ -254,6 +262,9 @@ if runid:
             step_map = {s["key"]: s for s in final.get("steps", [])}
             check("流水线 e2e·质量门落库总分≥80", step_map.get("quality-gate", {}).get("output", "").startswith("总分 8"),
                   str(step_map.get("quality-gate", {}).get("output")))
+            tv_step = step_map.get("topic-verify", {})
+            check("流水线 e2e·F-2.7 步骤起止时间戳", isinstance(tv_step.get("startedAt"), int) and isinstance(tv_step.get("endedAt"), int),
+                  f"startedAt={tv_step.get('startedAt')} endedAt={tv_step.get('endedAt')}")
             # qualityReports / citations(format=pipeline) 产物断言
             sq, qd = req("GET", f"/api/quality?documentId={doc_id}")
             check("流水线 e2e·qualityReports 落库", sq == 200 and isinstance(qd, list) and len(qd) >= 1 and qd[0].get("totalScore", 0) >= 80,
@@ -390,6 +401,30 @@ if docid:
     if rcid:
         st, d2 = req("DELETE", f"/api/research/review-comments/{rcid}")
         check("审稿意见·删除", st == 200 and d2.get("ok"), f"st={st}")
+
+# ---------- 15.5 F3 实验设计助手 + 流水线运行参数 ----------
+st, d = ai_call("F3 实验设计 design POST", lambda: req("POST", "/api/research/design", {"projectId": pid, "question": "时序感知聚合在动态图节点分类中是否优于均匀采样？"}))
+info("F3 实验设计 design POST", f"st={st} {str(d)[:120]}")
+design_id = d.get("id") if isinstance(d, dict) else None
+if design_id:
+    check("F3 实验设计·结构化字段（变量/分组/功效）",
+          isinstance(d.get("design"), dict) and d["design"].get("variables", {}).get("independent")
+          and d["design"].get("groups") and d["design"].get("sampleHint"),
+          str(d.get("design"))[:140])
+    st, d2 = req("GET", f"/api/research/design?projectId={pid}")
+    check("F3 实验设计·列表 GET", st == 200 and isinstance(d2, list) and len(d2) >= 1, f"st={st}")
+    st, d2 = req("DELETE", f"/api/research/design/{design_id}")
+    check("F3 实验设计·删除 DELETE", st == 200 and d2.get("ok"), f"st={st}")
+st, d2 = req("POST", "/api/research/design", {"projectId": pid, "question": "  "})
+check("F3 实验设计·空问题 400 语义", st == 400, f"st={st}")
+st, d2 = req("GET", "/api/customization/pipeline-settings")
+check("流水线设置·GET 研究深度", st == 200 and d2.get("researchDepth") in (1, 2, 3), f"st={st} {d2}")
+st, d2 = req("POST", "/api/customization/pipeline-settings", {"researchDepth": 2})
+check("流水线设置·POST 研究深度=2", st in (200, 201) and d2.get("researchDepth") == 2, f"st={st} {d2}")
+st, d2 = req("POST", "/api/customization/pipeline-settings", {"researchDepth": 9})
+check("流水线设置·非法深度 400", st == 400, f"st={st}")
+st, d2 = req("POST", "/api/customization/pipeline-settings", {"researchDepth": 1})
+check("流水线设置·恢复默认 1", st in (200, 201) and d2.get("researchDepth") == 1, f"st={st} {d2}")
 
 # ---------- 16. 期刊库 + 结构化匹配 ----------
 st, d = req("GET", "/api/submission/journals")

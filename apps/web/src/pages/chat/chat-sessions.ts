@@ -1,6 +1,6 @@
 import type { ChatSource } from '../../types';
 
-/** 一条对话消息（本地会话存储的持久化形态；与 ChatPage 的 Msg 对齐但去掉瞬态字段） */
+/** 一条对话消息（本地会话存储的持久化形态；与内核 ChatMessage 对齐但去掉瞬态字段） */
 export interface StoredMessage {
   role: 'user' | 'assistant';
   content: string;

@@ -44,6 +44,59 @@ export const WRITE_OUTLINE = (topic: string, literatureSummary: string) => `
 - 章节标题具体、有学术性，不要泛泛的"引言""方法"
 - 章节数量 6-8 个`;
 
+/**
+ * F2 反同质化引擎：主大纲 + 2 个「反共识」变体（对标 STORM 多视角大纲）。
+ * 反共识 = 刻意挑战领域主流叙事：质疑主流假设、纳入异见/负结果文献、改变论证顺序或立场。
+ */
+export const WRITE_OUTLINE_VARIANTS = (topic: string, literatureSummary: string) => `
+你是一位资深学术写作专家。请为一个研究主题设计论文大纲：先给一个主流立场的主推大纲，再给两个「反共识」变体大纲（用于打破同质化写作）。
+
+研究主题：${topic}
+文献综述摘要：${literatureSummary || '（暂无，按通用学术结构设计）'}
+
+请输出严格的 JSON（不要任何其他文字），结构如下：
+{
+  "primary": { "title": "论文标题", "sections": [{"title": "章节标题", "subsections": ["小节1", "小节2"]}] },
+  "variants": [
+    { "title": "反共识标题A", "sections": [{"title": "章节标题", "subsections": ["小节1"]}] },
+    { "title": "反共识标题B", "sections": [{"title": "章节标题", "subsections": ["小节1"]}]}
+  ]
+}
+要求：
+- primary：包含引言、相关工作/文献综述、方法、实验/结果、讨论、结论等标准学术章节，章节数量 6-8 个，章节标题具体、有学术性
+- variants 恰好 2 个，每个 4-6 章，与 primary 的差异必须实质：
+  - 变体 A「挑战共识」：以质疑领域主流假设/方法局限为主线，安排「主流方法的系统性缺陷」「反例与边界条件」类章节
+  - 变体 B「另起框架」：换一种组织框架（如按学派论战、按时间断代、按任务场景、或以负结果/失败案例为中心）重组同一主题
+- 三个大纲都不得虚构具体文献；标题具体、有学术性，不要泛泛的"引言""方法"`;
+
+/** F3 实验设计助手：研究问题 → 结构化实验设计稿（变量表/对照组/功效提示/流程/分析计划） */
+export const EXPERIMENT_DESIGN = (question: string, papers: string) => `
+你是一位跨领域实验设计专家（覆盖计算机/生物医学/社科实证研究）。研究者提出以下研究问题，请给出一份可直接执行的结构化实验设计稿。
+
+研究问题：${question}
+
+相关文献（标题/方法/结论，供设计参照，可空）：
+${papers || '（暂无，请基于通用实验设计方法论给出）'}
+
+请只输出一个合法的纯 JSON 对象（禁止任何 markdown 代码围栏或前后缀文字，不要反引号）；JSON 字符串内的换行必须使用 \\n 转义，禁止字面换行。JSON 结构：
+{
+  "objective": "一句话实验目标（可证伪的假设形式）",
+  "variables": {
+    "independent": ["自变量 1（如何操纵、水平数）"],
+    "dependent": ["因变量 1（如何测量、指标名）"],
+    "controlled": ["需控制的混杂变量 1（如何固定）"]
+  },
+  "groups": [
+    { "name": "实验组", "role": "treatment", "description": "处理内容一句话" },
+    { "name": "对照组", "role": "control", "description": "基线内容一句话" }
+  ],
+  "sampleHint": "样本量/重复次数建议与统计功效说明（如：每组 5 个随机种子，配对 t 检验 α=0.05，power≥0.8）",
+  "procedure": ["步骤 1", "步骤 2", "步骤 3"],
+  "analysisPlan": ["分析 1：主指标与统计方法", "分析 2：消融/稳健性检验"],
+  "risks": ["主要效度威胁或执行风险 1"]
+}
+要求：groups 至少含一个 treatment 与一个 control（若为纯观测研究，对照组写「自然基线」并说明）；independent/dependent/controlled 各 1-4 条；procedure 3-6 步；analysisPlan 1-4 条；risks 1-3 条；全部中文。`;
+
 export const DRAFT_SECTION = (sectionTitle: string, outline: string, references: string) => `
 你是一位学术论文写作者。请起草论文的一个章节。
 

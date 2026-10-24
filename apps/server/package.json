@@ -1,6 +1,6 @@
 {
   "name": "@sciflow/server",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "node --watch dist/apps/server/src/main.js",

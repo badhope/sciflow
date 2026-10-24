@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Beaker, FileText, FlaskConical, Gauge, Plus, Workflow, ArrowRight } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardOverview, Project } from '../types';
-import { Button, Card, Empty, Skeleton, Badge, jsonText, SectionTitle, Textarea, errMsg } from '../components/ui';
+import { Button, Card, EmptyState, Skeleton, Badge, jsonText, SectionHeader, SectionTitle, Textarea, errMsg } from '../components/ui';
 import { Donut, HBar, MetricCard } from '../components/charts';
 import { formatWordCount } from '../lib/format';
 import { useContext } from 'react';
@@ -36,7 +36,7 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
   const loading = dashQuery.isLoading;
   const [newTitle, setNewTitle] = useState('');
   /** 科研全链路总览：后端未就绪/失败时为 null，前端降级为小字提示，不白屏 */
-  const overviewQuery = useQuery({ queryKey: ['dash-overview'], queryFn: () => api.dashboard.overview(), retry: 0 });
+  const overviewQuery = useQuery({ queryKey: ['dash-overview', project.id], queryFn: () => api.dashboard.overview(project.id), retry: 0 });
   const overview: DashboardOverview | null = overviewQuery.data ?? null;
   /** 差距#22：项目级系统提示（写作偏好），本地草稿态 */
   const [prefaceDraft, setPrefaceDraft] = useState(project.preface || '');
@@ -194,18 +194,38 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
 
       {docs.length > 0 && (
         <Card className="p-4 mb-6">
-          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">草稿状态分布</div>
-          <Donut
-            size={120}
-            centerValue={String(docs.length)}
-            centerLabel="草稿总数"
-            segments={[
-              { label: '草稿', value: docs.filter((d) => d.status === 'draft').length },
-              { label: '评审中', value: docs.filter((d) => d.status === 'reviewing').length },
-              { label: '已润色', value: docs.filter((d) => d.status === 'polished').length },
-              { label: '已定稿', value: docs.filter((d) => d.status === 'final').length },
-            ]}
-          />
+          <SectionHeader title="草稿状态分布" description="按文档状态统计，点击卡片进入写作页" />
+          <div className="mt-3 flex flex-wrap items-center gap-6">
+            <Donut
+              size={132}
+              thickness={22}
+              centerValue={String(docs.length)}
+              centerLabel="草稿总数"
+              segments={[
+                { label: '草稿', value: docs.filter((d) => d.status === 'draft').length },
+                { label: '评审中', value: docs.filter((d) => d.status === 'reviewing').length },
+                { label: '已润色', value: docs.filter((d) => d.status === 'polished').length },
+                { label: '已定稿', value: docs.filter((d) => d.status === 'final').length },
+              ]}
+            />
+            <ul className="flex flex-wrap gap-x-5 gap-y-2 text-xs">
+              {[
+                { label: '草稿', status: 'draft', color: 'var(--viz-series-1)' },
+                { label: '评审中', status: 'reviewing', color: 'var(--viz-series-2)' },
+                { label: '已润色', status: 'polished', color: 'var(--viz-series-3)' },
+                { label: '已定稿', status: 'final', color: 'var(--viz-series-4)' },
+              ].map((it) => {
+                const n = docs.filter((d) => d.status === it.status).length;
+                return (
+                  <li key={it.status} className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: it.color }} aria-hidden="true" />
+                    {it.label}
+                    <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{n}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         </Card>
       )}
 
@@ -255,7 +275,16 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
           <Card className="p-4"><Skeleton lines={3} /></Card>
         </div>
       ) : docs.length === 0 ? (
-        <Empty text="暂无草稿，新建一篇开始写作，或到「全自动流水线」一键生成" />
+        <EmptyState
+          illustration="documents"
+          title="还没有论文草稿"
+          hint="新建一篇从空白开始，或到「全自动流水线」用主题一键生成初稿"
+          action={
+            <Button onClick={() => onNavigate('pipeline')}>
+              <Workflow size={14} /> 去生成初稿
+            </Button>
+          }
+        />
       ) : (
         <div className="grid md:grid-cols-2 gap-3 [&>*]:min-w-0">
           {docs.map((d) => {

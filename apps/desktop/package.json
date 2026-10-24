@@ -1,6 +1,6 @@
 {
   "name": "@sciflow/desktop",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "private": true,
   "description": "SciFlow 桌面端（Electron 封装：内嵌 NestJS 后端 + 本地 SQLite，离线可用）",
   "main": "dist-electron/main.js",

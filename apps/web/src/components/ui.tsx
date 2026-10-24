@@ -13,41 +13,153 @@ const ILLUSTRATIONS = {
 type IllustrationKey = keyof typeof ILLUSTRATIONS;
 
 const btnBase =
-  'inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none whitespace-nowrap active:scale-[0.97] select-none';
+  'inline-flex items-center justify-center gap-1.5 font-medium transition-[background,color,border-color,box-shadow,transform] duration-150 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none whitespace-nowrap active:scale-[0.98] select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--background)]';
+
+/** 三档尺寸：xs(24) / sm(32) / md(38)。移动端热区由 padding 撑到 ≥32，图标按钮请用 IconButton。 */
+const btnSizes = {
+  xs: 'h-6 px-2 text-[12px] rounded-md gap-1',
+  sm: 'h-8 px-2.5 text-[13px] rounded-md',
+  md: 'h-[38px] px-3.5 text-sm rounded-lg',
+} as const;
+
+export type ButtonSize = keyof typeof btnSizes;
 
 export function Button({
-  children, variant = 'primary', className = '', disabled, onClick, title, loading,
+  children, variant = 'primary', size = 'md', className = '', disabled, onClick, title, loading, type = 'button', ariaLabel, fullWidth,
 }: {
   children: ReactNode;
-  variant?: 'primary' | 'ghost' | 'danger' | 'outline' | 'success';
+  variant?: 'primary' | 'ghost' | 'danger' | 'outline' | 'success' | 'subtle';
+  size?: ButtonSize;
   className?: string;
   disabled?: boolean;
   onClick?: () => void;
   title?: string;
   loading?: boolean;
+  type?: 'button' | 'submit';
+  ariaLabel?: string;
+  fullWidth?: boolean;
 }) {
   const variants: Record<string, string> = {
     primary: 'brand-btn',
-    ghost: 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700',
+    ghost: 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800',
+    subtle: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200/80 dark:hover:bg-slate-700',
     danger: 'bg-rose-600 text-white hover:bg-rose-700 shadow-sm shadow-rose-600/20',
-    outline: 'border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 bg-white dark:bg-slate-900',
+    outline: 'border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 bg-[var(--card)]',
     success: 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm shadow-emerald-600/20',
   };
   return (
-    <button title={title} className={`${btnBase} ${variants[variant]} ${className}`} disabled={disabled || loading} onClick={onClick}>
-      {loading && <Loader2 size={14} className="animate-spin" />}
+    <button
+      type={type}
+      title={title}
+      aria-label={ariaLabel}
+      aria-busy={loading || undefined}
+      className={`${btnBase} ${btnSizes[size]} ${variants[variant]} ${fullWidth ? 'w-full' : ''} ${className}`}
+      disabled={disabled || loading}
+      onClick={onClick}
+    >
+      {loading && <Loader2 size={size === 'xs' ? 12 : 14} className="animate-spin" aria-hidden="true" />}
       {children}
     </button>
   );
 }
 
-export function Card({ children, className = '', onClick, hover }: { children: ReactNode; className?: string; onClick?: () => void; hover?: boolean }) {
+/** 图标按钮：保证 ≥32×32 热区（移动端可点），必须给 ariaLabel。 */
+export function IconButton({
+  icon, label, onClick, size = 32, tone = 'slate', disabled, title, className = '',
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick?: () => void;
+  size?: 28 | 32 | 36 | 40;
+  tone?: 'slate' | 'danger' | 'brand';
+  disabled?: boolean;
+  title?: string;
+  className?: string;
+}) {
+  const tones = {
+    slate: 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200',
+    danger: 'text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/30 dark:hover:text-rose-300',
+    brand: 'text-slate-400 hover:bg-teal-50 hover:text-teal-700 dark:hover:bg-teal-900/30 dark:hover:text-teal-300',
+  } as const;
   return (
-    <div
+    <button
+      type="button"
+      title={title ?? label}
+      aria-label={label}
+      disabled={disabled}
       onClick={onClick}
-      className={`bg-[var(--card)] text-[var(--card-foreground)] rounded-xl border border-slate-200 dark:border-slate-800 shadow-[var(--card-shadow)] ${hover ? 'card-lift cursor-pointer' : ''} ${className}`}
+      style={{ width: size, height: size }}
+      className={`inline-flex shrink-0 items-center justify-center rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40 ${tones[tone]} ${className}`}
+    >
+      {icon}
+    </button>
+  );
+}
+
+export function Card({ children, className = '', onClick, hover, padded = true, as = 'div', id }: {
+  children: ReactNode;
+  className?: string;
+  onClick?: () => void;
+  hover?: boolean;
+  /** 默认给 16px 内边距；需要自定义布局时传 false */
+  padded?: boolean;
+  as?: 'div' | 'section' | 'article';
+  /** 锚点 id（设置页/文档页内导航用） */
+  id?: string;
+}) {
+  const Tag = as;
+  return (
+    <Tag
+      id={id}
+      onClick={onClick}
+      className={`bg-[var(--card)] text-[var(--card-foreground)] rounded-[var(--r-md)] border border-slate-200/80 dark:border-slate-800 shadow-[var(--sh-card)] ${padded ? 'p-4' : ''} ${hover ? 'card-lift cursor-pointer' : ''} ${className}`}
     >
       {children}
+    </Tag>
+  );
+}
+
+/** 区块标题：全站统一的信息层级（标题 / 描述 / 右侧操作） */
+export function SectionHeader({ title, description, actions, level = 2, className = '' }: {
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  level?: 2 | 3;
+  className?: string;
+}) {
+  const Tag = level === 2 ? 'h2' : 'h3';
+  return (
+    <div className={`flex flex-wrap items-start justify-between gap-2 ${className}`}>
+      <div className="min-w-0">
+        <Tag className={`${level === 2 ? 'text-[15px]' : 'text-sm'} font-semibold tracking-tight text-slate-900 dark:text-slate-100 truncate`}>{title}</Tag>
+        {description && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{description}</p>}
+      </div>
+      {actions && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}
+    </div>
+  );
+}
+
+/** 空态：插图 + 标题 + 说明 + 主操作（缺一不可，避免"只有一行字"） */
+export function EmptyState({ title, hint, illustration, action, compact }: {
+  title: string;
+  hint?: string;
+  illustration?: IllustrationKey;
+  action?: ReactNode;
+  compact?: boolean;
+}) {
+  const IllustrationComp = illustration ? ILLUSTRATIONS[illustration] : null;
+  return (
+    <div className={`flex flex-col items-center justify-center text-center ${compact ? 'py-8' : 'py-14'} px-6`}>
+      {IllustrationComp ? (
+        <IllustrationComp className="w-24 h-20 mb-2 opacity-90" />
+      ) : (
+        <div className="w-11 h-11 rounded-[var(--r-md)] brand-logo flex items-center justify-center mb-2">
+          <Sparkles size={19} aria-hidden="true" />
+        </div>
+      )}
+      <div className="text-sm font-medium text-slate-700 dark:text-slate-200">{title}</div>
+      {hint && <div className="mt-1 max-w-sm text-xs leading-relaxed text-slate-500 dark:text-slate-400">{hint}</div>}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }

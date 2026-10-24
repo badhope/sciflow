@@ -2,6 +2,71 @@
 
 本项目格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，语义化版本号。以下按 `git log` 自底向上归纳历轮功能与修复，未含真实密钥。
 
+## [1.0.0] - 2026-10-24
+
+首个正式版：深度研究能力（对标 deep research 类工具）+ 反同质化 + 实验设计助手，外加 CLI headless 全流程与一批工程收尾。竞品调研对标 Stanford STORM / Elicit / NotebookLM / GPT-Researcher / PaperQA2（2026-10-24，结论沉淀于本批架构文档与 README）。
+
+### Added（深度研究与差异化）
+- **研究深度参数（depth 1-3）**：文献调研按轮递归——第 2+ 轮由 Planner 依据上一轮发现给出新检索词，命中跨轮去重合并、零新增自动收敛；流水线页/工作台均可切换（标准/深入/彻底），全局设置落 `pipeline_research_depth`。
+- **反共识大纲变体（F2 反同质化引擎）**：大纲阶段一次产出「主推方案 + 2 个反共识变体」（挑战主流假设 / 另起组织框架），工作台确认卡与流水线大纲弹窗均可一键切换对比后采用；模型不支持时自动回退单大纲，流程永不中断。
+- **实验设计助手（F3）**：研究问题 → 结构化实验设计稿（自变量/因变量/控制变量、对照组、样本量与统计功效提示、实验流程、分析计划、效度风险），落库可复看可删除；入口在「实验记录」页。
+- **步骤耗时时间线（F-2.7）**：流水线详情新增甘特式耗时条（真实 startedAt/endedAt），哪一步最烧时间一眼可见。
+- **命令面板注册表（F-3.1）**：⌘K 命令清单收敛到 `lib/commands.ts` 单一来源（label+关键词双通道模糊匹配）；设置页新增「快捷键速查」（F-3.2，与真实注册一一对应并有测试锁定）。
+- **深度健康探针 `GET /api/health/deep`**（Q-10.3）：db 往返时延 / 向量扩展 / AI 配置三探针，运维巡检与桌面托盘可直接消费。
+- **MCP resources（M-8.2）**：`sciflow://projects` 静态资源 + `sciflow://project/{projectId}/{documents|references}` 资源模板，Claude Desktop 等客户端可只读引用本地库。
+- **CLI headless 全流程（C-7.2）**：`sciflow run --topic "主题" --auto --depth 2 --out ./paper/` 一条命令完成 建项目→流水线→自动确认大纲→导出 Markdown 论文；产物文件名取自论文标题。
+- 前端工作台/流水线页新增研究深度选择器；实验页新增设计稿卡片（展开详情/删除）。
+
+### Changed
+- **CLI 重写 HTTP 层（C-7.1）**：`localApi` 从 `spawnSync('node',['-e',…])` 字符串拼接改为原生 `fetch`（node ≥18），消灭命令注入面；`pipeline run`/`doc export` 同步走 REST。
+- `PipelineStepState` 增量字段 `variants`/`startedAt`/`endedAt`（纯增量，旧消费者不受影响）；`ResearchTraceEntry` 修正为线上真实契约 `{round,thought,action,query,found}`。
+- 自定义提示词清单新增「实验设计助手」（可配即生效）。
+
+### Verified
+- server 新增 `pipeline-variants.spec.ts`（5 条，真图+真 SQLite）与 `experiment-design.spec.ts`（4 条）；web 新增 `commands.test.ts`（注册表/过滤/速查表 7 条）。
+- 回归新增 10 条用例（深度探针/反共识变体下发/步骤时间戳/F3 设计稿 4 条/研究深度设置 3 条），其余契约不变。
+- typecheck 双端 0 error；详见交付报告。
+
+## [0.11.0] - 2026-10-23
+
+品牌修订 2「墨流 · Ink Current」+ 信息架构合并批次。**科研问答并入工作台**（唯一对话入口），前端 -1 个重复页面、-602 行。
+
+### Changed（品牌 · 墨流 Ink Current）
+- **Logo 重做**：手绘感 S 曲线 → 几何双弧「墨流 S + 思想节点」（右上入水、左下出水，末端圆点=想法汇入水流）。唯一矢量源更新：`BrandMark.tsx` / `docs/brand/icon-master.svg`（1024 母版）/ `logo-mark*.svg` / `logo-horizontal.svg` / `favicon.svg` / `apple-touch-icon.*`；桌面 ICO/ICNS 经 `pnpm icons` 管线再生成。16px favicon 可辨识已实测。
+- **设计语言去「AI 通用味」**：全局网格纹理背景移除（保留两团极淡品牌光晕）；Logo 釉面高光移除；主按钮常驻光晕改为 hover 出现（默认平面 + 细投影）；卡片阴影中性化（去 teal 色偏）；圆角刻度收敛（--r-lg 14→12）；指标卡数值加粗紧字距；新增品牌色文本选区。
+
+### Changed（信息架构合并）
+- **科研问答 → 工作台**：两处重复的对话界面（同内核同 MessageList）合并为一个。工作台补齐原科研问答全部能力：本地多会话（新建/重命名/删除/搜索，与旧页同 localStorage key，旧会话自动延续）、模型选择、深度思考、意图识别、slash 快捷指令（7 条）、followUps 追问建议、来源卡「引用进草稿」、Markdown 快照导出；保留工作台原有的文档预览/流水线运行卡/沉淀摘要注入。`ChatPage.tsx` 删除；`#/chat` 深链由 VIEW_KEYS 白名单自动兜底回工作台。
+- **导航分组重排**：核心工作（工作台/论文写作/文献调研/知识库）→ 自动化（流水线/质量评分/投稿辅助）→ 记录与洞察（项目总览/实验记录/记忆中心）；命令面板与移动端 TabBar 自动跟随。
+- **会话落盘改走内核 `onMessagesChange`**（删除 effect 内同步 setState，React Compiler lint 0 error）；slash 菜单改派生状态 + Esc 关闭记忆（同上）。
+- **发送键统一**：工作台对话 Enter 发送 / Shift+Enter 换行 / ⌘+Ctrl+Enter 兼容（与输入区提示一致）。
+
+### Verified
+- typecheck 0 error；eslint 0 error / 1 warning（TanStack Table 已知互操作项）；web **67** 用例全绿；`vite build` 成功。
+- 真实运行冒烟（AI_MOCK=1）：新 Logo 侧栏/favicon/登录门渲染正常；会话面板（本地会话+沉淀摘要）与 slash 菜单可用；对话内核端到端 mock 流式 667 字 0 pageerror；`#/chat` 深链兜底渲染工作台；390 无横向溢出。
+- 已知后续：README 内 12 张截图仍为旧 Logo 时代画面（截图刷新涉及全页重拍，留待下批次）。
+
+## [0.10.0] - 2026-10-23
+
+交互基建统一批次：三处聊天入口收敛到同一内核、全局快捷键注册表、项目阶段条、可拖拽分栏。前端契约记录见 `ARCHITECTURE.md` §2.12。
+
+### Added
+- **统一聊天内核 `useChatSession`**（`apps/web/src/lib/chat-session.ts`）：工作台 / 科研问答 / 写作抽屉共用。累积回调强制走 `applyStreamDelta` 覆盖语义、停止保留已收文本并置 `stopped`、错误落到 `message.error` 可重试；发送/重试/续写统一触发 `onSend`（意图识别旁路）与 `doneTransform`（followUps 解析），`messageSuffix` 支持 FOLLOWUP_HINT 约定。此前三处各写一套 streamChat 回调，能力漂移（抽屉无来源卡、停止后不置 stopped）。
+- **全局快捷键注册表 `lib/hotkeys.ts`**：mod 归一化（Mac ⌘ / Win Ctrl）、输入框保护、后注册者优先、handler 返回 `false` 放行外层；替换 7 处裸 `addEventListener('keydown')`（修「提示 ⌘S 但只在写作页生效」「Esc 被多处抢」类不一致）。App / ChatPage / WorkspacePage / WritingPage 四处接入。
+- **异步动作三态 `lib/async.ts`**：`useAsyncAction`（running/error/idle + 防重复提交），替代手写 `setBusy/finally`（漏 catch 即静默失败）。ChatPanel 快捷动作、ChatPage「发送到写作页」接入。
+- **项目阶段条 StageBar + `lib/stages.ts`**：六阶段（选题→文献→大纲→起草→评审→投稿）纯函数推断，只有真实数据才算完成（空项目不全绿），含待办角标（待确认大纲/未处理评审意见/逾期投稿）；`stages.test.ts` 5 条。AppShell 新增 `stageBar` 槽位，项目级页面共享。
+- **移动端底部 TabBar**：AppShell 新增 `mobileTabbar` 槽位，窄屏高频视图一键可达。
+- **可拖拽分栏**：`SplitPane`（写作编辑器左右栏）与 `useSplitDrag`（工作台预览宽度，localStorage 持久化）。
+- **消息追问建议（followUps）**：科研问答页按 `---FOLLOWUPS---` 约定解析模型的后续追问，点击即以该问题续发（含历史上下文）。
+
+### Changed
+- **`MessageList` 成为消息渲染唯一入口**：思考流折叠、来源卡（展开原文/引用进草稿）、token 用量、消息操作（复制/重试/继续/删除/发送到写作页）只保留一份实现；工作台/科研问答/写作抽屉全部接入，消除「抽屉没有来源卡」类能力漂移。
+- **工作区草稿中的 `lib/optimistic.ts`（useOptimisticList）未随批次保留**：其撤销语义要求后端恢复接口，服务端无任何 restore 端点，属无法真实接线的死代码（同 F-013「配了不生效」类缺陷）；该文件从未进入提交历史。
+
+### Verified
+- `pnpm --filter @sciflow/web typecheck` 0 error；`npx eslint .` 0 error / 1 warning（TanStack Table 已知互操作项）；web **67** 用例全绿（含 WorkspacePage 8 条行为用例改走内核路径，D1 累积回归有效）；`vite build` 成功（22.7s）。
+- server 端本批次零改动（基线 99 用例不变）。
+
 ## [0.9.0] - 2026-10-23
 
 品牌与体验打磨批次 + 全维度审查驱动的数据完整性修复。审查报告见 [`docs/AUDIT-2026-10-23.md`](docs/AUDIT-2026-10-23.md)（35 条发现、具名竞品矩阵、路线图）。

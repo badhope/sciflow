@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import { useContext } from 'react';
 import { ToastContext } from '../App';
 import type { Doc, KnowledgeDoc, KnowledgeDocDetail, KnowledgeQueryResult, KnowledgeSource, Project, Reference } from '../types';
-import { Button, Card, ConfirmDialog, Empty, ErrorBox, Input, Modal, SectionTitle, Badge, Spinner, errMsg } from '../components/ui';
+import { Button, Card, ConfirmDialog, EmptyState, ErrorBox, Input, Modal, SectionTitle, Badge, Spinner, errMsg } from '../components/ui';
 import { Donut, HBar } from '../components/charts';
 import { SemanticMap } from './knowledge/SemanticMap';
 
@@ -533,7 +533,7 @@ export function KnowledgePage({ project }: { project: Project }) {
         <div className="mt-4">
           <div className="text-xs text-slate-400 dark:text-slate-500 mb-2">知识库（{docs.length} 份资料）</div>
           {docs.length === 0 ? (
-            <Empty illustration="knowledge" text="知识库还没有资料" hint="上传 PDF / Markdown / 文本后即可基于资料提问" />
+            <EmptyState illustration="knowledge" title="知识库还没有资料" hint="上传 PDF / Markdown / 文本后即可基于资料提问" />
           ) : (
             <div className="space-y-2">
               {docs.map((d) => (

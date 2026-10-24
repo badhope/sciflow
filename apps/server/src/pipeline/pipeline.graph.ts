@@ -31,6 +31,7 @@ export const PipelineAnnotation = Annotation.Root({
   researchNotice: Annotation<string | undefined>({ reducer: (_a, b) => b, default: () => undefined }),
   literatureSummary: Annotation<string>({ reducer: (_a, b) => b, default: () => '' }),
   outline: Annotation<Outline | undefined>({ reducer: (_a, b) => b, default: () => undefined }),
+  outlineVariants: Annotation<string[]>({ reducer: (_a, b) => b, default: () => [] }),
   documentId: Annotation<string | undefined>({ reducer: (_a, b) => b, default: () => undefined }),
   report: Annotation<QualityReport | undefined>({ reducer: (_a, b) => b, default: () => undefined }),
 });
@@ -43,6 +44,8 @@ export interface PipelineGraphDeps {
   ai: {
     summarizeLiterature(topic: string, papers: string): Promise<string>;
     writeOutline(topic: string, summary: string): Promise<Outline>;
+    /** F2 反共识大纲变体：[主大纲, 变体A, 变体B]。模型不支持时抛错，节点回退 writeOutline */
+    writeOutlineVariants(topic: string, summary: string): Promise<Outline[]>;
     /** Planner：产出多语检索关键词（失败时由实现方兜底 [topic]） */
     planResearch(topic: string): Promise<{ keywords: string[] }>;
     reviewPaper(title: string, content: string): Promise<{ totalScore: number; feedback: string; scores?: Record<string, number> }>;
@@ -52,6 +55,8 @@ export interface PipelineGraphDeps {
   };
   /** H2 预算器：LLM 调用后累计该任务 token，超限抛错终止流水线 */
   trackBudget(taskId: string): void;
+  /** 研究深度（1-3）：literature 节点按轮递归检索；实现方读 app_setting pipeline_research_depth */
+  researchDepth(): number;
   /** 分章起草（服务层实现，内部并行；onProgress 用于逐节进度通知）。 */
   runDrafting(
     taskId: string,
@@ -72,8 +77,8 @@ export interface PipelineGraphDeps {
     topic: string,
     plan: ResearchPlan,
   ): Promise<{ libraryHits: PaperHit[]; knowledgeHits: PaperHit[]; notice: string | null; meta: { lib: { title: string; score: number }[]; kn: PaperHit[] }; summary: string }>;
-  /** 每步状态落库（保持 pipeline_task.steps JSON 前端契约不变）。 */
-  notify(taskId: string, key: string, status: StepStatusWire, output?: string, retryCount?: number): Promise<void>;
+  /** 每步状态落库（保持 pipeline_task.steps JSON 前端契约不变；extra 增量合并新字段如 variants）。 */
+  notify(taskId: string, key: string, status: StepStatusWire, output?: string, retryCount?: number, extra?: { variants?: string[] }): Promise<void>;
   /** 步骤开关。 */
   stepEnabled(key: string): boolean;
   logger: { log(m: string): void; warn(m: string): void; error(m: string): void };
@@ -101,43 +106,98 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
         return { researchNotice: '用户已禁用文献调研' };
       }
       await deps.notify(s.taskId, 'literature', 'running');
-      const enriched = await deps.crossEnrich(s.task.projectId, s.task.topic, s.plan);
+      // 研究深度（对标 deep research 的 depth 语义）：depth>1 时按上轮发现递归补充检索，
+      // 命中按 id/title 跨轮去重合并；无新增即提前收敛（不烧 token）。
+      const depth = Math.max(1, Math.min(3, Math.floor(deps.researchDepth() || 1)));
+      const seenLib = new Map<string, PaperHit>();
+      const seenKn = new Map<string, PaperHit>();
+      let notice: string | null = null;
+      let summary = '';
+      let plan = s.plan;
+      const researchTrace: ResearchTraceEntry[] = [];
+      for (let round = 1; round <= depth; round++) {
+        if (round > 1) {
+          const prior = [...seenLib.values()].slice(0, 6).map((h) => h.title).join('；');
+          const follow = await deps.ai
+            .planResearch(`${s.task.topic}\n（第 ${round} 轮补充检索：已有发现 ${prior || '无'}。请只给出与已有发现角度不同、能带来新证据的检索词）`)
+            .catch(() => ({ keywords: [] as string[] }));
+          const kws = (follow.keywords || []).map((k) => String(k).trim()).filter(Boolean);
+          if (!kws.length) break; // 规划器没有新词 → 无法继续深挖
+          plan = { searchStrategy: { keywords: kws } };
+        }
+        const before = seenLib.size + seenKn.size;
+        const enriched = await deps.crossEnrich(s.task.projectId, s.task.topic, plan);
+        for (const h of enriched.libraryHits) {
+          const key = h.id || `${h.title}:${h.year ?? ''}`;
+          if (!seenLib.has(key)) seenLib.set(key, h);
+        }
+        for (const h of enriched.knowledgeHits) {
+          if (!seenKn.has(h.title)) seenKn.set(h.title, h);
+        }
+        if (enriched.notice) notice = enriched.notice;
+        if (enriched.summary) summary = enriched.summary;
+        const keywords = (plan.searchStrategy?.keywords || [s.task.topic]).filter(Boolean).slice(0, 4);
+        for (const q of keywords) {
+          const needle = q.toLowerCase();
+          const found = [...seenLib.values(), ...seenKn.values()].filter((h) => `${h.title} ${h.abstract || ''}`.toLowerCase().includes(needle)).length;
+          researchTrace.push({
+            round: researchTrace.length + 1,
+            thought: round > 1 ? `第 ${round} 轮：围绕「${q}」补充检索本地文献库与知识库` : `围绕「${q}」检索本地文献库与知识库`,
+            action: 'search',
+            query: q,
+            found,
+          });
+        }
+        if (round > 1 && seenLib.size + seenKn.size === before) break; // 本轮零新增，收敛
+      }
+      // 跨轮合并 meta：同名取最高分（引用渲染池展示口径与单轮一致）
+      const libMeta = new Map<string, number>();
+      for (const h of seenLib.values()) {
+        const score = h.matchScore ?? 0;
+        if (!libMeta.has(h.title) || score > (libMeta.get(h.title) ?? 0)) libMeta.set(h.title, score);
+      }
+      const knMerged = [...seenKn.values()];
+      const meta = { lib: [...libMeta.entries()].map(([title, score]) => ({ title, score })), kn: knMerged };
       // ReAct 轨迹（think → act → observe）：由本轮真实跨库命中派生，落 pipeline_task.trace 供前端展示
-      const keywords = (s.plan.searchStrategy?.keywords || [s.task.topic]).filter(Boolean).slice(0, 4);
-      const allHits = [...enriched.libraryHits, ...enriched.knowledgeHits];
-      const researchTrace = keywords.map((q, i) => {
-        const needle = q.toLowerCase();
-        const found = allHits.filter((h) => `${h.title} ${h.abstract || ''}`.toLowerCase().includes(needle)).length;
-        return { round: i + 1, thought: `围绕「${q}」检索本地文献库与知识库`, action: 'search', query: q, found };
-      });
       db.update(pipelineTasks)
-        .set({ researchNotice: enriched.notice, researchMeta: JSON.stringify(enriched.meta), trace: JSON.stringify(researchTrace), updatedAt: Date.now() })
+        .set({ researchNotice: notice, researchMeta: JSON.stringify(meta), trace: JSON.stringify(researchTrace), updatedAt: Date.now() })
         .where(eq(pipelineTasks.id, s.taskId))
         .run();
-      await deps.notify(s.taskId, 'literature', 'done', enriched.summary.split('\n')[0]);
+      await deps.notify(s.taskId, 'literature', 'done', summary.split('\n')[0]);
       return {
-        enrichedLibHits: enriched.libraryHits,
-        enrichedKnHits: enriched.knowledgeHits,
-        researchNotice: enriched.notice ?? undefined,
+        enrichedLibHits: [...seenLib.values()],
+        enrichedKnHits: knMerged,
+        researchNotice: notice ?? undefined,
         researchTrace,
-        literatureSummary: enriched.summary,
+        literatureSummary: summary,
       };
     })
     .addNode('outline-gen', async (s: PipelineGraphState) => {
       await deps.notify(s.taskId, 'outline', 'running');
-      const outline = await deps.ai.writeOutline(s.verifiedTopic || s.task.topic, s.literatureSummary);
+      const topic = s.verifiedTopic || s.task.topic;
+      // F2 反同质化：优先取「主大纲 + 反共识变体」；模型不支持时回退单大纲
+      let variants: Outline[] = [];
+      try {
+        const produced = await deps.ai.writeOutlineVariants(topic, s.literatureSummary);
+        variants = Array.isArray(produced) ? produced.filter(Boolean) : [];
+      } catch (e: any) {
+        deps.logger.warn(`反共识大纲生成失败，回退单大纲: ${e?.message || e}`);
+      }
+      const outline = variants[0] ?? (await deps.ai.writeOutline(topic, s.literatureSummary));
+      const variantWires = variants.slice(1).map((v) => JSON.stringify(v));
+      const extra = variantWires.length ? { variants: variantWires } : undefined;
       const wire = JSON.stringify(outline);
       if (!deps.stepEnabled('outline')) {
-        await deps.notify(s.taskId, 'outline', 'done', wire);
+        await deps.notify(s.taskId, 'outline', 'done', wire, undefined, extra);
       } else {
-        await deps.notify(s.taskId, 'outline', 'awaiting_confirmation', wire);
+        await deps.notify(s.taskId, 'outline', 'awaiting_confirmation', wire, undefined, extra);
       }
-      return { outline };
+      return { outline, outlineVariants: variantWires };
     })
     .addNode('outline-gate', async (s: PipelineGraphState) => {
       // 节点体只有 interrupt：resume 重放零副作用
       if (!deps.stepEnabled('outline')) return {};
-      const resume = interrupt({ outline: JSON.stringify(s.outline ?? {}) }) as { edited?: Outline } | undefined;
+      const resume = interrupt({ outline: JSON.stringify(s.outline ?? {}), variants: s.outlineVariants }) as { edited?: Outline } | undefined;
       return resume?.edited ? { outline: resume.edited } : {};
     })
     .addNode('doc-create', async (s: PipelineGraphState) => {

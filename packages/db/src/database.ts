@@ -330,6 +330,16 @@ CREATE TABLE IF NOT EXISTS experiment (
 );
 CREATE INDEX IF NOT EXISTS idx_experiment_project ON experiment(project_id);
 
+-- F3 实验设计助手：AI 结构化实验设计稿（变量表/对照组/功效提示/流程/分析计划）
+CREATE TABLE IF NOT EXISTS research_design (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  question TEXT NOT NULL,
+  design TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_research_design_project ON research_design(project_id);
+
 -- 投稿流程状态跟踪：投稿记录 + 状态历史流水
 CREATE TABLE IF NOT EXISTS submission (
   id TEXT PRIMARY KEY,

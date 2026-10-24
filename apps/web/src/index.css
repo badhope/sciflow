@@ -25,7 +25,7 @@
   --on-brand: #ffffff;
   --brand-grad-soft: linear-gradient(135deg, rgba(15, 158, 148, 0.10), rgba(11, 143, 180, 0.08) 52%, rgba(11, 111, 196, 0.06));
   --brand-glow: 0 8px 28px rgba(11, 143, 180, 0.22), 0 2px 8px rgba(15, 158, 148, 0.18);
-  --card-shadow: 0 1px 2px rgba(15, 118, 110, 0.04), 0 8px 24px -12px rgba(15, 118, 110, 0.10);
+  --card-shadow: 0 1px 2px rgba(23, 32, 44, 0.05), 0 8px 24px -14px rgba(23, 32, 44, 0.12);
   --bg-app: #f4f6fb;
   --ink: #1c2a44;
 
@@ -72,6 +72,31 @@
 
   /* 布局节奏：内容页统一最大宽度，避免切页时左右边界跳动 */
   --page-max: 1152px;
+
+  /* ---- 设计系统刻度（唯一来源，页面不得自造）----
+     间距：4/8/12/16/20/24/32（--sp-1..--sp-8）
+     字号：11/12/13/14/16/20/24/32
+     圆角：6/10/14/18
+     阴影：2 档（卡片 / 浮层）
+     动效：1 条曲线 + 2 个时长
+  */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-7: 32px; --sp-8: 40px;
+
+  --fs-2xs: 11px; --fs-xs: 12px; --fs-sm: 13px; --fs-base: 14px;
+  --fs-lg: 16px;  --fs-xl: 20px; --fs-2xl: 24px; --fs-3xl: 32px;
+
+  --r-sm: 6px; --r-md: 10px; --r-lg: 12px; --r-xl: 16px;
+
+  --sh-card: 0 1px 2px rgba(23, 32, 44, 0.05), 0 8px 24px -14px rgba(23, 32, 44, 0.12);
+  --sh-overlay: 0 24px 60px -24px rgba(9, 15, 28, 0.35), 0 2px 8px rgba(9, 15, 28, 0.08);
+
+  --dur-1: 120ms; --dur-2: 200ms;
+
+  /* 阶段条 / 进度统一刻度（品牌渐变作为"进度语言"，不是装饰） */
+  --stage-done: var(--brand-600);
+  --stage-current: var(--brand-500);
+  --stage-todo: var(--border);
 
   /* 动效时长（统一节奏，避免各页面各写一套） */
   --dur-fast: 120ms;
@@ -148,7 +173,8 @@ body {
   color: var(--ink);
 }
 
-/* 品牌氛围背景：浅色淡网格 + 顶部品牌光晕；深色加深蓝渐变 */
+/* 品牌氛围背景：只保留两团极淡的品牌光晕（网格纹理已移除——
+   密集纹理是"AI 通用感"的主要来源，安静的底面才衬得出内容层级） */
 #root::before {
   content: "";
   position: fixed;
@@ -156,19 +182,18 @@ body {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(800px 400px at 80% -10%, rgba(13, 148, 136, 0.07), transparent 60%),
-    radial-gradient(600px 300px at 0% 0%, rgba(8, 145, 178, 0.05), transparent 55%),
-    linear-gradient(rgba(28, 42, 68, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(28, 42, 68, 0.025) 1px, transparent 1px);
-  background-size: auto, auto, 28px 28px, 28px 28px;
+    radial-gradient(900px 460px at 82% -12%, rgba(13, 148, 136, 0.06), transparent 62%),
+    radial-gradient(680px 320px at -6% -4%, rgba(8, 145, 178, 0.04), transparent 58%);
 }
 .dark #root::before {
   background:
-    radial-gradient(900px 420px at 85% -10%, rgba(13, 148, 136, 0.10), transparent 60%),
-    radial-gradient(700px 320px at 0% 0%, rgba(8, 145, 178, 0.07), transparent 55%),
-    linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
-  background-size: auto, auto, 32px 32px, 32px 32px;
+    radial-gradient(1000px 480px at 86% -12%, rgba(13, 148, 136, 0.09), transparent 62%),
+    radial-gradient(760px 340px at -6% -4%, rgba(8, 145, 178, 0.06), transparent 58%);
+}
+
+/* 文本选区：品牌色一以贯之 */
+::selection {
+  background: color-mix(in srgb, var(--brand-500) 22%, transparent);
 }
 
 /* 细滚动条 */
@@ -223,7 +248,7 @@ body {
 }
 .card-lift:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(15, 118, 110, 0.10);
+  box-shadow: 0 10px 28px rgba(23, 32, 44, 0.12);
 }
 
 /* ---- Micro-interactions ---- */
@@ -290,16 +315,17 @@ select:focus-visible {
   color: transparent;
 }
 
-/* 品牌渐变按钮底色（primary Button 用） */
+/* 品牌渐变按钮底色（primary Button 用）：默认收敛为平面，
+   光晕只在 hover 时出现——常驻发光是"AI 应用味"的另一大来源 */
 .brand-btn {
   background-image: var(--brand-grad);
   color: var(--on-brand);
-  box-shadow: var(--brand-glow);
+  box-shadow: 0 1px 2px rgba(9, 42, 77, 0.18);
   transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
 }
 .brand-btn:hover {
-  filter: brightness(1.06);
-  box-shadow: 0 10px 34px rgba(13, 148, 136, 0.32), 0 2px 10px rgba(8, 145, 178, 0.22);
+  filter: brightness(1.05);
+  box-shadow: var(--brand-glow);
 }
 .brand-btn:active {
   transform: scale(0.97);
@@ -312,20 +338,11 @@ select:focus-visible {
   box-shadow: var(--brand-glow);
 }
 
-/* Logo 徽标：渐变底 + 内发光 */
+/* Logo 徽标：渐变底 + 极浅描边（釉面高光已移除，几何标志本身足够） */
 .brand-logo {
   background-image: var(--brand-grad);
   color: var(--on-brand);
-  box-shadow: var(--brand-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  position: relative;
-}
-.brand-logo::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(120px 30px at 30% 0%, rgba(255, 255, 255, 0.35), transparent 70%);
-  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 1px 2px rgba(9, 42, 77, 0.20);
 }
 
 /* 顶部 header 玻璃质感 */
@@ -484,7 +501,7 @@ kbd {
 .metric-card {
   display: flex; flex-direction: column; gap: 6px;
   padding: 16px;
-  border-radius: 14px;
+  border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--card);
   box-shadow: var(--card-shadow);
@@ -495,7 +512,7 @@ kbd {
   color: var(--muted-foreground);
 }
 .metric-card__icon { display: inline-flex; }
-.metric-card__value { font-size: 26px; font-weight: 500; line-height: 1.1; color: var(--foreground); }
+.metric-card__value { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; color: var(--foreground); }
 .metric-card__delta, .metric-card__hint { font-size: 11px; color: var(--muted-foreground); }
 
 .chart-empty {
@@ -768,3 +785,203 @@ kbd {
 .dark .cm-editor .cm-selectionBackground,
 .dark .cm-editor.cm-focused .cm-selectionBackground { background: rgba(45, 212, 191, 0.22) !important; }
 .dark .cm-editor .cm-cursor { border-left-color: #5eead4; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   项目阶段条（Flow-first 叙事）
+   ── 把「选题→文献→大纲→起草→评审→投稿」从 6 个抽屉变成一条可点的进度线。
+   已完成 = 品牌深色 + 勾；当前 = 品牌渐变描边 + 加粗；待办 = 灰。
+   ═══════════════════════════════════════════════════════════════════ */
+.stage-bar {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 72%, transparent);
+  backdrop-filter: blur(8px);
+}
+.stage-bar__list {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.stage-bar__list::-webkit-scrollbar { display: none; }
+.stage-bar__item { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.stage-bar__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.4;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease);
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.stage-bar__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px; height: 17px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.stage-bar__btn.is-done { color: var(--brand-700); }
+.stage-bar__btn.is-done .stage-bar__index { background: var(--brand-600); color: #fff; }
+.stage-bar__btn.is-current { color: var(--foreground); font-weight: 600; }
+.stage-bar__btn.is-current .stage-bar__index { background-image: var(--brand-grad); color: var(--on-brand); }
+.stage-bar__btn.is-todo { color: var(--muted-foreground); }
+.stage-bar__btn.is-active { background: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-500) 28%, transparent); }
+.stage-bar__btn:hover { background: var(--muted); }
+.stage-bar__btn:focus-visible { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-500) 40%, transparent); }
+.stage-bar__badge {
+  min-width: 16px; height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--amber-500);
+  color: #1f1300;
+  font-size: 10px;
+  font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.stage-bar__sep {
+  width: 14px; height: 1px;
+  background: var(--border);
+}
+.stage-bar__sep.is-done { background: color-mix(in srgb, var(--brand-600) 55%, transparent); }
+.stage-bar__compact { display: none; }
+
+@media (max-width: 900px) {
+  .stage-bar__list { display: none; }
+  .stage-bar__compact {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 11px;
+    color: var(--muted-foreground);
+  }
+  .stage-bar__compact-value { color: var(--foreground); font-weight: 500; }
+  .stage-bar__compact-track {
+    flex: 1 1 auto;
+    height: 3px;
+    border-radius: 999px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .stage-bar__compact-track > span {
+    display: block;
+    height: 100%;
+    background-image: var(--brand-grad);
+    transition: width var(--dur-2) var(--ease);
+  }
+}
+
+/* 底部移动端 Tab（≤900px 显示） */
+.mobile-tabbar { display: none; }
+@media (max-width: 900px) {
+  .mobile-tabbar {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    flex: 0 0 auto;
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--card) 92%, transparent);
+    backdrop-filter: blur(10px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .mobile-tabbar__btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 7px 0 6px;
+    font-size: 10px;
+    color: var(--muted-foreground);
+    min-height: 52px;
+  }
+  .mobile-tabbar__btn[aria-current="page"] { color: var(--brand-700); }
+  .mobile-tabbar__btn[aria-current="page"] svg { color: var(--brand-600); }
+}
+
+/* 可拖拽分栏（写作 split / 工作台对话+预览） */
+.split-handle {
+  flex: 0 0 6px;
+  cursor: col-resize;
+  position: relative;
+  background: transparent;
+  touch-action: none;
+}
+.split-handle::after {
+  content: "";
+  position: absolute;
+  inset: 0 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background var(--dur-1) var(--ease);
+}
+.split-handle:hover::after, .split-handle.is-dragging::after { background: color-mix(in srgb, var(--brand-500) 45%, transparent); }
+/* 叠加模式（工作台预览左缘）：定位全部走本层——Tailwind v4 的 absolute 在 @layer utilities，
+   会被未分层的基础样式（position:relative）压过，把手曾被渲染成面板顶部一条 6px 横条 */
+.split-handle--overlay {
+  position: absolute;
+  left: -7px;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  flex: none;
+}
+.split-handle:focus-visible { outline: none; }
+.split-handle:focus-visible::after { background: var(--brand-500); }
+
+/* 页面级骨架（列表/表单通用） */
+.page-skeleton { display: flex; flex-direction: column; gap: 12px; padding: 4px; }
+
+/* 路由切换进度条（顶部 2px，仅切换瞬间出现；避免"点了没反应"的错觉） */
+.route-progress {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  z-index: 90;
+  background: var(--brand-grad);
+  transform-origin: 0 50%;
+  animation: route-progress 420ms var(--ease) forwards;
+  pointer-events: none;
+}
+@keyframes route-progress {
+  0% { transform: scaleX(0); opacity: 1; }
+  70% { transform: scaleX(0.9); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+
+/* 设置页内导航（粘性，锚点直达；3 屏以上的长页必须有） */
+.settings-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  backdrop-filter: blur(10px);
+}
+.settings-nav::-webkit-scrollbar { display: none; }
+.settings-nav__item {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+.settings-nav__item:hover { background: var(--muted); color: var(--foreground); }

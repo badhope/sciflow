@@ -47,6 +47,17 @@ export class CustomizationController {
     return this.customization.resetPipelineSteps();
   }
 
+  // 流水线运行参数（研究深度）
+  @Get('pipeline-settings')
+  getPipelineSettings() {
+    return this.customization.getPipelineSettings();
+  }
+
+  @Post('pipeline-settings')
+  setPipelineSettings(@Body() body: { researchDepth?: number }) {
+    return this.customization.setPipelineSettings(body || {});
+  }
+
   // 质量评分权重
   @Get('quality-weights')
   listQualityWeights() {

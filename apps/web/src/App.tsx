@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { HashRouter, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { PageErrorBoundary } from './components/PageErrorBoundary';
 import {
-  BookOpen, Brain, Beaker, LayoutDashboard, Plus, RefreshCw, Search, Send, Settings, Trash2, Workflow, BookMarked, ChevronRight, Command, Sun, Moon, Monitor, MessageSquare as MessageSquareIcon, XCircle as XCircleIcon, Gauge, Library, LayoutGrid,
+  BookOpen, Brain, Beaker, LayoutDashboard, Plus, RefreshCw, Search, Send, Settings, Trash2, Workflow, BookMarked, ChevronRight, Command, Sun, Moon, Monitor, XCircle as XCircleIcon, Gauge, Library, LayoutGrid, Menu as MenuIcon,
 } from 'lucide-react';
 import { api } from './api/client';
 import { isNetworkError } from './api/core';
@@ -13,6 +13,9 @@ import { applyTheme, readStoredTheme, resolveTheme, systemPrefersDark, THEME_OPT
 import { AuthGate } from './components/AuthGate';
 import { AppShell, ShellNavGroup, ShellNavItem, useAppShell } from './components/AppShell';
 import { BrandLockup } from './components/BrandMark';
+import { StageBar } from './components/StageBar';
+import { buildCommands, filterCommands } from './lib/commands';
+import { useHotkeys } from './lib/hotkeys';
 import { Button, Input, Modal, Spinner, ErrorBox, ToastViewport, ConfirmDialog, type ToastItem, type ToastKind } from './components/ui';
 // 路由级代码分割：所有页面懒加载（首屏只加载当前视图，大厂 SPA 标准）
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
@@ -20,7 +23,6 @@ const WritingPage = lazy(() => import('./pages/WritingPage').then((m) => ({ defa
 const LiteraturePage = lazy(() => import('./pages/LiteraturePage').then((m) => ({ default: m.LiteraturePage })));
 const PipelinePage = lazy(() => import('./pages/PipelinePage').then((m) => ({ default: m.PipelinePage })));
 const QualityPage = lazy(() => import('./pages/QualityPage').then((m) => ({ default: m.QualityPage })));
-const ChatPage = lazy(() => import('./pages/ChatPage').then((m) => ({ default: m.ChatPage })));
 const SubmissionPage = lazy(() => import('./pages/SubmissionPage').then((m) => ({ default: m.SubmissionPage })));
 const KnowledgePage = lazy(() => import('./pages/KnowledgePage').then((m) => ({ default: m.KnowledgePage })));
 const ExperimentsPage = lazy(() => import('./pages/ExperimentsPage').then((m) => ({ default: m.ExperimentsPage })));
@@ -54,7 +56,6 @@ export type View =
   | 'experiments'
   | 'pipeline'
   | 'quality'
-  | 'chat'
   | 'submission'
   | 'knowledge'
   | 'memory'
@@ -64,7 +65,7 @@ export type View =
 /** 平台修饰键显示文案（Windows 上不显示 ⌘） */
 const MOD_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 
-const VIEW_KEYS: readonly View[] = ['workspace', 'dashboard', 'writing', 'literature', 'experiments', 'pipeline', 'quality', 'chat', 'submission', 'knowledge', 'memory', 'settings'];
+const VIEW_KEYS: readonly View[] = ['workspace', 'dashboard', 'writing', 'literature', 'experiments', 'pipeline', 'quality', 'submission', 'knowledge', 'memory', 'settings'];
 
 /** 功能导航分组（大厂式：按工作流分组，设置独立收纳到底部） */
 const VIEW_LABELS: Record<View, string> = {
@@ -77,18 +78,16 @@ const VIEW_LABELS: Record<View, string> = {
   memory: '记忆中心',
   pipeline: '全自动流水线',
   quality: '质量评分',
-  chat: '科研问答',
   submission: '投稿辅助',
   settings: '设置',
 };
 
-/** 功能导航分组（大厂式：按工作流分组，设置独立收纳到底部）；名称唯一来源 = VIEW_LABELS */
+/** 导航按「核心工作 → 自动化 → 记录与洞察」三段叙事（名称唯一来源 = VIEW_LABELS） */
 const NAV_GROUPS: { label: string; items: { key: View; label: string; icon: typeof LayoutDashboard }[] }[] = [
   {
     label: '核心工作',
     items: [
       { key: 'workspace', label: VIEW_LABELS.workspace, icon: LayoutDashboard },
-      { key: 'chat', label: VIEW_LABELS.chat, icon: MessageSquareIcon },
       { key: 'writing', label: VIEW_LABELS.writing, icon: BookOpen },
       { key: 'literature', label: VIEW_LABELS.literature, icon: Library },
       { key: 'knowledge', label: VIEW_LABELS.knowledge, icon: BookMarked },
@@ -99,15 +98,15 @@ const NAV_GROUPS: { label: string; items: { key: View; label: string; icon: type
     items: [
       { key: 'pipeline', label: VIEW_LABELS.pipeline, icon: Workflow },
       { key: 'quality', label: VIEW_LABELS.quality, icon: Gauge },
-      { key: 'memory', label: VIEW_LABELS.memory, icon: Brain },
+      { key: 'submission', label: VIEW_LABELS.submission, icon: Send },
     ],
   },
   {
-    label: '辅助',
+    label: '记录与洞察',
     items: [
       { key: 'dashboard', label: VIEW_LABELS.dashboard, icon: LayoutGrid },
       { key: 'experiments', label: VIEW_LABELS.experiments, icon: Beaker },
-      { key: 'submission', label: VIEW_LABELS.submission, icon: Send },
+      { key: 'memory', label: VIEW_LABELS.memory, icon: Brain },
     ],
   },
 ];
@@ -159,7 +158,6 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
         </Suspense>
       </PageErrorBoundary>
     ) : null,
-  chat: ({ project }) => (project ? <PageErrorBoundary pageName="科研问答"><SuspensePage name="科研问答"><ChatPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
   submission: ({ project }) => (project ? <PageErrorBoundary pageName="投稿辅助"><SuspensePage name="投稿辅助"><SubmissionPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
 };
 
@@ -261,25 +259,42 @@ function AppInner() {
   // 选中项目为派生：显式选择 > 列表首个（不在 effect 里写 state）
   const currentProjectId = pickedProjectId && projects.some((p) => p.id === pickedProjectId) ? pickedProjectId : (projects[0]?.id ?? null);
 
-  // 全局快捷键：⌘K 命令面板 / ⌘N 新建项目 / Esc 关闭
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      const k = e.key.toLowerCase();
-      if (mod && k === 'k') {
-        e.preventDefault();
-        setCommandOpen((s) => !s);
-      } else if (mod && k === 'n') {
-        e.preventDefault(); // 阻止浏览器新窗口
+  // 阶段条数据（项目级）：文档/概览/投稿三项，缺失即降级为「不做完成度推断」
+  const stageDocsQuery = useQuery({
+    queryKey: ['stage-docs', currentProjectId],
+    queryFn: () => api.documents.list(currentProjectId!),
+    enabled: !!currentProjectId && view !== 'settings',
+    staleTime: 30_000,
+  });
+  const stageOverviewQuery = useQuery({
+    queryKey: ['stage-overview', currentProjectId],
+    queryFn: () => api.dashboard.overview(currentProjectId ?? undefined),
+    enabled: !!currentProjectId && view !== 'settings',
+    retry: 0,
+    staleTime: 30_000,
+  });
+  const stageSubsQuery = useQuery({
+    queryKey: ['stage-subs', currentProjectId],
+    queryFn: () => api.submission.listTracks(currentProjectId!),
+    enabled: !!currentProjectId && view !== 'settings',
+    retry: 0,
+    staleTime: 30_000,
+  });
+
+  // 全局快捷键（统一注册表）：命令面板 / 新建项目 / Esc 关闭
+  useHotkeys([
+    // 输入区内可达：焦点在搜索框/编辑器时 ⌘K 仍可开面板（历史回归：命令面板自己的输入框会吞掉 ⌘K）
+    { combo: 'mod+k', allowInInput: true, handler: () => setCommandOpen((s) => !s) },
+    {
+      combo: 'mod+n',
+      allowInInput: true,
+      handler: () => {
         setCommandOpen(false);
         setShowNewProject(true);
-      } else if (e.key === 'Escape') {
-        setCommandOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+      },
+    },
+    { combo: 'escape', allowInInput: true, handler: () => setCommandOpen(false) },
+  ]);
 
   const createProject = async () => {
     if (!newName.trim()) return;
@@ -315,6 +330,13 @@ function AppInner() {
     [projects, projectQuery],
   );
 
+  // 阶段条数据派生：文档有正文 / 最近评分 / 投稿条数
+  const stageDocs = stageDocsQuery.data ?? [];
+  const stageDocWithContent = stageDocs.some((d) => (d.content || '').length > 40);
+  // 评审完成度：文档状态进入 reviewing/polished/final 即视为已评审（lowQualityDocs 只含 <60 分，不能当完成信号）
+  const stageReviewedCount = stageDocs.filter((d) => ['reviewing', 'polished', 'final'].includes(d.status)).length;
+  const stageSubmissionCount = stageSubsQuery.data?.length ?? 0;
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -332,6 +354,22 @@ function AppInner() {
           <AppShell
             sidebarWidth={224}
             toolbarTitle={VIEW_LABELS[view]}
+            stageBar={
+              currentProject && view !== 'settings' ? (
+                <StageBar
+                  project={currentProject}
+                  view={view}
+                  overview={stageOverviewQuery.data ?? null}
+                  docCount={stageDocs.length}
+                  hasContent={stageDocWithContent}
+                  score={null}
+                  reviewedDocCount={stageReviewedCount}
+                  submissionCount={stageSubmissionCount}
+                  onNavigate={(v) => setView(v as View)}
+                />
+              ) : undefined
+            }
+            mobileTabbar={<MobileTabBar view={view} onSelect={setView} />}
             sidebar={
               <SidebarContent
                 view={view}
@@ -383,6 +421,7 @@ function AppInner() {
             }
           >
             <div key={view} className={`page-enter ${PAGE_PADDING[view] ?? 'p-3 sm:p-4 md:p-6'} h-full min-h-0`}>
+              <RouteProgress view={view} />
               {error && (
                 <div className="mb-4">
                   <ErrorBox message={error} />
@@ -624,18 +663,13 @@ function SidebarContent({
 function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onClose: () => void; onNavigate: (v: View) => void; onNewProject: () => void; projectId: string | null }) {
   const [q, setQ] = useState('');
   const { setMode } = useContext(ThemeContext);
-  const commands = useMemo(() => {
-    const nav = NAV_GROUPS.flatMap((g) => g.items).map((n) => ({ id: `nav-${n.key}`, label: n.label, group: g(n.key), run: () => onNavigate(n.key) }));
-    return [
-      ...nav,
-      { id: 'theme-light', label: '外观：浅色', group: '外观', run: () => setMode('light') },
-      { id: 'theme-dark', label: '外观：深色', group: '外观', run: () => setMode('dark') },
-      { id: 'theme-system', label: '外观：跟随系统', group: '外观', run: () => setMode('system') },
-      { id: 'new-project', label: '新建研究项目', group: '项目', run: onNewProject },
-    ];
-  }, [onNavigate, onNewProject, setMode]);
+  // F-3.1：命令清单单一来源 lib/commands.ts（label+keywords+hotkey 声明、run 注入），过滤走 filterCommands 双通道
+  const commands = useMemo(
+    () => buildCommands({ onNavigate, onNewProject, setThemeMode: setMode, navGroups: NAV_GROUPS.map((g) => ({ label: g.label, items: g.items.map((n) => ({ key: n.key, label: n.label })) })) }),
+    [onNavigate, onNewProject, setMode],
+  );
 
-  const filtered = commands.filter((c) => !q.trim() || c.label.toLowerCase().includes(q.trim().toLowerCase()));
+  const filtered = useMemo(() => filterCommands(commands, q), [commands, q]);
   const [active, setActive] = useState(0);
 
   /* ---- 差距#18：内容搜索（文献 references.search + 知识库 list 前端过滤） ---- */
@@ -773,8 +807,41 @@ function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onCl
   );
 }
 
-function g(key: View) {
-  return NAV_GROUPS.find((grp) => grp.items.some((n) => n.key === key))?.label ?? '';
+/** 移动端底部导航（≤900px）：只放最高频 5 个入口，其余走侧栏抽屉 */
+function MobileTabBar({ view, onSelect }: { view: View; onSelect: (v: View) => void }) {
+  const items: { key: View | 'more'; label: string; icon: typeof LayoutDashboard }[] = [
+    { key: 'workspace', label: '工作台', icon: LayoutDashboard },
+    { key: 'writing', label: '写作', icon: BookOpen },
+    { key: 'literature', label: '文献', icon: Library },
+    { key: 'quality', label: '评分', icon: Gauge },
+    { key: 'more', label: '更多', icon: MenuIcon },
+  ];
+  return (
+    <nav className="mobile-tabbar" aria-label="移动端主导航">
+      {items.map((it) => {
+        const Icon = it.icon;
+        const active = it.key === 'more' ? !items.some((x) => x.key === view) : view === it.key;
+        return (
+          <button
+            key={it.key}
+            type="button"
+            className="mobile-tabbar__btn"
+            aria-current={active ? 'page' : undefined}
+            onClick={() => {
+              if (it.key === 'more') {
+                window.dispatchEvent(new CustomEvent('sciflow:open-sidebar'));
+              } else {
+                onSelect(it.key);
+              }
+            }}
+          >
+            <Icon size={18} aria-hidden="true" />
+            <span>{it.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
 }
 
 /** 全局错误边界：页面崩溃时显示友好提示而非白屏（健壮性兜底） */
@@ -816,4 +883,9 @@ export default function App() {
       </ErrorBoundary>
     </HashRouter>
   );
+}
+
+/** 路由切换进度条：view 变化时重挂载一次动画（纯视觉反馈，无网络语义） */
+function RouteProgress({ view }: { view: string }) {
+  return <div key={view} className="route-progress" aria-hidden="true" />;
 }

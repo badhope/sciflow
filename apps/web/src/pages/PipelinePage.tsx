@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Brain, Eye, Loader2, Plus, Trash2, Workflow, Zap } from 'lucide-react';
+import { Brain, Clock, Eye, Loader2, Plus, Trash2, Workflow, Zap } from 'lucide-react';
 import { api } from '../api/client';
 import { useContext } from 'react';
 import { ToastContext } from '../App';
@@ -18,6 +18,62 @@ const STEP_LABELS: Record<string, string> = Object.fromEntries(
 const ALL_STEP_LABELS: Record<string, string> = Object.fromEntries(PIPELINE_STEPS.map((s) => [s.key, s.label]));
 /** 任意步骤 key → 展示标签（含非 UI 步骤 drafting / figures） */
 const stepLabel = (key: string) => STEP_LABELS[key] || ALL_STEP_LABELS[key] || key;
+
+/** F-2.7 流水线时间线：从 steps 的 startedAt/endedAt 计算甘特条几何（纯函数，steps 缺时间戳时返回 null） */
+export function computeStepTimeline(steps: { key: string; label: string; status: string; startedAt?: number; endedAt?: number }[]): { span: number; rows: { key: string; label: string; status: string; start: number; width: number; durationMs: number }[] } | null {
+  const timed = steps.filter((s) => typeof s.startedAt === 'number');
+  if (timed.length < 2) return null;
+  const startAt = Math.min(...timed.map((s) => s.startedAt!));
+  const endAt = Math.max(...timed.map((s) => s.endedAt ?? Date.now()));
+  const span = Math.max(1, endAt - startAt);
+  const rows = timed.map((s) => {
+    const start = s.startedAt! - startAt;
+    const dur = Math.max(1, (s.endedAt ?? endAt) - s.startedAt!);
+    return { key: s.key, label: s.label, status: s.status, start, width: Math.min(span - start, dur), durationMs: s.endedAt ? dur : Date.now() - s.startedAt! };
+  });
+  return { span, rows };
+}
+
+const TIMELINE_TONE: Record<string, string> = {
+  done: 'bg-teal-500/80',
+  scored: 'bg-teal-500/80',
+  running: 'bg-sky-500 animate-pulse',
+  awaiting_confirmation: 'bg-amber-400',
+  retry: 'bg-amber-400',
+  failed: 'bg-rose-500',
+  skipped: 'bg-slate-300 dark:bg-slate-600',
+};
+
+/** F-2.7 步骤耗时甘特条（成本/耗时的另一面：哪一步最烧时间一眼可见） */
+function StepTimeline({ steps }: { steps: PipelineStep[] }) {
+  const tl = computeStepTimeline(steps);
+  if (!tl) return null;
+  const totalSec = tl.span / 1000;
+  return (
+    <div className="mb-3 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2.5" data-testid="step-timeline">
+      <div className="flex items-center justify-between mb-2">
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
+          <Clock size={13} className="text-teal-500" /> 步骤耗时
+        </span>
+        <span className="text-[11px] text-slate-400 dark:text-slate-500">总时长 {totalSec >= 60 ? `${Math.floor(totalSec / 60)} 分 ${Math.round(totalSec % 60)} 秒` : `${Math.round(totalSec)} 秒`}</span>
+      </div>
+      <div className="space-y-1">
+        {tl.rows.map((r) => (
+          <div key={r.key} className="flex items-center gap-2 min-w-0">
+            <span className="w-20 shrink-0 truncate text-[11px] text-slate-500 dark:text-slate-400" title={r.label}>{r.label}</span>
+            <div className="relative flex-1 h-3.5 rounded bg-slate-100 dark:bg-slate-800 overflow-hidden min-w-0" title={`${r.label}：${(r.durationMs / 1000).toFixed(1)} 秒`}>
+              <div
+                className={`absolute h-full rounded ${TIMELINE_TONE[r.status] || 'bg-sky-400'}`}
+                style={{ left: `${(r.start / tl.span) * 100}%`, width: `${Math.max(1.5, (r.width / tl.span) * 100)}%` }}
+              />
+            </div>
+            <span className="w-14 shrink-0 text-right text-[11px] text-slate-400 dark:text-slate-500">{(r.durationMs / 1000).toFixed(1)}s</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** 多 Agent 协作映射：每个流水线步骤由哪个 Agent 角色负责（对标 Deep Research / Agent Laboratory 分工） */
 const AGENT_MAP: Record<string, { role: string; tone: 'blue' | 'green' | 'teal' | 'amber' | 'slate' }> = {
@@ -153,6 +209,11 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
   const [error, setError] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [editableOutline, setEditableOutline] = useState<Outline | null>(null);
+  /** F2 反共识大纲变体：确认弹窗内的候选大纲（0=主推，1..n=变体） */
+  const [variantList, setVariantList] = useState<Outline[]>([]);
+  const [variantIndex, setVariantIndex] = useState(0);
+  /** 研究深度（1-3）：全局运行参数，改动即落 app_setting */
+  const [researchDepth, setResearchDepth] = useState(1);
   const [showPlan, setShowPlan] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
   const toast = useContext(ToastContext);
@@ -193,6 +254,30 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
       cancelled = true;
     };
   }, [project.id, project.templates]);
+
+  // 研究深度：读全局运行参数（失败静默用默认 1；保存失败 toast）
+  useEffect(() => {
+    let cancelled = false;
+    api.customization.getPipelineSettings().then(
+      (r) => {
+        if (!cancelled) setResearchDepth(r.researchDepth || 1);
+      },
+      () => {},
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const changeResearchDepth = async (n: number) => {
+    setResearchDepth(n);
+    try {
+      await api.customization.setPipelineSettings({ researchDepth: n });
+      toast('info', n > 1 ? `研究深度已设为 ${n}：文献调研将多轮递归检索（更全但更耗时）` : '研究深度已设为 1（标准单轮检索）');
+    } catch (e: unknown) {
+      toast('error', '保存研究深度失败：' + errMsg(e));
+    }
+  };
 
   /** 自定义模板持久化：写后端项目 templates 字段（PATCH /api/projects/:id），失败 toast 提示 */
   const persistCustomTemplates = async (list: ManagedTemplate[]) => {
@@ -356,6 +441,20 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
     const outlineStep = active?.steps.find((s) => s.key === 'outline');
     if (outlineStep?.output) {
       setEditableOutline(jsonText<Outline>(outlineStep.output, { title: active?.topic || '', sections: [] }));
+      const variants = (outlineStep.variants || []).map((v) => jsonText<Outline>(v, { title: '', sections: [] }));
+      setVariantList(variants);
+      setVariantIndex(0);
+    }
+  };
+
+  /** 切换主推/反共识变体：载入对应大纲进入编辑区（确认时以当前编辑区为准） */
+  const switchVariant = (idx: number) => {
+    setVariantIndex(idx);
+    if (idx === 0) {
+      const outlineStep = active?.steps.find((s) => s.key === 'outline');
+      if (outlineStep?.output) setEditableOutline(jsonText<Outline>(outlineStep.output, { title: active?.topic || '', sections: [] }));
+    } else if (variantList[idx - 1]) {
+      setEditableOutline(variantList[idx - 1]);
     }
   };
 
@@ -406,6 +505,30 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
         </div>
         <div className="text-xs text-slate-400 dark:text-slate-500 mb-3">
           输入研究主题 → 多智能体自动完成 文献调研 → 大纲确认 → 分章起草 → 7 维质量门（&lt;80 自动回炉打磨）→ 润色定稿 → 引用格式化
+        </div>
+
+        {/* 研究深度：对标 deep research 的 depth/breadth 参数（1=标准单轮；2/3=按上轮发现递归补充检索） */}
+        <div className="mb-3 flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">研究深度</span>
+          <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden" role="radiogroup" aria-label="研究深度">
+            {([1, 2, 3] as const).map((n) => (
+              <button
+                key={n}
+                role="radio"
+                aria-checked={researchDepth === n}
+                onClick={() => changeResearchDepth(n)}
+                title={n === 1 ? '标准：单轮关键词检索' : n === 2 ? '深入：按首轮发现递归补充一轮检索' : '彻底：三轮递归检索，覆盖面最大（耗时与 token 成本更高）'}
+                className={`px-3 py-1.5 text-xs transition-colors ${
+                  researchDepth === n
+                    ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-200 font-medium'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                }`}
+              >
+                {n === 1 ? '标准' : n === 2 ? '深入' : '彻底'}
+              </button>
+            ))}
+          </div>
+          {researchDepth > 1 && <span className="text-[11px] text-amber-600 dark:text-amber-400">多轮检索更全，token 消耗相应增加</span>}
         </div>
 
         {/* 差距#17：大纲模板选择（前端常量，零 AI）；P2：自定义模板管理 + 一键套用草稿 */}
@@ -556,6 +679,9 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
                   <PipelineDag steps={active.steps} currentStep={active.currentStep} />
                 </div>
 
+                {/* F-2.7 步骤耗时时间线：有真实起止数据才渲染 */}
+                <StepTimeline steps={active.steps} />
+
                 {active.lastError && <div className="text-xs text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/20 rounded p-2 mb-3">{active.lastError}</div>}
 
                 {/* 失败/中断引导（零后端端点：无 per-task resume）：说明 checkpoint 续跑边界与下一步动作 */}
@@ -701,6 +827,30 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
       <Modal open={!!editableOutline} title="确认论文大纲" onClose={() => setEditableOutline(null)} width="max-w-3xl">
         {editableOutline && (
           <div>
+            {variantList.length > 0 && (
+              <div className="mb-3">
+                <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">大纲方案</span>
+                  <span className="text-[11px] text-slate-400 dark:text-slate-500">反共识变体刻意挑战主流叙事，可与主推方案对比后选用</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {['主推方案', ...variantList.map((_, i) => `反共识 ${String.fromCharCode(65 + i)}`)].map((label, i) => (
+                    <button
+                      key={i}
+                      onClick={() => switchVariant(i)}
+                      aria-pressed={variantIndex === i}
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs transition-all ${
+                        variantIndex === i
+                          ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-200'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-teal-300'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="text-xs text-slate-400 dark:text-slate-500 mb-2">论文标题</div>
             <Input value={editableOutline.title} onChange={(e) => setEditableOutline({ ...editableOutline, title: e.target.value })} />
             <div className="text-xs text-slate-400 dark:text-slate-500 my-2">

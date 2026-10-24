@@ -2,7 +2,7 @@ import { useEffect, useState, useContext } from 'react';
 import { Gauge, Loader2, Sparkles, ListChecks } from 'lucide-react';
 import { api } from '../api/client';
 import type { Doc, Project, QualityReport, CitationAudit } from '../types';
-import { Badge, Button, Card, Empty, ErrorBox, Select, jsonText, errMsg } from '../components/ui';
+import { Badge, Button, Card, EmptyState, ErrorBox, Select, jsonText, errMsg } from '../components/ui';
 import { ToastContext } from '../App';
 import { HBar, LineChart, ProgressRing } from '../components/charts';
 import { QUALITY_DIMS } from './qualityDims';
@@ -298,7 +298,16 @@ export function QualityPage({ project }: { project: Project }) {
           </Card>
         </div>
       ) : (
-          <Empty illustration="documents" text="选择一篇文档并开始评分" hint="评分后这里会显示 7 维雷达图、总分趋势与可执行的改进建议" />
+          <EmptyState
+            illustration="documents"
+            title="选择一篇文档并开始评分"
+            hint="评分后这里会显示 7 维雷达图、总分趋势与可执行的改进建议"
+            action={
+              <Button onClick={doReview} disabled={!docId || scoring} loading={scoring}>
+                开始评分
+              </Button>
+            }
+          />
       )}
     </div>
   );

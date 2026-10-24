@@ -1,7 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { z } from 'zod';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { ListToolsRequestSchema, CallToolRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, ListResourceTemplatesRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { allowPrivateOutbound, checkOutboundUrl } from '../common/outbound-guard';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -22,6 +22,22 @@ const noProjectHint = (args: Record<string, any>, required: string[]) => {
   const missing = required.filter((k) => args[k] === undefined || args[k] === null || args[k] === '');
   return missing.length ? `缺少必填参数：${missing.join(', ')}` : null;
 };
+
+/** M-8.2 资源模板：按 projectId 读取文档/文献清单（客户端填参后得到具体资源 URI） */
+const MCP_RESOURCE_TEMPLATES = [
+  {
+    uriTemplate: 'sciflow://project/{projectId}/documents',
+    name: '项目文档清单',
+    description: '某研究项目下全部论文文档（id/标题/状态/版本/更新时间）',
+    mimeType: 'application/json',
+  },
+  {
+    uriTemplate: 'sciflow://project/{projectId}/references',
+    name: '项目文献清单',
+    description: '某研究项目下全部文献元数据（id/标题/作者/年份/来源/DOI）',
+    mimeType: 'application/json',
+  },
+];
 
 /**
  * MCP 服务：把 SciFlow 全部 AI 能力暴露为标准 MCP 工具，
@@ -287,7 +303,7 @@ export class McpService {
   buildSdkServer(): Server {
     const server = new Server(
       { name: 'sciflow', version: '0.3.0' },
-      { capabilities: { tools: {} } },
+      { capabilities: { tools: {}, resources: {} } },
     );
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: this.tools.map((t) => ({
@@ -303,7 +319,45 @@ export class McpService {
         isError: r.isError,
       };
     });
+    // M-8.2 资源暴露：documents/references 只读清单，Claude Desktop 等客户端可直接引用
+    server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: this.listResourceDescriptors() }));
+    server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({ resourceTemplates: MCP_RESOURCE_TEMPLATES }));
+    server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
+      const text = this.readResourceText(String(req.params.uri || ''));
+      return { contents: [{ uri: req.params.uri, mimeType: 'application/json', text }] };
+    });
     return server;
+  }
+
+  /** 静态资源：全项目索引（动态的按 projectId 走 resourceTemplates） */
+  private listResourceDescriptors() {
+    return [
+      { uri: 'sciflow://projects', name: 'SciFlow 项目索引', description: '全部研究项目（id/名称/状态/文档与文献计数）', mimeType: 'application/json' },
+    ];
+  }
+
+  /** 读取资源内容；URI 不合法或 projectId 不存在时抛参数错误 */
+  private readResourceText(uri: string): string {
+    if (uri === 'sciflow://projects') {
+      const rows = sqlite.prepare('SELECT id, name, status, created_at AS createdAt FROM project ORDER BY created_at').all() as { id: string; name: string; status: string; createdAt: number }[];
+      const withCounts = rows.map((r) => {
+        const docs = (sqlite.prepare('SELECT COUNT(*) AS c FROM document WHERE project_id = ?').get(r.id) as { c: number }).c;
+        const refs = (sqlite.prepare('SELECT COUNT(*) AS c FROM reference WHERE project_id = ?').get(r.id) as { c: number }).c;
+        return { ...r, documentCount: Number(docs), referenceCount: Number(refs) };
+      });
+      return JSON.stringify(withCounts, null, 2);
+    }
+    const m = uri.match(/^sciflow:\/\/project\/([^/]+)\/(documents|references)$/);
+    if (!m) throw new HttpException(`未知资源 URI：${uri}`, HttpStatus.BAD_REQUEST);
+    const [, projectId, kind] = m;
+    const project = sqlite.prepare('SELECT id FROM project WHERE id = ?').get(projectId);
+    if (!project) throw new HttpException(`项目不存在：${projectId}`, HttpStatus.NOT_FOUND);
+    if (kind === 'documents') {
+      const rows = sqlite.prepare('SELECT id, title, status, version, updated_at AS updatedAt FROM document WHERE project_id = ? ORDER BY updated_at DESC').all(projectId);
+      return JSON.stringify(rows, null, 2);
+    }
+    const refs = sqlite.prepare('SELECT id, title, authors, year, venue, doi FROM reference WHERE project_id = ? ORDER BY created_at DESC').all(projectId);
+    return JSON.stringify(refs, null, 2);
   }
 
   // ---------- 外部 MCP 服务器（客户端：接入任意 MCP 兼容服务，工具生态互通） ----------

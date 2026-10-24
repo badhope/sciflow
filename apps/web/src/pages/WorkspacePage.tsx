@@ -1,36 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Brain, Check, Copy, ExternalLink, FilePlus2, Globe, Loader2, PlayCircle, RotateCcw, Send, Sparkles, Square, Trash2, Workflow } from 'lucide-react';
-import { Streamdown } from 'streamdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
-import { api, streamChat } from '../api/client';
-import { applyStreamDelta } from '../api/stream-accumulator';
-import type { ChatSource, Doc, PipelineTask, Project } from '../types';
-import { Badge, Button, ConfirmDialog, Empty, Input } from '../components/ui';
+import {
+  Brain, Check, Download, ExternalLink, FilePlus2, Globe, Loader2, MessageSquare, Navigation, Pencil,
+  PlayCircle, Plus, Quote, Search, Send, Sparkles, Square, Trash2, Workflow,
+} from 'lucide-react';
+import { api } from '../api/client';
+import { MessageList } from '../components/MessageList';
+import { useSplitDrag } from '../lib/split-drag';
+import { useHotkeys } from '../lib/hotkeys';
+import { useAsyncAction } from '../lib/async';
+import { useChatSession, parseFollowUps, FOLLOWUP_HINT, type ChatMessage, type SendOptions } from '../lib/chat-session';
+import {
+  createSession, deriveTitle, loadActiveSessionId, loadDraft, loadSessions, saveActiveSessionId, saveDraft, saveSessions,
+  type ChatSession,
+} from './chat/chat-sessions';
+import type { ChatSource, Doc, IntentResult, KnowledgeDoc, Outline, PipelineTask, Project } from '../types';
+import { Badge, Button, ConfirmDialog, Empty, ErrorBox, Input, Modal } from '../components/ui';
 import { WritingPreview } from './writing/WritingPreview';
 
 /**
- * WorkspacePage — 对话优先工作台（对标 Codex / Qoder / GPT 形态）：
- *   左：对话线程（流式 Markdown、推理折叠、知识库来源卡）
+ * WorkspacePage — 对话优先工作台（唯一对话入口）：
+ *   左：对话线程（流式 Markdown、推理折叠、知识库来源卡、多会话管理）
  *   右：当前文档预览（懒加载选中文档，写作产物就地可见）
- *   顶部：文档选择 / 新建文档 / 运行流水线（产物 = 文档，直接在右侧更新）
+ *   顶部：文档选择 / 新建文档 / 运行流水线 / 会话 / 导出快照
  *
  * 设计立场（2026-10 产品重构）：主要工作 = 对话 + 预览；流水线是"一条消息里的长任务"，
- * 以 run card 形式内联在对话流中；其余 11 个工具页降级为 ⌘K 命令面板可达的次级视图。
- * 数据获取统一走 @tanstack/react-query（docs 列表 / 文档正文 / 流水线轮询）。
+ * 以 run card 形式内联在对话流中；其余工具页降级为 ⌘K 命令面板可达的次级视图。
+ * 数据获取统一走 @tanstack/react-query；对话内核走 useChatSession（累积/停止/错误语义单点强制）。
+ *
+ * v0.11 合并：科研问答页并入本页（同一内核同一渲染，此前是两套重复界面）——
+ * 多会话（localStorage，与原科研问答页同 key，旧会话自动延续）、模型选择、深度思考、
+ * 意图识别、slash 快捷指令、followUps 追问、来源引用进草稿、Markdown 快照导出。
  */
-
-interface ThreadMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  reasoning?: string;
-  sources?: ChatSource[];
-  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
-  streaming?: boolean;
-  stopped?: boolean;
-}
 
 const STEP_LABELS: Record<string, string> = {
   'topic-verify': '主题验证',
@@ -41,6 +42,17 @@ const STEP_LABELS: Record<string, string> = {
   'citation-format': '引用',
   complete: '完成',
 };
+
+/** Slash 快捷指令（对话直达高频科研动作） */
+const SLASH_COMMANDS: { name: string; desc: string; template: string }[] = [
+  { name: '润色', desc: '提升学术表达质量', template: '请润色以下内容，提升学术表达质量，保持原意：\n\n' },
+  { name: '翻译英文', desc: '翻译为地道学术英文', template: '请将以下内容翻译为地道的学术英文：\n\n' },
+  { name: '生成摘要', desc: '提取要点与关键词', template: '请为以下内容生成摘要（3-5 句话）与关键词列表：\n\n' },
+  { name: '生成大纲', desc: '围绕主题生成论文大纲', template: '请围绕以下主题生成一份论文大纲（章节+要点）：\n\n' },
+  { name: '降重', desc: '改写降低重复率', template: '请改写以下内容以降低与原文的重复率，保持原意与学术性：\n\n' },
+  { name: '补充引用', desc: '建议可引用文献与研究', template: '请针对以下内容，建议可引用的相关文献与研究并说明理由：\n\n' },
+  { name: '深入追问', desc: '就内容继续深挖', template: '请就以下内容进一步深入分析，给出更细致的论证：\n\n' },
+];
 
 export function WorkspacePage({
   project,
@@ -53,47 +65,130 @@ export function WorkspacePage({
 }) {
   const qc = useQueryClient();
   const [docId, setDocId] = useState<string | null>(initialDocId);
-  // 线程持久化（localStorage，按项目隔离）：刷新不丢对话
-  const threadKey = `sciflow.workspace.thread.${project.id}`;
-  const [messages, setMessages] = useState<ThreadMessage[]>(() => {
+
+  // ── 本地多会话（localStorage，按项目隔离；与旧科研问答页同 key，旧会话自动延续） ──
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    const list = loadSessions(project.id);
+    if (list.length) return list;
+    // 一次性迁移：更早版本工作台的单线程 → 会话模型
     try {
-      const raw = localStorage.getItem(threadKey);
-      return raw ? (JSON.parse(raw) as ThreadMessage[]).map((m) => ({ ...m, streaming: false })) : [];
+      const raw = localStorage.getItem(`sciflow.workspace.thread.${project.id}`);
+      if (raw) {
+        const msgs = (JSON.parse(raw) as ChatMessage[]).filter((m) => !m.streaming);
+        if (msgs.some((m) => m.role === 'user')) {
+          const s = createSession();
+          s.title = deriveTitle(msgs);
+          s.messages = msgs;
+          s.updatedAt = Date.now();
+          saveSessions(project.id, [s]);
+          saveActiveSessionId(project.id, s.id);
+          // 一次性迁移的关键：删源 key。否则「删光会话后重挂载」会把旧线程复活
+          try { localStorage.removeItem(`sciflow.workspace.thread.${project.id}`); } catch { /* 隐私模式删不掉：接受可能复活 */ }
+          return [s];
+        }
+      }
     } catch {
-      return [];
+      /* 迁移失败按无会话处理 */
     }
+    return [];
   });
+  const [activeId, setActiveId] = useState<string>(() => {
+    const saved = loadActiveSessionId(project.id);
+    return saved && sessions.some((s) => s.id === saved) ? saved : (sessions[0]?.id ?? createSession().id);
+  });
+  const [input, setInput] = useState(() => loadDraft(project.id, activeId));
+  const [sessionFilter, setSessionFilter] = useState('');
+  const [renamingSession, setRenamingSession] = useState<{ id: string; title: string } | null>(null);
+  const [deletingSession, setDeletingSession] = useState<{ id: string; title: string } | null>(null);
+
+  // ── 对话内核（onSend=意图旁路；doneTransform=followUps 解析；onMessagesChange=会话落盘） ──
+  const [error, setError] = useState('');
+  const [intent, setIntent] = useState<IntentResult | null>(null);
+  const [intentBusy, setIntentBusy] = useState(false);
+  /** 会话消息变动即落盘（内核保证流式瞬态不触发；无用户消息的空会话不落） */
+  const syncSession = useCallback(
+    (ms: ChatMessage[]) => {
+      const clean = ms.filter((m) => !m.streaming);
+      if (!clean.some((m) => m.role === 'user')) return;
+      setSessions((prev) => {
+        const now = Date.now();
+        const prevCur = prev.find((s) => s.id === activeId);
+        const msgs = clean.map(({ streaming: _s, ...rest }) => rest);
+        // 内容未变（如打开旧会话触发内核持久化）不 bump updatedAt、不重排：
+        // 会话排序语义是「最后发言」，不是「最后打开」
+        const changed = JSON.stringify(msgs) !== JSON.stringify(prevCur?.messages ?? []);
+        const current: ChatSession = {
+          id: activeId,
+          title: deriveTitle(clean),
+          createdAt: prevCur?.createdAt ?? now,
+          updatedAt: changed ? now : (prevCur?.updatedAt ?? now),
+          messages: msgs,
+        };
+        const next = changed ? [current, ...prev.filter((s) => s.id !== activeId)] : prev.map((s) => (s.id === activeId ? current : s));
+        saveSessions(project.id, next);
+        return next;
+      });
+      saveActiveSessionId(project.id, activeId);
+    },
+    [activeId, project.id],
+  );
+  const chat = useChatSession({
+    initialMessages: (() => {
+      const target = sessions.find((s) => s.id === activeId);
+      return target && target.messages.length ? (target.messages as ChatMessage[]) : [];
+    })(),
+    onSend: (text) => {
+      setIntentBusy(true);
+      setIntent(null);
+      api.judgment.intent(text, project.name).then(setIntent).catch(() => undefined).finally(() => setIntentBusy(false));
+    },
+    doneTransform: (full) => parseFollowUps(full),
+    onMessagesChange: syncSession,
+  });
+  const messages = chat.messages;
+  const streaming = chat.streaming;
+
+  /* 草稿自动保存（300ms 防抖；切会话/刷新后恢复） */
   useEffect(() => {
-    try {
-      const persistable = messages.filter((m) => !m.streaming).slice(-60);
-      localStorage.setItem(threadKey, JSON.stringify(persistable));
-    } catch {
-      /* 隐私模式写入失败可忽略 */
-    }
-  }, [messages, threadKey]);
-  const [input, setInput] = useState('');
-  const [streaming, setStreaming] = useState(false);
+    const t = setTimeout(() => saveDraft(project.id, activeId, input), 300);
+    return () => clearTimeout(t);
+  }, [input, project.id, activeId]);
+
+  // ── 工具条状态 ──
   const [topic, setTopic] = useState('');
   const [showRun, setShowRun] = useState(false);
   const [taskId, setTaskId] = useState<string | null>(null);
-  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [webSearch, setWebSearch] = useState(false);
+  const [thinking, setThinking] = useState(false);
+  const [models, setModels] = useState<string[]>([]);
+  const [model, setModel] = useState('');
   const [showPreview, setShowPreview] = useState(false);
-  const [confirmClear, setConfirmClear] = useState(false);
-  const abortRef = useRef<(() => void) | null>(null);
+  const [showSessionsPanel, setShowSessionsPanel] = useState(false);
+  const previewPanel = useSplitDrag({ initial: 460, min: 300, max: 640, storageKey: 'sciflow:workspace-preview-w' });
   const threadRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const [slashDismissed, setSlashDismissed] = useState(false);
+  const [slashActive, setSlashActive] = useState(0);
 
   // ── 数据层（React Query）──────────────────────────────────
   const docsQuery = useQuery({ queryKey: ['docs', project.id], queryFn: () => api.documents.list(project.id) });
-  // 历史会话摘要（对话历史侧栏）：来自 chat_session 落库
-  const [showSessions, setShowSessions] = useState(false);
+  // 服务端沉淀摘要（chat_session 落库）：点击注入为对话背景
   const [sessionContext, setSessionContext] = useState<string | null>(null);
-  const sessionsQuery = useQuery({
-    queryKey: ['chat-sessions', project.id],
+  const summariesQuery = useQuery({
+    queryKey: ['chat-summaries', project.id],
     queryFn: () => api.chat.sessions(project.id),
-    enabled: showSessions,
+    enabled: showSessionsPanel,
   });
+  // 知识库清单（来源卡「引用进草稿」用）
+  const [kbByName, setKbByName] = useState<Map<string, KnowledgeDoc>>(new Map());
+  const [citeSource, setCiteSource] = useState<ChatSource | null>(null);
+  const [citing, setCiting] = useState(false);
   const docs: Doc[] = docsQuery.data ?? [];
+
+  useEffect(() => {
+    api.settings.get().then((s) => setModels(s.ai.models || [])).catch(() => undefined);
+    api.knowledge.list(project.id).then((list) => setKbByName(new Map(list.map((d) => [d.name, d])))).catch(() => undefined);
+  }, [project.id]);
 
   // 流水线轮询：仅在有活动任务时以 2.5s 间隔刷新（React Query refetchInterval）
   const taskQuery = useQuery({
@@ -128,108 +223,181 @@ export function WorkspacePage({
     requestAnimationFrame(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight }));
   }, []);
 
-  /** 复制单条消息（带 1.5s 勾选反馈） */
+  /** 消息变化即滚动到底（内核把流式增量也落到 messages，替代旧的逐回调滚动） */
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  /** 复制单条消息（勾选反馈由 MessageList 内部处理） */
   const copyMsg = useCallback(async (i: number) => {
     try {
       await navigator.clipboard.writeText(messages[i].content);
-      setCopiedIdx(i);
-      window.setTimeout(() => setCopiedIdx((c) => (c === i ? null : c)), 1500);
     } catch {
       /* 剪贴板不可用（http 非安全上下文等）：静默失败不打断对话 */
     }
   }, [messages]);
 
-  /** 删除单条消息 */
-  const deleteMsg = useCallback((i: number) => {
-    setMessages((ms) => ms.filter((_, k) => k !== i));
-  }, []);
+  /** 当前文档上下文（预览文档正文片段） */
+  const docContext = activeDoc && effectiveDocId
+    ? `当前文档《${activeDoc.title}》正文（片段）：\n${(activeDoc.content || '').slice(0, 1500)}`
+    : undefined;
 
-  /** 重新生成第 i 条 assistant 消息：回到其前置历史重发 */
-  const regenerate = useCallback((i: number) => {
-    const j = i - 1;
-    if (j < 0 || streaming) return;
-    const text = messages[j]?.content || '';
-    if (!text) return;
-    setMessages((ms) => ms.slice(0, j));
-    setStreaming(true);
-    setMessages((ms) => [...ms, { role: 'user', content: text }, { role: 'assistant', content: '', streaming: true }]);
-    const history = messages.slice(0, j).filter((x) => !x.streaming).map((x) => ({ role: x.role, content: x.content }));
-    const updateLast = (patch: Partial<ThreadMessage>) =>
-      setMessages((ms) => ms.map((x, k) => (k === ms.length - 1 ? { ...x, ...patch } : x)));
-    abortRef.current = streamChat({
-      message: text,
-      history,
-      projectId: project.id,
-      docContext: activeDoc && effectiveDocId ? `当前文档《${activeDoc.title}》正文（片段）：
-${(activeDoc.content || '').slice(0, 1500)}` : undefined,
-      onDelta: (fullText) => updateLast({ content: fullText }),
-      onReasoning: (full) => updateLast({ reasoning: full }),
-      onSources: (src) => updateLast({ sources: src }),
-      onUsage: (u) => updateLast({ usage: u }),
-      onDone: () => { setStreaming(false); updateLast({ streaming: false }); abortRef.current = null; },
-      onError: (msg) => { setStreaming(false); updateLast({ streaming: false, content: messages[j + 1]?.content || `（出错了：${msg}）`, stopped: true }); abortRef.current = null; },
-    });
-  }, [messages, streaming, project.id, activeDoc, effectiveDocId]);
+  const chatOpts = (): SendOptions => ({
+    projectId: project.id,
+    docContext,
+    sessionContext: sessionContext || undefined,
+    model: model || undefined,
+    enableThinking: thinking || undefined,
+    webSearch: webSearch || undefined,
+    messageSuffix: FOLLOWUP_HINT,
+  });
 
-  const send = useCallback(() => {
+  const send = () => {
     const text = input.trim();
     if (!text || streaming) return;
     setInput('');
-    setStreaming(true);
-    setMessages((m) => [...m, { role: 'user', content: text }, { role: 'assistant', content: '', streaming: true }]);
-    scrollToBottom();
-    const history = messages.filter((x) => !x.streaming).map((x) => ({ role: x.role, content: x.content }));
-    const updateLast = (patch: Partial<ThreadMessage> | ((m: ThreadMessage) => Partial<ThreadMessage>)) =>
-      setMessages((ms) => ms.map((x, i) => (i === ms.length - 1 ? { ...x, ...(typeof patch === 'function' ? patch(x) : patch) } : x)));
-    abortRef.current = streamChat({
-      message: text,
-      history,
-      projectId: project.id,
-      webSearch: webSearch || undefined,
-      docContext:
-        [
-          activeDoc && effectiveDocId ? `当前文档《${activeDoc.title}》正文（片段）：\n${(activeDoc.content || '').slice(0, 1500)}` : '',
-          sessionContext ? `历史会话背景（用户主动引用）：${sessionContext}` : '',
-        ]
-          .filter(Boolean)
-          .join('\n\n') || undefined,
-      // onDelta/onReasoning 回调参数是「累积全文」——用统一的 applyStreamDelta 覆盖，禁止追加拼接
-      onDelta: (fullText) => {
-        updateLast((x) => applyStreamDelta({ content: x.content, reasoning: x.reasoning ?? '' }, { content: fullText }));
-        scrollToBottom();
-      },
-      onReasoning: (full) => {
-        updateLast((x) => ({ reasoning: applyStreamDelta({ content: x.content, reasoning: x.reasoning ?? '' }, { reasoning: full }).reasoning }));
-        scrollToBottom();
-      },
-      onSources: (s) => updateLast({ sources: s }),
-      onUsage: (u) => updateLast({ usage: u }),
-      onDone: () => { setStreaming(false); updateLast({ streaming: false }); abortRef.current = null; },
-      onError: (msg) => { setStreaming(false); updateLast((x) => ({ streaming: false, content: x.content || `（出错了：${msg}）`, stopped: true })); abortRef.current = null; },
-    });
-  }, [input, streaming, messages, project.id, activeDoc, effectiveDocId, sessionContext, scrollToBottom, webSearch]);
+    setSlashDismissed(false);
+    saveDraft(project.id, activeId, '');
+    chat.send(text, chatOpts());
+  };
 
-  // Esc 全局停止（生成中）：挂在 window 上，不依赖输入框焦点
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && abortRef.current) {
-        e.preventDefault();
-        abortRef.current();
-        abortRef.current = null;
-        setStreaming(false);
-        setMessages((ms) => ms.map((x, i) => (i === ms.length - 1 ? { ...x, streaming: false, stopped: true } : x)));
+  // Esc 停止（统一快捷键注册表；生成中才生效，输入框内也响应）
+  useHotkeys([
+    {
+      combo: 'escape',
+      allowInInput: true,
+      handler: () => {
+        if (!streaming) return false;
+        chat.stop();
+      },
+    },
+  ]);
+
+  const onComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 中文输入法组词中的 Enter 不能当作发送（历史缺陷：拼音未上屏就发出）
+    if (e.nativeEvent.isComposing) return;
+    if (slashOpen) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashActive((a) => Math.min(a + 1, Math.max(slashFiltered.length - 1, 0))); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSlashActive((a) => Math.max(a - 1, 0)); return; }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); applySlash(slashFiltered[slashActive] ?? slashFiltered[0]); return; }
+      if (e.key === 'Escape') { setSlashDismissed(true); return; }
+    }
+    // Enter 发送（Shift+Enter 换行；⌘/Ctrl+Enter 兼容），与输入区提示一致
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  };
+
+  /** 来源卡「引用进草稿」：把知识库片段登记为当前论文的引用 */
+  const openCite = (s: ChatSource) => {
+    if (!kbByName.get(s.docName)?.referenceId) return;
+    setCiteSource(s);
+  };
+
+  const doCite = async (docId: string) => {
+    if (!citeSource) return;
+    const refId = kbByName.get(citeSource.docName)?.referenceId;
+    if (!refId) return;
+    setCiting(true);
+    try {
+      await api.references.addCitation({
+        documentId: docId,
+        referenceId: refId,
+        location: 'rag:' + citeSource.docName,
+        context: (citeSource.chunkText || '').slice(0, 200),
+      });
+      setCiteSource(null);
+    } catch (e: unknown) {
+      setError(String((e as Error)?.message || '引用失败'));
+    } finally {
+      setCiting(false);
+    }
+  };
+
+  /** 发送到写作页：新建草稿并写入内容（三态防重复提交） */
+  const sendWriting = useAsyncAction(
+    async (i: number) => {
+      const firstLine = messages[i].content.split('\n').find((l) => l.trim())?.trim() || '';
+      const doc = await api.documents.create(project.id, `${firstLine.slice(0, 20) || '聊天摘录'}（聊天摘录）`);
+      await api.documents.update(doc.id, { content: messages[i].content });
+      window.location.hash = `/writing?doc=${doc.id}`;
+    },
+    { onError: (message) => setError(message) },
+  );
+
+  /** 导出当前会话为 Markdown 快照 */
+  const exportSnapshot = () => {
+    const lines = [`# 科研问答快照 · ${project.name}`, '', `导出时间：${new Date().toLocaleString('zh-CN')}`, ''];
+    for (const m of messages) {
+      if (m.role === 'user') {
+        lines.push('## 提问', '', m.content, '');
+      } else {
+        lines.push('## 回答', '');
+        if (m.reasoning) lines.push(`> 思考过程：${m.reasoning.slice(0, 600)}`, '');
+        lines.push(m.content || '（空）', '');
+        if (m.sources?.length) {
+          lines.push('参考来源：');
+          for (const s of m.sources) lines.push(`- ${s.docName}（相关度 ${Math.round(s.score > 1 ? s.score : s.score * 100)}%）`);
+          lines.push('');
+        }
       }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `科研问答快照-${new Date().toISOString().slice(0, 10)}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
-  const stop = useCallback(() => {
-    abortRef.current?.();
-    abortRef.current = null;
-    setStreaming(false);
-    setMessages((ms) => ms.map((x, i) => (i === ms.length - 1 ? { ...x, streaming: false, stopped: true } : x)));
-  }, []);
+  // ── 会话管理 ─────────────────────────────────────────────
+  const startNewSession = () => {
+    const s = createSession();
+    setSessions((prev) => [s, ...prev]);
+    setActiveId(s.id);
+    saveActiveSessionId(project.id, s.id);
+    chat.reset([]);
+    setInput('');
+    setIntent(null);
+  };
+
+  const openSession = (id: string) => {
+    const target = sessions.find((s) => s.id === id);
+    if (!target) return;
+    setActiveId(id);
+    saveActiveSessionId(project.id, id);
+    chat.reset(target.messages.length ? (target.messages as ChatMessage[]) : []);
+    setInput(loadDraft(project.id, id));
+    setIntent(null);
+  };
+
+  const deleteSession = (id: string) => {
+    const next = sessions.filter((s) => s.id !== id);
+    setSessions(next);
+    saveSessions(project.id, next);
+    if (id === activeId) {
+      const fallback = next[0];
+      setActiveId(fallback?.id ?? createSession().id);
+      chat.reset(fallback?.messages.length ? (fallback.messages as ChatMessage[]) : []);
+    }
+  };
+
+  const renameSession = (id: string, title: string) => {
+    setSessions((prev) => {
+      const next = prev.map((s) => (s.id === id ? { ...s, title, updatedAt: Date.now() } : s));
+      saveSessions(project.id, next);
+      return next;
+    });
+  };
+
+  const filteredSessions = useMemo(
+    () => (sessionFilter.trim() ? sessions.filter((s) => s.title.toLowerCase().includes(sessionFilter.trim().toLowerCase())) : sessions),
+    [sessions, sessionFilter],
+  );
 
   // ── 流水线 ───────────────────────────────────────────────
   const runPipeline = useMutation({
@@ -238,13 +406,16 @@ ${(activeDoc.content || '').slice(0, 1500)}` : undefined,
       setTaskId(t.id);
       setShowRun(false);
       setTopic('');
-      setMessages((m) => [...m, { role: 'assistant', content: `已启动全自动流水线（主题：${t.topic}）。进度与确认操作见下方运行卡片。` }]);
+      chat.append({ role: 'assistant', content: `已启动全自动流水线（主题：${t.topic}）。进度与确认操作见下方运行卡片。` });
       scrollToBottom();
     },
   });
   const confirmOutline = useMutation({
-    mutationFn: () => api.pipeline.confirmOutline(taskId!),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['pipeline-task', taskId] }),
+    mutationFn: (chosen?: Outline) => api.pipeline.confirmOutline(taskId!, chosen),
+    onSuccess: () => {
+      setChosenVariant(null);
+      void qc.invalidateQueries({ queryKey: ['pipeline-task', taskId] });
+    },
   });
   const newDoc = useMutation({
     mutationFn: () => api.documents.create(project.id, '未命名论文'),
@@ -274,7 +445,33 @@ ${(activeDoc.content || '').slice(0, 1500)}` : undefined,
     }
   }, [task?.steps]);
 
+  /** F2 反共识大纲变体：outline 步骤 variants（Outline JSON 串数组） */
+  const outlineVariants = useMemo(() => {
+    const step = task?.steps.find((s) => s.key === 'outline');
+    if (!step?.variants?.length) return [];
+    return step.variants
+      .map((v) => {
+        try {
+          return JSON.parse(v) as Outline;
+        } catch {
+          return null;
+        }
+      })
+      .filter((o): o is Outline => !!o);
+  }, [task?.steps]);
+  /** 工作台内选中的变体（null=主推大纲原样确认） */
+  const [chosenVariant, setChosenVariant] = useState<Outline | null>(null);
+
   const busy = task && (task.status === 'running' || task.status === 'awaiting_confirmation');
+  const hasConversation = messages.some((m) => m.role === 'user');
+  const slashFiltered = input.startsWith('/') ? SLASH_COMMANDS.filter((c) => c.name.includes(input.slice(1))).slice(0, 5) : [];
+  // slash 菜单为派生状态（输入 "/" 即出，Esc 仅记忆"本次已关闭"，输入变化即重置）
+  const slashOpen = !slashDismissed && input.startsWith('/') && slashFiltered.length > 0;
+  const applySlash = (c: (typeof SLASH_COMMANDS)[number]) => {
+    setInput(c.template);
+    setSlashActive(0);
+    requestAnimationFrame(() => taRef.current?.focus());
+  };
 
   return (
     <div className="h-full flex flex-col gap-3">
@@ -298,14 +495,16 @@ ${(activeDoc.content || '').slice(0, 1500)}` : undefined,
         <Button variant="outline" onClick={() => setShowRun((v) => !v)} disabled={!!busy} title="运行全自动流水线">
           <Workflow size={14} /> 运行流水线
         </Button>
-        <Button variant="outline" onClick={() => setShowSessions((v) => !v)} title="历史会话摘要（chat_session 落库）">
-          <Brain size={14} /> 历史会话
+        <Button
+          variant={showSessionsPanel ? 'subtle' : 'outline'}
+          onClick={() => setShowSessionsPanel((v) => !v)}
+          title="会话管理（多会话 / 沉淀摘要）"
+        >
+          <MessageSquare size={14} /> 会话{sessions.length > 1 ? ` · ${sessions.length}` : ''}
         </Button>
-        {messages.length > 0 && (
-          <Button variant="ghost" onClick={() => setConfirmClear(true)} title="清空当前对话">
-            清空对话
-          </Button>
-        )}
+        <Button variant="ghost" onClick={exportSnapshot} disabled={!hasConversation} title="导出当前会话为 Markdown">
+          <Download size={14} /> 导出
+        </Button>
         {effectiveDocId && (
           <Button variant="outline" className="lg:hidden" onClick={() => setShowPreview(true)} title="查看文档预览">
             <ExternalLink size={14} /> 预览
@@ -323,30 +522,85 @@ ${(activeDoc.content || '').slice(0, 1500)}` : undefined,
         )}
       </div>
 
-      {/* 历史会话抽屉：摘要列表 → 点击注入为对话背景 */}
-      {showSessions && (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shrink-0 max-h-56 overflow-y-auto">
-          <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-2">历史会话（点击引用其摘要作为对话背景）</div>
-          {sessionsQuery.isLoading && <div className="text-xs text-slate-400">加载中…</div>}
-          {!sessionsQuery.isLoading && (sessionsQuery.data?.sessions?.length ?? 0) === 0 && <div className="text-xs text-slate-400">暂无历史会话（完成一次问答后自动沉淀摘要）</div>}
-          <div className="space-y-1.5">
-            {(sessionsQuery.data?.sessions ?? []).map((sess) => (
-              <button
-                key={sess.id}
-                className={`w-full text-left rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-                  sessionContext === sess.summary
-                    ? 'border-teal-400 bg-teal-50/60 dark:bg-teal-900/20 dark:border-teal-700'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-teal-300'
-                }`}
-                onClick={() => setSessionContext(sessionContext === sess.summary ? null : sess.summary)}
-              >
-                <div className="text-slate-700 dark:text-slate-200 line-clamp-2">{sess.summary || '（无摘要）'}</div>
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  {new Date(sess.createdAt).toLocaleString()} · {sess.messageCount} 条消息 · {sess.totalTokens} tokens
+      {/* 会话面板：本地多会话（管理）+ 服务端沉淀摘要（注入对话背景） */}
+      {showSessionsPanel && (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shrink-0 max-h-[300px] overflow-y-auto space-y-4">
+          <section aria-label="本地会话">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">本地会话（{sessions.length}）</div>
+              <div className="relative ml-auto w-40">
+                <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={sessionFilter}
+                  onChange={(e) => setSessionFilter(e.target.value)}
+                  placeholder="搜索会话"
+                  aria-label="搜索会话"
+                  className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-transparent pl-7 pr-2 py-1 text-[11px] outline-none focus:border-teal-500"
+                />
+              </div>
+              <Button size="xs" variant="subtle" onClick={startNewSession} title="开始新会话">
+                <Plus size={12} /> 新对话
+              </Button>
+            </div>
+            {filteredSessions.length === 0 && <div className="text-xs text-slate-400 py-2">暂无会话，发送第一条消息后自动创建</div>}
+            <div className="space-y-1">
+              {filteredSessions.map((s) => (
+                <div
+                  key={s.id}
+                  role="button"
+                  tabIndex={0}
+                  className={`group flex items-center gap-2 rounded-lg border px-2.5 py-1.5 cursor-pointer transition-colors ${
+                    s.id === activeId
+                      ? 'border-teal-300 bg-teal-50/70 dark:bg-teal-900/20 dark:border-teal-700'
+                      : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                  }`}
+                  onClick={() => openSession(s.id)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') openSession(s.id); }}
+                >
+                  <MessageSquare size={12} className="text-slate-400 shrink-0" />
+                  <span className="text-xs text-slate-700 dark:text-slate-200 truncate flex-1">{s.title}</span>
+                  <span className="text-[11px] text-slate-400 shrink-0">{new Date(s.updatedAt).toLocaleDateString('zh-CN')} · {s.messages.length} 条</span>
+                  <span className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setRenamingSession({ id: s.id, title: s.title }); }}
+                      className="p-1 text-slate-400 hover:text-teal-600 rounded"
+                      aria-label={`重命名会话 ${s.title}`}
+                    ><Pencil size={11} /></button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeletingSession({ id: s.id, title: s.title }); }}
+                      className="p-1 text-slate-400 hover:text-rose-500 rounded"
+                      aria-label={`删除会话 ${s.title}`}
+                    ><Trash2 size={11} /></button>
+                  </span>
                 </div>
-              </button>
-            ))}
-          </div>
+              ))}
+            </div>
+          </section>
+          <section aria-label="沉淀摘要">
+            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-2">沉淀摘要（服务端 · 点击引用其摘要作为对话背景）</div>
+            {summariesQuery.isLoading && <div className="text-xs text-slate-400">加载中…</div>}
+            {!summariesQuery.isLoading && (summariesQuery.data?.sessions?.length ?? 0) === 0 && (
+              <div className="text-xs text-slate-400">暂无沉淀（完成一次问答后自动摘要落库）</div>
+            )}
+            <div className="space-y-1.5">
+              {(summariesQuery.data?.sessions ?? []).map((sess) => (
+                <button
+                  key={sess.id}
+                  className={`w-full text-left rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                    sessionContext === sess.summary
+                      ? 'border-teal-400 bg-teal-50/60 dark:bg-teal-900/20 dark:border-teal-700'
+                      : 'border-slate-200 dark:border-slate-700 hover:border-teal-300'
+                  }`}
+                  onClick={() => setSessionContext(sessionContext === sess.summary ? null : sess.summary)}
+                >
+                  <div className="text-slate-700 dark:text-slate-200 line-clamp-2">{sess.summary || '（无摘要）'}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    {new Date(sess.createdAt).toLocaleString()} · {sess.messageCount} 条消息 · {sess.totalTokens} tokens
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
         </div>
       )}
 
@@ -370,6 +624,28 @@ ${(activeDoc.content || '').slice(0, 1500)}` : undefined,
       {/* 主体：对话（左）+ 文档预览（右） */}
       <div className="flex-1 min-h-0 flex gap-3">
         <div className="flex-1 min-w-0 flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <ErrorBox message={error} />
+
+          {(intent || intentBusy) && (
+            <div className="px-3.5 pt-2.5 shrink-0">
+              <div className="inline-flex items-center gap-2 text-xs bg-teal-50/60 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-full px-3 py-1 page-in max-w-full">
+                {intentBusy ? (
+                  <><Loader2 size={12} className="animate-spin text-teal-600" /><span className="text-slate-500 dark:text-slate-400" role="status">正在识别意图…</span></>
+                ) : intent ? (
+                  <>
+                    <Sparkles size={12} className="text-teal-600 shrink-0" />
+                    <span className="text-slate-600 dark:text-slate-300 truncate">意图：<b className="text-teal-700 dark:text-teal-300">{intent.label}</b>（{Math.round(intent.confidence * 100)}%）</span>
+                    {intent.route !== '/workspace' && (
+                      <button className="flex items-center gap-1 shrink-0 text-teal-700 dark:text-teal-300 hover:underline" onClick={() => { window.location.hash = intent.route; }}>
+                        <Navigation size={11} /> 前往
+                      </button>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            </div>
+          )}
+
           <div ref={threadRef} data-testid="chat-thread" className="flex-1 overflow-y-auto p-3.5 space-y-3">
             {messages.length === 0 && (
               <div className="pt-4">
@@ -379,7 +655,7 @@ ${(activeDoc.content || '').slice(0, 1500)}` : undefined,
                   </div>
                   <div className="text-sm font-medium text-slate-600 dark:text-slate-300">开始与 SciFlow 对话</div>
                   <div className="text-xs text-slate-400 dark:text-slate-500 max-w-md">
-                    让 AI 起草章节、润色、答疑；或点上方「运行流水线」一键成稿——产物可在预览中查看
+                    让 AI 起草章节、润色、答疑；或点上方「运行流水线」一键成稿——产物可在预览中查看。输入 "/" 唤出快捷指令。
                   </div>
                 </div>
                 <div className="mt-5 grid sm:grid-cols-2 gap-2 max-w-2xl mx-auto">
@@ -391,7 +667,7 @@ ${(activeDoc.content || '').slice(0, 1500)}` : undefined,
                   ].map((c) => (
                     <button
                       key={c.t}
-                      onClick={() => setInput(c.q)}
+                      onClick={() => { setInput(c.q); requestAnimationFrame(() => taRef.current?.focus()); }}
                       className="text-left rounded-xl border border-slate-200 dark:border-slate-700 bg-[var(--card)] p-3 hover:border-teal-400 hover:bg-teal-50/40 dark:hover:bg-teal-900/10 transition-colors"
                     >
                       <div className="text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
@@ -403,63 +679,19 @@ ${(activeDoc.content || '').slice(0, 1500)}` : undefined,
                 </div>
               </div>
             )}
-            {messages.map((m, i) => (
-              <div key={i}>
-                {m.role === 'user' ? (
-                  <div className="group ml-auto max-w-[85%] w-fit flex flex-col items-end">
-                    <div className="rounded-2xl bg-teal-600/10 dark:bg-teal-400/10 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 whitespace-pre-wrap break-words" data-testid="user-message">
-                      {m.content}
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                      <button onClick={() => copyMsg(i)} className="p-1 rounded text-slate-400 hover:text-teal-600" title="复制" aria-label="复制提问">
-                        {copiedIdx === i ? <Check size={11} /> : <Copy size={11} />}
-                      </button>
-                      <button onClick={() => deleteMsg(i)} className="p-1 rounded text-slate-400 hover:text-rose-500" title="删除这条消息" aria-label="删除提问">
-                        <Trash2 size={11} />
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="group max-w-full min-w-0 text-sm leading-relaxed text-slate-700 dark:text-slate-200" data-testid="assistant-message">
-                    {m.reasoning ? (
-                      <details className="mb-1.5">
-                        <summary className="cursor-pointer select-none text-[11px] font-medium text-teal-700 dark:text-teal-300 flex items-center gap-1">
-                          <Brain size={11} /> 思考过程
-                        </summary>
-                        <div className="mt-1 text-[11px] text-slate-400 dark:text-slate-500 border-l-2 border-teal-300 dark:border-teal-700 pl-2 max-h-32 overflow-y-auto" data-testid="assistant-reasoning">{m.reasoning}</div>
-                      </details>
-                    ) : null}
-                    {m.content ? <Streamdown mode={m.streaming ? 'streaming' : 'static'} remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{m.content}</Streamdown> : m.streaming ? <Loader2 size={13} className="animate-spin text-teal-500" /> : null}
-                    {m.sources && m.sources.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {m.sources.slice(0, 4).map((s, k) => (
-                          <span key={k} className="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-500 dark:text-slate-400" title={s.chunkText?.slice(0, 200)}>
-                            📄 {s.docName} · {(s.score ?? 0).toFixed?.(0) ?? s.score}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {m.usage && !m.streaming && (
-                      <div className="mt-1 text-[11px] text-slate-400">↑{m.usage.prompt_tokens} ↓{m.usage.completion_tokens}</div>
-                    )}
-                    {!m.streaming && (
-                      <div className="mt-1 flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                        <button onClick={() => copyMsg(i)} className="p-1 rounded text-slate-400 hover:text-teal-600" title="复制回答" aria-label="复制回答">
-                          {copiedIdx === i ? <Check size={12} className="text-teal-600" /> : <Copy size={12} />}
-                        </button>
-                        <button onClick={() => regenerate(i)} className="p-1 rounded text-slate-400 hover:text-teal-600" title="重新生成" aria-label="重新生成">
-                          <RotateCcw size={12} />
-                        </button>
-                        <button onClick={() => deleteMsg(i)} className="p-1 rounded text-slate-400 hover:text-rose-500" title="删除这条回答" aria-label="删除回答">
-                          <Trash2 size={12} />
-                        </button>
-                        {m.stopped && <span className="text-[11px] text-amber-600 dark:text-amber-400 ml-1">已停止</span>}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
+            <MessageList
+              messages={messages}
+              streaming={streaming}
+              onCopy={(i) => void copyMsg(i)}
+              onRetry={(i) => chat.retry(i, chatOpts())}
+              onContinue={(i) => chat.cont(i, chatOpts())}
+              onStop={chat.stop}
+              onDelete={(i) => chat.remove(i)}
+              onCite={(src) => openCite(src)}
+              onSendToWriting={(i) => void sendWriting.run(i)}
+              onFollowUp={(f, i) => chat.send(f, { ...chatOpts(), baseMessages: messages.slice(0, i + 1) })}
+              userBubble="plain"
+            />
 
             {/* 流水线运行卡（内联在对话流） */}
             {task && (
@@ -492,16 +724,43 @@ ${(activeDoc.content || '').slice(0, 1500)}` : undefined,
                 {task.status === 'awaiting_confirmation' && (
                   <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-2.5 mb-2">
                     <div className="text-[11px] text-amber-800 dark:text-amber-300 mb-1.5">大纲已生成，确认后开始起草：</div>
-                    {outlinePreview ? (
-                      <ol className="text-xs text-slate-700 dark:text-slate-200 list-decimal ml-4 space-y-0.5 mb-2">
-                        <li className="font-medium list-none -ml-4 mb-1">{outlinePreview.title}</li>
-                        {(outlinePreview.sections || []).map((s, k) => (
-                          <li key={k}>{s.title}</li>
-                        ))}
-                      </ol>
-                    ) : null}
+                    {outlineVariants.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap mb-2" role="radiogroup" aria-label="大纲方案">
+                        {['主推方案', ...outlineVariants.map((_, i) => `反共识 ${String.fromCharCode(65 + i)}`)].map((label, i) => {
+                          const isMain = i === 0;
+                          const activeChip = isMain ? !chosenVariant : chosenVariant === outlineVariants[i - 1];
+                          return (
+                            <button
+                              key={i}
+                              role="radio"
+                              aria-checked={activeChip}
+                              title={isMain ? '按主流学术结构生成的大纲' : '刻意挑战主流叙事的反共识变体大纲'}
+                              onClick={() => setChosenVariant(isMain ? null : outlineVariants[i - 1])}
+                              className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+                                activeChip
+                                  ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-200'
+                                  : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-teal-300'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {(() => {
+                      const shown = chosenVariant ?? outlinePreview;
+                      return shown ? (
+                        <ol className="text-xs text-slate-700 dark:text-slate-200 list-decimal ml-4 space-y-0.5 mb-2">
+                          <li className="font-medium list-none -ml-4 mb-1">{shown.title}</li>
+                          {((shown.sections || []) as { title: string }[]).map((s, k) => (
+                            <li key={k}>{s.title}</li>
+                          ))}
+                        </ol>
+                      ) : null;
+                    })()}
                     <div className="flex gap-2">
-                      <Button className="text-xs px-3 py-1.5" onClick={() => confirmOutline.mutate()} loading={confirmOutline.isPending}>
+                      <Button className="text-xs px-3 py-1.5" onClick={() => confirmOutline.mutate(chosenVariant ?? undefined)} loading={confirmOutline.isPending}>
                         <Check size={12} /> 确认并开始起草
                       </Button>
                       <a className="text-xs self-center text-slate-400 hover:text-slate-600" href={`#/pipeline`}>
@@ -528,8 +787,24 @@ ${(activeDoc.content || '').slice(0, 1500)}` : undefined,
           </div>
 
           {/* 输入区 */}
-          <div className="border-t border-slate-100 dark:border-slate-800 p-2.5 shrink-0">
-            <div className="flex items-center gap-2 mb-1.5">
+          <div className="border-t border-slate-100 dark:border-slate-800 p-2.5 shrink-0 relative">
+            {/* Slash 下拉 */}
+            {slashOpen && (
+              <div className="absolute bottom-full left-3 right-3 mb-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-[var(--card)] shadow-lg overflow-hidden page-in z-10" role="listbox" aria-label="快捷指令">
+                {slashFiltered.map((c, ci) => (
+                  <button
+                    key={c.name}
+                    type="button"
+                    onClick={() => applySlash(c)}
+                    className={`w-full text-left px-3 py-2 flex items-center gap-2 ${ci === slashActive ? 'bg-teal-50 dark:bg-teal-500/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'}`}
+                  >
+                    <span className="text-xs font-semibold text-teal-700 dark:text-teal-300 w-20 shrink-0">/{c.name}</span>
+                    <span className="text-[11px] text-slate-400 truncate">{c.desc}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <button
                 onClick={() => setWebSearch((v) => !v)}
                 aria-pressed={webSearch}
@@ -538,19 +813,39 @@ ${(activeDoc.content || '').slice(0, 1500)}` : undefined,
               >
                 <Globe size={12} /> 联网{webSearch ? '已开' : ''}
               </button>
-              <span className="text-[11px] text-slate-400">⌘/Ctrl+Enter 发送 · Esc 停止</span>
+              <button
+                onClick={() => setThinking((v) => !v)}
+                aria-pressed={thinking}
+                className={`flex items-center gap-1 text-[11px] rounded-md px-1.5 py-1 border transition-colors ${thinking ? 'bg-teal-50 dark:bg-teal-500/10 border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
+                title="深度思考：先输出推理过程（需模型支持）"
+              >
+                <Brain size={12} /> 深度思考
+              </button>
+              {models.length > 0 && (
+                <select
+                  className="text-[11px] bg-transparent text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md px-1.5 py-1 max-w-[140px] outline-none focus:ring-1 focus:ring-teal-500"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  title="本次问答使用的模型"
+                >
+                  <option value="">默认模型</option>
+                  {models.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              )}
+              <span className="text-[11px] text-slate-400 ml-auto hidden sm:inline">Enter 发送 · Esc 停止 · / 快捷指令</span>
             </div>
             <div className="flex items-end gap-2">
               <textarea
                 rows={2}
+                ref={taRef}
                 className="flex-1 resize-none rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-900 outline-none focus:border-teal-500"
-                placeholder="问问题 / 让 AI 起草内容（⌘+Enter 发送）…"
+                placeholder="问问题 / 让 AI 起草内容（Enter 发送，/ 唤出快捷指令）…"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }}
+                onChange={(e) => { setInput(e.target.value); setSlashDismissed(false); }}
+                onKeyDown={onComposerKeyDown}
               />
               {streaming ? (
-                <Button variant="danger" onClick={stop} title="停止生成">
+                <Button variant="danger" onClick={chat.stop} title="停止生成">
                   <Square size={14} /> 停止
                 </Button>
               ) : (
@@ -563,7 +858,17 @@ ${(activeDoc.content || '').slice(0, 1500)}` : undefined,
         </div>
 
         {/* 右侧文档预览 */}
-        <div className="hidden lg:flex w-[46%] min-w-[320px] max-w-[640px] flex-col rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="relative hidden lg:flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 bg-[var(--card)]" style={{ width: previewPanel.width }} data-testid="doc-preview-panel">
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整预览宽度"
+            tabIndex={0}
+            className="split-handle split-handle--overlay"
+            onPointerDown={previewPanel.onPointerDown}
+            onKeyDown={previewPanel.onKeyDown}
+            title="拖拽调整预览宽度（←/→ 微调）"
+          />
           <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">{activeDoc?.title || '文档预览'}</span>
             {activeDoc && <Badge tone="blue">v{activeDoc.version}</Badge>}
@@ -599,14 +904,74 @@ ${(activeDoc.content || '').slice(0, 1500)}` : undefined,
         </>
       )}
 
+      {/* 来源引用 Modal：把知识库片段登记为当前论文引用 */}
+      <Modal open={!!citeSource} title="引用到论文" onClose={() => setCiteSource(null)}>
+        <div className="space-y-3">
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            来源：<b className="text-slate-700 dark:text-slate-200">{citeSource?.docName}</b>
+            {citeSource?.chunkText ? <div className="mt-1.5 max-h-32 overflow-y-auto rounded-md border border-slate-200 dark:border-slate-700 p-2 text-[11px] leading-relaxed">{citeSource.chunkText}</div> : null}
+          </div>
+          {docs.length === 0 ? (
+            <div className="text-xs text-slate-400">当前项目还没有论文文档，请先在写作页新建。</div>
+          ) : (
+            <div className="space-y-1 max-h-56 overflow-y-auto">
+              {docs.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  disabled={citing}
+                  onClick={() => void doCite(d.id)}
+                  className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs hover:border-teal-400 hover:bg-teal-50/40 dark:hover:bg-teal-900/10 transition-colors disabled:opacity-50"
+                >
+                  {citing && <Loader2 size={11} className="inline animate-spin mr-1" />}
+                  <Quote size={11} className="inline mr-1 text-teal-600" /> 引用到「{d.title}」
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* 会话重命名 */}
+      <Modal open={!!renamingSession} title="重命名会话" onClose={() => setRenamingSession(null)}>
+        <div className="space-y-3">
+          <Input
+            autoFocus
+            value={renamingSession?.title ?? ''}
+            onChange={(e) => setRenamingSession((s) => (s ? { ...s, title: e.target.value } : s))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && renamingSession?.title.trim()) {
+                renameSession(renamingSession.id, renamingSession.title.trim());
+                setRenamingSession(null);
+              }
+            }}
+            placeholder="会话名称"
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setRenamingSession(null)}>取消</Button>
+            <Button
+              onClick={() => {
+                if (renamingSession?.title.trim()) {
+                  renameSession(renamingSession.id, renamingSession.title.trim());
+                  setRenamingSession(null);
+                }
+              }}
+            >
+              保存
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 会话删除确认 */}
       <ConfirmDialog
-        open={confirmClear}
-        title="清空当前对话？"
-        description="将删除当前对话面板中的全部消息（已保存的历史会话不受影响）。此操作不可撤销。"
-        confirmText="清空"
+        open={!!deletingSession}
+        title="删除会话？"
+        description={`将删除本地会话「${deletingSession?.title ?? ''}」及其全部消息。此操作不可撤销。`}
+        confirmText="删除"
         danger
-        onClose={() => setConfirmClear(false)}
-        onConfirm={() => { setMessages([]); setSessionContext(null); setConfirmClear(false); }}
+        onClose={() => setDeletingSession(null)}
+        onConfirm={() => { if (deletingSession) deleteSession(deletingSession.id); setDeletingSession(null); }}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { db } from '../db/database';
 import {
@@ -28,7 +28,11 @@ const LOW_SCORE_THRESHOLD = 60;
 export class DashboardService {
   private readonly logger = new Logger(DashboardService.name);
 
-  overview() {
+  /**
+   * 全链路总览。projectId 传参时按项目过滤（工作台 StageBar「项目阶段条」必须项目级，
+   * 否则多项目时完成度与角标混入其他项目数据——2026-10-24 审计 M9）；缺省 = 全库（兼容旧调用）。
+   */
+  overview(projectId?: string) {
     // 分块降级：单个聚合失败只影响它自己，并把错误写进日志（此前整体 catch 把 SQL 错误吞成「全 0」）
     const safe = <T,>(label: string, fn: () => T, fallback: T): T => {
       try {
@@ -39,13 +43,14 @@ export class DashboardService {
       }
     };
     try {
-      const pendingOutline = safe('pendingOutline', () => this.pendingOutlineCount(), 0);
-      const openReviewComments = safe('openReviewComments', () => this.openReviewCommentCount(), 0);
-      const experimentCount = safe('experiments', () => this.countRows(experiments), 0);
-      const docCount = safe('documents', () => this.countRows(documents), 0);
-      const refCount = safe('references', () => this.countRows(references), 0);
-      const overdueSubmissions = safe('overdueSubmissions', () => this.overdueSubmissions(), []);
-      const lowQualityDocs = safe('lowQualityDocs', () => this.lowQualityDocs(), []);
+      const scope = projectId?.trim() || undefined;
+      const pendingOutline = safe('pendingOutline', () => this.pendingOutlineCount(scope), 0);
+      const openReviewComments = safe('openReviewComments', () => this.openReviewCommentCount(scope), 0);
+      const experimentCount = safe('experiments', () => this.countRows(experiments, scope), 0);
+      const docCount = safe('documents', () => this.countRows(documents, scope), 0);
+      const refCount = safe('references', () => this.countRows(references, scope), 0);
+      const overdueSubmissions = safe('overdueSubmissions', () => this.overdueSubmissions(scope), []);
+      const lowQualityDocs = safe('lowQualityDocs', () => this.lowQualityDocs(scope), []);
       return {
         pendingOutline,
         overdueSubmissions,
@@ -69,17 +74,36 @@ export class DashboardService {
   }
 
   /** 状态为「大纲待确认」的流水线任务数（Human-in-the-loop 卡点） */
-  private pendingOutlineCount(): number {
-    return db.select().from(pipelineTasks).where(eq(pipelineTasks.status, 'awaiting_confirmation')).all().length;
+  private pendingOutlineCount(projectId?: string): number {
+    const conds = [eq(pipelineTasks.status, 'awaiting_confirmation')];
+    if (projectId) conds.push(eq(pipelineTasks.projectId, projectId));
+    return db.select().from(pipelineTasks).where(and(...conds)).all().length;
   }
 
-  /** open 状态审稿意见总数 */
-  private openReviewCommentCount(): number {
-    return db.select().from(reviewComments).where(eq(reviewComments.status, 'open')).all().length;
+  /** open 状态审稿意见总数（按项目过滤时经 document 关联 projectId） */
+  private openReviewCommentCount(projectId?: string): number {
+    if (!projectId) {
+      return db.select().from(reviewComments).where(eq(reviewComments.status, 'open')).all().length;
+    }
+    const rows = db
+      .select({ n: sql<number>`COUNT(*)` })
+      .from(reviewComments)
+      .innerJoin(documents, eq(reviewComments.documentId, documents.id))
+      .where(and(eq(reviewComments.status, 'open'), eq(documents.projectId, projectId)))
+      .get();
+    return Number(rows?.n ?? 0);
   }
 
-  private countRows(table: SQLiteTable): number {
+  private countRows(table: SQLiteTable, projectId?: string): number {
     // COUNT(*) 而非 select().all().length：后者把整表拉进内存（文档/文献多时纯浪费）
+    if (projectId) {
+      const row = db
+        .select({ n: sql<number>`COUNT(*)` })
+        .from(table)
+        .where(sql`project_id = ${projectId}`)
+        .get();
+      return Number(row?.n ?? 0);
+    }
     const row = db.select({ n: sql<number>`COUNT(*)` }).from(table).get();
     return Number(row?.n ?? 0);
   }
@@ -87,7 +111,7 @@ export class DashboardService {
   /**
    * 活跃投稿中超期的列表。单次 JOIN 查询消除 N+1（原来循环内逐条查 journals）。
    */
-  private overdueSubmissions() {
+  private overdueSubmissions(projectId?: string) {
     const now = Date.now();
     const rows = db
       .select({
@@ -101,6 +125,7 @@ export class DashboardService {
       })
       .from(submissions)
       .leftJoin(journals, eq(submissions.journalId, journals.id))
+      .where(projectId ? eq(submissions.projectId, projectId) : undefined)
       .all();
     const out: { id: string; journalName: string; title: string; status: string; overdueDays: number }[] = [];
     for (const s of rows) {
@@ -121,7 +146,7 @@ export class DashboardService {
   }
 
   /** 最近一次质量总分低于阈值的文档列表（子查询消除 N+1） */
-  private lowQualityDocs() {
+  private lowQualityDocs(projectId?: string) {
     const rows = db
       .select({
         id: documents.id,
@@ -133,7 +158,12 @@ export class DashboardService {
       .innerJoin(qualityReports, eq(qualityReports.documentId, documents.id))
       // 注意：物理表名是 document（单数），别名必须写 document.id；写成 documents.id 会抛
       // "no such column" 并被上层 catch 吞成「全 0」，导致总览恒为 0（历史缺陷）。
-      .where(sql`quality_report.created_at = (SELECT MAX(qr.created_at) FROM quality_report qr WHERE qr.document_id = document.id)`)
+      .where(
+        and(
+          projectId ? eq(documents.projectId, projectId) : undefined,
+          sql`quality_report.created_at = (SELECT MAX(qr.created_at) FROM quality_report qr WHERE qr.document_id = document.id)`,
+        ),
+      )
       .all();
     return rows.filter((r) => (r.score ?? 100) < LOW_SCORE_THRESHOLD).slice(0, 10);
   }

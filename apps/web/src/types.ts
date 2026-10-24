@@ -118,6 +118,29 @@ export interface PipelineStep {
   status: 'pending' | 'running' | 'awaiting_confirmation' | 'done' | 'scored' | 'retry' | 'failed' | 'skipped';
   output?: string;
   retryCount: number;
+  /** F2 反共识大纲变体（outline 步骤 awaiting_confirmation 时有值）：Outline JSON 串数组 */
+  variants?: string[];
+  /** F-2.7 时间线：步骤起止毫秒时间戳 */
+  startedAt?: number;
+  endedAt?: number;
+}
+
+/** F3 实验设计助手：结构化实验设计稿 */
+export interface ExperimentDesign {
+  objective: string;
+  variables: { independent: string[]; dependent: string[]; controlled: string[] };
+  groups: { name: string; role: string; description: string }[];
+  sampleHint: string;
+  procedure: string[];
+  analysisPlan: string[];
+  risks: string[];
+}
+
+export interface ExperimentDesignRecord {
+  id: string;
+  question: string;
+  design: ExperimentDesign;
+  createdAt: number;
 }
 
 export interface ModelProvider {

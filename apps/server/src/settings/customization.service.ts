@@ -95,6 +95,25 @@ export class CustomizationService {
     return { ok: true };
   }
 
+  // ---------- 流水线运行参数（研究深度） ----------
+  /** 研究深度 1-3：literature 节点按轮递归检索的轮数（app_setting pipeline_research_depth） */
+  getPipelineSettings() {
+    const row = db.select().from(appSettings).where(eq(appSettings.key, 'pipeline_research_depth')).get();
+    const n = Math.floor(Number(row?.value));
+    return { researchDepth: Number.isFinite(n) ? Math.max(1, Math.min(3, n)) : 1 };
+  }
+
+  setPipelineSettings(patch: { researchDepth?: number }) {
+    if (patch.researchDepth !== undefined) {
+      const n = Math.floor(Number(patch.researchDepth));
+      if (!Number.isFinite(n) || n < 1 || n > 3) throw new BadRequestException('研究深度需为 1-3 的整数');
+      const existing = db.select().from(appSettings).where(eq(appSettings.key, 'pipeline_research_depth')).get();
+      if (existing) db.update(appSettings).set({ value: String(n) }).where(eq(appSettings.key, 'pipeline_research_depth')).run();
+      else db.insert(appSettings).values({ key: 'pipeline_research_depth', value: String(n) }).run();
+    }
+    return this.getPipelineSettings();
+  }
+
   // ---------- 质量评分权重 ----------
   listQualityWeights() {
     const DIMS = [
@@ -154,6 +173,7 @@ export class CustomizationService {
       { key: 'researchGap', label: '研究缺口' },
       { key: 'generateAbstract', label: '摘要关键词' },
       { key: 'designReview', label: '研究设计诊断' },
+      { key: 'experimentDesign', label: '实验设计助手' },
       { key: 'paperComparison', label: '文献对比' },
       { key: 'simulatedReview', label: '模拟同行评审' },
       { key: 'writeOutline', label: '大纲生成' },

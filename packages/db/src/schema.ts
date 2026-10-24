@@ -379,6 +379,17 @@ export const experiments = sqliteTable('experiment', {
 
 export type Experiment = typeof experiments.$inferSelect;
 
+/** F3 实验设计助手：AI 结构化实验设计稿（变量表/对照组/功效提示/流程/分析计划），一个项目多份 */
+export const researchDesigns = sqliteTable('research_design', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  question: text('question').notNull(), // 研究问题原文
+  design: text('design').notNull(), // JSON: ExperimentDesign 结构
+  createdAt: integer('created_at').notNull(),
+});
+
+export type ResearchDesign = typeof researchDesigns.$inferSelect;
+
 /** 用户（企业认证 · AUTH_MODE=jwt 时启用；本地/桌面模式 AUTH_MODE=none 不强制登录） */
 export const users = sqliteTable('user', {
   id: text('id').primaryKey(),

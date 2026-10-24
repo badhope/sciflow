@@ -86,7 +86,11 @@ async function main() {
     projectId: project.id, goal: '验证消息传递聚合实现的数值稳定性',
     code: 'import math\nresult = sum(math.sqrt(i) for i in range(1,101))\nprint(f"sqrt(1..100) 之和 = {result:.4f}")',
   });
-  console.log('seed done: 1 项目 / 1 文档 / 4 文献 / 1 质量报告 / 1 投稿 / 2 资料 / 1 实验');
+  await call('POST', '/api/research/design', {
+    projectId: project.id,
+    question: '时序感知聚合在动态图节点分类中是否优于均匀采样？',
+  });
+  console.log('seed done: 1 项目 / 1 文档 / 4 文献 / 1 质量报告 / 1 投稿 / 2 资料 / 1 实验 / 1 实验设计稿');
 
   if (RUN_PIPELINE) {
     const task = await call('POST', '/api/pipeline', { projectId: project.id, topic: '图神经网络在药物发现中的应用' });

@@ -93,6 +93,7 @@ export const writing = {
   },
   dashboard: {
     /** 科研全链路总览（待办计数 + 卡点列表；接口未就绪时前端 catch 降级为小字提示） */
-    overview: () => request<DashboardOverview>('/api/dashboard/overview'),
+    overview: (projectId?: string) =>
+      request<DashboardOverview>(`/api/dashboard/overview${projectId ? `?projectId=${projectId}` : ''}`),
   },
 };

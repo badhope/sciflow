@@ -20,6 +20,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/health/deep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["HealthController_healthDeep"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agent/executions": {
         parameters: {
             query?: never;
@@ -1348,6 +1364,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/research/design": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ResearchController_listDesigns"];
+        put?: never;
+        post: operations["ResearchController_designExperiment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/research/design/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["ResearchController_deleteDesign"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/research/review-comments": {
         parameters: {
             query?: never;
@@ -1700,6 +1748,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/customization/pipeline-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomizationController_getPipelineSettings"];
+        put?: never;
+        post: operations["CustomizationController_setPipelineSettings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/customization/quality-weights": {
         parameters: {
             query?: never;
@@ -1877,6 +1941,23 @@ export interface components {
 export type $defs = Record<string, never>;
 export interface operations {
     HealthController_health: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HealthController_healthDeep: {
         parameters: {
             query?: never;
             header?: never;
@@ -3856,6 +3937,61 @@ export interface operations {
             };
         };
     };
+    ResearchController_listDesigns: {
+        parameters: {
+            query: {
+                projectId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ResearchController_designExperiment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ResearchController_deleteDesign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ResearchController_listReviewComments: {
         parameters: {
             query: {
@@ -4430,6 +4566,40 @@ export interface operations {
             };
         };
     };
+    CustomizationController_getPipelineSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CustomizationController_setPipelineSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     CustomizationController_listQualityWeights: {
         parameters: {
             query?: never;
@@ -4667,7 +4837,9 @@ export interface operations {
     };
     DashboardController_overview: {
         parameters: {
-            query?: never;
+            query: {
+                projectId: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;

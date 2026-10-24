@@ -23,6 +23,10 @@ interface AppShellProps {
   sidebarWidth?: number;
   /** 当前视图名：用于渲染唯一的 h1（视觉隐藏，供读屏与文档大纲） */
   toolbarTitle?: string;
+  /** 阶段条插槽（渲染在工具栏下方，内容之上） */
+  stageBar?: ReactNode;
+  /** 移动端底部导航插槽（≤900px 显示） */
+  mobileTabbar?: ReactNode;
 }
 
 const ShellCtx = createContext<{ openSidebar: () => void; closeSidebar: () => void; sidebarOpen: boolean }>({
@@ -33,7 +37,7 @@ const ShellCtx = createContext<{ openSidebar: () => void; closeSidebar: () => vo
 
 export const useAppShell = () => useContext(ShellCtx);
 
-export function AppShell({ sidebar, toolbar, children, sidebarWidth = 224, toolbarTitle }: AppShellProps) {
+export function AppShell({ sidebar, toolbar, children, sidebarWidth = 224, toolbarTitle, stageBar, mobileTabbar }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const openSidebar = useCallback(() => setSidebarOpen(true), []);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
@@ -43,6 +47,13 @@ export function AppShell({ sidebar, toolbar, children, sidebarWidth = 224, toolb
     const onHash = () => setSidebarOpen(false);
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  // 移动端底部「更多」通过自定义事件打开侧栏抽屉（避免 prop drilling）
+  useEffect(() => {
+    const open = () => setSidebarOpen(true);
+    window.addEventListener('sciflow:open-sidebar', open);
+    return () => window.removeEventListener('sciflow:open-sidebar', open);
   }, []);
 
   // 抽屉打开时锁滚动 + Esc 关闭
@@ -74,6 +85,7 @@ export function AppShell({ sidebar, toolbar, children, sidebarWidth = 224, toolb
               {toolbar}
             </header>
           )}
+          {stageBar}
           <div className="app-shell__body">
             {/* 每个视图必须有一个 h1（屏幕阅读器/SEO/大纲导航）；页面级标题由 toolbar 提供语义 */}
             <h1 className="sr-only">{toolbarTitle || 'SciFlow 工作台'}</h1>
@@ -81,6 +93,7 @@ export function AppShell({ sidebar, toolbar, children, sidebarWidth = 224, toolb
               {children}
             </main>
           </div>
+          {mobileTabbar}
         </div>
       </div>
     </ShellCtx.Provider>

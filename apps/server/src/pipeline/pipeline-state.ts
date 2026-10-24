@@ -35,10 +35,13 @@ export interface ResearchPlan {
   searchStrategy?: { keywords?: string[] };
 }
 
+/** ReAct 轨迹条目（落 pipeline_task.trace，前端 ReAct 面板的线上契约；round = 全局步序号） */
 export interface ResearchTraceEntry {
-  step: string;
+  round: number;
+  thought: string;
+  action: string;
   query: string;
-  count: number;
+  found: number;
 }
 
 /**

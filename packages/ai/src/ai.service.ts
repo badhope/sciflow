@@ -134,6 +134,26 @@ ${literatureSummary}` : prompts.WRITE_OUTLINE(topic, literatureSummary);
     return { keywords: kw.length ? kw : [topic] };
   }
 
+  /**
+   * F2 反共识大纲变体：主大纲 + 2 个反共识变体。
+   * 模型不支持该形态（旧端点/解析失败）时抛错，由调用方回退单大纲 writeOutline —— 不在此静默吞。
+   */
+  async writeOutlineVariants(topic: string, literatureSummary: string): Promise<{ title: string; sections: { title: string; subsections: string[] }[] }[]> {
+    const raw = await this.complete([{ role: 'user', content: prompts.WRITE_OUTLINE_VARIANTS(topic, literatureSummary) }], { temperature: 0.5, model: 'strong', context: 'writeOutlineVariants' });
+    const outlineShape = z.object({ title: z.string().optional(), sections: z.array(z.object({ title: z.string(), subsections: z.array(z.string()).optional().default([]) })).optional() });
+    const schema = z.object({
+      primary: outlineShape.optional(),
+      variants: z.array(outlineShape).min(1).optional(),
+    });
+    const parsed = this.safeParse(raw, schema);
+    const toOutline = (o: { title?: string; sections?: { title: string; subsections: string[] }[] } | undefined, fallbackTitle: string) =>
+      o && (o.title || o.sections?.length) ? { title: o.title || fallbackTitle, sections: o.sections || [] } : null;
+    const primary = toOutline(parsed?.primary, topic);
+    const variants = (parsed?.variants || []).map((v, i) => toOutline(v, `${topic}（反共识变体 ${i + 1}）`)).filter((v): v is NonNullable<typeof v> => !!v);
+    if (!primary || variants.length === 0) throw new Error('反共识大纲解析失败');
+    return [primary, ...variants];
+  }
+
   /** 章节起草 */
   async draftSection(sectionTitle: string, outline: string, references: string): Promise<string> {
     const custom = this.getCustomPrompt('draftSection');

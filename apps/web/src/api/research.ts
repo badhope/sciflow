@@ -20,6 +20,7 @@ import type {
   Reference,
   ReferenceGraph,
   ReferenceInput,
+  ExperimentDesignRecord,
   ResearchDesignResult,
   ReviewComment,
   ScreeningItem,
@@ -124,6 +125,11 @@ export const research = {
     removeReviewComment: (id: string) => request<{ ok: boolean }>(`/api/research/review-comments/${id}`, { method: 'DELETE' }),
     responseLetter: (documentId: string) =>
       request<{ letter: string }>('/api/research/response-letter', { method: 'POST', body: JSON.stringify({ documentId }) }),
+    /** F3 实验设计助手：研究问题 → 结构化设计稿（落库） */
+    designExperiment: (projectId: string, question: string, papers: unknown[] = []) =>
+      request<ExperimentDesignRecord & { error?: string }>('/api/research/design', { method: 'POST', body: JSON.stringify({ projectId, question, papers }) }),
+    listDesigns: (projectId: string) => request<ExperimentDesignRecord[]>(`/api/research/design?projectId=${projectId}`),
+    removeDesign: (id: string) => request<{ ok: boolean }>(`/api/research/design/${id}`, { method: 'DELETE' }),
   },
   quality: {
     review: (documentId: string, title: string, content: string) =>
@@ -160,5 +166,8 @@ export const research = {
       request<QualityWeightItem[]>('/api/customization/quality-weights', { method: 'POST', body: JSON.stringify({ weights }) }),
     getJudgmentMode: () => request<{ mode: string }>('/api/customization/judgment-mode'),
     setJudgmentMode: (mode: string) => request<{ mode: string }>('/api/customization/judgment-mode', { method: 'POST', body: JSON.stringify({ mode }) }),
+    getPipelineSettings: () => request<{ researchDepth: number }>('/api/customization/pipeline-settings'),
+    setPipelineSettings: (patch: { researchDepth?: number }) =>
+      request<{ researchDepth: number }>('/api/customization/pipeline-settings', { method: 'POST', body: JSON.stringify(patch) }),
   },
 };
