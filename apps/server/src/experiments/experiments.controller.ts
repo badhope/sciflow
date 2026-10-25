@@ -32,10 +32,11 @@ export class ExperimentsController {
     return this.experiments.list(projectId);
   }
 
-  /** 按文档回流写作页：返回关联该文档的实验列表（须声明在 :id 之前，避免 by-document 被当成实验 id） */
+  /** 按文档回流写作页：返回关联该文档的实验列表（须声明在 :id 之前，避免 by-document 被当成实验 id）
+   *  只读查询：文档不存在返回空数组（不报错），存在但无权访问抛 404（防 IDOR） */
   @Get('by-document/:documentId')
   byDocument(@Param('documentId') documentId: string, @Req() req: { user?: AuthPayload }) {
-    this.access.assertDocument(documentId, req.user);
+    this.access.findDocument(documentId, req.user);
     return this.experiments.byDocument(documentId);
   }
 

@@ -49,6 +49,16 @@ export class ProjectAccessService {
     return doc;
   }
 
+  /** 只读查询用的文档存在性检查（不抛错）：存在则校验归属，不存在返回 undefined。
+   *  用于「按文档回流」类端点——文档不存在时返回空列表而非 404，存在但无权仍拒绝（防 IDOR）。 */
+  findDocument(documentId: string, user?: AuthPayload) {
+    if (!documentId) return undefined;
+    const doc = db.select().from(documents).where(eq(documents.id, documentId)).get();
+    if (!doc) return undefined;
+    this.assertProject(doc.projectId, user);
+    return doc;
+  }
+
   /** 断言文献可访问（经由其 project 归属），返回文献行 */
   assertReference(referenceId: string, user?: AuthPayload) {
     const ref = db.select().from(references).where(eq(references.id, referenceId)).get();
