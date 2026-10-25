@@ -2,6 +2,29 @@
 
 本项目格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，语义化版本号。以下按 `git log` 自底向上归纳历轮功能与修复，未含真实密钥。
 
+## [1.2.0] - 2026-10-26
+
+模型接入体验批次：设置页从「手填模型名」升级为「填地址和 Key → 自动检测模型 → 自动匹配能力 → 连接测试」，并在真实浏览器里用 UniSound u2-flash 端到端验证。
+
+### Added
+- **三种主流协议**：OpenAI 兼容（默认）/ Anthropic Messages / Google Gemini，官方 AI SDK provider 接入（`@ai-sdk/anthropic` 4.0.78、`@ai-sdk/google` 4.0.93），与仓库现有 `ai@7.0.137` 的 provider 依赖版本对齐。
+- **自动检测模型**：填写 Base URL + Key 后 800ms 防抖自动拉取 `/models`（也可点「检测模型」），结果展开为可选列表并显示上下文窗口 / 输出上限 / 工具调用能力；网关元数据缺失时允许手填。`POST /api/settings/providers/discover`。
+- **连接测试**：表单内「测试连接」与厂商行内「测试」均用当前表单值（未保存）发最小消息，不切换、不落库；失败按鉴权/模型不存在/超时给可读原因。`POST /api/settings/providers/test`。
+- **能力自动匹配**：厂商行新增 `protocol/context_window/max_output/tool_calling/models`，激活即生效；最大输出超过上下文窗口时服务端钳制，未上报时单次输出上限回落 4096；`tool_calling=0` 时 chat 静默移除工具集而不是被上游 400。
+- **常见厂商预置**：只预置地址与协议（OpenAI / Anthropic / Gemini / DeepSeek / 通义 / 智谱 / Kimi / 豆包 / UniSound / Ollama），不再硬编码模型名（旧硬编码已过时会误导）。
+- **本地端点开关**：Ollama 等回环地址需显式勾选「本地/内网端点」，仍拒绝云元数据地址（SSRF 守卫不放松）。
+
+### Fixed
+- **StrictMode 下对话永远停在「正在生成…」**：`useChatSession` 的挂载清理把 `mountedRef` 置 false 后未在重新挂载时复位，`onDone/onError` 被整体吞掉（浏览器实测复现，修复后正常收尾）。
+- **流式 token 恒为 0**：OpenAI 兼容 provider 未开 `includeUsage`，上游 usage 块从不返回；开启后成本与上下文占比恢复真实值。
+- **编辑激活中的厂商不生效**：此前只改库不刷新内存连接，出现「页面显示新模型、实际仍打旧端点」；更新激活厂商后重新 `switchProvider`。
+- **掩码 Key 被当真实 Key 上送**：检测/测试接口编辑态提交掩码回显时回查库内真实 Key，避免 `***` 触发 401。
+
+### Tests
+- 新增 `packages/ai/src/model-catalog.spec.ts`（10）、`apps/server/src/settings/settings.provider.spec.ts`（9）、`apps/web/src/pages/settings/ProviderManager.test.tsx`（8）。
+- 门禁：server 165 / web 81、typecheck ×2、eslint 0 error、server build 全绿。
+- 真实浏览器验证：设置页点击「UniSound MaaS」→ 键盘输入 Key → 自动检测 29 个模型 → 选择 u2-flash（上下文 1M / 输出 131K）→ 「测试连接」1425ms 正常 → 保存 → 激活 → 列表「测试」1592ms 正常 → 工作台对话真实返回「正常」并落 `llm_call_log`。
+
 ## [1.1.0] - 2026-10-25
 
 产品化收口批次：安全收口、品牌升级、前后端 1:1 对齐、人设与技能体系，以及界面整合与默认亮色。

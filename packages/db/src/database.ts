@@ -188,6 +188,11 @@ CREATE TABLE IF NOT EXISTS model_provider (
   base_url TEXT NOT NULL,
   api_key TEXT DEFAULT '',
   model TEXT NOT NULL,
+  protocol TEXT DEFAULT 'openai-compatible',
+  context_window INTEGER DEFAULT 0,
+  max_output INTEGER DEFAULT 0,
+  tool_calling INTEGER DEFAULT 1,
+  models TEXT DEFAULT '[]',
   is_active INTEGER DEFAULT 0,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
@@ -511,6 +516,12 @@ ensureColumn('llm_call_log', 'kind', "TEXT DEFAULT 'llm'");
 // 企业模式（AUTH_MODE=jwt）：项目归属，用于按用户隔离数据（防 IDOR）
 ensureColumn('project', 'owner_id', "TEXT DEFAULT ''");
 sqlite.exec('CREATE INDEX IF NOT EXISTS idx_project_owner ON project(owner_id)');
+// 模型厂商 v1.2：协议 / 能力自动匹配（上下文窗口、最大输出、工具调用）/ 检测到的模型目录
+ensureColumn('model_provider', 'protocol', "TEXT DEFAULT 'openai-compatible'");
+ensureColumn('model_provider', 'context_window', 'INTEGER DEFAULT 0');
+ensureColumn('model_provider', 'max_output', 'INTEGER DEFAULT 0');
+ensureColumn('model_provider', 'tool_calling', 'INTEGER DEFAULT 1');
+ensureColumn('model_provider', 'models', "TEXT DEFAULT '[]'");
 
 // ---------- 迁移：knowledge_chunk_fts 从 unicode61 升级到 trigram ----------
 // 原因：unicode61 不切分 CJK（整段中文是一个 token），中文短语检索永远命中不到；

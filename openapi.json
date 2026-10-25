@@ -1717,6 +1717,29 @@
         ]
       }
     },
+    "/pipeline/{id}/stop": {
+      "post": {
+        "operationId": "PipelineController_stop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Pipeline"
+        ]
+      }
+    },
     "/chat": {
       "post": {
         "operationId": "ChatController_answer",
@@ -1930,6 +1953,34 @@
         ]
       }
     },
+    "/settings/providers/discover": {
+      "post": {
+        "operationId": "SettingsController_discoverModels",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/settings/providers/test": {
+      "post": {
+        "operationId": "SettingsController_testProvider",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
     "/settings/providers/{id}/activate": {
       "post": {
         "operationId": "SettingsController_activateProvider",
@@ -2017,6 +2068,32 @@
         ],
         "responses": {
           "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/settings/persona": {
+      "get": {
+        "operationId": "SettingsController_getPersona",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      },
+      "post": {
+        "operationId": "SettingsController_savePersona",
+        "parameters": [],
+        "responses": {
+          "201": {
             "description": ""
           }
         },
@@ -2990,7 +3067,7 @@
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "0.8.1",
+    "version": "1.2.0",
     "contact": {}
   },
   "tags": [],

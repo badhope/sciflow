@@ -168,6 +168,16 @@ export const modelProviders = sqliteTable('model_provider', {
   baseUrl: text('base_url').notNull(),
   apiKey: text('api_key').default(''),
   model: text('model').notNull(),
+  /** 协议：openai-compatible / anthropic-messages / google-gemini */
+  protocol: text('protocol').default('openai-compatible'),
+  /** 上下文窗口（token，0=未知） */
+  contextWindow: integer('context_window').default(0),
+  /** 单次最大输出（token，0=未知） */
+  maxOutput: integer('max_output').default(0),
+  /** 是否支持工具调用（1/0） */
+  toolCalling: integer('tool_calling').default(1),
+  /** 检测到的模型目录 JSON（id/contextWindow/maxOutput/toolCalling），供下拉回显 */
+  models: text('models').default('[]'),
   isActive: integer('is_active').default(0),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),

@@ -66,7 +66,8 @@ print("=" * 64)
 # ---------- A. 本地门禁 ----------
 print("\n[A] 本地门禁")
 code, out = run("node node_modules/eslint/bin/eslint.js .")
-record("A1 eslint 0 errors", code == 0 and "(0 errors" in out, out.strip().splitlines()[-1] if out else "")
+# eslint 10 在 0 problem 时静默退出（无输出），因此以退出码为准；有输出时仍要求不含 error 汇总
+record("A1 eslint 0 errors", code == 0 and " error " not in f" {out} ", out.strip().splitlines()[-1] if out else "0 problems (silent)")
 code, out = run("pnpm --filter @sciflow/server typecheck"); record("A2 server typecheck", code == 0 and "error TS" not in out)
 code, out = run("pnpm --filter @sciflow/web typecheck"); record("A3 web typecheck", code == 0 and "error TS" not in out)
 code, out = run("pnpm --filter @sciflow/server test")

@@ -4,14 +4,14 @@
 > **选题验证 → 文献调研（深度可调）→ 大纲确认（含反共识变体）→ 分章起草 → 7 维质量门（不合格自动回炉）→ 润色 → 引用格式化 → 投稿跟踪。**
 >
 > 每个环节由**专用智能体**负责，人工只在关键节点把关；每一步的**执行轨迹、Token 用量、耗时甘特图**全程可见。
-> 模型可插拔（任意 OpenAI 兼容端点 + 多厂商切换）、能力走 **MCP 协议**（既可被 Claude 等客户端调用，也可接入外部 MCP 服务器）、
+> 模型可插拔（OpenAI 兼容 / Anthropic / Gemini 三协议 + 填地址自动检测模型与能力 + 连接测试）、能力走 **MCP 协议**（既可被 Claude 等客户端调用，也可接入外部 MCP 服务器）、
 > `sciflow run` 一条命令 headless 出稿。数据与 Key 默认留在本机——这是数据主权的事实，不是卖点。
 
 [![CI](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![version](https://img.shields.io/badge/version-1.1.0-black.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.2.0-black.svg)](CHANGELOG.md)
 
 > **🌐 语言 / Language：[中文](README.md) · [English](README.en.md)**
 
@@ -40,6 +40,7 @@ flowchart LR
 
 ## 🗞 最近更新
 
+- **2026-10-26 · v1.2.0**：设置页自定义连接升级——三协议（OpenAI 兼容 / Anthropic / Gemini）、填地址+Key 自动检测模型并匹配上下文/输出/工具调用能力、表单内连接测试；真实 UniSound u2-flash 浏览器端到端验证。
 - **2026-10-24 · v1.0.0**：研究深度参数（depth 1-3 多轮递归检索）、反共识大纲变体（F2 反同质化）、实验设计助手（F3）、步骤耗时甘特图、CLI headless 全流程 `sciflow run`、MCP resources、深度健康探针。
 - **2026-10-23 · v0.11.0**：品牌「墨流」新标识；科研问答并入工作台（唯一对话入口，本地多会话 + slash 指令 + 追问建议）。
 - **2026-10-23 · v0.10.0**：统一聊天内核 / 全局快捷键注册表 / 项目阶段条 / 可拖拽分栏。
@@ -145,7 +146,7 @@ flowchart LR
 | 过程可观测 | **Agent 执行轨迹 / Token 用量 / 步骤耗时甘特图 / 深度健康探针** | 少量 | — | — | — |
 | 多智能体编排 | **专用智能体分环节 + 大纲人工确认点 + Checkpoint 断点续跑** | 部分 | — | 递归 | — |
 | 反同质化 | **反共识大纲变体 + 研究深度多轮递归** | 多视角提问 | — | 递归深度 | — |
-| 模型自由度 | **任意 OpenAI 兼容端点 + 多厂商一键切换（fast/strong 双档路由）** | 指定云模型 | 内置 | 自带 Key | 内置 |
+| 模型自由度 | **OpenAI 兼容 / Anthropic / Gemini 三协议 + 自动检测模型与能力 + 连接测试（fast/strong 双档路由）** | 指定云模型 | 内置 | 自带 Key | 内置 |
 | 开放集成 | **MCP 协议双向：可被 Claude 调用，也可接入外部 MCP；CLI headless 出稿** | — | API | CLI | — |
 | 引用管理 | **8 种 CSL 样式实时重排 + 引用体检 + 文献库指纹去重** | 脚注 | 抽取表 | 引用列表 | 来源标注 |
 | 投稿环节 | **选刊匹配 / Cover Letter / 审稿回复 / 状态跟踪** | — | — | — | — |

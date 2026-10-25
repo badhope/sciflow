@@ -30,8 +30,31 @@ export class SettingsController {
   }
 
   @Post('providers')
-  saveProvider(@Body() body: { id?: string; name: string; baseUrl: string; apiKey?: string; model: string }) {
+  saveProvider(@Body() body: {
+    id?: string;
+    name: string;
+    baseUrl: string;
+    apiKey?: string;
+    model: string;
+    protocol?: string;
+    contextWindow?: number;
+    maxOutput?: number;
+    toolCalling?: number | boolean;
+    models?: { id: string; displayName?: string; contextWindow?: number; maxOutput?: number; toolCalling?: boolean }[];
+  }) {
     return this.settings.saveProvider(body);
+  }
+
+  /** 检测模型：表单地址 + Key 实时拉取模型目录（不落库） */
+  @Post('providers/discover')
+  discoverModels(@Body() body: { id?: string; baseUrl: string; apiKey?: string; protocol?: string; privateOk?: boolean }) {
+    return this.settings.discoverModels(body);
+  }
+
+  /** 连接测试：表单当前协议/地址/Key/模型发最小消息，不保存、不切换 */
+  @Post('providers/test')
+  testProvider(@Body() body: { id?: string; baseUrl: string; apiKey?: string; protocol?: string; model: string; maxOutput?: number; privateOk?: boolean }) {
+    return this.settings.testProvider(body);
   }
 
   @Post('providers/:id/activate')

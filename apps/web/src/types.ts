@@ -143,14 +143,48 @@ export interface ExperimentDesignRecord {
   createdAt: number;
 }
 
+/** 厂商协议（主流三选一） */
+export type ModelProtocol = 'openai-compatible' | 'anthropic-messages' | 'google-gemini';
+
+/** 检测到的模型条目（/models 元数据） */
+export interface DiscoveredModel {
+  id: string;
+  displayName?: string;
+  contextWindow?: number;
+  maxOutput?: number;
+  toolCalling?: boolean;
+  ownedBy?: string;
+}
+
 export interface ModelProvider {
   id: string;
   name: string;
   baseUrl: string;
   apiKey: string;
   model: string;
+  protocol: ModelProtocol;
+  contextWindow: number;
+  maxOutput: number;
+  toolCalling: number;
+  models: DiscoveredModel[];
   isActive: number;
   createdAt: number;
+}
+
+/** 检测模型响应 */
+export interface ModelDiscoveryResult {
+  ok: boolean;
+  models: DiscoveredModel[];
+  error?: string;
+  endpoint?: string;
+}
+
+/** 连接测试响应 */
+export interface ProviderTestResult {
+  ok: boolean;
+  reply: string;
+  model: string;
+  latencyMs: number;
 }
 
 export interface McpServerInfo {
@@ -407,7 +441,10 @@ export interface EvidenceResult {
 }
 
 export interface AppSettings {
-  ai: { baseUrl: string; model: string; fastModel: string; strongModel: string; configured: boolean; models: string[] };
+  ai: {
+    baseUrl: string; model: string; fastModel: string; strongModel: string; configured: boolean; models: string[];
+    protocol: ModelProtocol; contextWindow: number; maxOutput: number; toolCalling: boolean;
+  };
   env: { node: string; database: string; port: number };
   sources: { literature: string[] };
 }

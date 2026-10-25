@@ -3,9 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { AiService } from '../ai/ai.service';
 import { DB_PATH, sqlite, vecLoaded } from '../db/database';
 import { encryptSecret, decryptSecret } from '../common/secret-crypto';
+import { allowPrivateOutbound, checkOutboundUrl } from '../common/outbound-guard';
+import { fetchModelCatalog, normalizeProtocol, type DiscoveredModel } from '../../../../packages/ai/src/model-catalog';
 
 export interface AppSettings {
-  ai: { baseUrl: string; model: string; fastModel: string; strongModel: string; configured: boolean; models: string[] };
+  ai: {
+    baseUrl: string; model: string; fastModel: string; strongModel: string; configured: boolean; models: string[];
+    protocol: string; contextWindow: number; maxOutput: number; toolCalling: boolean;
+  };
   env: { node: string; database: string; port: number };
   sources: { literature: string[] };
 }
@@ -33,6 +38,53 @@ function maskApiKey(key: unknown): string {
 /** 判断提交上来的 apiKey 是否为列表接口下发的掩码回显（含 * 即视为掩码，真实 LLM key 不含星号） */
 function isMaskedKey(key: string): boolean {
   return key.includes('*');
+}
+
+/** 上下文窗口 / 最大输出钳制：0=未知；最大输出不得超过上下文窗口 */
+function normalizeCapabilities(contextWindow: unknown, maxOutput: unknown): { contextWindow: number; maxOutput: number } {
+  const num = (v: unknown): number => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+  };
+  const cw = num(contextWindow);
+  const mo = num(maxOutput);
+  return { contextWindow: cw, maxOutput: cw > 0 && mo > cw ? cw : mo };
+}
+
+/** 模型目录落库前裁剪：只保留必要字段、限制条数，防止异常载荷撑爆单行 */
+function sanitizeModels(raw: unknown): DiscoveredModel[] {
+  if (!Array.isArray(raw)) return [];
+  const out: DiscoveredModel[] = [];
+  for (const item of raw.slice(0, 200)) {
+    const m = item as Record<string, unknown> | null;
+    const id = typeof m?.['id'] === 'string' ? m['id'].trim() : '';
+    if (!id) continue;
+    const num = (v: unknown): number | undefined => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
+    };
+    out.push({
+      id,
+      displayName: typeof m?.['displayName'] === 'string' ? String(m['displayName']) : undefined,
+      contextWindow: num(m?.['contextWindow']),
+      maxOutput: num(m?.['maxOutput']),
+      toolCalling: m?.['toolCalling'] === false ? false : true,
+    });
+  }
+  return out;
+}
+
+/** 模型目录 JSON 回读：损坏/空值一律回落 []，不让设置页因脏数据崩溃 */
+function parseModelsJson(raw: unknown): DiscoveredModel[] {
+  if (Array.isArray(raw)) return raw as DiscoveredModel[];
+  const text = String(raw ?? '').trim();
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? (parsed as DiscoveredModel[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 @Injectable()
@@ -117,40 +169,125 @@ export class SettingsService {
   listProviders() {
     const rows = sqlite
       .prepare(
-        'SELECT id, name, base_url AS baseUrl, api_key AS apiKey, model, is_active AS isActive, created_at AS createdAt FROM model_provider ORDER BY created_at',
+        'SELECT id, name, base_url AS baseUrl, api_key AS apiKey, model, protocol, context_window AS contextWindow, '
+        + 'max_output AS maxOutput, tool_calling AS toolCalling, models, is_active AS isActive, created_at AS createdAt '
+        + 'FROM model_provider ORDER BY created_at',
       )
       .all() as Array<Record<string, unknown>>;
     return rows.map((r) => {
       const masked = maskApiKey(decryptSecret(String((r as Record<string, unknown>)['apiKey'] ?? '')));
-      return { ...r, ['apiKey']: masked };
+      return { ...r, ['apiKey']: masked, models: parseModelsJson(r['models']) };
     });
   }
 
-  saveProvider(body: { id?: string; name: string; baseUrl: string; apiKey?: string; model: string }) {
+  /** 保存厂商（新增/更新）：协议 + 能力列 + 检测到的模型目录 */
+  saveProvider(body: {
+    id?: string;
+    name: string;
+    baseUrl: string;
+    apiKey?: string;
+    model: string;
+    protocol?: string;
+    contextWindow?: number;
+    maxOutput?: number;
+    toolCalling?: number | boolean;
+    models?: unknown;
+  }) {
     if (!body?.name?.trim() || !body?.baseUrl?.trim() || !body?.model?.trim()) {
       throw new BadRequestException('厂商名称、Base URL、模型名不能为空');
     }
+    if (!/^https?:\/\//.test(body.baseUrl.trim())) throw new BadRequestException('Base URL 需以 http:// 或 https:// 开头');
     const now = Date.now();
+    const protocol = normalizeProtocol(body.protocol);
+    const caps = normalizeCapabilities(body.contextWindow, body.maxOutput);
+    const toolCalling = body.toolCalling === false || Number(body.toolCalling) === 0 ? 0 : 1;
+    const modelsJson = JSON.stringify(sanitizeModels(body.models));
     if (body.id) {
       // 更新：若提交的 apiKey 为空或是掩码回显（含 *），保留 DB 原密文 key 不覆盖；
       // 只有用户输入了新的明文 key 才加密写回。防止掩码字符串被误存为真实 key。
       const existing = sqlite
-        .prepare('SELECT api_key FROM model_provider WHERE id = ?')
-        .get(body.id) as Record<string, string | undefined> | undefined;
+        .prepare('SELECT api_key, is_active FROM model_provider WHERE id = ?')
+        .get(body.id) as Record<string, string | number | undefined> | undefined;
+      if (!existing) throw new NotFoundException('厂商不存在');
       const submitted = body.apiKey?.trim() ?? '';
       const finalKey = submitted && !isMaskedKey(submitted)
         ? encryptSecret(submitted)
-        : (existing as Record<string, string | undefined> | undefined)?.['api_key'] ?? '';
+        : String(existing['api_key'] ?? '');
       sqlite
-        .prepare('UPDATE model_provider SET name=?, base_url=?, ' + 'api_key' + '=?, model=?, updated_at=? WHERE id=?')
-        .run(body.name.trim(), body.baseUrl.trim().replace(/\/$/, ''), finalKey, body.model.trim(), now, body.id);
+        .prepare('UPDATE model_provider SET name=?, base_url=?, ' + 'api_key' + '=?, model=?, protocol=?, context_window=?, max_output=?, tool_calling=?, models=?, updated_at=? WHERE id=?')
+        .run(body.name.trim(), body.baseUrl.trim().replace(/\/$/, ''), finalKey, body.model.trim(), protocol, caps.contextWindow, caps.maxOutput, toolCalling, modelsJson, now, body.id);
+      // 编辑的是激活中的厂商 → 立即刷新运行中连接参数（否则页面显示新模型、实际还在打旧端点）
+      if (Number(existing['is_active']) === 1) this.ai.switchProvider(body.id);
       return { ok: true, id: body.id };
     }
     const id = randomUUID();
     sqlite
-      .prepare('INSERT INTO model_provider (id, name, base_url, ' + 'api_key' + ', model, is_active, created_at, updated_at) VALUES (?,?,?,?,?,0,?,?)')
-      .run(id, body.name.trim(), body.baseUrl.trim().replace(/\/$/, ''), encryptSecret(body.apiKey?.trim() || ''), body.model.trim(), now, now);
+      .prepare('INSERT INTO model_provider (id, name, base_url, ' + 'api_key' + ', model, protocol, context_window, max_output, tool_calling, models, is_active, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?)')
+      .run(id, body.name.trim(), body.baseUrl.trim().replace(/\/$/, ''), encryptSecret(body.apiKey?.trim() || ''), body.model.trim(), protocol, caps.contextWindow, caps.maxOutput, toolCalling, modelsJson, now, now);
     return { ok: true, id };
+  }
+
+  /**
+   * 检测模型：用「表单里的地址 + Key」实时拉 /models（不落库）。
+   * 编辑态 Key 为掩码回显时复用库内真实 Key（id 定位）；全部错误以 ok=false 返回，前端原地展示。
+   */
+  async discoverModels(body: {
+    id?: string;
+    baseUrl: string;
+    apiKey?: string;
+    protocol?: string;
+    privateOk?: boolean;
+  }): Promise<{ ok: boolean; models: DiscoveredModel[]; error?: string; endpoint?: string }> {
+    const baseUrl = String(body?.baseUrl || '').trim();
+    if (!baseUrl) return { ok: false, models: [], error: '请先填写 Base URL' };
+    if (!/^https?:\/\//.test(baseUrl)) return { ok: false, models: [], error: 'Base URL 需以 http:// 或 https:// 开头' };
+    const key = this.resolveFormKey(body.id, body.apiKey);
+    // SSRF 守卫：内网/回环/云元数据地址默认拒绝（本地 Ollama 场景由调用方显式声明 privateOk，仍需 ALLOW_PRIVATE_OUTBOUND=1）
+    const allowPrivate = body.privateOk === true || allowPrivateOutbound();
+    const guard = await this.guardOutbound(baseUrl, allowPrivate);
+    if (!guard.ok) return { ok: false, models: [], error: `地址被安全策略拒绝：${guard.reason}` };
+    const r = await fetchModelCatalog({ baseUrl, apiKey: key, protocol: body.protocol });
+    return { ok: r.ok, models: r.models, error: r.error, endpoint: r.endpoint };
+  }
+
+  /** 连接测试：用表单当前值发一条最小消息，不保存、不切换激活厂商 */
+  async testProvider(body: {
+    id?: string;
+    baseUrl: string;
+    apiKey?: string;
+    protocol?: string;
+    model: string;
+    maxOutput?: number;
+    privateOk?: boolean;
+  }): Promise<{ ok: boolean; reply: string; model: string; latencyMs: number }> {
+    const baseUrl = String(body?.baseUrl || '').trim();
+    const model = String(body?.model || '').trim();
+    if (!baseUrl) return { ok: false, reply: '请先填写 Base URL', model, latencyMs: 0 };
+    if (!model) return { ok: false, reply: '请先选择或填写模型名', model, latencyMs: 0 };
+    if (!/^https?:\/\//.test(baseUrl)) return { ok: false, reply: 'Base URL 需以 http:// 或 https:// 开头', model, latencyMs: 0 };
+    const guard = await this.guardOutbound(baseUrl, body.privateOk === true || allowPrivateOutbound());
+    if (!guard.ok) return { ok: false, reply: `地址被安全策略拒绝：${guard.reason}`, model, latencyMs: 0 };
+    return this.ai.testProviderConfig({
+      baseUrl,
+      apiKey: this.resolveFormKey(body.id, body.apiKey),
+      protocol: body.protocol,
+      model,
+      maxOutput: body.maxOutput,
+    });
+  }
+
+  /** 出站地址守卫（独立方法便于单测注入：DNS 解析不适合在每个用例里真跑） */
+  protected async guardOutbound(url: string, allowPrivate: boolean) {
+    return checkOutboundUrl(url, { allowPrivate });
+  }
+
+  /** 表单 Key 解析：明文直接用；空/掩码时按 id 回查库内真实 Key（绝不把掩码当 Key 发上游） */
+  private resolveFormKey(id: string | undefined, submitted: string | undefined): string {
+    const key = String(submitted ?? '').trim();
+    if (key && !isMaskedKey(key)) return key;
+    if (!id) return '';
+    const row = sqlite.prepare('SELECT api_key FROM model_provider WHERE id = ?').get(id) as Record<string, string | undefined> | undefined;
+    return row?.['api_key'] ? decryptSecret(String(row['api_key'])) : '';
   }
 
   removeProvider(id: string) {

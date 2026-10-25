@@ -1,5 +1,9 @@
 import type { WebSearchConfig,
   AppSettings,
+  DiscoveredModel,
+  ModelDiscoveryResult,
+  ModelProtocol,
+  ProviderTestResult,
   Experiment,
   Journal,
   JournalMatchResult,
@@ -42,8 +46,18 @@ export const platform = {
         body: JSON.stringify({ model }),
       }),
     listProviders: () => request<ModelProvider[]>(`/api/settings/providers`),
-    saveProvider: (p: { id?: string; name: string; baseUrl: string; apiKey?: string; model: string }) =>
+    saveProvider: (p: {
+      id?: string; name: string; baseUrl: string; apiKey?: string; model: string;
+      protocol?: ModelProtocol; contextWindow?: number; maxOutput?: number; toolCalling?: number;
+      models?: DiscoveredModel[];
+    }) =>
       request<{ ok: boolean; id: string }>(`/api/settings/providers`, { method: 'POST', body: JSON.stringify(p) }),
+    /** 检测模型：表单地址+Key 实时拉取模型目录（不保存） */
+    discoverModels: (p: { id?: string; baseUrl: string; apiKey?: string; protocol?: ModelProtocol; privateOk?: boolean }) =>
+      request<ModelDiscoveryResult>(`/api/settings/providers/discover`, { method: 'POST', body: JSON.stringify(p) }),
+    /** 连接测试：表单当前协议/地址/Key/模型（不保存） */
+    testProvider: (p: { id?: string; baseUrl: string; apiKey?: string; protocol?: ModelProtocol; model: string; maxOutput?: number; privateOk?: boolean }) =>
+      request<ProviderTestResult>(`/api/settings/providers/test`, { method: 'POST', body: JSON.stringify(p) }),
     removeProvider: (id: string) => request<{ ok: boolean }>(`/api/settings/providers/${id}`, { method: 'DELETE' }),
     activateProvider: (id: string) =>
       request<{ ok: boolean; active: string }>(`/api/settings/providers/${id}/activate`, { method: 'POST' }),

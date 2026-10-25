@@ -98,6 +98,19 @@
 
 ---
 
+## §2.16 v1.2 模型接入契约（2026-10-26）
+
+设置页从「手填模型名」升级为「地址 + Key → 自动发现 → 自动匹配能力」。以下契约后续不得回退：
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **三种主流协议**：`openai-compatible`（默认）/ `anthropic-messages` / `google-gemini`，分别用官方 `@ai-sdk/openai-compatible` / `@ai-sdk/anthropic` / `@ai-sdk/google` 构造模型，禁止手写各家 wire protocol | `packages/ai/src/ai-transport.service.ts buildModelWith` · `packages/ai/src/model-catalog.ts MODEL_PROTOCOLS` | `model-catalog.spec.ts` 解析/鉴权头用例 |
+| 2 | **模型发现单一实现**：`/models` 拉取与解析只在 `packages/ai/src/model-catalog.ts`（`fetchModelCatalog` + `parseCatalog`），设置页接口与 AI 传输层共用；过滤嵌入/语音/图像/视频等非聊天模型，网关上报的 context/max_output 必须保留 | `packages/ai/src/model-catalog.ts` · `apps/server/src/settings/settings.service.ts discoverModels` | `model-catalog.spec.ts` 10 条 + `settings.provider.spec.ts` 检测模型 3 条 |
+| 3 | **能力自动匹配可覆盖**：厂商行持久化 `protocol/context_window/max_output/tool_calling/models`；激活时 `applyProviderCapabilities` 写入运行连接；`maxOutput` 不得超过 `context_window`；未上报时输出上限回落 4096；`tool_calling=0` 时 chat 静默移除工具集 | `packages/db/src/schema.ts modelProviders` · `packages/ai/src/ai-transport.service.ts defaultMaxOutput/completeStream` · `settings.service.ts normalizeCapabilities` | `settings.provider.spec.ts` 夹取/回显用例 |
+| 4 | **表单值检测与测试不改状态**：`POST /api/settings/providers/discover` 与 `/test` 使用未保存的表单值；编辑态掩码 Key 必须回查库内真实 Key（禁止把 `***` 当 Key 上送）；两者都经 `checkOutboundUrl` SSRF 守卫 | `settings.controller.ts` · `settings.service.ts resolveFormKey/guardOutbound` | `settings.provider.spec.ts` 掩码/SSRF/临时配置用例 |
+| 5 | **保存即生效**：编辑激活中的厂商后必须重新 `switchProvider(id)`，避免「页面显示新模型、内存仍打旧端点」；协议/能力列走 `ensureColumn` 迁移旧库 | `settings.service.ts saveProvider` · `packages/db/src/database.ts ensureColumn` | `settings.provider.spec.ts` 激活刷新用例 |
+| 6 | **流式 usage 必需**：OpenAI 兼容 provider 固定 `includeUsage: true`，否则 token 成本与上下文占比恒为 0（本次浏览器实测发现） | `packages/ai/src/ai-transport.service.ts buildModelWith` | 实际流式冒烟返回非零 usage |
+
 ## §2.9 模块化布局（M3，2026-10-18）
 
 **分层定案**：`packages/` = 核心能力层，`apps/server/src` = 接口层（controller/module/websearch/settings 等）。
