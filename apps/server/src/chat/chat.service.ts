@@ -8,7 +8,7 @@ import { WebSearchService } from '../websearch/websearch.service';
 import { AgentToolBridge } from '../agent/agent-tool-bridge';
 import { AgentTraceService } from '../agent/agent-trace.service';
 import { db } from '../db/database';
-import { projects } from '../db/schema';
+import { projects, appSettings } from '../db/schema';
 import { envInt } from '../../../../packages/core/src/env';
 
 /** RAG 来源（随 SSE 首事件下发给前端）
@@ -160,6 +160,28 @@ export class ChatService {
     return { context: parts.join('\n\n'), sources };
   }
 
+  /** 读取全局角色与技能配置（设置→角色与技能）：自定义系统提示词 + 启用的技能清单 */
+  private personaConfig(): { systemPrompt?: string; skillsDesc?: string } {
+    try {
+      const read = (key: string): string => db.select().from(appSettings).where(eq(appSettings.key, key)).get()?.value ?? '';
+      const sys = read('system_prompt');
+      let skills: { name: string; description: string; enabled: number }[] = [];
+      try {
+        skills = JSON.parse(read('skills') || '[]');
+      } catch {
+        skills = [];
+      }
+      if (!Array.isArray(skills)) skills = [];
+      const desc = skills
+        .filter((s) => s.enabled !== 0 && s.description)
+        .map((s) => `- ${s.name}：${s.description}`)
+        .join('\n');
+      return { systemPrompt: sys.trim() || undefined, skillsDesc: desc || undefined };
+    } catch {
+      return {};
+    }
+  }
+
   async answer(
     message: string,
     history: ChatMessage[] = [],
@@ -168,9 +190,11 @@ export class ChatService {
     opts: Pick<ChatRuntimeOptions, 'model' | 'webSearch'> = {},
   ) {
     const { context, sources } = await this.contextFor(projectId, message, docContext, history.length, opts.webSearch === true);
-    const answerText = context
-      ? await this.ai.chatWithContext(message, history, context, { modelName: opts.model })
-      : await this.ai.chat(message, history, { modelName: opts.model });
+    const persona = this.personaConfig();
+    const fullContext = persona.skillsDesc ? `${context}\n\n【可用技能】\n${persona.skillsDesc}\n（回答需要时可利用对应技能获取事实依据）` : context;
+    const answerText = fullContext
+      ? await this.ai.chatWithContext(message, history, fullContext, { modelName: opts.model }, persona.systemPrompt)
+      : await this.ai.chat(message, history, { modelName: opts.model }, persona.systemPrompt);
     return { answer: answerText, sources };
   }
 
@@ -208,9 +232,11 @@ export class ChatService {
         signal: opts.signal,
         ...(toolSet && toolNames.length ? { tools: toolSet, maxSteps: 3 } : {}),
       };
-      const stream = context
-        ? await this.ai.streamChatWithContext(message, history, context, streamOpts)
-        : await this.ai.streamChat(message, history, streamOpts);
+      const persona = this.personaConfig();
+      const fullContext = persona.skillsDesc ? `${context}\n\n【可用技能】\n${persona.skillsDesc}\n（回答需要时可利用对应技能获取事实依据）` : context;
+      const stream = fullContext
+        ? await this.ai.streamChatWithContext(message, history, fullContext, streamOpts, persona.systemPrompt)
+        : await this.ai.streamChat(message, history, streamOpts, persona.systemPrompt);
       if (runId) {
         // 流已返回（SSE 转发在 controller 层完成）：这里只负责收尾执行记录，
         // 失败/中断也标记 done，避免执行历史长期停在 running。

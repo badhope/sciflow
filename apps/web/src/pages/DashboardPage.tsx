@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Beaker, FileText, FlaskConical, Gauge, Plus, Workflow, ArrowRight } from 'lucide-react';
+import { BookOpen, Beaker, FileText, FlaskConical, Gauge, Plus, Workflow, ArrowRight, Activity, Clock3 } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardOverview, Project } from '../types';
 import { Button, Card, EmptyState, Skeleton, Badge, jsonText, SectionHeader, SectionTitle, Textarea, errMsg } from '../components/ui';
@@ -34,6 +34,21 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
   const knowledgeCount = dashQuery.data?.knowledgeCount ?? 0;
   const pipelineCount = dashQuery.data?.pipelineCount ?? 0;
   const loading = dashQuery.isLoading;
+  /** Agent 执行追踪：执行历史 + Token 用量走势（接口未就绪时静默降级为空态） */
+  const agentQuery = useQuery({
+    queryKey: ['agent-trace', project.id],
+    queryFn: async () => {
+      const [exec, usage] = await Promise.all([
+        api.agent.executions(project.id, 6),
+        api.agent.usageTrend(project.id, 14),
+      ]);
+      return { executions: exec.executions ?? [], trend: usage.trend ?? [] };
+    },
+    retry: 0,
+    refetchInterval: 30000,
+  });
+  const agentExecs = agentQuery.data?.executions ?? [];
+  const agentTrend = agentQuery.data?.trend ?? [];
   const [newTitle, setNewTitle] = useState('');
   /** 科研全链路总览：后端未就绪/失败时为 null，前端降级为小字提示，不白屏 */
   const overviewQuery = useQuery({ queryKey: ['dash-overview', project.id], queryFn: () => api.dashboard.overview(project.id), retry: 0 });
@@ -228,6 +243,70 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
           </div>
         </Card>
       )}
+
+      {/* Agent 执行追踪：执行历史 + Token 用量走势（后端 /api/agent/* 观测入口） */}
+      <Card className="p-4 mb-6">
+        <SectionHeader
+          title={
+            <span className="flex items-center gap-1.5">
+              <Activity size={13} className="text-teal-600 dark:text-teal-400" aria-hidden="true" /> Agent 执行追踪
+            </span>
+          }
+          description="流水线/多智能体执行历史与 Token 用量走势"
+        />
+        {agentQuery.isLoading ? (
+          <div className="mt-3"><Skeleton className="h-20" /></div>
+        ) : (
+          <div className="mt-3 grid gap-4 md:grid-cols-2">
+            {/* 最近执行 */}
+            <div>
+              <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-400">最近执行</div>
+              {agentExecs.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-400 dark:border-slate-700">
+                  暂无执行记录——运行一次流水线后自动沉淀。
+                </div>
+              ) : (
+                <ul className="space-y-1.5">
+                  {agentExecs.map((ex) => (
+                    <li key={ex.id} className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-2.5 py-1.5 text-xs dark:border-slate-800 dark:bg-slate-800/40">
+                      <span
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                          ex.status === 'success' ? 'bg-emerald-500' : ex.status === 'failed' ? 'bg-rose-500' : ex.status === 'running' ? 'bg-amber-500 brand-breathe' : 'bg-slate-400'
+                        }`}
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">{ex.label || ex.source}</span>
+                      <span className="shrink-0 text-slate-400">
+                        {ex.totalTokens != null ? `${(ex.totalTokens / 1000).toFixed(1)}k tok` : ''}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-0.5 text-[11px] text-slate-400">
+                        <Clock3 size={10} aria-hidden="true" />
+                        {new Date(ex.startedAt).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {/* 用量走势 */}
+            <div>
+              <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-400">Token 用量（近 14 天）</div>
+              {agentTrend.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-400 dark:border-slate-700">
+                  暂无用量数据——Agent 执行后在此展示 Token 走势。
+                </div>
+              ) : (
+                <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-800/40">
+                  <HBar
+                    items={agentTrend.map((t) => ({ label: t.date.slice(5), value: t.tokens }))}
+                    formatValue={(v) => `${(v / 1000).toFixed(1)}k`}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Card>
 
       {/* 功能入口（大厂式网格：图标底 + 名称 + 描述 + 箭头） */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-7">

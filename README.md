@@ -1,13 +1,17 @@
-# SciFlow —— 本地优先的 AI 科研工作台
+# SciFlow —— 从研究想法到可投稿论文的多智能体科研流水线
 
-> **从研究主题到可投稿论文，一条流水线跑完：文献调研 → 大纲（可切换反共识方案）→ 分章起草 → 质量门回炉 → 润色 → 引用 → 投稿辅助。**
-> 数据、模型 Key、文献、记忆全部留在你自己的机器上——无云端、无多租户、无锁定。
+> **不是又一个"论文写作助手"。SciFlow 把科研产出拆成一条可执行、可观测、可回炉的流水线：**
+> **选题验证 → 文献调研（深度可调）→ 大纲确认（含反共识变体）→ 分章起草 → 7 维质量门（不合格自动回炉）→ 润色 → 引用格式化 → 投稿跟踪。**
+>
+> 每个环节由**专用智能体**负责，人工只在关键节点把关；每一步的**执行轨迹、Token 用量、耗时甘特图**全程可见。
+> 模型可插拔（任意 OpenAI 兼容端点 + 多厂商切换）、能力走 **MCP 协议**（既可被 Claude 等客户端调用，也可接入外部 MCP 服务器）、
+> `sciflow run` 一条命令 headless 出稿。数据与 Key 默认留在本机——这是数据主权的事实，不是卖点。
 
 [![CI](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![version](https://img.shields.io/badge/version-1.0.0-black.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.1.0-black.svg)](CHANGELOG.md)
 
 > **🌐 语言 / Language：[中文](README.md) · [English](README.en.md)**
 
@@ -132,18 +136,23 @@ flowchart LR
 
 ## 🆚 与同类项目的定位差异
 
+> 对比的不是"谁的模型强、谁的云大"——而是**科研产出的完整度与可靠度**：能不能一条流水线跑到投稿、AI 产出有没有质量闸、过程可不可审计。
+
 | | SciFlow | Stanford STORM | Elicit | GPT-Researcher | NotebookLM |
 | --- | --- | --- | --- | --- | --- |
-| 部署形态 | **本地单机**（SQLite 单文件 / Docker / 桌面端） | 云服务 + 开源库 | 云 SaaS | 自托管 / 云 | 云（Google） |
-| 模型 | **自带 Key，任意 OpenAI 兼容端点（含 Ollama 本地）** | 指定云模型 | 内置 | 自带 Key | 内置 |
-| 数据隐私 | **全部本地，零第三方上传** | 云端 | 云端 | 视部署 | 云端 |
-| 全流程 | 选题 → 文献 → 大纲 → 起草 → 质量门 → 引用 → **投稿跟踪** | 维基式报告 | 系统综述抽取 | 研究报告 | 笔记问答 |
-| 引用管理 | **8 种 CSL 样式实时重排 + 引用体检 + 文献库指纹去重** | 脚注 | 抽取表 | 引用列表 | 来源标注 |
+| 端到端闭环 | **选题 → 文献 → 大纲 → 起草 → 质量门 → 引用 → 投稿跟踪，一条流水线** | 维基式报告 | 系统综述抽取 | 研究报告 | 笔记问答 |
+| 质量机制 | **7 维质量门 + <80 自动回炉 + 审稿闭环 + 引用体检** | — | 抽取校验 | — | — |
+| 过程可观测 | **Agent 执行轨迹 / Token 用量 / 步骤耗时甘特图 / 深度健康探针** | 少量 | — | — | — |
+| 多智能体编排 | **专用智能体分环节 + 大纲人工确认点 + Checkpoint 断点续跑** | 部分 | — | 递归 | — |
 | 反同质化 | **反共识大纲变体 + 研究深度多轮递归** | 多视角提问 | — | 递归深度 | — |
+| 模型自由度 | **任意 OpenAI 兼容端点 + 多厂商一键切换（fast/strong 双档路由）** | 指定云模型 | 内置 | 自带 Key | 内置 |
+| 开放集成 | **MCP 协议双向：可被 Claude 调用，也可接入外部 MCP；CLI headless 出稿** | — | API | CLI | — |
+| 引用管理 | **8 种 CSL 样式实时重排 + 引用体检 + 文献库指纹去重** | 脚注 | 抽取表 | 引用列表 | 来源标注 |
 | 投稿环节 | **选刊匹配 / Cover Letter / 审稿回复 / 状态跟踪** | — | — | — | — |
 | 中文科研适配 | **GB/T 7714、国内期刊库、中文分词检索** | 弱 | 弱 | 弱 | 弱 |
+| 数据主权 | 单机 SQLite / Docker / 桌面端，Key 不落第三方 | 云端 | 云 SaaS | 视部署 | 云端 |
 
-> STORM/Elicit/NotebookLM 是优秀的云服务，SciFlow 不与之拼数据壁垒——只打「**本地优先 + 全流程闭环 + AI 失效模式治理**」这一仗：引用可溯源、质量门不达标自动回炉、成本有预算闸。
+> SciFlow 不参与"谁的云大"的军备竞赛——差异点是**科研产出工程化**：引用可溯源、质量门不达标自动回炉、每步成本与轨迹可审计、一条命令无人值守出稿。
 
 ## 🏗 技术栈
 

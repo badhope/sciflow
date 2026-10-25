@@ -17,6 +17,18 @@ export interface ChatMessage {
   content: string;
 }
 
+/**
+ * 上游返回空响应（区别于限流）：
+ *  - 可重试（与限流同等对待，指数退避重试 4 次）
+ *  - 重试耗尽后以 502 暴露（历史实现用 429 伪装限流触发重试，导致上层误判为「速率限制」）
+ */
+export class AiEmptyResponseError extends Error {
+  constructor() {
+    super('AI 返回空响应');
+    this.name = 'AiEmptyResponseError';
+  }
+}
+
 /** chat 流式/问答的可选运行参数（best-effort 透传，厂商不支持时静默忽略） */
 export interface ChatStreamOptions {
   /** 显式覆盖完整模型 ID（优先于 fast/strong 档位） */
@@ -304,11 +316,11 @@ export class AiTransportService {
               schema: aiJsonSchema(opts.jsonSchema.schema),
             });
             const text = JSON.stringify(object);
-            if (!text.trim()) throw new HttpException('AI 返回空响应', 429);
+            if (!text.trim()) throw new AiEmptyResponseError();
             return { text, usage };
           }
           const { text, usage } = await generateText(callArgs);
-          if (!text.trim()) throw new HttpException('AI 返回空响应', 429);
+          if (!text.trim()) throw new AiEmptyResponseError();
           return { text, usage };
         },
         {
@@ -317,8 +329,8 @@ export class AiTransportService {
           minTimeout: 2000,
           maxTimeout: 60_000,
           onFailedAttempt: (err) => {
-            if (!AiTransportService.isRetriableLimit(err)) throw err;
-            this.logger.warn(`AI 限流重试：第 ${err.attemptNumber} 次失败，剩余 ${err.retriesLeft} 次（${String((err as { message?: string }).message || '').slice(0, 80)}）`);
+            if (!AiTransportService.isRetriableLimit(err) && !(err instanceof AiEmptyResponseError)) throw err;
+            this.logger.warn(`AI 调用重试：第 ${err.attemptNumber} 次失败，剩余 ${err.retriesLeft} 次（${String((err as { message?: string }).message || '').slice(0, 80)}）`);
           },
         },
       ),
@@ -336,6 +348,9 @@ export class AiTransportService {
     }).catch((err) => {
       this.logLlmCall({ caller, model, promptTokens: 0, completionTokens: 0, latencyMs: Date.now() - t0, success: false, error: err?.message });
       if (err instanceof HttpException) throw err;
+      if (err instanceof AiEmptyResponseError) {
+        throw new HttpException('AI 返回空响应：模型未产出任何内容（已自动重试 4 次），请更换模型或稍后重试', HttpStatus.BAD_GATEWAY);
+      }
       if (AiTransportService.isRetriableLimit(err)) throw new HttpException('AI 限流 (429)：上游速率限制，请降低 AI_RPM_CAP 或升级模型配额', 429);
       const timeoutMs = AiTransportService.requestTimeoutMs();
       if (AiTransportService.isTimeoutError(err, t0, timeoutMs)) {

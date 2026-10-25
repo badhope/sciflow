@@ -1,5 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SciFlow">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b8079"/><stop offset="0.52" stop-color="#0a7896"/><stop offset="1" stop-color="#0b6fc4"/></linearGradient></defs>
-  <rect width="64" height="64" fill="url(#g)"/>
-  <path d="M 43.2 21.4 A 11 11 0 1 0 32 32 A 11 11 0 1 1 20.8 42.6" fill="none" stroke="#ffffff" stroke-width="6.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="47.4" cy="13.2" r="3.6" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- SciFlow iOS 主屏图标 · 墨流 2.0：渐变圆角方底 + 白色流线 -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b8079"/>
+      <stop offset="0.52" stop-color="#0a7896"/>
+      <stop offset="1" stop-color="#0b6fc4"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <path d="M 46.9 15.1 A 23 23 0 1 0 15.1 46.9" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.30"/>
+  <path d="M 43.2 21.4 A 11 11 0 1 0 32 32 A 11 11 0 1 1 20.8 42.6" fill="none" stroke="#ffffff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="47.4" cy="13.2" r="3.2" fill="#ffffff"/>
+  <circle cx="19.4" cy="44" r="1.7" fill="#ffffff" opacity="0.75"/>
 </svg>

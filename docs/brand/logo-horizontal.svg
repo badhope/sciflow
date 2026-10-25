@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 96" role="img" aria-label="SciFlow 横版标识">
   <!--
-    SciFlow 横版组合标识（Logo Lockup）· 品牌修订 2
-    结构：渐变圆角方标志（墨流 S）+ 词标「SciFlow」+ 标语「让科研从想法到成文」
+    SciFlow 横版组合标识（Logo Lockup）· 墨流 2.0 · 2026-10-25
+    结构：渐变圆角方标志（主 S + 轨道 + 节点 + 墨滴）+ 词标「SciFlow」+ 标语「让科研从想法到成文」
     适用：README、官网页头、文档封面、启动页。最小宽度 220px。
   -->
   <defs>
@@ -19,9 +19,12 @@
   <!-- 标志（80×80，视觉留白 8px；与 icon-master 同一几何） -->
   <g transform="translate(8 8) scale(1.25)">
     <rect width="64" height="64" rx="15" fill="url(#mark)"/>
+    <path d="M 46.9 15.1 A 23 23 0 1 0 15.1 46.9"
+          fill="none" stroke="#ffffff" stroke-width="1.9" stroke-linecap="round" opacity="0.30"/>
     <path d="M 43.2 21.4 A 11 11 0 1 0 32 32 A 11 11 0 1 1 20.8 42.6"
           fill="none" stroke="#ffffff" stroke-width="6.4" stroke-linecap="round" stroke-linejoin="round"/>
     <circle cx="47.4" cy="13.2" r="3.6" fill="#ffffff"/>
+    <circle cx="19.4" cy="44" r="1.8" fill="#ffffff" opacity="0.75"/>
   </g>
 
   <!-- 词标 -->

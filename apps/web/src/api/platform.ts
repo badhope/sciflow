@@ -6,6 +6,8 @@ import type { WebSearchConfig,
   McpServerInfo,
   McpToolInfo,
   ModelProvider,
+  PersonaConfig,
+  PersonaSkill,
   ParseEmailResult,
   SelfCheck,
   SubmissionStatus,
@@ -49,6 +51,10 @@ export const platform = {
     saveMcpServer: (p: { id?: string; name: string; url: string }) =>
       request<{ ok: boolean; id: string }>(`/api/settings/mcp-servers`, { method: 'POST', body: JSON.stringify(p) }),
     removeMcpServer: (id: string) => request<{ ok: boolean }>(`/api/settings/mcp-servers/${id}`, { method: 'DELETE' }),
+    /** 角色与技能（persona + skills）：自定义系统提示词 + 技能启停 */
+    getPersona: () => request<PersonaConfig>(`/api/settings/persona`),
+    savePersona: (p: { name?: string; systemPrompt?: string; skills?: PersonaSkill[] }) =>
+      request<{ ok: boolean } & PersonaConfig>(`/api/settings/persona`, { method: 'POST', body: JSON.stringify(p) }),
   },
   webSearchConfig: {
     get: () => request<WebSearchConfig>('/api/web/config'),

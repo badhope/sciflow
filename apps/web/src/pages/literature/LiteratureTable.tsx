@@ -533,6 +533,7 @@ export function LiteratureTable(props: LiteratureTableProps) {
     return [...info.filter((c) => c.id !== 'year'), ...fieldCols];
   }, [extFields, saveExtValue]);
   const extRows = extTable?.rows ?? [];
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table 的 getXxxRowModel 返回不可记忆化函数；本调用无 memo 需求，跳过 Compiler 记忆化是预期行为
   const extTableInstance = useReactTable({
     data: extRows,
     columns: extColumns,

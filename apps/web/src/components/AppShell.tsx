@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState, type ReactNode, useRef } from 'react';
-import { Menu, X } from 'lucide-react';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState, type ReactNode, useRef, Children } from 'react';
+import { ChevronDown, Menu, X } from 'lucide-react';
 
 /**
  * AppShell —— 全站布局契约。
@@ -100,12 +100,26 @@ export function AppShell({ sidebar, toolbar, children, sidebarWidth = 224, toolb
   );
 }
 
-/** 侧栏内的分组标题 */
-export function ShellNavGroup({ label, children }: { label: string; children: ReactNode }) {
+/** 侧栏内的分组标题（可折叠：低频分组默认收起为小节标题，点击展开——渐进披露，侧栏不再一屏 12 项） */
+export function ShellNavGroup({ label, children, defaultCollapsed = false }: { label: string; children: ReactNode; defaultCollapsed?: boolean }) {
+  const [open, setOpen] = useState(!defaultCollapsed);
+  const count = Children.count(children);
   return (
     <div className="shell-nav-group">
-      <div className="shell-nav-group__label">{label}</div>
-      {children}
+      <button
+        type="button"
+        className="shell-nav-group__label w-full text-left"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        title={open ? `收起 ${label}` : `展开 ${label}`}
+      >
+        <span>{label}</span>
+        <span className="flex items-center gap-1 text-[10px] font-normal normal-case tracking-normal text-slate-400" aria-hidden="true">
+          {!open && <span className="rounded-full bg-slate-100 px-1.5 text-[10px] leading-4 dark:bg-slate-800">{count}</span>}
+          <ChevronDown size={11} className={`transition-transform ${open ? '' : '-rotate-90'}`} />
+        </span>
+      </button>
+      {open && children}
     </div>
   );
 }

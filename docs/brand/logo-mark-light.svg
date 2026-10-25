@@ -1,6 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SciFlow mark (light)">
-  <!-- SciFlow 独立标志（深色/照片底用 · 纯白墨流 S + 思想节点） -->
+  <!-- SciFlow 独立标志 · 墨流 2.0（深色/照片底用 · 纯白版）
+       主 S 水流 + 数据闭环轨道 + 思想节点 + 收笔墨滴 -->
+  <path d="M 46.9 15.1 A 23 23 0 1 0 15.1 46.9"
+        fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.32"/>
   <path d="M 43.2 21.4 A 11 11 0 1 0 32 32 A 11 11 0 1 1 20.8 42.6"
         fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
   <circle cx="47.4" cy="13.2" r="3.4" fill="#ffffff"/>
+  <circle cx="19.4" cy="44" r="1.8" fill="#ffffff" opacity="0.75"/>
 </svg>

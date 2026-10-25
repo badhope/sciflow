@@ -161,6 +161,22 @@ export interface McpServerInfo {
   createdAt: number;
 }
 
+/** 角色与技能：自定义系统提示词 + 技能启停（对标 Dify/Coze 人设管理） */
+export interface PersonaSkill {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  enabled: number;
+  builtin: number;
+}
+export interface PersonaConfig {
+  name: string;
+  systemPrompt: string;
+  defaultSystemPrompt: string;
+  skills: PersonaSkill[];
+}
+
 export interface ReactTraceStep {
   round: number;
   thought: string;

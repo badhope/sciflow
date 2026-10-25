@@ -80,11 +80,13 @@ export function AuthGate() {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/45 backdrop-blur-sm overlay-in">
-      <div className="modal-in w-[380px] max-w-[92vw] rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 p-7">
+      {/* 品牌氛围光晕（墨流 2.0） */}
+      <div className="auth-glow" aria-hidden="true" />
+      <div className="modal-in brand-card-edge w-[380px] max-w-[92vw] rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 p-7">
         {/* 品牌头 */}
         <div className="flex items-center gap-2.5 mb-5">
           <div className="w-9 h-9 rounded-xl brand-logo flex items-center justify-center">
-            <BrandMark className="w-6 h-6" />
+            <BrandMark className="w-6 h-6" variant="gradient" />
           </div>
           <div>
             <div className="text-[16px] font-semibold text-slate-900 dark:text-slate-100 tracking-tight">

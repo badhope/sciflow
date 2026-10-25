@@ -102,6 +102,9 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
   const [diffModalOpen, setDiffModalOpen] = useState(false);
   const [diffA, setDiffA] = useState('');
   const [diffB, setDiffB] = useState('current');
+  /** 手动创建版本快照（POST /documents/:id/snapshot） */
+  const [snapshotMsg, setSnapshotMsg] = useState('');
+  const [snapshotBusy, setSnapshotBusy] = useState(false);
 
   /* ============ 文档管理状态 ============ */
   const [showNewDoc, setShowNewDoc] = useState(false);
@@ -278,6 +281,24 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
     setContent(s.content);
     toast('success', `已恢复到 v${s.version}（防抖自动保存将写回）`);
     setDiffModalOpen(false);
+  };
+
+  /** 手动创建版本快照：固化为不可变版本（可命名/对比/恢复），后端内容一致时幂等跳过 */
+  const createSnapshot = async () => {
+    if (!docId || snapshotBusy) return;
+    setSnapshotBusy(true);
+    try {
+      const res = await api.documents.createSnapshot(docId, snapshotMsg.trim() || undefined);
+      setSnapshotMsg('');
+      // 重新拉取文档以刷新 versions 快照列表
+      const fresh = await api.documents.get(docId);
+      setDoc(fresh);
+      toast('success', `已创建快照 v${res.version}（共 ${res.total} 个版本）`);
+    } catch (e: unknown) {
+      toast('error', `创建快照失败：${errMsg(e)}`);
+    } finally {
+      setSnapshotBusy(false);
+    }
   };
 
   /* ============ 文档 CRUD ============ */
@@ -891,6 +912,10 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
                 onToggleVersions={() => setVersionsOpen((v) => !v)}
                 snapshots={snapshots}
                 onOpenDiff={openDiffModal}
+                snapshotMsg={snapshotMsg}
+                snapshotBusy={snapshotBusy}
+                onSnapshotMsg={setSnapshotMsg}
+                onCreateSnapshot={() => void createSnapshot()}
               />
             </div>
           )}

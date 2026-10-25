@@ -20,8 +20,8 @@
   --brand-600: #0b7f78;
   /* 正文级品牌文字色：≥4.5:1（白底 4.86:1），--brand-500 仅用于图形填充 */
   --brand-700: #0b6f68;
-  /* 品牌渐变：三档均保证白字 ≥4.5:1（4.80 / 5.07 / 5.14），深色模式沿用提亮版 */
-  --brand-grad: linear-gradient(135deg, #0b8079 0%, #0a7896 52%, #0b6fc4 100%);
+  /* 品牌渐变（墨流 2.0：科研蓝绿，比 1.x 更鲜活；三档均保证白字 ≥4.5:1，深色模式沿用提亮版） */
+  --brand-grad: linear-gradient(135deg, #0f9e94 0%, #0b8fb4 48%, #0b6fc4 100%);
   --on-brand: #ffffff;
   --brand-grad-soft: linear-gradient(135deg, rgba(15, 158, 148, 0.10), rgba(11, 143, 180, 0.08) 52%, rgba(11, 111, 196, 0.06));
   --brand-glow: 0 8px 28px rgba(11, 143, 180, 0.22), 0 2px 8px rgba(15, 158, 148, 0.18);
@@ -345,6 +345,59 @@ select:focus-visible {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 1px 2px rgba(9, 42, 77, 0.20);
 }
 
+/* 侧边栏品牌区（墨流 2.0）：左上品牌光晕 + 底部渐变分隔线 */
+.shell-brand-zone {
+  position: relative;
+  background: radial-gradient(140% 110% at 0% 0%, rgba(13, 148, 136, 0.07), transparent 58%),
+    radial-gradient(90% 60% at 100% 100%, rgba(8, 145, 178, 0.04), transparent 55%);
+}
+.shell-brand-zone::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(13, 148, 136, 0.28), rgba(2, 132, 199, 0.28), transparent);
+}
+.dark .shell-brand-zone {
+  background: radial-gradient(140% 110% at 0% 0%, rgba(13, 148, 136, 0.10), transparent 58%),
+    radial-gradient(90% 60% at 100% 100%, rgba(8, 145, 178, 0.06), transparent 55%);
+}
+
+/* 登录门氛围：居中卡片后的两团品牌光晕（比全局光晕更聚焦） */
+.auth-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(720px 420px at 50% -8%, rgba(13, 148, 136, 0.16), transparent 62%),
+    radial-gradient(520px 300px at 12% 108%, rgba(8, 145, 178, 0.10), transparent 60%),
+    radial-gradient(460px 260px at 90% 96%, rgba(11, 111, 196, 0.08), transparent 58%);
+}
+.dark .auth-glow {
+  background:
+    radial-gradient(720px 420px at 50% -8%, rgba(13, 148, 136, 0.22), transparent 62%),
+    radial-gradient(520px 300px at 12% 108%, rgba(8, 145, 178, 0.14), transparent 60%),
+    radial-gradient(460px 260px at 90% 96%, rgba(11, 111, 196, 0.12), transparent 58%);
+}
+
+/* 卡片顶部品牌高光线（登录门等品牌卡用） */
+.brand-card-edge {
+  position: relative;
+  overflow: hidden;
+}
+.brand-card-edge::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--brand-grad);
+  opacity: 0.9;
+}
+
 /* 顶部 header 玻璃质感 */
 .glass-header {
   background: rgba(255, 255, 255, 0.72);
@@ -505,13 +558,22 @@ kbd {
   border: 1px solid var(--border);
   background: var(--card);
   box-shadow: var(--card-shadow);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.metric-card:hover {
+  border-color: rgba(13, 148, 136, 0.20);
+  box-shadow: var(--card-shadow), 0 0 0 1px rgba(13, 148, 136, 0.04);
 }
 .metric-card__label {
   display: flex; align-items: center; gap: 6px;
   font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--muted-foreground);
 }
-.metric-card__icon { display: inline-flex; }
+.metric-card__icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 7px;
+  background: color-mix(in srgb, var(--brand-500) 9%, transparent);
+}
 .metric-card__value { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; color: var(--foreground); }
 .metric-card__delta, .metric-card__hint { font-size: 11px; color: var(--muted-foreground); }
 
@@ -606,7 +668,14 @@ kbd {
   padding: 4px 8px;
   font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--muted-foreground);
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer;
+  border-radius: 6px;
+  background: none;
+  border: none;
+  transition: background-color 0.12s ease;
 }
+.shell-nav-group__label:hover { background: color-mix(in srgb, var(--muted-foreground) 8%, transparent); }
 .shell-nav-item {
   display: flex; align-items: center; gap: 10px;
   width: 100%;
@@ -985,3 +1054,9 @@ kbd {
   transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
 }
 .settings-nav__item:hover { background: var(--muted); color: var(--foreground); }
+.settings-nav__item--active {
+  background: var(--brand-grad);
+  color: #fff;
+  font-weight: 600;
+}
+.settings-nav__item--active:hover { background: var(--brand-grad); color: #fff; }

@@ -2,6 +2,26 @@
 
 本项目格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，语义化版本号。以下按 `git log` 自底向上归纳历轮功能与修复，未含真实密钥。
 
+## [1.1.0] - 2026-10-25
+
+产品化收口批次：安全收口、品牌升级、前后端 1:1 对齐、人设与技能体系，以及界面整合与默认亮色。
+
+### Security（阻断级）
+- **企业模式系统性 IDOR 收口**：`ProjectAccessService` 新增 `assertReference` / `assertExtractionField` / `assertExperiment` 三断言；projects PATCH/DELETE、documents 全部操作端点、references/experiments controller 整体重写注入归属校验（此前部分端点仅校验项目、未校验资源归属）。
+- **experiments run 任意命令执行面**：运行沙箱入口增加项目归属与文档归属校验，堵住跨项目/伪造 documentId 的执行路径。
+
+### Added
+- **墨流 2.0 品牌**：一笔流线 S + 数据闭环轨道弧 + 思想节点/收笔墨滴；渐变三色 `#0f9e94→#0b8fb4→#0b6fc4`；favicon/apple-touch-icon/SVG/PNG 全套 + docs 品牌规范。
+- **前后端 1:1 对齐补缺**：手动版本快照入口（提交信息 + 创建快照，快捷键文案更正）；项目总览「Agent 执行追踪」卡片（最近执行 + 近 14 天 Token 走势）；命令面板知识库检索改走服务端 `knowledge/search`（BM25+向量，按文档聚合）。
+- **角色与技能（persona + skills）**：设置页新增「角色与技能」——自定义系统提示词（整体替换内置角色段）+ 技能启停（内置 4 项 + 自定义增删）；chat 每轮注入自定义人设与启用技能清单。新端点 `GET/POST /api/settings/persona`。
+- **界面整合**：默认亮色（无存储即浅色）；侧边栏「自动化」「记录与洞察」低频分组默认折叠（渐进披露）；设置页 8 分区导航滚动跟踪激活高亮。
+
+### Fixed
+- **外部 MCP 工具恒传空参数**：McpToolList 外部工具 externalArgs 双模式（JSON / 纯文本）透传修复。
+- **community 排序无效**：改社区号升序 + 内部 id 稳定排序。
+- **AI 空响应用 429 伪装**：`AiEmptyResponseError` 可重试语义，耗尽后 502 暴露。
+- **lint 全绿**：eslint 配置转 `.mjs`（消除 ESM 探测警告）+ TanStack Table 兼容告警行级豁免（带原因注释）。
+
 ## [1.0.1] - 2026-10-24
 
 发布后真实性检查驱动的缺陷修复批次：真实模型运行暴露的挂起死锁、联网检索未接入流水线，以及一轮数据口径与重复实现清理。

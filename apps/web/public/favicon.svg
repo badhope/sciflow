@@ -1,6 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SciFlow">
-  <!-- SciFlow favicon · 墨流 S + 思想节点（与 docs/brand/icon-master.svg 同源） -->
-  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b8079"/><stop offset="0.52" stop-color="#0a7896"/><stop offset="1" stop-color="#0b6fc4"/></linearGradient></defs>
-  <rect width="64" height="64" rx="15" fill="url(#g)"/>
-  <path d="M 43.2 21.4 A 11 11 0 1 0 32 32 A 11 11 0 1 1 20.8 42.6" fill="none" stroke="#ffffff" stroke-width="6.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="47.4" cy="13.2" r="3.6" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- SciFlow favicon · 墨流 2.0（16px 可辨识：线宽加粗版） -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#0f9e94"/>
+      <stop offset="0.55" stop-color="#0b8fb4"/>
+      <stop offset="1" stop-color="#0b6fc4"/>
+    </linearGradient>
+  </defs>
+  <path d="M 46.9 15.1 A 23 23 0 1 0 15.1 46.9" fill="none" stroke="url(#g)" stroke-width="2.2" stroke-linecap="round" opacity="0.32"/>
+  <path d="M 43.2 21.4 A 11 11 0 1 0 32 32 A 11 11 0 1 1 20.8 42.6" fill="none" stroke="url(#g)" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="47.4" cy="13.2" r="3.6" fill="url(#g)"/>
+  <circle cx="19.4" cy="44" r="1.9" fill="url(#g)" opacity="0.75"/>
 </svg>

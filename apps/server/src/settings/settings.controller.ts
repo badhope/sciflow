@@ -59,4 +59,15 @@ export class SettingsController {
   removeMcpServer(@Param('id') id: string) {
     return this.settings.removeMcpServer(id);
   }
+
+  // ---------- 角色定义与技能（persona + skills，对标 Dify/Coze 人设与技能管理） ----------
+  @Get('persona')
+  getPersona() {
+    return this.settings.getPersona();
+  }
+
+  @Post('persona')
+  savePersona(@Body() body: { name?: string; systemPrompt?: string; skills?: { id?: string; key: string; name: string; description: string; enabled?: number; builtin?: number }[] }) {
+    return this.settings.savePersona(body);
+  }
 }

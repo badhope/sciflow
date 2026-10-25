@@ -52,95 +52,112 @@ export class DocumentsController {
 
   /** 缺口#2：为某个历史版本命名（versions JSON 内嵌 name，幂等覆盖；version 不存在返回 400） */
   @Patch(':id/version-name')
-  setVersionName(@Param('id') id: string, @Body() body: { version: number; name: string }) {
+  setVersionName(@Param('id') id: string, @Body() body: { version: number; name: string }, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.setVersionName(id, Number(body.version), body.name);
   }
 
   /** 为某个历史版本写入/覆盖 commit message（对标 git commit message；version 不存在返回 400） */
   @Patch(':id/versions/:version/commit-message')
-  setVersionCommitMessage(@Param('id') id: string, @Param('version') version: number, @Body() body: { message: string }) {
+  setVersionCommitMessage(@Param('id') id: string, @Param('version') version: number, @Body() body: { message: string }, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.setVersionCommitMessage(id, Number(version), body.message || '');
   }
 
   /** 创建手动版本快照（对标 git commit）：显式点保存当前内容快照 + commit message（幂等） */
   @Post(':id/snapshot')
   @HttpCode(HttpStatus.OK)
-  createSnapshot(@Param('id') id: string, @Body() body: { commitMessage?: string }) {
+  createSnapshot(@Param('id') id: string, @Body() body: { commitMessage?: string }, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return { versions: this.documents.createSnapshot(id, body.commitMessage) };
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  remove(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.remove(id);
   }
 
   // --- AI 写作工具 ---
   @Post(':id/outline')
-  generateOutline(@Param('id') id: string, @Body() body: { topic?: string; summary?: string }) {
+  generateOutline(@Param('id') id: string, @Body() body: { topic?: string; summary?: string }, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.generateOutline(id, body.topic || '', body.summary || '');
   }
 
   @Post(':id/section')
-  draftSection(@Param('id') id: string, @Body() body: { sectionTitle: string }) {
+  draftSection(@Param('id') id: string, @Body() body: { sectionTitle: string }, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.draftSection(id, body.sectionTitle);
   }
 
   @Post(':id/abstract')
-  generateAbstract(@Param('id') id: string) {
+  generateAbstract(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.generateAbstract(id);
   }
 
   @Post(':id/polish')
-  polish(@Param('id') id: string, @Body() body: { text: string; mode?: 'polish' | 'reduce' }) {
+  polish(@Param('id') id: string, @Body() body: { text: string; mode?: 'polish' | 'reduce' }, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.polish(id, body.text, body.mode || 'polish');
   }
 
   @Post(':id/translate')
-  translate(@Param('id') id: string, @Body() body: { text: string; targetLang?: 'zh' | 'en' }) {
+  translate(@Param('id') id: string, @Body() body: { text: string; targetLang?: 'zh' | 'en' }, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.translate(id, body.text, body.targetLang || 'zh');
   }
 
   @Get(':id/polish-records')
-  listPolishRecords(@Param('id') id: string) {
+  listPolishRecords(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.listPolishRecords(id);
   }
 
   // --- 引用管理 ---
   @Post(':id/citations')
-  addCitation(@Param('id') id: string, @Body() body: { referenceId: string; location?: string; context?: string; format?: string }) {
+  addCitation(@Param('id') id: string, @Body() body: { referenceId: string; location?: string; context?: string; format?: string }, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.addCitation(id, body);
   }
 
   @Get(':id/citations')
-  listCitations(@Param('id') id: string) {
+  listCitations(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.listCitations(id);
   }
 
   @Delete(':id/citations/:citationId')
-  removeCitation(@Param('id') _id: string, @Param('citationId') citationId: string) {
+  removeCitation(@Param('id') _id: string, @Param('citationId') citationId: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(_id, req.user);
     return this.documents.removeCitation(citationId);
   }
 
   @Get(':id/export-citations')
-  exportCitations(@Param('id') id: string, @Query('format') format: string) {
+  exportCitations(@Param('id') id: string, @Query('format') format: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.exportCitations(id, format || 'apa');
   }
 
   /** 缺口#4：按 8 样式渲染正文锚点+参考文献列表（纯函数预览，永不落库；前端确认后自行 PATCH content 覆盖） */
   @Post(':id/render-citations')
-  renderCitations(@Param('id') id: string, @Body() body: { style: string; dryRun?: boolean }) {
+  renderCitations(@Param('id') id: string, @Body() body: { style: string; dryRun?: boolean }, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.renderCitations(id, body.style, body.dryRun);
   }
 
   /** 导出 Markdown 全文 */
   @Get(':id/export')
-  exportMarkdown(@Param('id') id: string) {
+  exportMarkdown(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.exportMarkdown(id);
   }
 
   /** 导出 Word(.docx) 全文（交稿/投稿） */
   @Get(':id/export-docx')
-  async exportDocx(@Param('id') id: string) {
+  async exportDocx(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
     return this.documents.exportDocx(id);
   }
 }

@@ -17,7 +17,7 @@ export const HOTKEY_DOCS: HotkeyDoc[] = [
   { combo: 'mod+k', label: '打开 / 关闭命令面板', scope: '全局' },
   { combo: 'mod+n', label: '新建研究项目', scope: '全局' },
   { combo: 'escape', label: '关闭命令面板', scope: '全局', allowInInput: true },
-  { combo: 'mod+s', label: '保存版本快照', scope: '写作页' },
+  { combo: 'mod+s', label: '保存文档（自动记录历史版本）', scope: '写作页' },
   { combo: 'mod+b', label: '切换大纲 / 工具面板', scope: '写作页' },
   { combo: 'escape', label: '停止 AI 生成（保留已收文本）', scope: '工作台', allowInInput: true },
 ];

@@ -62,6 +62,18 @@ export const writing = {
     /** 版本命名（PATCH versions JSON 内嵌 name，幂等覆盖；version 不存在/被历史上限淘汰返回 400），返回更新后的 versions 数组 */
     setVersionName: (id: string, version: number, name: string) =>
       request<DocVersionEntry[]>(`/api/documents/${id}/version-name`, { method: 'PATCH', body: JSON.stringify({ version, name }) }),
+    /** 手动创建版本快照（内容与当前一致时后端幂等跳过）；commitMessage 可选，写入快照的提交说明 */
+    createSnapshot: (id: string, commitMessage?: string) =>
+      request<{ version: number; total: number }>(`/api/documents/${id}/snapshot`, {
+        method: 'POST',
+        body: JSON.stringify({ commitMessage }),
+      }),
+    /** 给指定历史版本写提交信息（PATCH /documents/:id/versions/:version/commit-message），返回更新后的 versions 数组 */
+    setCommitMessage: (id: string, version: number, commitMessage: string) =>
+      request<DocVersionEntry[]>(`/api/documents/${id}/versions/${version}/commit-message`, {
+        method: 'PATCH',
+        body: JSON.stringify({ commitMessage }),
+      }),
     /** 按样式渲染正文锚点+参考文献列表（纯函数预览，永不落库；前端确认后自行 PATCH content 覆盖） */
     renderCitations: (id: string, style: CiteStyle, dryRun = true) =>
       request<RenderCitationsResult>(`/api/documents/${id}/render-citations`, { method: 'POST', body: JSON.stringify({ style, dryRun }) }),

@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="SciFlow app icon">
   <!--
-    SciFlow 主图标（App Icon Master · 1024×1024）· 品牌修订 2 · 2026-10
-    概念：墨流 S —— 两段几何圆弧咬合成水流（右上入水、左下出水）+ 思想节点。
+    SciFlow 主图标（App Icon Master · 1024×1024）· 墨流 2.0 · 2026-10-25
+    概念：渐变圆角方底 + 白色主 S 水流 + 细数据闭环轨道 + 思想节点 + 收笔墨滴。
     规范：品牌渐变 #0b8079 → #0a7896 → #0b6fc4（135°），白色流线，圆角方底（r≈22%）。
     导出：本文件是唯一图标源；PNG/ICO/ICNS 由 scripts/generate-icons.mjs 从此渲染，禁止手改位图。
   -->
@@ -13,7 +13,14 @@
     </linearGradient>
   </defs>
   <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <!-- 数据闭环轨道（细弧，右上入 → 左下出） -->
+  <path d="M 750.4 241.6 A 368 368 0 1 0 241.6 750.4"
+        fill="none" stroke="#ffffff" stroke-width="28" stroke-linecap="round" opacity="0.30"/>
+  <!-- 主 S 水流 -->
   <path d="M 691.2 342.4 A 176 176 0 1 0 512 512 A 176 176 0 1 1 332.8 681.6"
-        fill="none" stroke="#ffffff" stroke-width="96" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="758.4" cy="211.2" r="54.4" fill="#ffffff"/>
+        fill="none" stroke="#ffffff" stroke-width="88" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 思想节点 -->
+  <circle cx="758.4" cy="211.2" r="51.2" fill="#ffffff"/>
+  <!-- 收笔墨滴 -->
+  <circle cx="310.4" cy="704" r="27.2" fill="#ffffff" opacity="0.75"/>
 </svg>

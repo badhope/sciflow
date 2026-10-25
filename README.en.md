@@ -1,13 +1,17 @@
-# SciFlow · Local-First AI Research Workbench
+# SciFlow · Multi-Agent Research Pipeline — From Idea to Submittable Manuscript
 
-> **From a research topic to a submittable manuscript in one pipeline: literature survey → outline (with contrarian variants) → section-wise drafting → quality-gate rewriting → polishing → citations → submission assistance.**
-> Your data, model keys, literature and memory never leave your machine — no cloud, no multi-tenancy, no lock-in.
+> **Not "yet another paper-writing assistant." SciFlow turns research output into an executable, observable, self-correcting pipeline:**
+> **topic validation → deep literature survey (depth 1–3) → outline confirmation (with contrarian variants) → section-wise drafting → 7-dimension quality gate (auto-reflexion under 80) → polishing → citation formatting → submission tracking.**
+>
+> Each stage is owned by a **dedicated agent**; humans only gate at key checkpoints. Every step's **execution trace, token usage and duration Gantt** are fully observable.
+> Models are pluggable (any OpenAI-compatible endpoint, multi-provider switching), capabilities speak **MCP** in both directions (callable by Claude, or connecting external MCP servers),
+> and `sciflow run` produces a manuscript headlessly. Data and keys stay on your machine by default — that is a data-sovereignty fact, not the selling point.
 
 [![CI](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![version](https://img.shields.io/badge/version-1.0.0-black.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.1.0-black.svg)](CHANGELOG.md)
 
 > **🌐 Language / 语言：[English](README.en.md) · [中文](README.md)**
 
@@ -105,18 +109,23 @@ See [`CHANGELOG.md`](CHANGELOG.md) for the full history.
 
 ## 🆚 How SciFlow differs
 
+> The comparison is not "whose model is stronger" — it is **how complete and how reliable the research output is**: whether a pipeline reaches submission, whether AI output passes quality gates, and whether the process is auditable.
+
 | | SciFlow | Stanford STORM | Elicit | GPT-Researcher | NotebookLM |
 | --- | --- | --- | --- | --- | --- |
-| Deployment | **Local single-machine** (SQLite / Docker / desktop) | Cloud + OSS lib | Cloud SaaS | Self-host / cloud | Cloud |
-| Models | **Bring your own key, any OpenAI-compatible endpoint (incl. Ollama)** | Fixed cloud models | Bundled | BYO key | Bundled |
-| Privacy | **Everything local, zero third-party upload** | Cloud | Cloud | Depends | Cloud |
-| Scope | Topic → literature → outline → drafting → quality gate → citations → **submission tracking** | Wiki-style report | Systematic review | Research report | Notebook Q&A |
-| Citations | **8 CSL styles live re-render + citation audit + fingerprint dedup** | Footnotes | Extraction table | Citation list | Source chips |
+| End-to-end pipeline | **Topic → literature → outline → drafting → quality gate → citations → submission tracking** | Wiki-style report | Systematic review | Research report | Notebook Q&A |
+| Quality mechanism | **7-dimension gate + auto-reflexion <80 + review-response loop + citation audit** | — | Extraction checks | — | — |
+| Observability | **Agent execution trace / token usage / step-duration Gantt / deep health probe** | Some | — | — | — |
+| Multi-agent orchestration | **Stage-owned agents + human outline checkpoint + checkpoint resume** | Partial | — | Recursive | — |
 | Anti-homogenization | **Contrarian outline variants + recursive research depth** | Multi-perspective QA | — | Recursive depth | — |
-| Submission | **Journal matching / cover letter / reviewer reply / tracking** | — | — | — | — |
-| CN academia | **GB/T 7714, CN journal library, Chinese-aware retrieval** | Weak | Weak | Weak | Weak |
+| Model freedom | **Any OpenAI-compatible endpoint + multi-provider switch (fast/strong routing)** | Fixed cloud models | Bundled | BYO key | Bundled |
+| Open integration | **MCP both directions (callable by Claude, or attach external MCP) + headless CLI** | — | API | CLI | — |
+| Citations | **8 CSL styles live re-render + citation audit + fingerprint dedup** | Footnotes | Extraction table | Citation list | Source chips |
+| Submission | **Journal matching / Cover Letter / review reply / status tracking** | — | — | — | — |
+| Chinese-research fit | **GB/T 7714, domestic journal library, Chinese-tokenized retrieval** | Weak | Weak | Weak | Weak |
+| Data sovereignty | Single-machine SQLite / Docker / desktop; keys never leave the machine | Cloud | Cloud SaaS | Depends | Cloud |
 
-> STORM/Elicit/NotebookLM are excellent cloud services; SciFlow does not fight their data moats. It fights the **"local-first + full-lifecycle loop + AI failure-mode governance"** battle: traceable citations, auto-rewrite quality gates, and hard cost budgets.
+> SciFlow is not in the "bigger cloud" arms race. Its difference is **research-output engineering**: traceable citations, auto-rewrite quality gates, auditable per-step cost and trace, and one-command unattended manuscript generation.
 
 ## 🏗 Tech stack
 

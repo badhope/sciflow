@@ -4,9 +4,9 @@ export type ResolvedTheme = 'light' | 'dark';
 const KEY = 'sciflow-theme';
 
 export function readStoredTheme(): ThemeMode {
-  if (typeof localStorage === 'undefined') return 'system';
+  if (typeof localStorage === 'undefined') return 'light';
   const raw = localStorage.getItem(KEY);
-  return raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'system';
+  return raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'light';
 }
 
 export function systemPrefersDark(): boolean {

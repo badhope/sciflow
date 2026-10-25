@@ -12,6 +12,7 @@ export function McpToolList() {
   const [toolLoading, setToolLoading] = useState(false);
   const [externalTools, setExternalTools] = useState<{ name?: string; description?: string }[]>([]);
   const [externalResult, setExternalResult] = useState('');
+  const [externalArgs, setExternalArgs] = useState<Record<string, string>>({});
   const [activeServerId, setActiveServerId] = useState('');
   const [showAddServer, setShowAddServer] = useState(false);
 
@@ -148,7 +149,7 @@ export function McpToolList() {
         )}
         {externalTools.length > 0 && (
           <div className="mt-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
-            <div className="text-xs text-slate-400 dark:text-slate-500 mb-1.5">{externalResult} —— 选择工具调用（参数用逗号分隔）</div>
+            <div className="text-xs text-slate-400 dark:text-slate-500 mb-1.5">{externalResult} —— 参数支持 JSON 对象（如 {"{\"query\":\"x\"}"}）或纯文本</div>
             <div className="space-y-1.5">
               {externalTools.map((t) => (
                 <div key={t.name} className="flex flex-wrap items-center gap-2">
@@ -156,13 +157,26 @@ export function McpToolList() {
                   <input
                     className="flex-1 min-w-0 rounded-md border border-slate-300 dark:border-slate-700 px-2 py-1 text-xs"
                     placeholder={(t.description || '').slice(0, 40)}
+                    value={externalArgs[t.name || ''] || ''}
+                    onChange={(e) => setExternalArgs((s) => ({ ...s, [t.name || '']: e.target.value }))}
                   />
                   <Button
                     variant="outline"
                     className="text-xs px-2 py-1"
                     onClick={async () => {
                       try {
-                        const res = await api.mcpExternal.call(activeServerId, t.name || '', {});
+                        const raw = (externalArgs[t.name || ''] || '').trim();
+                        let args: Record<string, any> = {};
+                        if (raw) {
+                          try {
+                            const parsed = JSON.parse(raw);
+                            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) args = parsed;
+                            else args = { input: String(parsed) };
+                          } catch {
+                            args = { input: raw };
+                          }
+                        }
+                        const res = await api.mcpExternal.call(activeServerId, t.name || '', args);
                         setExternalResult(JSON.stringify(res, null, 2).slice(0, 600));
                       } catch (e: unknown) {
                         setExternalResult('调用失败: ' + errMsg(e));

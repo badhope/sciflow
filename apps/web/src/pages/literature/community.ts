@@ -71,7 +71,8 @@ export function labelPropagation(graph: LabelGraph): Map<string, number> {
 /** 便于测试/展示：返回 社区号 → 节点列表 */
 export function groupByCommunity(labels: Map<string, number>): Map<number, string[]> {
   const out = new Map<number, string[]>();
-  for (const [id, c] of [...labels.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+  // 按社区号升序，社区内按文献 id 稳定排序（历史实现误用 key(id) 排序，sort 形同虚设）
+  for (const [id, c] of [...labels.entries()].sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : 1))) {
     const arr = out.get(c);
     if (arr) arr.push(id);
     else out.set(c, [id]);

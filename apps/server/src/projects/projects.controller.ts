@@ -28,12 +28,15 @@ export class ProjectsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: { name?: string; description?: string; preface?: string; templates?: string }) {
+  update(@Param('id') id: string, @Body() body: { name?: string; description?: string; preface?: string; templates?: string }, @Req() req: { user?: AuthPayload }) {
+    // 归属校验（企业模式防 IDOR；本地模式 no-op）——此前 PATCH 可越权改写非本人项目
+    this.access.assertProject(id, req.user);
     return this.projects.update(id, body);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  remove(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertProject(id, req.user);
     return this.projects.remove(id);
   }
 }

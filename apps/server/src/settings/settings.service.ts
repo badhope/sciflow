@@ -193,4 +193,58 @@ export class SettingsService {
     sqlite.prepare('DELETE FROM mcp_server WHERE id = ?').run(id);
     return { ok: true };
   }
+
+  // ---------- 角色定义与技能（persona + skills，对标 Dify/Coze 的人设与技能管理） ----------
+  /** 内置技能（不可删除、可启停；name/description 与真实能力对应） */
+  static readonly BUILTIN_SKILLS: { key: string; name: string; description: string }[] = [
+    { key: 'literature_search', name: '文献检索', description: '检索项目文献库（标题/作者/摘要/全文），需要引用具体文献时使用' },
+    { key: 'knowledge_qa', name: '知识库问答', description: '基于已上传资料（RAG）回答，回答标注来源文档，事实优先来自资料' },
+    { key: 'writing_assist', name: '写作辅助', description: '大纲生成、章节起草、润色、降重、翻译等写作类操作' },
+    { key: 'web_research', name: '联网检索', description: '检索公开网页作为背景参考，注意甄别时效与权威性' },
+  ];
+
+  /** 读取角色与技能配置（未配置时返回默认角色与内置技能全启用） */
+  getPersona() {
+    const read = (key: string): string => {
+      const row = sqlite.prepare('SELECT value FROM app_setting WHERE key = ?').get(key) as { value?: string } | undefined;
+      return row?.value ?? '';
+    };
+    let skills: { id: string; key: string; name: string; description: string; enabled: number; builtin: number }[] = [];
+    try {
+      skills = JSON.parse(read('skills') || '[]');
+    } catch {
+      skills = [];
+    }
+    if (!Array.isArray(skills)) skills = [];
+    // 首次使用（未保存过）：填充内置技能全启用，用户可立即启停
+    if (skills.length === 0) {
+      skills = SettingsService.BUILTIN_SKILLS.map((s) => ({ id: `builtin-${s.key}`, ...s, enabled: 1, builtin: 1 }));
+    }
+    return {
+      name: read('persona_name'),
+      systemPrompt: read('system_prompt'),
+      defaultSystemPrompt: read('system_prompt_default') || '',
+      skills,
+    };
+  }
+
+  /** 保存角色与技能：systemPrompt 为空=恢复默认角色；skills 全量覆盖（前端保证内置项存在） */
+  savePersona(body: { name?: string; systemPrompt?: string; skills?: { id?: string; key: string; name: string; description: string; enabled?: number; builtin?: number }[] }) {
+    const upsert = (key: string, value: string) => {
+      const exists = sqlite.prepare('SELECT key FROM app_setting WHERE key = ?').get(key);
+      if (exists) sqlite.prepare('UPDATE app_setting SET value = ? WHERE key = ?').run(value, key);
+      else sqlite.prepare('INSERT INTO app_setting (key, value) VALUES (?,?)').run(key, value);
+    };
+    if (body.name !== undefined) upsert('persona_name', body.name.trim());
+    if (body.systemPrompt !== undefined) upsert('system_prompt', body.systemPrompt.trim());
+    if (Array.isArray(body.skills)) upsert('skills', JSON.stringify(body.skills.map((s) => ({
+      id: s.id || randomUUID(),
+      key: s.key,
+      name: s.name,
+      description: s.description,
+      enabled: s.enabled === 0 ? 0 : 1,
+      builtin: s.builtin === 0 ? 0 : 1,
+    }))));
+    return { ok: true, ...this.getPersona() };
+  }
 }

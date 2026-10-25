@@ -70,6 +70,11 @@ export interface WritingToolsPanelProps {
   onToggleVersions: () => void;
   snapshots: (DocVersionEntry & { current?: boolean })[];
   onOpenDiff: () => void;
+  /** 手动创建版本快照（后端 POST /documents/:id/snapshot） */
+  snapshotMsg: string;
+  snapshotBusy: boolean;
+  onSnapshotMsg: (v: string) => void;
+  onCreateSnapshot: () => void;
 }
 
 const SEC = 'text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5';
@@ -94,6 +99,7 @@ export function WritingToolsPanel(props: WritingToolsPanelProps) {
     qualityReport, qualityScores, scoreColor,
     docExperiments, experimentsOpen, onToggleExperiments, onInsertExperiment,
     versionsOpen, onToggleVersions, snapshots, onOpenDiff,
+    snapshotMsg, snapshotBusy, onSnapshotMsg, onCreateSnapshot,
   } = props;
 
   return (
@@ -340,6 +346,21 @@ export function WritingToolsPanel(props: WritingToolsPanelProps) {
         </button>
         {versionsOpen && (
           <div className="space-y-1.5 text-xs">
+            <div className="flex gap-1.5">
+              <input
+                className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:border-teal-500/60 focus:ring-1 focus:ring-teal-500/40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                placeholder="提交信息（可选，如：初稿完成）"
+                value={snapshotMsg}
+                onChange={(e) => onSnapshotMsg(e.target.value)}
+                aria-label="快照提交信息"
+              />
+              <Button className="shrink-0 text-xs" onClick={onCreateSnapshot} disabled={snapshotBusy} loading={snapshotBusy}>
+                <History size={12} aria-hidden="true" /> 创建快照
+              </Button>
+            </div>
+            <p className="text-[11px] leading-relaxed text-slate-400">
+              将当前内容固化为不可变版本（可命名、可左右对比、可恢复），区别于自动保存的历史记录。
+            </p>
             <Button variant="outline" className="w-full text-xs" onClick={onOpenDiff} disabled={snapshots.length < 2}>
               <History size={12} aria-hidden="true" /> 左右栏对比版本
             </Button>

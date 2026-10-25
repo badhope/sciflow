@@ -1,7 +1,7 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/database';
-import { documents, projects } from '../db/schema';
+import { documents, projects, references, experiments, extractionFields } from '../db/schema';
 import type { AuthPayload } from '../auth/auth.service';
 
 /**
@@ -47,6 +47,30 @@ export class ProjectAccessService {
     if (!doc) throw new NotFoundException('文档不存在');
     this.assertProject(doc.projectId, user);
     return doc;
+  }
+
+  /** 断言文献可访问（经由其 project 归属），返回文献行 */
+  assertReference(referenceId: string, user?: AuthPayload) {
+    const ref = db.select().from(references).where(eq(references.id, referenceId)).get();
+    if (!ref) throw new NotFoundException('文献不存在');
+    this.assertProject(ref.projectId, user);
+    return ref;
+  }
+
+  /** 断言系统综述抽取字段可访问（经由其 project 归属） */
+  assertExtractionField(fieldId: string, user?: AuthPayload) {
+    const field = db.select().from(extractionFields).where(eq(extractionFields.id, fieldId)).get();
+    if (!field) throw new NotFoundException('抽取字段不存在');
+    this.assertProject(field.projectId, user);
+    return field;
+  }
+
+  /** 断言实验可访问（经由其 project 归属），返回实验行 */
+  assertExperiment(experimentId: string, user?: AuthPayload) {
+    const exp = db.select().from(experiments).where(eq(experiments.id, experimentId)).get();
+    if (!exp) throw new NotFoundException('实验不存在');
+    this.assertProject(exp.projectId, user);
+    return exp;
   }
 
   /** 显式拒绝（用于业务上必须报 403 的场景） */

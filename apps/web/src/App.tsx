@@ -3,11 +3,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { HashRouter, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { PageErrorBoundary } from './components/PageErrorBoundary';
 import {
-  BookOpen, Brain, Beaker, LayoutDashboard, Plus, RefreshCw, Search, Send, Settings, Trash2, Workflow, BookMarked, ChevronRight, Command, Sun, Moon, Monitor, XCircle as XCircleIcon, Gauge, Library, LayoutGrid, Menu as MenuIcon,
+  BookOpen, Brain, Beaker, LayoutDashboard, Plus, Pencil, RefreshCw, Search, Send, Settings, Trash2, Workflow, BookMarked, ChevronRight, Command, Sun, Moon, Monitor, XCircle as XCircleIcon, Gauge, Library, LayoutGrid, Menu as MenuIcon,
 } from 'lucide-react';
 import { api } from './api/client';
 import { isNetworkError } from './api/core';
-import type { KnowledgeDoc, Project, Reference } from './types';
+import type { KnowledgeSearchHit, Project, Reference } from './types';
 import { errMsg } from './components/ui';
 import { applyTheme, readStoredTheme, resolveTheme, systemPrefersDark, THEME_OPTIONS, type ThemeMode } from './lib/theme';
 import { AuthGate } from './components/AuthGate';
@@ -83,7 +83,7 @@ const VIEW_LABELS: Record<View, string> = {
 };
 
 /** 导航按「核心工作 → 自动化 → 记录与洞察」三段叙事（名称唯一来源 = VIEW_LABELS） */
-const NAV_GROUPS: { label: string; items: { key: View; label: string; icon: typeof LayoutDashboard }[] }[] = [
+const NAV_GROUPS: { label: string; defaultCollapsed?: boolean; items: { key: View; label: string; icon: typeof LayoutDashboard }[] }[] = [
   {
     label: '核心工作',
     items: [
@@ -95,6 +95,7 @@ const NAV_GROUPS: { label: string; items: { key: View; label: string; icon: type
   },
   {
     label: '自动化',
+    defaultCollapsed: true,
     items: [
       { key: 'pipeline', label: VIEW_LABELS.pipeline, icon: Workflow },
       { key: 'quality', label: VIEW_LABELS.quality, icon: Gauge },
@@ -103,6 +104,7 @@ const NAV_GROUPS: { label: string; items: { key: View; label: string; icon: type
   },
   {
     label: '记录与洞察',
+    defaultCollapsed: true,
     items: [
       { key: 'dashboard', label: VIEW_LABELS.dashboard, icon: LayoutGrid },
       { key: 'experiments', label: VIEW_LABELS.experiments, icon: Beaker },
@@ -532,15 +534,15 @@ function SidebarContent({
   const { closeSidebar } = useAppShell();
   return (
     <>
-      {/* 品牌区 */}
-      <div className="px-4 pb-2 pt-4">
+      {/* 品牌区（墨流 2.0 氛围：光晕 + 渐变分隔线） */}
+      <div className="shell-brand-zone px-4 pb-3 pt-4">
         <BrandLockup />
       </div>
 
       {/* 导航 */}
       <nav className="shrink-0" aria-label="功能导航">
         {NAV_GROUPS.map((g) => (
-          <ShellNavGroup key={g.label} label={g.label}>
+          <ShellNavGroup key={g.label} label={g.label} defaultCollapsed={g.defaultCollapsed}>
             {g.items.map((n) => {
               const Icon = n.icon;
               return (
@@ -558,7 +560,7 @@ function SidebarContent({
         <div className="relative pt-2">
           <Search size={13} className="absolute left-2.5 top-[13px] text-slate-400" aria-hidden="true" />
           <input
-            className="w-full rounded-lg bg-slate-100 py-1.5 pl-8 pr-2 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:bg-white focus:ring-1 focus:ring-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:focus:bg-slate-700"
+            className="w-full rounded-lg bg-slate-100 py-1.5 pl-8 pr-2 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:bg-white focus:ring-1 focus:ring-teal-500/50 dark:bg-slate-800 dark:text-slate-200 dark:focus:bg-slate-700 dark:focus:ring-teal-400/40"
             placeholder="搜索项目…"
             value={projectQuery}
             onChange={(e) => onProjectQuery(e.target.value)}
@@ -596,7 +598,7 @@ function SidebarContent({
               <span className="truncate">{p.name}</span>
               <span className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                 <button
-                  className="flex h-7 w-7 items-center justify-center rounded text-[11px] text-slate-400 hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                  className="flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
                   title="重命名项目"
                   aria-label={`重命名项目 ${p.name}`}
                   onClick={(e) => {
@@ -604,7 +606,7 @@ function SidebarContent({
                     onRenameProject(p);
                   }}
                 >
-                  改
+                  <Pencil size={12} aria-hidden="true" />
                 </button>
                 <button
                   className="flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/30"
@@ -672,11 +674,12 @@ function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onCl
   const filtered = useMemo(() => filterCommands(commands, q), [commands, q]);
   const [active, setActive] = useState(0);
 
-  /* ---- 差距#18：内容搜索（文献 references.search + 知识库 list 前端过滤） ---- */
-  // 后端未暴露 knowledge.search 单端，知识库退化为 list 后按文档名前端过滤；
-  // 文献走 references.search（服务端检索）。两者并行，250ms 防抖。
+  /* ---- 差距#18：内容搜索（文献 references.search + 知识库 knowledge.search） ---- */
+  // 文献走 references.search（服务端检索）；知识库走 knowledge.search（服务端 BM25+向量，
+  // 按 docId 聚合去重展示）。两者并行，250ms 防抖。
   const [docHits, setDocHits] = useState<Reference[]>([]);
-  const [kbHits, setKbHits] = useState<KnowledgeDoc[]>([]);
+  // 知识库命中文块按文档聚合（hits=聚合命中数）
+  const [kbHits, setKbHits] = useState<(KnowledgeSearchHit & { hits: number })[]>([]);
   const [searching, setSearching] = useState(false);
   const qTrim = q.trim();
   const searchActive = !!projectId && qTrim.length >= 2;
@@ -686,14 +689,28 @@ function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onCl
     const timer = setTimeout(async () => {
       if (cancelled) return;
       setSearching(true);
-      const [refRes, docRes] = await Promise.allSettled([
+      const [refRes, kbRes] = await Promise.allSettled([
         api.references.search(qTrim, 6, projectId),
-        api.knowledge.list(projectId),
+        api.knowledge.search(projectId, qTrim),
       ]);
       if (cancelled) return;
       const refs = refRes.status === 'fulfilled' ? refRes.value : [];
-      const allDocs = docRes.status === 'fulfilled' ? docRes.value : [];
-      const kb = allDocs.filter((d) => d.name.toLowerCase().includes(qTrim.toLowerCase())).slice(0, 6);
+      // 命中文块按文档聚合：每文档取最高分块，展示「文档名 + N 处命中」
+      const hits = kbRes.status === 'fulfilled' ? kbRes.value : [];
+      const byDoc = new Map<string, KnowledgeSearchHit & { hits: number }>();
+      for (const h of hits) {
+        const key = h.docId;
+        const prev = byDoc.get(key);
+        if (prev) {
+          prev.hits += 1;
+          if (h.score > prev.score) {
+            byDoc.set(key, { ...h, hits: prev.hits });
+          }
+        } else {
+          byDoc.set(key, { ...h, hits: 1 });
+        }
+      }
+      const kb = [...byDoc.values()].sort((a, b) => b.score - a.score).slice(0, 6);
       setDocHits(refs);
       setKbHits(kb);
       setSearching(false);
@@ -786,8 +803,8 @@ function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onCl
                   className="w-full flex items-center justify-between gap-2 px-4 py-1.5 text-left text-[13px] hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors"
                 >
                   <span className="min-w-0">
-                    <span className="text-slate-700 dark:text-slate-200 truncate block">{d.name}</span>
-                    <span className="text-[11px] text-slate-400">{d.type} · {d.chunkCount} 分块</span>
+                    <span className="text-slate-700 dark:text-slate-200 truncate block">{d.docName}</span>
+                    <span className="text-[11px] text-slate-400">{d.hits} 处命中 · 片段「{d.context.slice(0, 26)}…」</span>
                   </span>
                   <span className="text-[11px] text-sky-500 shrink-0">知识库 → 知识库</span>
                 </button>
