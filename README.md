@@ -16,7 +16,7 @@
 > **🌐 语言 / Language：[中文](README.md) · [English](README.en.md)**
 
 > **仓库镜像（五平台同步）**
-> [GitCode](https://gitcode.com/badhope/sciflow) · [Gitee](https://gitee.com/badhope/sciflow) · [GitHub · badhope](https://github.com/badhope/sciflow) · [GitHub · X33834](https://github.com/X33834/sciflow) · [GitHub · Morningstar202604](https://github.com/Morningstar202604/sciflow)
+> [GitCode](https://gitcode.com/badhope/sciflow) · [Gitee](https://gitee.com/badhope/sciflow) · [GitHub · badhope](https://github.com/badhope/sciflow) · [GitHub · x33834](https://github.com/x33834/sciflow) · [GitHub · Morningstar202604](https://github.com/Morningstar202604/sciflow)
 > GitHub 三仓运行同一套 CI：lint · typecheck ×2 · vitest ×2 · build ×2 · mock 全量回归（184 项）· promptfoo 契约评估 · Playwright 冒烟；GitCode 与 Gitee 同步同一发布树。
 
 <!-- 架构一览（Mermaid 随 README 渲染，无需图片资产） -->

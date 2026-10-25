@@ -16,7 +16,7 @@
 > **🌐 Language / 语言：[English](README.en.md) · [中文](README.md)**
 
 > **Repository mirrors (synced across 5 platforms)**
-> [GitCode](https://gitcode.com/badhope/sciflow) · [Gitee](https://gitee.com/badhope/sciflow) · [GitHub · badhope](https://github.com/badhope/sciflow) · [GitHub · X33834](https://github.com/X33834/sciflow) · [GitHub · Morningstar202604](https://github.com/Morningstar202604/sciflow)
+> [GitCode](https://gitcode.com/badhope/sciflow) · [Gitee](https://gitee.com/badhope/sciflow) · [GitHub · badhope](https://github.com/badhope/sciflow) · [GitHub · x33834](https://github.com/x33834/sciflow) · [GitHub · Morningstar202604](https://github.com/Morningstar202604/sciflow)
 > The three GitHub mirrors run the same CI: lint · typecheck ×2 · vitest ×2 · build ×2 · full mock regression (178 checks) · promptfoo prompt-contract evals · Playwright smoke; GitCode and Gitee mirror the same release tree.
 
 <!-- Architecture at a glance (Mermaid renders inline, no image assets needed) -->
