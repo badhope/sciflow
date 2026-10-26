@@ -217,6 +217,66 @@ if tools:
 st, d = req("GET", "/api/mcp/external")
 check("MCP 外部服务器列表", st == 200 and isinstance(d, list), f"{st}")
 
+# ---------- 4.5 配置中心（角色/约束/钩子/权限/审计） ----------
+st, cfg = req("GET", "/api/config")
+check("配置中心快照 GET /api/config", st == 200 and cfg.get("permission") and isinstance(cfg.get("roles"), list), f"{st}")
+base_mode = (cfg.get("permission") or {}).get("mode") if isinstance(cfg, dict) else None
+check("权限档合法（strict/balanced/open/unrestricted）", base_mode in ("strict", "balanced", "open", "unrestricted"), f"{base_mode}")
+if isinstance(cfg, dict):
+    check("核心保护项 ≥7", len((cfg.get("permission") or {}).get("coreProtected") or []) >= 7, f"{len((cfg.get('permission') or {}).get('coreProtected') or [])}")
+    check("默认角色唯一", len([r for r in (cfg.get("roles") or []) if r.get("isDefault") == 1]) == 1)
+
+# 恢复全面放开后再写（回归可能跑在 strict 档的库上）
+req("POST", "/api/config/permission", {"mode": "unrestricted"})
+tag = f"regression-{int(time.time())}"
+st, cons = req("POST", "/api/config/constraints", {"title": tag, "rule": "回归校验约束", "level": "must", "scope": "all"})
+check("约束创建 POST", st in (200, 201) and any(c.get("title") == tag for c in cons or []), f"{st}")
+cons_id = next((c["id"] for c in cons or [] if c.get("title") == tag), None)
+st, pv = req("GET", "/api/config/preview?scope=chat")
+check("约束进入 chat 注入预览", st == 200 and tag in (pv.get("text") or ""), f"{st}")
+if cons_id:
+    st, cons = req("POST", f"/api/config/constraints/{cons_id}", {"enabled": 0})
+    check("约束停用生效", st in (200, 201) and not any(c.get("id") == cons_id and c.get("enabled") == 1 for c in cons or []), f"{st}")
+    st, pv = req("GET", "/api/config/preview?scope=chat")
+    check("停用后不再注入", tag not in (pv.get("text") or ""), f"{st}")
+    st, _ = req("DELETE", f"/api/config/constraints/{cons_id}")
+    check("约束删除 DELETE", st == 200, f"{st}")
+
+st, hooks = req("POST", "/api/config/hooks", {"name": f"{tag}-hook", "event": "chat:before", "type": "prompt_inject", "config": {"text": "回归钩子注入文本"}})
+check("钩子创建 POST", st in (200, 201), f"{st}")
+st, pv = req("GET", "/api/config/preview?scope=chat")
+check("钩子进入注入预览", st == 200 and "回归钩子注入文本" in (pv.get("text") or ""), f"{st}")
+hook_id = next((h["id"] for h in hooks or [] if h.get("name") == f"{tag}-hook"), None)
+if hook_id:
+    st, _ = req("DELETE", f"/api/config/hooks/{hook_id}")
+    check("钩子删除 DELETE", st == 200, f"{st}")
+
+# block 钩子：命中拦截、未命中放行
+st, hooks = req("POST", "/api/config/hooks", {"name": f"{tag}-block", "event": "chat:before", "type": "block", "config": {"when": "keyword", "keywords": ["回归拦截词"], "reason": "回归拦截生效"}})
+block_id = next((h["id"] for h in hooks or [] if h.get("name") == f"{tag}-block"), None)
+st, d2 = req("POST", "/api/chat/stream", {"message": "回归拦截词 测试", "history": []})
+check("block 钩子拦截对话", st in (200, 201) and "回归拦截生效" in str(d2), f"{st} {str(d2)[:80]}")
+if block_id:
+    req("DELETE", f"/api/config/hooks/{block_id}")
+
+# 权限矩阵：strict 拒绝写且留拒绝审计
+req("POST", "/api/config/permission", {"mode": "strict"})
+st, d2 = req("POST", "/api/config/constraints", {"title": f"{tag}-denied", "rule": "x"})
+check("strict 档拒绝配置写入", st in (400, 403), f"{st}")
+st, audit = req("GET", "/api/config/audit?limit=20")
+check("拒绝操作写入审计", st == 200 and any(a.get("allowed") == 0 for a in audit or []), f"{st}")
+req("POST", "/api/config/permission", {"mode": "unrestricted"})
+
+# 预设应用（幂等：重复应用不叠加 preset 约束）
+st, snap2 = req("POST", "/api/config/presets/academic-rigor/apply")
+check("预设应用 POST", st in (200, 201) and isinstance(snap2.get("constraints"), list), f"{st}")
+preset_count_1 = len([c for c in (snap2.get("constraints") or []) if c.get("source") == "preset"])
+st, snap3 = req("POST", "/api/config/presets/academic-rigor/apply")
+preset_count_2 = len([c for c in (snap3.get("constraints") or []) if c.get("source") == "preset"])
+check("预设重复应用不叠加", st in (200, 201) and preset_count_1 == preset_count_2, f"{preset_count_1}->{preset_count_2}")
+st, audit2 = req("GET", "/api/config/audit?limit=50")
+check("配置中心审计可读", st == 200 and isinstance(audit2, list) and len(audit2) >= 1, f"{st} {len(audit2) if isinstance(audit2, list) else '?'}")
+
 # ---------- 5. 流水线（断点续跑相关） ----------
 if MOCK:
     # mock 模式：先种 2 条带元数据的领域文献，让 Research→Writer→renderCitations 链路真正产生引用回填

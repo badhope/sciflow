@@ -84,6 +84,7 @@ export class SettingsController {
   }
 
   // ---------- 角色定义与技能（persona + skills，对标 Dify/Coze 人设与技能管理） ----------
+  /** 角色与技能：角色写入配置中心 config_role，技能写 app_setting.skills（AgentToolBridge 读取） */
   @Get('persona')
   getPersona() {
     return this.settings.getPersona();

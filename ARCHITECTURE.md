@@ -111,6 +111,24 @@
 | 5 | **保存即生效**：编辑激活中的厂商后必须重新 `switchProvider(id)`，避免「页面显示新模型、内存仍打旧端点」；协议/能力列走 `ensureColumn` 迁移旧库 | `settings.service.ts saveProvider` · `packages/db/src/database.ts ensureColumn` | `settings.provider.spec.ts` 激活刷新用例 |
 | 6 | **流式 usage 必需**：OpenAI 兼容 provider 固定 `includeUsage: true`，否则 token 成本与上下文占比恒为 0（本次浏览器实测发现） | `packages/ai/src/ai-transport.service.ts buildModelWith` | 实际流式冒烟返回非零 usage |
 
+## §2.17 v1.3 配置中心契约（2026-10-26）
+
+设置页从「分散的自定义面板」升级为统一配置中心：角色 / 约束工程 / 钩子 / 权限档 / 审计，**Web 设置页、CLI、对话工具三条入口共用同一服务**，任一入口写入其余入口立即生效。以下契约不得回退：
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **单一写入口**：所有配置写操作只经 `ConfigCenterService`；控制器、CLI（`sciflow config`）、对话工具（`config.*`，MCP 工具）都调用它，禁止各自直写 `app_setting` 或新表 | `apps/server/src/config/config-center.service.ts` · `apps/server/src/config/config.controller.ts` · `apps/server/src/config/config-cli.ts` | `config-center.spec.ts` 11 条（含 actor=chat/cli 审计） |
+| 2 | **权限矩阵**：`strict`（只读）/ `balanced`（角色/约束/钩子/提示词/技能）/ `open`（除核心保护项外全部）/ `unrestricted`（全面放开，默认）。核心保护项（鉴权、密钥与加密、SSRF、审计、数据库路径、监听地址端口、不可逆数据操作）**任何档位不可改**，且不经配置中心暴露 | `apps/server/src/config/permission.ts` · `config.service.assertAllowed` | `permission.spec.ts` 6 条 + 回归「strict 拒绝写入并留拒绝审计」 |
+| 3 | **角色唯一事实源**：`config_role`（is_default=1）是对话角色；设置页「角色与技能」保存时同步写角色库；ChatService 的 `personaConfig()` 优先读角色库，旧 `app_setting.system_prompt` 仅兼容回退 | `apps/server/src/settings/settings.service.ts getPersona/savePersona` · `apps/server/src/chat/chat.service.ts personaConfig` | 实测更新默认角色提示词后模型按新角色回答（ZETA-9 标记法） |
+| 4 | **约束/钩子注入单一实现**：`packages/ai/src/prompt-augmentation.ts` 的 `loadPromptAugmentation(scope)` 是唯一注入点，在 `AiTransportService` 的 complete / completeStructured / completeStream / 非流式工具回退四处 system 层统一追加；scope 由 caller 归类（chat/chatSessionSummary/judgmentIntent → chat，其余 → pipeline） | `packages/ai/src/prompt-augmentation.ts` · `packages/ai/src/ai-transport.service.ts withConfigAugmentation` | `prompt-augmentation.spec.ts` 6 条；实测开启约束后 prompt_tokens 2187 vs 关闭 2021 |
+| 5 | **钩子真实执行**：`chat:before` 的 block 钩子在 ChatService.stream 前置拦截（SSE error 事件）；`chat:after` / `pipeline:after` 在完成回调触发 webhook（`checkOutboundUrl` SSRF 守卫 + 5s 超时）；`pipeline:before` 在 PipelineService.create 前置拦截；每次执行与拒绝都落 `config_audit` | `apps/server/src/chat/chat.service.ts stream` · `apps/server/src/chat/chat.controller.ts onComplete` · `apps/server/src/pipeline/pipeline.service.ts create/invokeGraph` | `config-center.spec.ts` 钩子用例；实测关键词命中返回「禁止导出密钥（安全策略）」、普通问题正常放行 |
+| 6 | **技能开关真实生效**：`AgentToolBridge.enabledSkillKeys()` 读 `app_setting.skills`，按前缀裁剪工具（literature/references→文献检索、knowledge→知识库问答、writing/outline/chat.answer→写作辅助）；`config.*` 工具不受技能开关影响（否则关掉技能就无法在对话里改回来）；无项目上下文时不暴露必填 `projectId` 的工具 | `apps/server/src/agent/agent-tool-bridge.ts` | `agent-skill-gating.spec.ts` 4 条 |
+| 7 | **无项目也能配置**：ChatService 的 `useTools` 不再要求 projectId，配置类工具在任意对话可用；对话工具步数上限 12、单轮工具调用上限 24（一次对话完成多项配置） | `apps/server/src/chat/chat.service.ts` | 实测一次对话完成 4 项配置（角色+约束+钩子+预览，工具调用 4 次） |
+| 8 | **审计只追加**：`config_audit` 记录 actor（ui/cli/chat）、类别、动作、allowed、reason；被拒操作必须留痕；任何档位不得删除或改写审计 | `config-center.service.ts audit/listAudit` | 回归「strict 拒绝配置写入」「拒绝操作写入审计」 |
+| 9 | **预设离线可用**：内置 4 套（学术严谨/高效产出/审稿人视角/数据处理型），应用幂等（只替换 `source=preset` 的约束与 `[预设]` 前缀钩子）；外部来源用「粘贴导入」承接，不依赖外网 | `apps/server/src/config/config-presets.ts` | 回归「预设重复应用不叠加」 |
+
+**运行时巡检**：`node scripts/monitor_config_center.mjs --base <url> --log <log>` 只读检查 14 项（服务健康/配置完整/注入预览/工具暴露/对话真实返回+usage/日志无 error），退出码非 0 即有异常，供监控 AI/CI 使用。
+
 ## §2.9 模块化布局（M3，2026-10-18）
 
 **分层定案**：`packages/` = 核心能力层，`apps/server/src` = 接口层（controller/module/websearch/settings 等）。

@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![version](https://img.shields.io/badge/version-1.2.0-black.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.3.0-black.svg)](CHANGELOG.md)
 
 > **🌐 语言 / Language：[中文](README.md) · [English](README.en.md)**
 
@@ -40,6 +40,7 @@ flowchart LR
 
 ## 🗞 最近更新
 
+- **2026-10-26 · v1.3.0**：配置中心（角色/约束工程/钩子/权限矩阵/审计）三入口同源——设置页、`sciflow config` CLI、对话工具 `config.*` 均可配置且立即生效；全面放开权限档 + 核心保护项锁定；内置 4 套预设；运行时巡检脚本。
 - **2026-10-26 · v1.2.0**：设置页自定义连接升级——三协议（OpenAI 兼容 / Anthropic / Gemini）、填地址+Key 自动检测模型并匹配上下文/输出/工具调用能力、表单内连接测试；真实 UniSound u2-flash 浏览器端到端验证。
 - **2026-10-24 · v1.0.0**：研究深度参数（depth 1-3 多轮递归检索）、反共识大纲变体（F2 反同质化）、实验设计助手（F3）、步骤耗时甘特图、CLI headless 全流程 `sciflow run`、MCP resources、深度健康探针。
 - **2026-10-23 · v0.11.0**：品牌「墨流」新标识；科研问答并入工作台（唯一对话入口，本地多会话 + slash 指令 + 追问建议）。

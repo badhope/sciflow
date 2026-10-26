@@ -737,3 +737,35 @@ export interface WebSearchConfig {
   chatFallback?: boolean;
   available?: { duckduckgo: boolean; searxng: boolean; tavily: boolean; serper: boolean; brave: boolean };
 }
+
+/** 配置中心：权限档 */
+export type PermissionMode = 'strict' | 'balanced' | 'open' | 'unrestricted';
+export interface PermissionModeInfo { value: PermissionMode; label: string; description: string }
+export interface CoreProtectedItem { key: string; label: string; reason: string }
+export interface PermissionInfo { mode: PermissionMode; modes: PermissionModeInfo[]; coreProtected: CoreProtectedItem[] }
+
+export interface ConfigRole {
+  id: string; name: string; systemPrompt: string; isDefault: number; enabled: number; createdAt: number; updatedAt: number;
+}
+export interface ConfigConstraint {
+  id: string; title: string; rule: string; level: 'must' | 'must_not' | 'should'; scope: 'all' | 'chat' | 'pipeline';
+  enabled: number; sortOrder: number; source: string; createdAt: number; updatedAt: number;
+}
+export interface ConfigHook {
+  id: string; name: string; event: 'chat:before' | 'chat:after' | 'pipeline:before' | 'pipeline:after';
+  type: 'prompt_inject' | 'block' | 'webhook'; config: string; enabled: number; priority: number; createdAt: number; updatedAt: number;
+}
+export interface ConfigAuditEntry {
+  id: string; actor: string; category: string; action: string; target: string; detail: string; allowed: number; reason: string; createdAt: number;
+}
+export interface ConfigPresetSummary { id: string; name: string; description: string; constraints: number; hooks: number }
+export interface ConfigSnapshot {
+  permission: PermissionInfo;
+  roles: ConfigRole[];
+  constraints: ConfigConstraint[];
+  hooks: ConfigHook[];
+  presets: ConfigPresetSummary[];
+  audit: ConfigAuditEntry[];
+  defaults: number;
+}
+export interface ConfigPreview { scope: 'chat' | 'pipeline'; text: string; role: ConfigRole | null }

@@ -10,6 +10,7 @@ import { AiService } from '../ai/ai.service';
 import { ReferencesService } from '../references/references.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { APP_VERSION } from '../common/version';
+import { ConfigCenterService } from '../config/config-center.service';
 
 /** MCP 工具定义（符合 Model Context Protocol 2026 的 Tool 结构：name/description/inputSchema） */
 interface McpTool {
@@ -52,6 +53,7 @@ export class McpService {
     private readonly ai: AiService,
     private readonly references: ReferencesService,
     private readonly knowledge: KnowledgeService,
+    private readonly config: ConfigCenterService,
   ) {
     this.tools = [
       {
@@ -204,6 +206,106 @@ export class McpService {
         },
         handler: async (args) =>
           this.ai.evidenceSynthesis(String(args.question), String(args.papers || '')),
+      },
+      {
+        name: 'config.snapshot',
+        description: '读取配置中心全量状态：角色/约束/钩子/权限档/预设/审计（对话里先读再改）',
+        inputSchema: { type: 'object', properties: {} },
+        handler: async () => this.config.snapshot(),
+      },
+      {
+        name: 'config.set_permission',
+        description: '切换配置权限档：strict（只读）/ balanced（角色约束钩子提示词技能）/ open（除核心保护项外全部）/ unrestricted（全面放开，默认）。核心保护项任何档位都不可改',
+        inputSchema: {
+          type: 'object',
+          properties: { mode: { type: 'string', enum: ['strict', 'balanced', 'open', 'unrestricted'] } },
+          required: ['mode'],
+        },
+        handler: async (args) => this.config.setPermissionMode(String(args.mode), 'chat'),
+      },
+      {
+        name: 'config.upsert_role',
+        description: '新增或更新角色（系统提示词）。传 roleId 为更新，不传为新增；isDefault=true 表示设为默认角色（对话立即使用）',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            roleId: { type: 'string' },
+            name: { type: 'string' },
+            systemPrompt: { type: 'string' },
+            isDefault: { type: 'boolean' },
+          },
+          required: ['name'],
+        },
+        handler: async (args) => {
+          if (args.roleId) return this.config.updateRole(String(args.roleId), { name: String(args.name), systemPrompt: args.systemPrompt === undefined ? undefined : String(args.systemPrompt), isDefault: args.isDefault === true }, 'chat');
+          return this.config.createRole({ name: String(args.name), systemPrompt: args.systemPrompt === undefined ? undefined : String(args.systemPrompt), isDefault: args.isDefault === true }, 'chat');
+        },
+      },
+      {
+        name: 'config.upsert_constraint',
+        description: '新增或更新一条约束（注入所有 chat/流水线 LLM 调用的 system 层）。level=must|must_not|should，scope=all|chat|pipeline',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            constraintId: { type: 'string' },
+            title: { type: 'string' },
+            rule: { type: 'string' },
+            level: { type: 'string', enum: ['must', 'must_not', 'should'] },
+            scope: { type: 'string', enum: ['all', 'chat', 'pipeline'] },
+            enabled: { type: 'boolean' },
+          },
+          required: ['title', 'rule'],
+        },
+        handler: async (args) => {
+          const body = {
+            title: String(args.title),
+            rule: String(args.rule),
+            level: args.level === undefined ? undefined : String(args.level),
+            scope: args.scope === undefined ? undefined : String(args.scope),
+            enabled: args.enabled === undefined ? undefined : (args.enabled ? 1 : 0),
+          };
+          if (args.constraintId) return this.config.updateConstraint(String(args.constraintId), body, 'chat');
+          return this.config.createConstraint(body, 'chat');
+        },
+      },
+      {
+        name: 'config.delete_constraint',
+        description: '删除一条约束（按 constraintId）',
+        inputSchema: { type: 'object', properties: { constraintId: { type: 'string' } }, required: ['constraintId'] },
+        handler: async (args) => this.config.deleteConstraint(String(args.constraintId), 'chat'),
+      },
+      {
+        name: 'config.upsert_hook',
+        description: '新增或更新钩子。event=chat:before|chat:after|pipeline:before|pipeline:after；type=prompt_inject（注入系统提示，config={text}）|block（拦截，config={when:"keyword",keywords:[],reason}）|webhook（config={url}，经 SSRF 守卫）',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            hookId: { type: 'string' },
+            name: { type: 'string' },
+            event: { type: 'string', enum: ['chat:before', 'chat:after', 'pipeline:before', 'pipeline:after'] },
+            type: { type: 'string', enum: ['prompt_inject', 'block', 'webhook'] },
+            config: { type: 'object' },
+            enabled: { type: 'boolean' },
+          },
+          required: ['name', 'event', 'type'],
+        },
+        handler: async (args) => {
+          const body = { name: String(args.name), event: String(args.event), type: String(args.type), config: args.config, enabled: args.enabled === undefined ? undefined : (args.enabled ? 1 : 0) };
+          if (args.hookId) return this.config.updateHook(String(args.hookId), body, 'chat');
+          return this.config.createHook(body, 'chat');
+        },
+      },
+      {
+        name: 'config.apply_preset',
+        description: '一键应用内置预设：academic-rigor（学术严谨）/ fast-output（高效产出）/ reviewer-strict（审稿人视角）/ data-careful（数据处理）',
+        inputSchema: { type: 'object', properties: { presetId: { type: 'string' } }, required: ['presetId'] },
+        handler: async (args) => this.config.applyPreset(String(args.presetId), 'chat'),
+      },
+      {
+        name: 'config.preview',
+        description: '预览当前配置在 chat 或 pipeline 中实际注入的约束文本与默认角色（用于确认生效）',
+        inputSchema: { type: 'object', properties: { scope: { type: 'string', enum: ['chat', 'pipeline'] } }, required: ['scope'] },
+        handler: async (args) => this.config.preview(args.scope === 'pipeline' ? 'pipeline' : 'chat'),
       },
       {
         name: 'chat.answer',

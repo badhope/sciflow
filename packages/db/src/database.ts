@@ -205,6 +205,54 @@ CREATE TABLE IF NOT EXISTS mcp_server (
   created_at INTEGER NOT NULL
 );
 
+
+-- 配置中心（v1.3）：角色库 / 约束工程 / 钩子 / 审计
+CREATE TABLE IF NOT EXISTS config_role (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  system_prompt TEXT DEFAULT '',
+  is_default INTEGER DEFAULT 0,
+  enabled INTEGER DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS config_constraint (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  rule TEXT NOT NULL,
+  level TEXT DEFAULT 'must',
+  scope TEXT DEFAULT 'all',
+  enabled INTEGER DEFAULT 1,
+  sort_order INTEGER DEFAULT 0,
+  source TEXT DEFAULT 'user',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS config_hook (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  event TEXT NOT NULL,
+  type TEXT NOT NULL,
+  config TEXT DEFAULT '{}',
+  enabled INTEGER DEFAULT 1,
+  priority INTEGER DEFAULT 100,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS config_audit (
+  id TEXT PRIMARY KEY,
+  actor TEXT DEFAULT 'ui',
+  category TEXT DEFAULT '',
+  action TEXT NOT NULL,
+  target TEXT DEFAULT '',
+  detail TEXT DEFAULT '',
+  allowed INTEGER DEFAULT 1,
+  reason TEXT DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_config_audit_created ON config_audit(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_config_constraint_scope ON config_constraint(scope, enabled);
+
 CREATE TABLE IF NOT EXISTS custom_intent (
   id TEXT PRIMARY KEY,
   key TEXT NOT NULL UNIQUE,

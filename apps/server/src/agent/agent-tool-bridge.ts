@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { envInt } from '../../../../packages/core/src/env';
 
 /**
- * Agent 工具桥：把 SciFlow 的 11 个 MCP 工具暴露给模型，形成真正的 tool-calling 链路。
+ * Agent 工具桥：把 SciFlow 的 MCP 工具（科研能力 + 配置中心）暴露给模型，形成真正的 tool-calling 链路。
  *
  * 设计要点：
  *  - 工具定义单一来源：复用 McpService.tools（REST / MCP 协议 / Agent 三条入口同一份实现）。
@@ -27,7 +27,7 @@ export interface AgentToolCallRecord {
   error?: string;
 }
 
-const MAX_TOOL_CALLS = envInt('AGENT_MAX_TOOL_CALLS', 8, { min: 1, max: 50 });
+const MAX_TOOL_CALLS = envInt('AGENT_MAX_TOOL_CALLS', 24, { min: 1, max: 100 });
 const TOOL_TIMEOUT_MS = envInt('AGENT_TOOL_TIMEOUT_MS', 20_000, { min: 1_000, max: 300_000 });
 
 @Injectable()
@@ -38,6 +38,29 @@ export class AgentToolBridge {
     private readonly mcp: McpService,
     private readonly trace?: AgentTraceService,
   ) {}
+
+  /** 技能→工具前缀映射：设置页停用某技能后，对应工具不再暴露给模型（技能真实生效，非仅展示） */
+  private enabledSkillKeys(): Set<string> | null {
+    try {
+      const row = db.select().from(appSettings).where(eq(appSettings.key, 'skills')).get();
+      if (!row?.value) return null; // 未配置 = 内置技能全启用
+      const skills = JSON.parse(row.value) as { key?: string; enabled?: number }[];
+      if (!Array.isArray(skills) || skills.length === 0) return null;
+      return new Set(skills.filter((s) => s.enabled !== 0 && s.key).map((s) => String(s.key)));
+    } catch {
+      return null;
+    }
+  }
+
+  /** 工具是否被技能开关允许：未配置技能时全部放行；配置后按映射裁剪 */
+  private allowedBySkills(toolName: string, enabled: Set<string> | null): boolean {
+    if (!enabled) return true;
+    if (toolName.startsWith('config.')) return true; // 配置工具不受科研技能开关影响
+    if (toolName.startsWith('literature.') || toolName.startsWith('references.')) return enabled.has('literature_search');
+    if (toolName.startsWith('knowledge.')) return enabled.has('knowledge_qa');
+    if (toolName.startsWith('writing.') || toolName.startsWith('outline.') || toolName === 'chat.answer') return enabled.has('writing_assist');
+    return true;
+  }
 
   /** 本轮对话是否启用工具（app_setting agent_tools=on，默认开启） */
   isEnabled(): boolean {
@@ -60,15 +83,20 @@ export class AgentToolBridge {
    */
   buildToolSet(projectId?: string, runId?: string): ToolSet {
     const allow = new Set(
-      (process.env.AGENT_TOOLS_ALLOW || 'literature.search,literature.summarize,knowledge.query,outline.generate,writing.polish,writing.translate,writing.review,references.extract,references.evidence,chat.answer')
+      (process.env.AGENT_TOOLS_ALLOW || 'literature.search,literature.summarize,knowledge.query,outline.generate,writing.polish,writing.translate,writing.review,references.extract,references.evidence,chat.answer,config.snapshot,config.set_permission,config.upsert_role,config.upsert_constraint,config.delete_constraint,config.upsert_hook,config.apply_preset,config.preview')
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean),
     );
     let callCount = 0;
     const set: ToolSet = {};
+    const skills = this.enabledSkillKeys();
     for (const t of this.mcp.list()) {
       if (!allow.has(t.name)) continue;
+      if (!this.allowedBySkills(t.name, skills)) continue;
+      // 无项目上下文时不暴露「必须带 projectId」的工具：避免模型编造 projectId 跨项目取数
+      const required = Array.isArray(t.inputSchema?.required) ? (t.inputSchema.required as string[]) : [];
+      if (!projectId && required.includes('projectId')) continue;
       // 工具名不能含点号（部分 provider 拒绝），统一转下划线
       const safeName = t.name.replace(/\./g, '_');
       set[safeName] = aiTool({

@@ -167,7 +167,10 @@ await c.close();
 code, out = run("node verify-mcp.tmp.mjs", env={"ACC_BASE": BASE}, cwd=str(ROOT / "apps" / "server"))
 verify_path.unlink(missing_ok=True)
 last = out.strip().splitlines()[-1][:60] if out.strip() else "(no output)"
-record("E1 MCP 握手+调用(HTTP)", code == 0 and "OK 11 true" in out, last)
+# 工具总数随能力扩展增长（v1.3 起含 8 个 config.* 工具）：断言握手成功 + 工具数 ≥11 + 内容数组
+import re as _re
+m_e1 = _re.search(r"OK (\d+) true", out)
+record("E1 MCP 握手+调用(HTTP)", code == 0 and bool(m_e1) and int(m_e1.group(1)) >= 11, last)
 
 # ---------- F. CLI ----------
 print("\n[F] CLI（commander）")

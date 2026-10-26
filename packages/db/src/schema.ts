@@ -228,6 +228,63 @@ export const customPrompts = sqliteTable('custom_prompt', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+
+/** 配置中心·角色库（默认角色用于对话 system prompt；空提示词=使用内置默认角色） */
+export const configRoles = sqliteTable('config_role', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  systemPrompt: text('system_prompt').default(''),
+  isDefault: integer('is_default').default(0),
+  enabled: integer('enabled').default(1),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+/** 配置中心·约束工程（每条约束注入所有或指定范围的 LLM 调用 system prompt） */
+export const configConstraints = sqliteTable('config_constraint', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  rule: text('rule').notNull(),
+  level: text('level').default('must'), // must | must_not | should
+  scope: text('scope').default('all'), // all | chat | pipeline
+  enabled: integer('enabled').default(1),
+  sortOrder: integer('sort_order').default(0),
+  source: text('source').default('user'), // user | preset | seed
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+/** 配置中心·钩子（生命周期事件：prompt_inject / block / webhook，真实执行并留痕） */
+export const configHooks = sqliteTable('config_hook', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  event: text('event').notNull(), // chat:before | chat:after | pipeline:before | pipeline:after
+  type: text('type').notNull(), // prompt_inject | block | webhook
+  config: text('config').default('{}'),
+  enabled: integer('enabled').default(1),
+  priority: integer('priority').default(100),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+/** 配置中心·审计（所有配置变更与钩子执行，含被拒原因） */
+export const configAudit = sqliteTable('config_audit', {
+  id: text('id').primaryKey(),
+  actor: text('actor').default('ui'),
+  category: text('category').default(''),
+  action: text('action').notNull(),
+  target: text('target').default(''),
+  detail: text('detail').default(''),
+  allowed: integer('allowed').default(1),
+  reason: text('reason').default(''),
+  createdAt: integer('created_at').notNull(),
+});
+
+export type ConfigRole = typeof configRoles.$inferSelect;
+export type ConfigConstraint = typeof configConstraints.$inferSelect;
+export type ConfigHook = typeof configHooks.$inferSelect;
+export type ConfigAuditEntry = typeof configAudit.$inferSelect;
+
 export const llmCallLogs = sqliteTable('llm_call_log', {
   id: text('id').primaryKey(),
   caller: text('caller').default('general'), // 调用方标识（pipeline/chat/orchestrator 等）

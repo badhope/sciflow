@@ -6,6 +6,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { fetchModelCatalog, normalizeProtocol, type ModelProtocol } from './model-catalog';
+import { loadPromptAugmentation } from './prompt-augmentation';
 import { generateText, generateObject, streamText, stepCountIs, jsonSchema as aiJsonSchema, type ModelMessage, type LanguageModelUsage } from 'ai';
 import type { LanguageModel, ToolSet } from 'ai';
 import { decryptSecret } from '../../db/src/secret-crypto';
@@ -206,6 +207,26 @@ export class AiTransportService {
     }
   }
 
+  /**
+   * 把配置中心的约束/钩子注入到 system 层（单一注入点，chat 与流水线都经过这里）。
+   * - scope 按 caller 归类：chat / chatSessionSummary / judgmentIntent → chat，其余 → pipeline
+   * - 无配置时零开销（返回原数组）
+   */
+  protected withConfigAugmentation(messages: ChatMessage[], caller: string): ChatMessage[] {
+    const scope = ['chat', 'chatSessionSummary', 'judgmentIntent'].includes(caller) ? 'chat' : 'pipeline';
+    const augmentation = loadPromptAugmentation(scope);
+    if (!augmentation) return messages;
+    const firstSystem = messages.findIndex((m) => m.role === 'system');
+    if (firstSystem >= 0) {
+      const next = messages.slice();
+      next[firstSystem] = { ...next[firstSystem], content: `${next[firstSystem].content}
+
+${augmentation}` };
+      return next;
+    }
+    return [{ role: 'system', content: augmentation }, ...messages];
+  }
+
   /** 最近一次调用的总 token 数（流水线预算器打点用；每次调用覆盖） */
   lastTotalTokens = 0;
 
@@ -361,7 +382,7 @@ export class AiTransportService {
     return this.limit(async () =>
       pRetry(
         async () => {
-          const { instructions, rest } = this.splitSystemMessages(messages);
+          const { instructions, rest } = this.splitSystemMessages(this.withConfigAugmentation(messages, caller));
           const callArgs = {
             model: this.buildModel(model),
             temperature: opts.temperature ?? 0.7,
@@ -430,7 +451,7 @@ export class AiTransportService {
     return this.limit(async () =>
       pRetry(
         async () => {
-          const { instructions, rest } = this.splitSystemMessages(messages);
+          const { instructions, rest } = this.splitSystemMessages(this.withConfigAugmentation(messages, caller));
           const { object, usage } = await generateObject({
             model: this.buildModel(model),
             temperature: opts.temperature ?? 0.3,
@@ -525,7 +546,7 @@ export class AiTransportService {
     t0: number,
     selfLog: AiTransportService['logLlmCall'],
   ): Promise<ReadableStream<Uint8Array> | null> {
-    const { instructions, rest } = this.splitSystemMessages(messages);
+    const { instructions, rest } = this.splitSystemMessages(this.withConfigAugmentation(messages, caller));
     const encoder = new TextEncoder();
     const useFallback = process.env.AI_TOOLS_NONSTREAM !== 'off';
     if (!useFallback) return null;
@@ -587,7 +608,7 @@ export class AiTransportService {
     selfLog: AiTransportService['logLlmCall'],
   ): Promise<ReadableStream<Uint8Array>> {
     return this.limit(async () => {
-      const { instructions, rest } = this.splitSystemMessages(messages);
+      const { instructions, rest } = this.splitSystemMessages(this.withConfigAugmentation(messages, caller));
       // 流式用「空闲看门狗」而不是总时长：正常长文流可以跑几分钟，
       // 但上游一旦停止出包（挂起/半死连接）必须及时中止，否则流水线永久卡 running。
       const idle = new AbortController();

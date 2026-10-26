@@ -340,12 +340,14 @@ export class SettingsService {
     { key: 'web_research', name: '联网检索', description: '检索公开网页作为背景参考，注意甄别时效与权威性' },
   ];
 
-  /** 读取角色与技能配置（未配置时返回默认角色与内置技能全启用） */
+  /** 读取角色与技能配置：角色库默认角色优先，app_setting 兼容旧版；技能始终读 app_setting */
   getPersona() {
     const read = (key: string): string => {
       const row = sqlite.prepare('SELECT value FROM app_setting WHERE key = ?').get(key) as { value?: string } | undefined;
       return row?.value ?? '';
     };
+    // 角色库（配置中心）是角色的唯一事实源：设置页「角色与技能」与配置中心显示同一份
+    const roleRow = sqlite.prepare('SELECT name, system_prompt AS systemPrompt FROM config_role WHERE is_default = 1 AND enabled != 0 LIMIT 1').get() as { name?: string; systemPrompt?: string } | undefined;
     let skills: { id: string; key: string; name: string; description: string; enabled: number; builtin: number }[] = [];
     try {
       skills = JSON.parse(read('skills') || '[]');
@@ -358,8 +360,8 @@ export class SettingsService {
       skills = SettingsService.BUILTIN_SKILLS.map((s) => ({ id: `builtin-${s.key}`, ...s, enabled: 1, builtin: 1 }));
     }
     return {
-      name: read('persona_name'),
-      systemPrompt: read('system_prompt'),
+      name: roleRow?.name ?? read('persona_name'),
+      systemPrompt: roleRow ? String(roleRow.systemPrompt ?? '') : read('system_prompt'),
       defaultSystemPrompt: read('system_prompt_default') || '',
       skills,
     };
@@ -373,7 +375,19 @@ export class SettingsService {
       else sqlite.prepare('INSERT INTO app_setting (key, value) VALUES (?,?)').run(key, value);
     };
     if (body.name !== undefined) upsert('persona_name', body.name.trim());
-    if (body.systemPrompt !== undefined) upsert('system_prompt', body.systemPrompt.trim());
+    if (body.systemPrompt !== undefined) {
+      upsert('system_prompt', body.systemPrompt.trim());
+      // 同步写角色库默认角色：保证配置中心 / CLI / 对话看到的是同一份角色
+      const roleName = body.name?.trim() || '默认角色';
+      const existing = sqlite.prepare('SELECT id FROM config_role WHERE is_default = 1 LIMIT 1').get() as { id?: string } | undefined;
+      if (existing?.id) {
+        sqlite.prepare('UPDATE config_role SET name = ?, system_prompt = ?, updated_at = ? WHERE id = ?')
+          .run(roleName, body.systemPrompt.trim(), Date.now(), existing.id);
+      } else {
+        sqlite.prepare('INSERT INTO config_role (id, name, system_prompt, is_default, enabled, created_at, updated_at) VALUES (?,?,?,1,1,?,?)')
+          .run(randomUUID(), roleName, body.systemPrompt.trim(), Date.now(), Date.now());
+      }
+    }
     if (Array.isArray(body.skills)) upsert('skills', JSON.stringify(body.skills.map((s) => ({
       id: s.id || randomUUID(),
       key: s.key,

@@ -5,11 +5,12 @@ import { ReferencesModule } from '../references/references.module';
 import { KnowledgeModule } from '../knowledge/knowledge.module';
 import { WebSearchModule } from '../websearch/websearch.module';
 import { AgentTraceModule } from '../agent/agent-trace.module';
+import { ConfigModule } from '../config/config.module';
 import { PipelineService } from './pipeline.service';
 import { PipelineController } from './pipeline.controller';
 
 @Module({
-  imports: [AiModule, ReferencesModule, KnowledgeModule, AgentTraceModule, WebSearchModule],
+  imports: [AiModule, ReferencesModule, KnowledgeModule, AgentTraceModule, WebSearchModule, ConfigModule],
   controllers: [PipelineController],
   providers: [PipelineService],
   exports: [PipelineService],

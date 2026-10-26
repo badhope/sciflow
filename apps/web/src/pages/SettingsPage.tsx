@@ -12,6 +12,7 @@ import { WebSearchSettings } from './settings/WebSearchSettings';
 import { UsageStats } from './settings/UsageStats';
 import { McpToolList } from './settings/McpToolList';
 import { PersonaSettings } from './settings/PersonaSettings';
+import { ConfigCenterSettings } from './settings/ConfigCenterSettings';
 
 const ModelIcon = ({ ok }: { ok?: boolean }) =>
   ok === undefined ? null : ok ? <CheckCircle2 size={16} className="text-emerald-500" /> : <XCircle size={16} className="text-rose-500" />;
@@ -320,6 +321,7 @@ function SettingsLayout() {
     { id: 'settings-web', label: '联网搜索' },
     { id: 'settings-check', label: '环境自检' },
     { id: 'settings-mcp', label: 'MCP 工具' },
+    { id: 'settings-config', label: '配置中心' },
     { id: 'settings-custom', label: '自定义' },
   ], []);
   const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -404,6 +406,9 @@ function SettingsLayout() {
           </div>
         )}
       </Card>
+
+      {/* 配置中心：角色库 / 约束工程 / 钩子 / 权限 / 预设 / 审计 */}
+      <ConfigCenterSettings />
 
       {/* 角色与技能（persona + skills） */}
       <PersonaSettings />

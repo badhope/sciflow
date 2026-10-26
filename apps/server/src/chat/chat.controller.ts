@@ -4,6 +4,7 @@ import type { Response, Request } from 'express';
 import { ChatService } from './chat.service';
 import { ChatMessage } from '../ai/ai.service';
 import { forwardOpenAiSse } from '../common/sse.helper';
+import { ConfigCenterService } from '../config/config-center.service';
 
 export class ChatRequestBody {
   @ApiProperty({ description: '本轮用户提问', example: '图神经网络的消息传递机制是什么？' })
@@ -41,7 +42,10 @@ export class ChatRequestBody {
  */
 @Controller('chat')
 export class ChatController {
-  constructor(private readonly chat: ChatService) {}
+  constructor(
+    private readonly chat: ChatService,
+    private readonly config: ConfigCenterService,
+  ) {}
 
   @Post()
   async answer(@Body() body: ChatRequestBody) {
@@ -88,6 +92,8 @@ export class ChatController {
             const msgs: ChatMessage[] = [...historyMsgs, { role: 'assistant', content: fullText }];
             this.chat.recordSessionSummary(body.projectId, msgs, tokens);
           }
+          // chat:after 钩子（webhook 类；prompt_inject 类已在 system 层生效）
+          if (fullText) void this.config.runEventHooks('chat:after', { text: body.message, answer: fullText.slice(0, 2000), projectId: body.projectId, tokens }, 'chat');
         },
       });
       if (result.error && !closed) {

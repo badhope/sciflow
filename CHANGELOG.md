@@ -2,6 +2,35 @@
 
 本项目格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，语义化版本号。以下按 `git log` 自底向上归纳历轮功能与修复，未含真实密钥。
 
+## [1.3.0] - 2026-10-26
+
+配置中心批次：角色 / 约束工程 / 钩子 / 权限矩阵 / 审计统一到一个服务，Web 设置页、CLI、对话工具三条入口共享同一数据源，任一入口写入其余入口立即可见并真实生效。
+
+### Added
+- **配置中心（`/api/config`）**：角色库（默认角色即对话角色，可切换/删除非默认）、约束工程（level=must/must_not/should，scope=all/chat/pipeline，按 sortOrder 注入）、钩子（`chat:before|chat:after|pipeline:before|pipeline:after` × `prompt_inject|block|webhook`）、权限档、审计、预设、生效预览。
+- **权限矩阵**：`strict`（只读）/`balanced`（角色/约束/钩子/提示词/技能）/`open`/`unrestricted`（全面放开，默认档）。核心保护项（鉴权、密钥与加密、SSRF、审计、数据库路径、监听地址端口、不可逆操作）任何档位不可改，UI 明示原因。
+- **对话内完成配置**：新增 8 个 MCP 工具 `config.snapshot / set_permission / upsert_role / upsert_constraint / delete_constraint / upsert_hook / apply_preset / preview`，模型可在同一轮对话里连续调用完成多项设置（步数上限 12、单轮 24 次），完成后前端显示「工具调用 · N 次」折叠卡并汇总结果。
+- **CLI 对等入口**：`sciflow config status|permission|role|constraint|hook|preset|preview|audit`，与 Web/对话同一服务；写操作带 `X-Sciflow-Actor: cli` 审计来源。
+- **技能开关真实生效**：停用「文献检索 / 知识库问答 / 写作辅助」会同步裁掉对应 MCP 工具；配置工具不受影响。
+- **内置预设 4 套**（离线）：学术严谨型、高效产出型、审稿人视角、数据处理型；应用幂等。
+- **运行时巡检脚本** `scripts/monitor_config_center.mjs`：14 项只读检查（含对话真实返回与 usage、日志无 error），供监控 / CI 使用。
+- 设置页新增「配置中心」分区：权限档、一键预设、角色、约束（带注入预览）、钩子、审计。
+
+### Changed
+- **角色唯一事实源**：`config_role` 取代 `app_setting.system_prompt` 作为角色来源；设置页「角色与技能」保存时同步写角色库，旧数据保留兼容回退。
+- **约束/钩子注入点收敛**：`packages/ai/src/prompt-augmentation.ts` 为唯一实现，`AiTransportService` 四个 LLM 入口统一追加 system 层；设置页预览与真实调用同源。
+- **无项目也能用工具**：ChatService 不再要求 projectId 才注入工具集；无项目时自动隐藏必填 projectId 的科研工具，保留配置工具。
+- **CLI 退出**：命令失败改用 `process.exitCode`（Windows 下 `process.exit` 触发 libuv 断言）。
+
+### Fixed
+- **设置页角色与配置中心不同步**：此前两套存储各自为政，页面显示与模型实际收到的不一致；现已统一。
+- **配置类对话工具在无项目时不可用**：此前 `useTools` 依赖 projectId，导致空库用户无法通过对话完成设置。
+
+### Tests
+- 新增 `apps/server/src/config/permission.spec.ts`（6）、`config-center.spec.ts`（11）、`agent/agent-skill-gating.spec.ts`（4）、`packages/ai/src/prompt-augmentation.spec.ts`（6）。
+- 回归脚本新增配置中心 16 条断言（快照/约束增删停用与注入/钩子增删与拦截/权限拒绝与审计/预设幂等）。
+- 门禁：server 188+ / web 81 / lint 0 error / typecheck ×2 / build ×2。
+
 ## [1.2.0] - 2026-10-26
 
 模型接入体验批次：设置页从「手填模型名」升级为「填地址和 Key → 自动检测模型 → 自动匹配能力 → 连接测试」，并在真实浏览器里用 UniSound u2-flash 端到端验证。

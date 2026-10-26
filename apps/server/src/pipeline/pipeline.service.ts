@@ -16,6 +16,7 @@ import { reflexionLogs } from '../db/schema';
 import { buildPipelineGraph, type PipelineGraphDeps, type StepStatusWire } from './pipeline.graph';
 import type { Outline, PipelineTaskRow, ResearchPlan } from './pipeline-state';
 import { WebSearchService } from '../websearch/websearch.service';
+import { ConfigCenterService } from '../config/config-center.service';
 import { buildWebHits, isWebSearchEnabled } from './pipeline-websearch';
 import { normalizeKnScore } from './pipeline-metrics';
 import { envInt } from '../../../../packages/core/src/env';
@@ -84,6 +85,7 @@ export class PipelineService implements OnModuleInit {
     private readonly knowledge: KnowledgeService,
     private readonly trace: AgentTraceService,
     private readonly websearch: WebSearchService,
+    private readonly config: ConfigCenterService,
   ) {}
 
   onModuleInit() {
@@ -188,7 +190,7 @@ export class PipelineService implements OnModuleInit {
     }
   }
 
-  create(projectId: string, topic: string) {
+  async create(projectId: string, topic: string) {
     if (!projectId?.trim()) throw new BadRequestException('projectId 必填');
     if (!topic?.trim()) throw new BadRequestException('请先输入研究主题');
     const project = db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId.trim())).get();
@@ -205,6 +207,9 @@ export class PipelineService implements OnModuleInit {
     if (running) {
       throw new BadRequestException(`该项目已有流水线在运行中（${running.id.slice(0, 8)}…）。请等待完成、在流水线页停止后再新建，或查看其他项目的任务。`);
     }
+    // pipeline:before 钩子：block 在此拦截（返回 400 可读原因），webhook 异步执行
+    const before = await this.config.runEventHooks('pipeline:before', { topic: topic.trim(), projectId }, 'pipeline');
+    if (before.blocked) throw new BadRequestException(before.blocked);
     const now = Date.now();
     const task = {
       id: randomUUID(), projectId, documentId: null as string | null, topic: topic.trim(),
@@ -348,6 +353,10 @@ export class PipelineService implements OnModuleInit {
       } else {
         this.setStatus(taskId, 'completed', 'complete');
         this.trace.finishRun(runId, { status: 'done', outputSummary: '流水线完成', totalTokens: tokens });
+        try {
+          const t = this.getTaskRow(taskId);
+          void this.config.runEventHooks('pipeline:after', { taskId, projectId: t.projectId, topic: t.topic, documentId: t.documentId, tokens }, 'pipeline');
+        } catch { /* 结束钩子失败不影响终态 */ }
       }
     } catch (e: any) {
       if (this.stoppedTasks.has(taskId)) {
