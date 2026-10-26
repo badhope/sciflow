@@ -115,9 +115,23 @@ if (snap) {
   record('pipeline 注入预览覆盖全部适用约束', missingPipe.length === 0, missingPipe.length ? missingPipe.map((c) => c.title).join(',') : `${pipeScope.length} 条`);
 }
 
+// 扩展中心：内置资产默认启用 + 私有不外泄（监控 AI 可据此发现播种/投影回退）
+const ext = await get('/api/extensions').catch(() => ({ status: 0, json: null }));
+if (ext.status === 200 && ext.json) {
+  const assets = ext.json.assets || [];
+  record('扩展中心资产 ≥80', assets.length >= 80, `${assets.length}`);
+  const builtinDisabled = assets.filter((a) => String(a.source || '').startsWith('builtin') && a.enabled !== 1);
+  record('内置资产默认全启用', builtinDisabled.length === 0, builtinDisabled.length ? `${builtinDisabled.length} disabled` : 'ok');
+  record('含私有优势工具', assets.some((a) => a.visibility === 'private'), 'private present');
+  const exp = await get('/api/extensions/export').catch(() => ({ status: 0, json: null }));
+  const leaked = (exp.json?.assets || []).filter((a) => a.visibility === 'private');
+  record('扩展导出不含私有', exp.status === 200 && leaked.length === 0, `${exp.json?.assets?.length ?? 0} exported`);
+}
+
 const tools = await get('/api/mcp/tools').catch(() => ({ status: 0, json: null }));
 const toolNames = (tools.json?.tools || []).map((t) => t.name);
 record('配置工具已暴露给对话', ['config.snapshot', 'config.upsert_role', 'config.upsert_constraint', 'config.upsert_hook', 'config.preview'].every((n) => toolNames.includes(n)), `${toolNames.length} tools`);
+record('扩展工具已暴露给对话', ['extension.list', 'extension.create', 'extension.toggle', 'extension.generate'].every((n) => toolNames.includes(n)), `${toolNames.length} tools`);
 
 const chat = await chatOnce().catch((e) => ({ ok: false, error: String(e) }));
 record('对话真实返回', chat.ok, `tokens=${chat.usage?.total_tokens ?? 0}${chat.error ? ` error=${chat.error}` : ''}`);
