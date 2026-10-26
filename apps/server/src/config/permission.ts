@@ -93,8 +93,3 @@ export function decidePermission(mode: PermissionMode, category: ConfigCategory)
     category,
   };
 }
-
-/** 核心保护项是否被触碰（供 CLI/UI 展示拦截原因，永远 false） */
-export function isCoreProtected(key: string): boolean {
-  return CORE_PROTECTED.some((c) => c.key === key);
-}

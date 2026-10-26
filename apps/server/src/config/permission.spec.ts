@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CORE_PROTECTED, decidePermission, isCoreProtected, normalizePermissionMode, parsePermissionMode } from './permission';
+import { CORE_PROTECTED, decidePermission, normalizePermissionMode, parsePermissionMode } from './permission';
 
 /**
  * 权限矩阵行为锁：全面放开 = 除核心保护项外全可改；档位越高放行越多；
@@ -45,10 +45,11 @@ describe('权限矩阵', () => {
     expect(normalizePermissionMode('strict')).toBe('strict');
     expect(parsePermissionMode('whatever')).toBeNull();
     expect(parsePermissionMode(' open ')).toBe('open');
+    const keys = CORE_PROTECTED.map((c) => c.key);
     for (const k of ['auth', 'secrets', 'ssrf', 'audit', 'database', 'network', 'irreversible']) {
-      expect(isCoreProtected(k), k).toBe(true);
+      expect(keys, k).toContain(k);
     }
     expect(CORE_PROTECTED.length).toBeGreaterThanOrEqual(7);
-    expect(isCoreProtected('role')).toBe(false);
+    expect(keys).not.toContain('role');
   });
 });

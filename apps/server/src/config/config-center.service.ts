@@ -9,11 +9,11 @@ import { randomUUID } from 'node:crypto';
 import { sqlite } from '../db/database';
 import { checkOutboundUrl, allowPrivateOutbound } from '../common/outbound-guard';
 import {
-  CORE_PROTECTED, PERMISSION_MODES, PERMISSION_RANK, decidePermission, parsePermissionMode,
+  CORE_PROTECTED, PERMISSION_MODES, PERMISSION_RANK, decidePermission, normalizePermissionMode, parsePermissionMode,
   type ConfigCategory, type PermissionMode, type PermissionDecision,
 } from './permission';
 import { CONFIG_PRESETS, SEED_CONSTRAINTS, SEED_HOOKS, SEED_ROLE, type ConfigPreset } from './config-presets';
-import { loadPromptAugmentation } from '../../../../packages/ai/src/prompt-augmentation';
+import { hookMatchesKeywords, loadPromptAugmentation } from '../../../../packages/ai/src/prompt-augmentation';
 
 export interface RoleRow {
   id: string; name: string; systemPrompt: string; isDefault: number; enabled: number; createdAt: number; updatedAt: number;
@@ -50,11 +50,8 @@ export class ConfigCenterService {
     // 未设置 → 产品默认「全面放开」；读到非法值 → fail-closed 回落 strict 并告警（防脏数据静默提权）
     if (row?.value === undefined) return 'unrestricted';
     const parsed = parsePermissionMode(row.value);
-    if (!parsed) {
-      this.logger.warn(`[config] 非法权限档「${row.value}」已按 strict 处理`);
-      return 'strict';
-    }
-    return parsed;
+    if (!parsed) this.logger.warn(`[config] 非法权限档「${row.value}」已按 strict 处理`);
+    return normalizePermissionMode(row.value);
   }
 
   getPermissionInfo() {
@@ -286,11 +283,8 @@ export class ConfigCenterService {
       try { cfg = JSON.parse(h.config || '{}'); } catch { cfg = {}; }
       try {
         if (h.type === 'block') {
-          const when = String(cfg.when || 'always');
-          const kws = Array.isArray(cfg.keywords) ? (cfg.keywords as unknown[]).map(String).filter(Boolean) : [];
           const text = String(payload.text ?? payload.topic ?? '');
-          const hit = when !== 'keyword' || kws.length === 0 || kws.some((k) => text.toLowerCase().includes(k.toLowerCase()));
-          if (hit) {
+          if (hookMatchesKeywords(text, cfg)) {
             const reason = String(cfg.reason || `已被钩子「${h.name}」拦截`);
             this.audit({ actor, category: 'hook', action: 'block', target: h.id, detail: JSON.stringify({ event, text: text.slice(0, 200) }), allowed: 0, reason });
             return { blocked: reason, fired: fired + 1, errors };
