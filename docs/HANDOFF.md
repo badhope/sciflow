@@ -33,7 +33,8 @@ pnpm build && pnpm start                        # 或 pnpm dev（前后端并行
 | M2 检索与引用 | ✅ | RRF 双路融合（ANN+FTS5）/ citation-audit 引用体检 / 网搜五 provider / LLM 重排开关(默认off) / DOI 核验(Crossref) |
 | M3 模块化 | ✅ | packages/{core,db,ai,retrieval} 物理拆分 + ESLint 依赖红线 + 桶过渡（统一编译模式贯穿） |
 | 运行时修复 | ✅ | 实跑发现 D1–D12（12 个用户可见缺陷）+ 独立审计抓出 A1–A13（本轮引入回归），全部修复复测 → `docs/RUNTIME-FINDINGS.md` |
-| Agent 工具链 | ✅ | `AgentToolBridge`：11 个 MCP 工具可被模型自主调用，带项目作用域/次数上限/超时/轨迹落库；真实模型实测触发 5 次调用 |
+| Agent 工具链 | ✅ | `AgentToolBridge`：19 个 MCP 工具（11 科研能力 + 8 `config.*` 配置）可被模型自主调用，带项目作用域/次数上限（24）/超时/轨迹落库；v1.3 实测单轮 4 次配置工具调用 |
+| 配置中心 | ✅ | 角色/约束/钩子/权限/审计；设置页 + `sciflow config` CLI + 对话工具三入口同源，见 `ARCHITECTURE.md` §2.17 |
 | 可视化 | ✅ | DAG 实时图(回炉回边)/成本仪表盘(byModel+预算卡)/引用体检面板/语义地图(向量 PCA)/引用网络社区着色+搜索定位+抽取热力图 |
 | 前端架构 | ✅ | `AppShell` 布局契约（侧栏/抽屉/断点/滚动收敛一处）、语义化 token、写作页五栏改主区+Tab+抽屉 |
 | 深度调研 | 文档齐 | 幻觉引用闭环(F1)/反同质化(F2)/实验设计(F3) 已论证；B-5.3 arXiv 聚合因合规与离线不可验证**明确不做** |
