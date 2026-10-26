@@ -19,6 +19,7 @@
 - **CLI**：`sciflow ext list|toggle|import|export|reset`。
 - **设置页新增「扩展中心」分区**：分类计数、私有开关、停用/启用/删除/恢复内置/导出；各资产面板（角色/技能/提示词/约束/钩子/MCP）内置「从扩展中心添加」快捷入口。
 - **回归新增 12 条**（快照/六类齐全/默认启用/含私有/模板齐全/导出不含私有/手填新增并注入/停用撤回/删除/SKILL.md 导入/非法格式报错）。
+- **巡检新增 5 项**（资产 ≥80 / 内置全启用 / 含私有 / 导出不含私有 / 扩展工具暴露），巡检总数 19→24。
 
 ### Changed
 - **提示词模板默认不覆盖系统默认**：模板「启用」只代表可用，必须显式点「应用」才写入 `custom_prompt`——自动覆盖会静默改变流水线起草的 [n] 锚点契约（回归实测 citations 回填失败，故收紧）。
@@ -30,7 +31,7 @@
 
 ### Tests
 - 新增 `apps/server/src/extensions/extensions.service.spec.ts`（18）、`apps/web/src/pages/settings/ExtensionCenter.test.tsx`（11）。
-- 门禁：server 221 / web 98 / lint 0 / typecheck ×2 / build ×2 / final_acceptance 23/23 / 回归 **PASS 220 / FAIL 0**。
+- 门禁：server 221 / web 98 / lint 0 / typecheck ×2 / build ×2 / final_acceptance 23/23 / 回归 **PASS 220 / FAIL 0** / 巡检 24/24。
 
 ## [1.3.0] - 2026-10-26
 
