@@ -46,6 +46,11 @@
 11. **列表型 UI 不得直接渲染原始 JSON**：流水线步骤明细用 `PipelineDag.summarizeStepOutput`。
     历史事故：大纲 JSON 把 DAG 行高撑成多行并在窄列横向溢出。
    部分网关流式不支持标准 tool_calls，传输层会回退到非流式工具循环（`AI_TOOLS_NONSTREAM=off` 可关闭）。
+12. **配置中心单一写入口（v1.3 契约）**：角色/约束/钩子/权限/审计只经 `apps/server/src/config/config-center.service.ts`；
+    Web 设置页、`sciflow config` CLI、对话工具 `config.*` 三条入口共用，禁止各自直写 `app_setting` 或 `config_*` 表。
+    约束与 prompt_inject 钩子的唯一注入点是 `packages/ai/src/prompt-augmentation.ts`（AI 层四个 LLM 入口统一调用）；
+    权限档升档每次最多一级、核心保护项（鉴权/密钥/SSRF/审计/数据库/端口/不可逆）任何档位不可改；
+    `config_audit` 有只追加触发器，禁止 UPDATE/DELETE。细则见 `ARCHITECTURE.md` §2.17。
 
 ## 验证纪律
 
