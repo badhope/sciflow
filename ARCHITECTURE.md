@@ -132,7 +132,7 @@
 | 13 | **钩子唯一**：`config_hook` 建 `(name,event,type)` 唯一索引，创建前预检；防止同名钩子重复注入 | `packages/db/src/database.ts ux_config_hook_name_event_type` · `createHook` | `config-center.spec.ts` 重复钩子用例 |
 | 14 | **非流式对话同源**：`/api/chat` 与 MCP `chat.answer` 显式 `context: 'chat'`（作用域正确），并执行 `chat:before` block 钩子（400 可读原因） | `packages/ai/src/ai.service.ts chat/chatWithContext` · `ChatService.answer` | 实测关键词命中返回 400、普通消息正常 |
 
-**运行时巡检**：`node scripts/monitor_config_center.mjs --base <url> --log <log>` 只读检查 14 项（服务健康/配置完整/注入预览/工具暴露/对话真实返回+usage/日志无 error），退出码非 0 即有异常，供监控 AI/CI 使用。
+**运行时巡检**：`node scripts/monitor_config_center.mjs --base <url> --log <log>` 只读检查 19 项（服务健康/配置完整/钩子唯一/注入预览全覆盖/工具暴露/对话真实返回+usage/审计拒绝原因/日志无 error），退出码非 0 即有异常，供监控 AI/CI 使用。
 
 ## §2.9 模块化布局（M3，2026-10-18）
 
