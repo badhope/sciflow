@@ -9,5 +9,6 @@ import { UsageService } from './usage.service';
   imports: [AiModule],
   controllers: [SettingsController, UsageController],
   providers: [SettingsService, UsageService],
+  exports: [SettingsService],
 })
 export class SettingsModule {}

@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![version](https://img.shields.io/badge/version-1.3.0-black.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.4.0-black.svg)](CHANGELOG.md)
 
 > **🌐 语言 / Language：[中文](README.md) · [English](README.en.md)**
 
@@ -40,6 +40,7 @@ flowchart LR
 
 ## 🗞 最近更新
 
+- **2026-10-26 · v1.4.0**：扩展中心——内置 87 条科研资产（20 MCP / 31 技能 / 10 角色 / 10 约束 / 4 钩子 / 12 提示词，含 13 项 SciFlow 私有优势工具）随仓库发布、默认启用；四种添加入口（手填/粘贴/拖拽 ZIP/一键 AI 生成）+ 对话与 CLI 入口；停用即撤回对应子系统配置。
 - **2026-10-26 · v1.3.0**：配置中心（角色/约束工程/钩子/权限矩阵/审计）三入口同源——设置页、`sciflow config` CLI、对话工具 `config.*` 均可配置且立即生效；全面放开权限档 + 核心保护项锁定；内置 4 套预设；运行时巡检脚本。
 - **2026-10-26 · v1.2.0**：设置页自定义连接升级——三协议（OpenAI 兼容 / Anthropic / Gemini）、填地址+Key 自动检测模型并匹配上下文/输出/工具调用能力、表单内连接测试；真实 UniSound u2-flash 浏览器端到端验证。
 - **2026-10-24 · v1.0.0**：研究深度参数（depth 1-3 多轮递归检索）、反共识大纲变体（F2 反同质化）、实验设计助手（F3）、步骤耗时甘特图、CLI headless 全流程 `sciflow run`、MCP resources、深度健康探针。
@@ -147,6 +148,7 @@ flowchart LR
 | 过程可观测 | **Agent 执行轨迹 / Token 用量 / 步骤耗时甘特图 / 深度健康探针** | 少量 | — | — | — |
 | 多智能体编排 | **专用智能体分环节 + 大纲人工确认点 + Checkpoint 断点续跑** | 部分 | — | 递归 | — |
 | 反同质化 | **反共识大纲变体 + 研究深度多轮递归** | 多视角提问 | — | 递归深度 | — |
+| 内置资产 | **87 条开箱即用**（20 MCP / 31 技能 / 10 角色 / 10 约束 / 4 钩子 / 12 提示词），含 13 项私有优势工具 | 无 | 内置 | 少 | 内置 |
 | 配置自由度 | **配置中心**：角色 / 约束工程 / 钩子 / 权限档 / 审计；设置页、`sciflow config` CLI、对话工具三入口同源，改完即生效 | 无 | 仅内置 | 部分 | 部分 |
 | 模型自由度 | **OpenAI 兼容 / Anthropic / Gemini 三协议 + 自动检测模型与能力 + 连接测试（fast/strong 双档路由）** | 指定云模型 | 内置 | 自带 Key | 内置 |
 | 开放集成 | **MCP 协议双向：可被 Claude 调用，也可接入外部 MCP；CLI headless 出稿** | — | API | CLI | — |

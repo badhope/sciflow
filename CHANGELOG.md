@@ -2,6 +2,36 @@
 
 本项目格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，语义化版本号。以下按 `git log` 自底向上归纳历轮功能与修复，未含真实密钥。
 
+## [1.4.0] - 2026-10-26
+
+扩展中心批次：内置 87 条科研资产（社区开源 74 + SciFlow 私有优势 13）随仓库发布、默认全启用；技能/ MCP / 角色 / 约束 / 钩子 / 提示词六类统一管理，四种添加入口 + 对话入口，全部真实投影到对应子系统。
+
+### Added
+- **扩展中心（`/api/extensions`）**：`extension_asset` 单表承载六类资产；`source=builtin-public`（社区开源，含仓库/许可证/安装方式）/ `builtin-private`（SciFlow 私有优势工具，仅本机可见）/ `user` / `import`；`enabled` 默认 1。
+- **内置目录 87 条**：
+  - 20 个 MCP（Context7、DeepWiki、arXiv、Paper Search、Zotero、BioMCP、Semantic Scholar、CNKI、Obsidian、NotebookLM、Basic Memory、Deep Research、Agentset、DocsAgent、PaperDebugger、PDFMathTranslate、Lit Review Tools、Patsnap、Obsidian Wiki、LLM for Zotero）
+  - 31 个技能（Anthropic 官方 Skills、Academic Research Skills 53.9k★、Codex/Claude 学术三件套、Agent Research Skills、Claude Scholar、Academic Humanizer、Claude Prism、LatteReview、Paper Proofreading、AI Research Writing、Deep Research Prompts、Awesome Agent Skills 等 + 13 个 SciFlow 私有：引用体检/统计口径审计/可复现性方案/伦理扫描/图表规范/新颖性扫描/基金契合/投稿风险/审稿答辩/精读矩阵/实验计划/数据可用性/提示词加固）
+  - 10 个角色（方法学家/统计顾问/期刊编辑/基金评审/数据管理员/伦理审查员/科研馆员/可复现性专员/图表设计师/审稿回复专家）
+  - 10 条约束、4 个钩子、12 个提示词模板
+- **四种添加入口（每个资产面板都有）**：① 手填模板 ② 粘贴 SKILL.md / 模板 JSON / MCP JSON ③ 拖拽上传 .md/.json/.zip（ZIP 自动解析内部 SKILL.md 与 JSON）④ 一键 AI 生成（按模板出草稿，jsonrepair 容错，确认后落库）。第五入口：对话工具 `extension.list/create/toggle/generate`。
+- **投影真实生效**：启用/停用同步到 `app_setting.skills`（技能，保留内置 4 项）/ `config_role` / `config_constraint` / `config_hook` / `custom_prompt`（仅显式「应用」时）/ `mcp_server`（HTTP 端点）。
+- **私有优势工具不外泄**：导出包与外部 MCP 客户端的 `extension.list` 均过滤 `visibility=private`。
+- **CLI**：`sciflow ext list|toggle|import|export|reset`。
+- **设置页新增「扩展中心」分区**：分类计数、私有开关、停用/启用/删除/恢复内置/导出；各资产面板（角色/技能/提示词/约束/钩子/MCP）内置「从扩展中心添加」快捷入口。
+- **回归新增 12 条**（快照/六类齐全/默认启用/含私有/模板齐全/导出不含私有/手填新增并注入/停用撤回/删除/SKILL.md 导入/非法格式报错）。
+
+### Changed
+- **提示词模板默认不覆盖系统默认**：模板「启用」只代表可用，必须显式点「应用」才写入 `custom_prompt`——自动覆盖会静默改变流水线起草的 [n] 锚点契约（回归实测 citations 回填失败，故收紧）。
+- **资产 key 生成**：非 ASCII 名称改用哈希短码（此前中文名净化后产生空 slug 冲突）。
+
+### Fixed
+- **AI 生成返回非法 JSON 时整体失败**：改用 `jsonrepair` 修复（与 `AiService` 同策略），失败时才报可读错误。
+- **前端一键生成 60s 超时**：AI 生成最长 3 分钟，改为显式 `AbortSignal.timeout(300_000)` 关闭默认兜底。
+
+### Tests
+- 新增 `apps/server/src/extensions/extensions.service.spec.ts`（18）、`apps/web/src/pages/settings/ExtensionCenter.test.tsx`（11）。
+- 门禁：server 221 / web 98 / lint 0 / typecheck ×2 / build ×2 / final_acceptance 23/23 / 回归 **PASS 220 / FAIL 0**。
+
 ## [1.3.0] - 2026-10-26
 
 配置中心批次：角色 / 约束工程 / 钩子 / 权限矩阵 / 审计统一到一个服务，Web 设置页、CLI、对话工具三条入口共享同一数据源，任一入口写入其余入口立即可见并真实生效。

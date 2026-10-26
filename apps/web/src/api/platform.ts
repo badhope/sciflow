@@ -43,6 +43,36 @@ export const platform = {
     me: () => request<{ id: string; email: string; name: string; role: string; createdAt: number }>('/api/auth/me'),
     logout: () => setToken(null),
   },
+  extensions: {
+    list: (kind?: string) => request<import('../types').ExtensionKindsResponse>(`/api/extensions${kind ? `?kind=${kind}` : ''}`),
+    create: (p: {
+      id?: string; kind: string; key?: string; name: string; description?: string;
+      repo?: string; license?: string; install?: string; tags?: string[];
+      manifest?: Record<string, unknown>; visibility?: string;
+    }) => request<import('../types').ExtensionAsset>('/api/extensions', { method: 'POST', body: JSON.stringify(p) }),
+    toggle: (id: string, enabled: boolean) => request<import('../types').ExtensionAsset>(`/api/extensions/${id}/toggle`, { method: 'POST', body: JSON.stringify({ enabled }) }),
+    apply: (id: string) => request<import('../types').ExtensionAsset>(`/api/extensions/${id}/apply`, { method: 'POST' }),
+    remove: (id: string) => request<{ ok: boolean }>(`/api/extensions/${id}`, { method: 'DELETE' }),
+    resetBuiltin: () => request<{ restored: number }>('/api/extensions/reset-builtin', { method: 'POST' }),
+    importRaw: (p: { filename?: string; content: string }) => request<import('../types').ExtensionImportResult>('/api/extensions/import', { method: 'POST', body: JSON.stringify(p) }),
+    upload: async (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/extensions/upload', { method: 'POST', body: fd });
+      const text = await res.text();
+      let json: unknown = null;
+      try { json = JSON.parse(text); } catch { /* 非 JSON */ }
+      if (!res.ok) throw new Error((json as { message?: string })?.message || `上传失败（HTTP ${res.status}）`);
+      return json as import('../types').ExtensionImportResult;
+    },
+    // AI 生成可能耗时 1-3 分钟：显式传 signal 关闭默认 60s 兜底（core.ts 有 signal 时不加超时）
+    generate: (kind: string, brief: string) => request<{ draft: Record<string, unknown>; raw: string }>('/api/extensions/generate', {
+      method: 'POST',
+      body: JSON.stringify({ kind, brief }),
+      signal: AbortSignal.timeout(300_000),
+    }),
+    exportBundle: () => request<Record<string, unknown>>('/api/extensions/export'),
+  },
   config: {
     snapshot: () => request<ConfigSnapshot>('/api/config'),
     setPermission: (mode: string) => request<PermissionInfo>('/api/config/permission', { method: 'POST', body: JSON.stringify({ mode }) }),

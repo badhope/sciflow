@@ -769,3 +769,34 @@ export interface ConfigSnapshot {
   defaults: number;
 }
 export interface ConfigPreview { scope: 'chat' | 'pipeline'; text: string; role: ConfigRole | null }
+
+/** 扩展中心（v1.4） */
+export type ExtensionKind = 'skill' | 'mcp' | 'role' | 'constraint' | 'hook' | 'prompt';
+export interface ExtensionAsset {
+  id: string;
+  key: string;
+  kind: ExtensionKind;
+  name: string;
+  description: string;
+  source: 'builtin-public' | 'builtin-private' | 'user' | 'import' | string;
+  repo: string;
+  license: string;
+  install: string;
+  tags: string;
+  manifest: string;
+  enabled: number;
+  visibility: 'public' | 'private' | string;
+  createdAt: number;
+  updatedAt: number;
+}
+export interface ExtensionTemplate {
+  kind: ExtensionKind;
+  fields: { key: string; label: string; required: boolean; example?: string }[];
+  jsonExample: Record<string, unknown>;
+}
+export interface ExtensionKindsResponse {
+  kinds: { value: ExtensionKind; label: string; description: string; total: number; enabled: number }[];
+  assets: ExtensionAsset[];
+  templates: ExtensionTemplate[];
+}
+export interface ExtensionImportResult { added: number; updated: number; assets: ExtensionAsset[]; errors: string[] }

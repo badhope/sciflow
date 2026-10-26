@@ -281,6 +281,42 @@ check("预设重复应用不叠加", st in (200, 201) and preset_count_1 == pres
 st, audit2 = req("GET", "/api/config/audit?limit=50")
 check("配置中心审计可读", st == 200 and isinstance(audit2, list) and len(audit2) >= 1, f"{st} {len(audit2) if isinstance(audit2, list) else '?'}")
 
+# ---------- 4.6 扩展中心（内置资产/投影/四入口/私有不外泄） ----------
+st, ext = req("GET", "/api/extensions")
+check("扩展中心快照 GET /api/extensions", st == 200 and isinstance(ext.get("assets"), list) and len(ext.get("assets") or []) >= 50, f"{st} {len(ext.get('assets') or []) if isinstance(ext, dict) else '?'}")
+if isinstance(ext, dict):
+    kinds = {k.get("value"): k for k in (ext.get("kinds") or [])}
+    check("六类资产齐全", all(k in kinds for k in ("skill", "mcp", "role", "constraint", "hook", "prompt")), f"{sorted(kinds.keys())}")
+    check("内置资产默认全启用", all(a.get("enabled") == 1 for a in (ext.get("assets") or []) if str(a.get("source","")).startswith("builtin")), "builtin enabled")
+    check("含私有优势工具", any(a.get("visibility") == "private" for a in (ext.get("assets") or [])), "private present")
+    check("模板清单齐全", len(ext.get("templates") or []) >= 6, f"{len(ext.get('templates') or [])}")
+
+st, exp = req("GET", "/api/extensions/export")
+check("扩展导出不含私有工具", st == 200 and all(a.get("visibility") != "private" for a in (exp.get("assets") or [])), f"{st}")
+
+# 手填新增（约束）→ 立即投影到 config_constraint 并可注入
+st, created = req("POST", "/api/extensions", {"kind": "constraint", "name": "回归扩展约束", "description": "d", "manifest": {"title": "回归扩展约束", "rule": "所有数值必须带单位", "level": "must", "scope": "all"}})
+check("扩展手填新增 POST", st in (200, 201) and created.get("id"), f"{st}")
+ext_id = created.get("id") if isinstance(created, dict) else None
+st, pv = req("GET", "/api/config/preview?scope=chat")
+check("扩展约束已注入 chat", st == 200 and "回归扩展约束" in (pv.get("text") or ""), f"{st}")
+if ext_id:
+    st, toggled = req("POST", f"/api/extensions/{ext_id}/toggle", {"enabled": False})
+    check("扩展停用 toggle", st in (200, 201) and toggled.get("enabled") == 0, f"{st}")
+    st, pv = req("GET", "/api/config/preview?scope=chat")
+    check("停用后不再注入", "回归扩展约束" not in (pv.get("text") or ""), f"{st}")
+    st, _ = req("DELETE", f"/api/extensions/{ext_id}")
+    check("扩展删除 DELETE", st == 200, f"{st}")
+
+# 粘贴导入 SKILL.md
+skill_md = "---\nname: regression-skill\ndescription: 回归导入技能\n---\n\n# 步骤\n1. 测试\n"
+
+st, imp = req("POST", "/api/extensions/import", {"filename": "SKILL.md", "content": skill_md})
+check("SKILL.md 导入", st in (200, 201) and (imp.get("added", 0) + imp.get("updated", 0)) >= 1, f"{st} {str(imp)[:80]}")
+# 错误格式必须返回可读错误（400）
+st, bad = req("POST", "/api/extensions/import", {"filename": "x.json", "content": '{"kind":"bad","name":"x"}'})
+check("非法格式明确报错", st in (200, 201) and len(bad.get("errors") or []) >= 1 or st == 400, f"{st}")
+
 # ---------- 5. 流水线（断点续跑相关） ----------
 if MOCK:
     # mock 模式：先种 2 条带元数据的领域文献，让 Research→Writer→renderCitations 链路真正产生引用回填

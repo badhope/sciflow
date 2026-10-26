@@ -155,9 +155,15 @@ importers:
       drizzle-orm:
         specifier: ^0.45.3
         version: 0.45.3(@libsql/client@0.18.0)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)(pg@8.23.1)
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
       helmet:
         specifier: ^8.3.0
         version: 8.3.0
+      js-yaml:
+        specifier: 4.3.2
+        version: 4.3.2
       jsonrepair:
         specifier: ^3.15.0
         version: 3.15.0
@@ -11380,8 +11386,7 @@ snapshots:
       node-domexception: 1.0.0
       web-streams-polyfill: 3.3.3
 
-  fflate@0.8.3:
-    optional: true
+  fflate@0.8.3: {}
 
   fft.js@4.0.4: {}
 

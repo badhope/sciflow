@@ -13,6 +13,7 @@ import { UsageStats } from './settings/UsageStats';
 import { McpToolList } from './settings/McpToolList';
 import { PersonaSettings } from './settings/PersonaSettings';
 import { ConfigCenterSettings } from './settings/ConfigCenterSettings';
+import { ExtensionCenter, ExtensionQuickAdd } from './settings/ExtensionCenter';
 
 const ModelIcon = ({ ok }: { ok?: boolean }) =>
   ok === undefined ? null : ok ? <CheckCircle2 size={16} className="text-emerald-500" /> : <XCircle size={16} className="text-rose-500" />;
@@ -133,6 +134,7 @@ function PromptEditor() {
         onToggle={() => setOpen(o => !o)}
       >
         <div className="mt-4">
+          <div className="mb-3"><ExtensionQuickAdd kind="prompt" label="从扩展中心添加提示词模板" /></div>
           <div className="text-xs text-slate-400 dark:text-slate-500 mb-3">
             每个 AI 科研工具（综述/精读/缺口/对比/评审…）默认提示词可被你的自定义覆盖：点击「编辑」写入你的专属提示词（含你的领域规范/输出格式/风格要求），未配置时自动使用系统默认。
           </div>
@@ -321,6 +323,7 @@ function SettingsLayout() {
     { id: 'settings-web', label: '联网搜索' },
     { id: 'settings-check', label: '环境自检' },
     { id: 'settings-mcp', label: 'MCP 工具' },
+    { id: 'settings-extensions', label: '扩展中心' },
     { id: 'settings-config', label: '配置中心' },
     { id: 'settings-custom', label: '自定义' },
   ], []);
@@ -406,6 +409,9 @@ function SettingsLayout() {
           </div>
         )}
       </Card>
+
+      {/* 扩展中心：内置社区开源资产 + SciFlow 私有优势工具（默认全启用） */}
+      <ExtensionCenter />
 
       {/* 配置中心：角色库 / 约束工程 / 钩子 / 权限 / 预设 / 审计 */}
       <ConfigCenterSettings />

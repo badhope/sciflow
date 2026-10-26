@@ -3,6 +3,7 @@ import { Badge, Button, Card, Input, Modal, SectionTitle, Textarea, errMsg } fro
 import { Plug, Plus, Wrench } from 'lucide-react';
 import { api } from '../../api/client';
 import { useSettings } from './settings-context';
+import { ExtensionQuickAdd } from './ExtensionCenter';
 
 export function McpToolList() {
   const { state, addMcpServer, removeMcpServer } = useSettings();
@@ -41,6 +42,7 @@ export function McpToolList() {
             <Wrench size={16} className="text-teal-600" /> MCP 工具台
           </span>
         </SectionTitle>
+        <div className="mb-3"><ExtensionQuickAdd kind="mcp" label="添加 MCP（手填/粘贴/上传/一键生成）" /></div>
         <div className="text-xs text-slate-400 dark:text-slate-500 mb-3">
           SciFlow 的全部 AI 能力已协议化为标准 MCP 工具（Model Context Protocol 2026-07 规范），可被任意 MCP 兼容客户端动态发现与调用
         </div>

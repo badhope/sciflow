@@ -11,6 +11,7 @@ import { ReferencesService } from '../references/references.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { APP_VERSION } from '../common/version';
 import { ConfigCenterService } from '../config/config-center.service';
+import { ExtensionsService, assetKey } from '../extensions/extensions.service';
 
 /** MCP 工具定义（符合 Model Context Protocol 2026 的 Tool 结构：name/description/inputSchema） */
 interface McpTool {
@@ -54,6 +55,7 @@ export class McpService {
     private readonly references: ReferencesService,
     private readonly knowledge: KnowledgeService,
     private readonly config: ConfigCenterService,
+    private readonly extensions: ExtensionsService,
   ) {
     this.tools = [
       {
@@ -306,6 +308,76 @@ export class McpService {
         description: '预览当前配置在 chat 或 pipeline 中实际注入的约束文本与默认角色（用于确认生效）',
         inputSchema: { type: 'object', properties: { scope: { type: 'string', enum: ['chat', 'pipeline'] } }, required: ['scope'] },
         handler: async (args) => this.config.preview(args.scope === 'pipeline' ? 'pipeline' : 'chat'),
+      },
+      {
+        name: 'extension.list',
+        description: '列出扩展中心资产（skill/mcp/role/constraint/hook/prompt），可按 kind 过滤；含内置社区开源与本机私有优势工具',
+        inputSchema: {
+          type: 'object',
+          properties: { kind: { type: 'string', enum: ['skill', 'mcp', 'role', 'constraint', 'hook', 'prompt'] } },
+        },
+        handler: async (args) => {
+          // 外部 MCP 客户端不得看到 SciFlow 私有优势工具（visibility=private）
+          const rows = this.extensions
+            .list(args.kind === undefined ? undefined : String(args.kind))
+            .filter((r) => r.visibility !== 'private');
+          return rows.map((r) => ({ key: r.key, kind: r.kind, name: r.name, description: r.description, source: r.source, enabled: r.enabled, repo: r.repo, license: r.license }));
+        },
+      },
+      {
+        name: 'extension.create',
+        description: '新增一条扩展资产（对话里直接添加 skill/mcp/role/constraint/hook/prompt）。manifest 按类型给结构化定义：skill={mode:"prompt",instructions}；mcp={transport:"http",url}；role={systemPrompt}；constraint={title,rule,level,scope}；hook={event,type,config}；prompt={toolKey,prompt}',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            kind: { type: 'string', enum: ['skill', 'mcp', 'role', 'constraint', 'hook', 'prompt'] },
+            name: { type: 'string' },
+            description: { type: 'string' },
+            manifest: { type: 'object' },
+            tags: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['kind', 'name', 'manifest'],
+        },
+        handler: async (args) => {
+          const row = this.extensions.upsert({
+            kind: String(args.kind) as never,
+            key: assetKey(String(args.kind), String(args.name)),
+            name: String(args.name),
+            description: String(args.description || ''),
+            manifest: (args.manifest as Record<string, unknown>) || {},
+            tags: Array.isArray(args.tags) ? (args.tags as unknown[]).map(String) : [],
+          }, { source: 'user', actor: 'chat' });
+          return { ok: true, id: row.id, key: row.key, kind: row.kind, enabled: row.enabled };
+        },
+      },
+      {
+        name: 'extension.toggle',
+        description: '启用/停用一条扩展资产（按 key 或 id）；停用会同步撤回对应子系统配置',
+        inputSchema: {
+          type: 'object',
+          properties: { key: { type: 'string' }, enabled: { type: 'boolean' } },
+          required: ['key', 'enabled'],
+        },
+        handler: async (args) => {
+          const all = this.extensions.list();
+          const row = all.find((r) => r.key === String(args.key) || r.id === String(args.key));
+          if (!row) return { error: `未找到扩展：${String(args.key)}` };
+          const next = this.extensions.toggle(row.id, args.enabled !== false);
+          return { ok: true, key: next.key, enabled: next.enabled };
+        },
+      },
+      {
+        name: 'extension.generate',
+        description: '一键生成一条扩展资产草稿（按 kind + 一句话需求，用已配置模型按官方模板生成；返回 draft，确认后再用 extension.create 落库）',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            kind: { type: 'string', enum: ['skill', 'mcp', 'role', 'constraint', 'hook', 'prompt'] },
+            brief: { type: 'string' },
+          },
+          required: ['kind', 'brief'],
+        },
+        handler: async (args) => this.extensions.generate(String(args.kind), String(args.brief)),
       },
       {
         name: 'chat.answer',

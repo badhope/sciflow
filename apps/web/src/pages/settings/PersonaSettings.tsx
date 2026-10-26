@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import type { PersonaSkill } from '../../types';
 import { Badge, Button, Card, Input, SectionTitle, Textarea, errMsg } from '../../components/ui';
 import { ToastContext } from '../../App';
+import { ExtensionQuickAdd } from './ExtensionCenter';
 
 /** 角色与技能（对标 Dify/Coze 人设管理）：自定义系统提示词 + 技能启停 + 自定义技能 */
 export function PersonaSettings() {
@@ -153,6 +154,9 @@ export function PersonaSettings() {
               </pre>
             )}
           </div>
+
+          {/* 从扩展中心添加（四种方式） */}
+          <ExtensionQuickAdd kind="skill" label="从扩展中心添加技能" />
 
           {/* 技能列表 */}
           <div>

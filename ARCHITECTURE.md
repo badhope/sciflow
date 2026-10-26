@@ -134,6 +134,23 @@
 
 **运行时巡检**：`node scripts/monitor_config_center.mjs --base <url> --log <log>` 只读检查 19 项（服务健康/配置完整/钩子唯一/注入预览全覆盖/工具暴露/对话真实返回+usage/审计拒绝原因/日志无 error），退出码非 0 即有异常；已接入 CI `regression` job（回归之后执行），本地验收矩阵新增 F4/F5 两条 CLI 冒烟（`final_acceptance.py` 23 项）。
 
+## §2.18 v1.4 扩展中心契约（2026-10-26）
+
+六类科研资产（skill / mcp / role / constraint / hook / prompt）统一管理，内置目录随仓库发布、默认启用，四种添加入口与对话入口共用同一服务。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **单表单一服务**：所有资产存 `extension_asset`（唯一 key 索引），写操作只经 `ExtensionsService.upsert/toggle/remove`；禁止在别处直写该表 | `packages/db/src/database.ts extension_asset` · `apps/server/src/extensions/extensions.service.ts` | `extensions.service.spec.ts` 18 条 |
+| 2 | **内置目录默认启用**：`BUILTIN_EXTENSION_ASSETS`（87 条：20 MCP / 31 技能 / 10 角色 / 10 约束 / 4 钩子 / 12 提示词）首次启动幂等播种，`enabled=1`；内置不可物理删除，只能停用（`resetBuiltin` 一键恢复） | `apps/server/src/extensions/extension-catalog.ts` · `ensureSeed/remove/resetBuiltin` | 回归「内置资产默认全启用」+ spec「内置不可物理删除」 |
+| 3 | **投影真实生效**：启用/停用必须同步对应子系统——技能→`app_setting.skills`（保留内置 4 项）、角色→`config_role`、约束→`config_constraint`（source=extension）、钩子→`config_hook`、提示词→`custom_prompt`（仅显式应用）、MCP→`mcp_server`（仅 HTTP 端点） | `ExtensionsService.project*` | spec「停用资产会撤回投影」+ 回归「扩展约束已注入 chat / 停用后不再注入」 |
+| 4 | **提示词模板需显式应用**：模板 `enabled=1` 仅代表可用，不自动覆盖系统默认；`POST /api/extensions/:id/apply` 才写 `custom_prompt`，同 toolKey 只保留一个生效（`app_setting.extension_prompt_active`） | `projectPrompt/applyPrompt` | spec「默认不覆盖 / 应用后写入 / 切换生效」；回归 citations 回填用例 |
+| 5 | **私有优势工具不外泄**：`visibility=private` 的资产（SciFlow 自研 13 项）不进导出包、不出现在外部 MCP 客户端的 `extension.list`；仅本机设置页可见可关 | `listPublic/exportBundle` · `mcp.service.ts extension.list` | spec「导出包排除 private」+ 回归「扩展导出不含私有工具」 |
+| 6 | **四种添加格式**：SKILL.md（YAML frontmatter）/ 模板 JSON（`{kind,name,manifest}`，可数组）/ MCP JSON（`mcpServers`，仅 http(s) 端点）/ ZIP（自动遍历内部 SKILL.md 与 JSON）；错误逐条返回（不整体失败），无法识别时 400 带格式说明 | `parseSkillMarkdown/parseTemplateJson/parseMcpJson/importRaw` | spec 解析器 4 条 + 导入 3 条 + 回归「SKILL.md 导入 / 非法格式报错」 |
+| 7 | **一键 AI 生成**：按 kind 模板出 JSON 草稿（不落库）；`jsonrepair` 修复模型常见非法 JSON；结构校验失败给可读错误；前端关闭 60s 默认超时（AI 生成允许 3 分钟） | `ExtensionsService.generate` · `ExtensionCenter.tsx` | spec「jsonrepair 容错」+ 真实浏览器验证 |
+| 8 | **每个资产面板都可添加**：角色/技能/提示词/约束/钩子/MCP 面板均挂 `ExtensionQuickAdd`（同一套四种方式），不允许某类资产只能从单一入口添加 | `ConfigCenterSettings.tsx` · `PersonaSettings.tsx` · `SettingsPage.tsx` · `McpToolList.tsx` | `ExtensionCenter.test.tsx` 11 条（含四模式按钮齐全） |
+| 9 | **对话入口**：MCP 工具 `extension.list/create/toggle/generate`；`extension.list` 对模型同样过滤 private（外部客户端不掌握私有资产清单） | `mcp.service.ts` · `agent-tool-bridge.ts` allowlist | 实测 MCP 工具数 23 且含 4 个 extension.* |
+| 10 | **CLI 对等**：`sciflow ext list|toggle|import|export|reset`，与 Web/对话同一 REST 服务 | `apps/server/src/config/config-cli.ts registerExtensionCommands` | CLI 实测 list/toggle/import/export |
+
 ## §2.9 模块化布局（M3，2026-10-18）
 
 **分层定案**：`packages/` = 核心能力层，`apps/server/src` = 接口层（controller/module/websearch/settings 等）。

@@ -219,3 +219,71 @@ export function registerConfigCommands(program: Command, localApi: Api): void {
       })));
     });
 }
+
+
+/** 扩展中心 CLI（v1.4）：与设置页/对话工具同源，写操作带 X-Sciflow-Actor: cli 审计来源 */
+export function registerExtensionCommands(program: Command, localApi: Api): void {
+  const ext = program.command('ext').description('扩展中心（技能/MCP/角色/约束/钩子/提示词）');
+
+  ext
+    .command('list')
+    .description('列出扩展资产（含内置与私有标记）')
+    .option('--kind <kind>', 'skill|mcp|role|constraint|hook|prompt')
+    .action(async (opts: { kind?: string }) => {
+      const q = opts.kind ? `?kind=${opts.kind}` : '';
+      const r = await localApi(`/api/extensions${q}`);
+      console.table((r.assets || []).map((a: any) => ({
+        key: a.key, kind: a.kind, name: a.name, source: a.source,
+        visibility: a.visibility, enabled: a.enabled === 1,
+      })));
+      console.log(`共 ${r.assets?.length ?? 0} 条`);
+    });
+
+  ext
+    .command('toggle')
+    .description('启用/停用一条扩展（按 key）')
+    .argument('<key>', '资产 key')
+    .option('--off', '停用（默认启用）', false)
+    .action(async (key: string, opts: { off?: boolean }) => {
+      const all = await localApi('/api/extensions');
+      const row = (all.assets || []).find((a: any) => a.key === key);
+      if (!row) throw new Error(`未找到扩展：${key}`);
+      const next = await localApi(`/api/extensions/${row.id}/toggle`, { method: 'POST', body: { enabled: opts.off !== true } });
+      console.log(`${next.name} 已${next.enabled ? '启用' : '停用'}`);
+    });
+
+  ext
+    .command('import')
+    .description('导入 SKILL.md / 模板 JSON / MCP JSON 文件（.md/.json；压缩包请在设置页拖拽或先解压）')
+    .argument('<file>', '文件路径')
+    .action(async (file: string) => {
+      const { readFileSync } = await import('node:fs');
+      const content = readFileSync(file, 'utf-8');
+      const r = await localApi('/api/extensions/import', { method: 'POST', body: { filename: file, content } });
+      console.log(`导入完成：新增 ${r.added} / 更新 ${r.updated}`);
+      if (r.errors?.length) console.log(`跳过 ${r.errors.length} 条：${r.errors.map((e: string) => `
+  - ${e}`).join('')}`);
+    });
+
+  ext
+    .command('export')
+    .description('导出扩展包（不含 SciFlow 私有优势工具）')
+    .option('--out <path>', '写入文件（缺省 stdout）')
+    .action(async (opts: { out?: string }) => {
+      const bundle = await localApi('/api/extensions/export');
+      const text = JSON.stringify(bundle, null, 2);
+      if (opts.out) {
+        const { writeFileSync } = await import('node:fs');
+        writeFileSync(opts.out, text, 'utf-8');
+        console.log(`已写入 ${opts.out}（${bundle.assets.length} 条）`);
+      } else console.log(text);
+    });
+
+  ext
+    .command('reset')
+    .description('恢复全部内置资产（重新启用）')
+    .action(async () => {
+      const r = await localApi('/api/extensions/reset-builtin', { method: 'POST' });
+      console.log(`已恢复 ${r.restored} 条内置资产`);
+    });
+}

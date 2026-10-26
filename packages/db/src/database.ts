@@ -253,6 +253,28 @@ CREATE TABLE IF NOT EXISTS config_audit (
 CREATE INDEX IF NOT EXISTS idx_config_audit_created ON config_audit(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_config_constraint_scope ON config_constraint(scope, enabled);
 
+
+-- 扩展中心（v1.4）：统一资产表
+CREATE TABLE IF NOT EXISTS extension_asset (
+  id TEXT PRIMARY KEY,
+  key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  source TEXT DEFAULT 'user',
+  repo TEXT DEFAULT '',
+  license TEXT DEFAULT '',
+  install TEXT DEFAULT '',
+  tags TEXT DEFAULT '[]',
+  manifest TEXT DEFAULT '{}',
+  enabled INTEGER DEFAULT 1,
+  visibility TEXT DEFAULT 'public',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_extension_asset_key ON extension_asset(key);
+CREATE INDEX IF NOT EXISTS idx_extension_asset_kind ON extension_asset(kind, enabled);
+
 CREATE TABLE IF NOT EXISTS custom_intent (
   id TEXT PRIMARY KEY,
   key TEXT NOT NULL UNIQUE,

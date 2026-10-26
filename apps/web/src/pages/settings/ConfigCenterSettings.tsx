@@ -8,6 +8,7 @@ import type {
   ConfigConstraint, ConfigHook, ConfigRole, ConfigSnapshot, PermissionMode,
 } from '../../types';
 import { Badge, Button, Card, Input, SectionTitle, Select, Textarea, errMsg } from '../../components/ui';
+import { ExtensionQuickAdd } from './ExtensionCenter';
 
 /**
  * 配置中心面板（角色 / 约束工程 / 钩子 / 权限 / 预设 / 审计）。
@@ -183,11 +184,13 @@ export function ConfigCenterSettings() {
 
       {/* 角色 */}
       <ConfigSection icon={<Wrench size={14} />} title="角色（系统提示词）" count={snap.roles.length} open={!!open.roles} onToggle={() => toggle('roles')}>
+        <div className="mb-2"><ExtensionQuickAdd kind="role" label="从扩展中心添加角色" /></div>
         <RoleEditor roles={snap.roles} busy={busy} run={run} />
       </ConfigSection>
 
       {/* 约束 */}
       <ConfigSection icon={<ShieldCheck size={14} />} title="约束工程（每次 AI 调用注入）" count={snap.constraints.length} open={!!open.constraints} onToggle={() => toggle('constraints')}>
+        <div className="mb-2"><ExtensionQuickAdd kind="constraint" label="从扩展中心添加约束" /></div>
         <ConstraintEditor constraints={snap.constraints} busy={busy} run={run} />
         <div className="mt-3 flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => void run('preview-chat', async () => setPreview(await api.config.preview('chat')), '已生成 chat 生效预览')}>
@@ -206,6 +209,7 @@ export function ConfigCenterSettings() {
 
       {/* 钩子 */}
       <ConfigSection icon={<Workflow size={14} />} title="钩子（生命周期真实执行）" count={snap.hooks.length} open={!!open.hooks} onToggle={() => toggle('hooks')}>
+        <div className="mb-2"><ExtensionQuickAdd kind="hook" label="从扩展中心添加钩子" /></div>
         <HookEditor hooks={snap.hooks} busy={busy} run={run} />
       </ConfigSection>
 

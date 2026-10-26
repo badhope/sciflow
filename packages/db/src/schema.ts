@@ -302,6 +302,35 @@ export const llmCallLogs = sqliteTable('llm_call_log', {
 
 export type LlmCallLog = typeof llmCallLogs.$inferSelect;
 
+
+/** 扩展中心·统一资产（skill / mcp / role / constraint / hook / prompt / pipeline） */
+export const extensionAssets = sqliteTable('extension_asset', {
+  id: text('id').primaryKey(),
+  /** 稳定标识（内置用固定 key，用户资产用 uuid） */
+  key: text('key').notNull(),
+  kind: text('kind').notNull(),
+  name: text('name').notNull(),
+  description: text('description').default(''),
+  /** 来源：builtin-public（社区开源）/ builtin-private（SciFlow 内置优势，不对外）/ user */
+  source: text('source').default('user'),
+  repo: text('repo').default(''),
+  license: text('license').default(''),
+  install: text('install').default(''),
+  tags: text('tags').default('[]'),
+  /** 能力清单 JSON（各 kind 的结构化定义，投影到真实子系统时使用） */
+  manifest: text('manifest').default('{}'),
+  enabled: integer('enabled').default(1),
+  /**
+   * 可见性：public（可导出/对外展示）/ private（仅本机可用，不进导出包、不对外）
+   * 内置优势工具一律 private；社区开源与用户资产默认 public。
+   */
+  visibility: text('visibility').default('public'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type ExtensionAsset = typeof extensionAssets.$inferSelect;
+
 /** 系统综述·筛选队列（题录筛选：纳入/排除/待定） */
 export const screeningQueue = sqliteTable('screening_queue', {
   id: text('id').primaryKey(),
