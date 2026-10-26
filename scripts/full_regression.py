@@ -226,8 +226,9 @@ if isinstance(cfg, dict):
     check("核心保护项 ≥7", len((cfg.get("permission") or {}).get("coreProtected") or []) >= 7, f"{len((cfg.get('permission') or {}).get('coreProtected') or [])}")
     check("默认角色唯一", len([r for r in (cfg.get("roles") or []) if r.get("isDefault") == 1]) == 1)
 
-# 恢复全面放开后再写（回归可能跑在 strict 档的库上）
-req("POST", "/api/config/permission", {"mode": "unrestricted"})
+# 恢复全面放开后再写（回归可能跑在 strict 档的库上；升档需逐级）
+for _m in ("balanced", "open", "unrestricted"):
+    req("POST", "/api/config/permission", {"mode": _m})
 tag = f"regression-{int(time.time())}"
 st, cons = req("POST", "/api/config/constraints", {"title": tag, "rule": "回归校验约束", "level": "must", "scope": "all"})
 check("约束创建 POST", st in (200, 201) and any(c.get("title") == tag for c in cons or []), f"{st}")
@@ -265,7 +266,10 @@ st, d2 = req("POST", "/api/config/constraints", {"title": f"{tag}-denied", "rule
 check("strict 档拒绝配置写入", st in (400, 403), f"{st}")
 st, audit = req("GET", "/api/config/audit?limit=20")
 check("拒绝操作写入审计", st == 200 and any(a.get("allowed") == 0 for a in audit or []), f"{st}")
-req("POST", "/api/config/permission", {"mode": "unrestricted"})
+# 升档每次最多一级（v1.3 权限门禁）：strict → balanced → open → unrestricted 逐级解锁
+for _m in ("balanced", "open", "unrestricted"):
+    st, _d = req("POST", "/api/config/permission", {"mode": _m})
+    check(f"权限逐级解锁 {_m}", st in (200, 201), f"{st}")
 
 # 预设应用（幂等：重复应用不叠加 preset 约束）
 st, snap2 = req("POST", "/api/config/presets/academic-rigor/apply")
