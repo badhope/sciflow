@@ -16,6 +16,16 @@
 import { readFileSync, existsSync, statSync } from 'node:fs';
 
 const args = process.argv.slice(2);
+if (args.includes('--help') || args.includes('-h')) {
+  console.log(`用法：node scripts/monitor_config_center.mjs [--base <url>] [--log <path>]
+
+只读巡检配置中心（不改配置、不写库），退出码 0=全部通过 / 1=有失败项。
+  --base  后端地址，默认 $SCIFLOW_BASE 或 http://127.0.0.1:3000
+  --log   服务日志路径（可选，扫描最近 4000 行 level>=50）
+检查项：服务健康、配置快照、权限档、核心保护项、默认角色、约束/钩子合法性、钩子唯一、
+      注入预览（chat/pipeline 全覆盖）、MCP 工具暴露、审计拒绝原因、对话真实返回与 usage、日志无 error。`);
+  process.exit(0);
+}
 const argOf = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
@@ -83,7 +93,8 @@ if (snap) {
 // 审计不可变 + 拒绝原因非空（监控 AI 补强）
 const audit = await get('/api/config/audit?limit=100').catch(() => ({ status: 0, json: null }));
 const denied = Array.isArray(audit.json) ? audit.json.filter((a) => a.allowed === 0) : [];
-record('审计拒绝记录带原因', denied.every((a) => String(a.reason || '').trim().length > 0), `${denied.length} denied`);
+record('审计接口可达', audit.status === 200 && Array.isArray(audit.json), `status=${audit.status}`);
+record('审计拒绝记录带原因', audit.status === 200 && denied.every((a) => String(a.reason || '').trim().length > 0), `${denied.length} denied`);
 
 const chatPreview = await get('/api/config/preview?scope=chat').catch(() => ({ status: 0, json: null }));
 const pv = chatPreview.json;
