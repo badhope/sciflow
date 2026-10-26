@@ -86,7 +86,7 @@ export class AiService extends AiTransportService {
 
   /** 科研问答（非流式） */
   async chat(question: string, history: ChatMessage[] = [], opts: Pick<ChatStreamOptions, 'modelName'> = {}, customSystemPrompt?: string): Promise<string> {
-    return this.complete([{ role: 'system', content: this.resolveSystem(customSystemPrompt) }, ...history, { role: 'user', content: question }], { modelName: opts.modelName });
+    return this.complete([{ role: 'system', content: this.resolveSystem(customSystemPrompt) }, ...history, { role: 'user', content: question }], { modelName: opts.modelName, context: 'chat' });
   }
 
   /** Agent 化问答：在系统提示中注入项目记忆 + 知识库上下文（RAG） */
@@ -94,7 +94,7 @@ export class AiService extends AiTransportService {
     const sys = context
       ? `${this.resolveSystem(customSystemPrompt)}\n\n【当前项目上下文】\n${context}\n\n请优先结合上下文回答；上下文不足以覆盖时，再用你的专业知识补充，并说明依据。`
       : this.resolveSystem(customSystemPrompt);
-    return this.complete([{ role: 'system', content: sys }, ...history, { role: 'user', content: question }], { modelName: opts.modelName });
+    return this.complete([{ role: 'system', content: sys }, ...history, { role: 'user', content: question }], { modelName: opts.modelName, context: 'chat' });
   }
 
   /** Agent 化问答（流式）：默认请求 include_usage 收尾块，并接线外部 AbortSignal */

@@ -99,8 +99,14 @@ export function ConfigCenterSettings() {
               className="w-full"
               value={snap.permission.mode}
               onChange={(v) => void run('permission', () => api.config.setPermission(v as PermissionMode), `权限档已切换为「${snap.permission.modes.find((m) => m.value === v)?.label}」`)}
-              options={snap.permission.modes.map((m) => ({ value: m.value, label: `${m.label} — ${m.description}` }))}
+              options={snap.permission.modes.map((m) => {
+                // 升档每次最多一级：远端会 400，这里提前把不可选档位置灰（保留当前档与降档）
+                const rank: Record<string, number> = { strict: 0, balanced: 1, open: 2, unrestricted: 3 };
+                const disabled = rank[m.value] - rank[snap.permission.mode] > 1;
+                return { value: m.value, label: `${m.label} — ${m.description}${disabled ? '（需逐级解锁）' : ''}` };
+              })}
             />
+            <div className="text-[11px] text-slate-400">放宽权限每次最多一级（防误触一键放开）；收紧可任意降档。</div>
             <div className="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 rounded px-2.5 py-2">
               <div className="font-medium mb-1">核心保护项（任何档位都不可改）</div>
               <ul className="space-y-0.5">

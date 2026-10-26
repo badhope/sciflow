@@ -11,12 +11,28 @@ import { decidePermission } from './permission';
  * - 预设应用幂等（重复应用不叠加 preset 来源的约束）
  */
 
+const AUDIT_TRIGGERS = `
+CREATE TRIGGER IF NOT EXISTS trg_config_audit_no_update
+BEFORE UPDATE ON config_audit
+BEGIN
+  SELECT RAISE(ABORT, 'config_audit 只追加：禁止 UPDATE');
+END;
+CREATE TRIGGER IF NOT EXISTS trg_config_audit_no_delete
+BEFORE DELETE ON config_audit
+BEGIN
+  SELECT RAISE(ABORT, 'config_audit 只追加：禁止 DELETE');
+END;
+`;
+
 function fresh() {
+  // 审计表有「只追加」触发器：测试夹具需临时摘除，清理后恢复（生产路径永远有触发器）
+  sqlite.exec('DROP TRIGGER IF EXISTS trg_config_audit_no_delete; DROP TRIGGER IF EXISTS trg_config_audit_no_update;');
   sqlite.prepare('DELETE FROM config_role').run();
   sqlite.prepare('DELETE FROM config_constraint').run();
   sqlite.prepare('DELETE FROM config_hook').run();
   sqlite.prepare('DELETE FROM config_audit').run();
   sqlite.prepare("DELETE FROM app_setting WHERE key = 'config_permission_mode'").run();
+  sqlite.exec(AUDIT_TRIGGERS);
   const svc = new ConfigCenterService();
   return svc;
 }
@@ -184,5 +200,73 @@ describe('配置中心·导入导出', () => {
     const titles = svc.listConstraints().map((c) => c.title);
     expect(titles).toContain('新的导入约束');
     expect(titles).not.toContain('旧的用户约束');
+  });
+});
+
+describe('配置中心·监控 AI 发现的回归项', () => {
+  beforeEach(() => { fresh(); });
+
+  it('非法权限档 400（不再静默回落 unrestricted）', () => {
+    const svc = fresh();
+    expect(() => svc.setPermissionMode('typo')).toThrow(/非法权限档/);
+    expect(svc.getPermissionMode()).toBe('unrestricted');
+  });
+
+  it('升档每次最多一级：strict 不能一步跳到 unrestricted', () => {
+    const svc = fresh();
+    svc.setPermissionMode('strict');
+    expect(() => svc.setPermissionMode('unrestricted')).toThrow(/最多放宽一级/);
+    svc.setPermissionMode('balanced');
+    svc.setPermissionMode('open');
+    svc.setPermissionMode('unrestricted');
+    expect(svc.getPermissionMode()).toBe('unrestricted');
+  });
+
+  it('导入包夹带 permission.mode 默认不生效（需显式 applyPermission）', () => {
+    const svc = fresh();
+    svc.setPermissionMode('strict');
+    // strict 下导入本身被拒 → 先切到 balanced 验证「不自动提权」
+    svc.setPermissionMode('balanced');
+    const r = svc.importBundle({ permission: { mode: 'unrestricted' }, constraints: [{ title: 'x', rule: 'y' }] }, { merge: true }, 'test');
+    expect(svc.getPermissionMode()).toBe('balanced');
+    expect(r.errors.some((e) => e.includes('已忽略'))).toBe(true);
+  });
+
+  it('同名同事件同类型钩子不允许重复创建', () => {
+    const svc = fresh();
+    const body = { name: '唯一钩子', event: 'chat:before', type: 'prompt_inject', config: { text: 'a' } };
+    svc.createHook(body, 'test');
+    expect(() => svc.createHook(body, 'test')).toThrow(/已存在/);
+    expect(svc.listHooks().filter((h) => h.name === '唯一钩子')).toHaveLength(1);
+  });
+
+  it('唯一默认角色不能被取消默认或停用', () => {
+    const svc = fresh();
+    const d = svc.listRoles().find((r) => r.isDefault === 1 && r.enabled !== 0)!;
+    expect(() => svc.updateRole(d.id, { enabled: 0 })).toThrow(/不可停用|至少保留/);
+    // 有其他候选时可取消默认
+    svc.createRole({ name: '候选角色', systemPrompt: 'x' }, 'test');
+    expect(() => svc.updateRole(d.id, { isDefault: false })).not.toThrow();
+  });
+
+  it('merge=false 导入把被删条目写入审计', () => {
+    const svc = fresh();
+    svc.createConstraint({ title: '将被覆盖的约束', rule: 'x' }, 'test');
+    svc.importBundle({ constraints: [{ title: '覆盖后的约束', rule: 'y' }] }, { merge: false }, 'test');
+    const bulk = svc.listAudit(30).find((a) => (a as { action: string }).action === 'bulk_delete');
+    expect(bulk).toBeTruthy();
+    expect(String(bulk!.detail)).toContain('将被覆盖的约束');
+  });
+});
+
+describe('配置中心·审计不可变', () => {
+  beforeEach(() => { fresh(); });
+
+  it('审计记录禁止 UPDATE / DELETE（触发器兜底）', () => {
+    const svc = fresh();
+    svc.createConstraint({ title: '审计触发测试', rule: 'x' }, 'test');
+    const row = sqlite.prepare('SELECT id FROM config_audit LIMIT 1').get() as { id: string };
+    expect(() => sqlite.prepare('DELETE FROM config_audit WHERE id = ?').run(row.id)).toThrow(/只追加/);
+    expect(() => sqlite.prepare('UPDATE config_audit SET reason = ? WHERE id = ?').run('tamper', row.id)).toThrow(/只追加/);
   });
 });

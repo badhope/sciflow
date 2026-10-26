@@ -108,8 +108,8 @@ export class ConfigController {
 
   /** 导入配置包（外部来源或备份恢复）：merge 默认 true 追加 */
   @Post('import')
-  importBundle(@Body() body: { bundle?: unknown; merge?: boolean }, @Headers() headers: Record<string, string | undefined>) {
-    return this.config.importBundle(body?.bundle ?? body, { merge: body?.merge !== false }, this.actor(headers));
+  importBundle(@Body() body: { bundle?: unknown; merge?: boolean; applyPermission?: boolean }, @Headers() headers: Record<string, string | undefined>) {
+    return this.config.importBundle(body?.bundle ?? body, { merge: body?.merge !== false, applyPermission: body?.applyPermission === true }, this.actor(headers));
   }
 
   @Get('preview')

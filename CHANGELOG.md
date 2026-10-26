@@ -26,6 +26,14 @@
 ### Fixed
 - **设置页角色与配置中心不同步**：此前两套存储各自为政，页面显示与模型实际收到的不一致；现已统一。
 - **配置类对话工具在无项目时不可用**：此前 `useTools` 依赖 projectId，导致空库用户无法通过对话完成设置。
+- **权限档可被一键解除（监控 AI P1）**：`setPermissionMode` 此前只校验枚举、不过权限矩阵，strict 下 40 秒即可切回 unrestricted；现改为专用门禁——降档自由、**升档每次最多一级**，非法值 400（不再静默回落），导入包夹带的 `permission.mode` 默认忽略。
+- **非法权限档静默提权（P2）**：`normalizePermissionMode` 未知值原回落 `unrestricted`；现 fail-closed 回落 `strict`，DB 读取遇脏值告警。
+- **重复钩子重复注入（P1）**：`config_hook` 缺唯一约束导致同名同事件同类型可重复创建、每次对话重复注入；现加 `ux_config_hook_name_event_type` 唯一索引 + 创建前预检。
+- **非流式对话绕过 chat 作用域与钩子（P2）**：`/api/chat`、MCP `chat.answer` 走 caller=general 被判为 pipeline 作用域，且不执行 `chat:before`；现显式 `context: 'chat'` 并接入 block 钩子（返回 400 而非 500）。
+- **审计可被删除（P2）**：`config_audit` 现加 `BEFORE UPDATE/DELETE` 触发器（任何档位不可改写/删除）；`merge=false` 导入先快照被删条目写入 `bulk_delete` 审计。
+- **唯一默认角色可被停用（P3）**：`updateRole` 增加不变量守卫，禁止把唯一可用默认角色取消默认或停用。
+- **巡检脚本假绿（P2）**：检查项从 14 增至 19（钩子重复/类型、默认角色原始计数、全部适用约束覆盖、审计拒绝原因、日志文件存在），并补充日志体积记录。
+- **block 钩子抛裸 Error → 500**：改为 `BadRequestException`，非流式入口返回 400 可读原因。
 
 ### Tests
 - 新增 `apps/server/src/config/permission.spec.ts`（6）、`config-center.spec.ts`（15）、`agent/agent-skill-gating.spec.ts`（4）、`packages/ai/src/prompt-augmentation.spec.ts`（6）。

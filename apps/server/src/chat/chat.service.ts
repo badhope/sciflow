@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { AiService, ChatMessage, ChatStreamOptions } from '../ai/ai.service';
 import { MemoryService } from '../memory/memory.service';
@@ -195,6 +195,9 @@ export class ChatService {
     docContext?: string,
     opts: Pick<ChatRuntimeOptions, 'model' | 'webSearch'> = {},
   ) {
+    // 非流式入口同样执行 chat:before 钩子（block 在此拦截；prompt_inject 由 AI 层注入）
+    const before = await this.config.runEventHooks('chat:before', { text: message, projectId }, 'chat');
+    if (before.blocked) throw new BadRequestException(before.blocked);
     const { context, sources } = await this.contextFor(projectId, message, docContext, history.length, opts.webSearch === true);
     const persona = this.personaConfig();
     const fullContext = persona.skillsDesc ? `${context}\n\n【可用技能】\n${persona.skillsDesc}\n（回答需要时可利用对应技能获取事实依据）` : context;
@@ -218,11 +221,7 @@ export class ChatService {
     return this.contextFor(projectId, message, docContext, history.length, opts.webSearch === true).then(async ({ context, sources }) => {
       // chat:before 钩子：block 类型在此拦截（抛错由 controller 转为 SSE error 事件）
       const before = await this.config.runEventHooks('chat:before', { text: message, projectId }, 'chat');
-      if (before.blocked) {
-        const err = new Error(before.blocked);
-        (err as Error & { status?: number }).status = 400;
-        throw err;
-      }
+      if (before.blocked) throw new BadRequestException(before.blocked);
       // Agent 工具：开启时把 MCP 工具集注入本轮请求，模型可自主决定检索文献/查知识库。
       // projectId 一并注入，保证工具只在当前项目范围内检索（避免跨项目数据泄露）。
       // 无项目时仍保留工具：配置中心工具（config.*）不依赖项目，用户可在任意对话里完成设置。

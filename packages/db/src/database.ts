@@ -570,6 +570,24 @@ ensureColumn('model_provider', 'context_window', 'INTEGER DEFAULT 0');
 ensureColumn('model_provider', 'max_output', 'INTEGER DEFAULT 0');
 ensureColumn('model_provider', 'tool_calling', 'INTEGER DEFAULT 1');
 ensureColumn('model_provider', 'models', "TEXT DEFAULT '[]'");
+// 配置中心 v1.3：钩子唯一性（同名同事件同类型只允许一条，防重复注入）+ 审计只追加（触发器兜底）
+try {
+  sqlite.exec('CREATE UNIQUE INDEX IF NOT EXISTS ux_config_hook_name_event_type ON config_hook(name, event, type)');
+} catch (e: any) {
+  console.warn(`[DB] config_hook 唯一索引创建失败（可能存在历史重复，需先清理）: ${e?.message || e}`);
+}
+sqlite.exec(`
+CREATE TRIGGER IF NOT EXISTS trg_config_audit_no_update
+BEFORE UPDATE ON config_audit
+BEGIN
+  SELECT RAISE(ABORT, 'config_audit 只追加：禁止 UPDATE');
+END;
+CREATE TRIGGER IF NOT EXISTS trg_config_audit_no_delete
+BEFORE DELETE ON config_audit
+BEGIN
+  SELECT RAISE(ABORT, 'config_audit 只追加：禁止 DELETE');
+END;
+`);
 
 // ---------- 迁移：knowledge_chunk_fts 从 unicode61 升级到 trigram ----------
 // 原因：unicode61 不切分 CJK（整段中文是一个 token），中文短语检索永远命中不到；

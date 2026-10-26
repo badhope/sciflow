@@ -1216,6 +1216,34 @@
         ]
       }
     },
+    "/config/export": {
+      "get": {
+        "operationId": "ConfigController_exportBundle",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/config/import": {
+      "post": {
+        "operationId": "ConfigController_importBundle",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
     "/config/preview": {
       "get": {
         "operationId": "ConfigController_preview",

@@ -53,10 +53,22 @@ export interface PermissionDecision {
   category: ConfigCategory;
 }
 
-export function normalizePermissionMode(value: unknown): PermissionMode {
+/** 严格解析：合法档位返回值，非法返回 null（调用方决定 fail-closed 策略） */
+export function parsePermissionMode(value: unknown): PermissionMode | null {
   const v = String(value ?? '').trim();
-  return (PERMISSION_MODES.map((m) => m.value) as string[]).includes(v) ? (v as PermissionMode) : 'unrestricted';
+  return (PERMISSION_MODES.map((m) => m.value) as string[]).includes(v) ? (v as PermissionMode) : null;
 }
+
+/**
+ * 归一化：非法值 fail-closed 回落 strict（不是 unrestricted）。
+ * 历史行为曾回落 unrestricted，导致拼写错误被静默提权到最宽松档。
+ */
+export function normalizePermissionMode(value: unknown): PermissionMode {
+  return parsePermissionMode(value) ?? 'strict';
+}
+
+/** 档位强度（越大越宽松）：升档必须逐级，降档随意 */
+export const PERMISSION_RANK: Record<PermissionMode, number> = { strict: 0, balanced: 1, open: 2, unrestricted: 3 };
 
 /** 判定某配置类别在当前档位是否可写 */
 export function decidePermission(mode: PermissionMode, category: ConfigCategory): PermissionDecision {

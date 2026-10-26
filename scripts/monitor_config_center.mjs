@@ -13,7 +13,7 @@
  * 用法：node scripts/monitor_config_center.mjs --base http://127.0.0.1:3100 --log ../.tmp-server.log
  * 结果：stdout 打印逐项结论，退出码 0=全部通过；1=有失败项。
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 const argOf = (name, fallback) => {
@@ -66,19 +66,43 @@ if (snap) {
   record('启用约束 ≥1', enabledCons.length >= 1, `${enabledCons.length}`);
   const badHooks = (snap.hooks || []).filter((h) => !['chat:before', 'chat:after', 'pipeline:before', 'pipeline:after'].includes(h.event));
   record('钩子事件合法', badHooks.length === 0, badHooks.map((h) => h.event).join(',') || 'ok');
+  const badTypes = (snap.hooks || []).filter((h) => !['prompt_inject', 'block', 'webhook'].includes(h.type));
+  record('钩子类型合法', badTypes.length === 0, badTypes.map((h) => `${h.name}:${h.type}`).join(',') || 'ok');
+  // 重复钩子 = 每次对话重复注入同一文本（监控 AI 发现的假绿项）
+  const hookKeys = new Map();
+  for (const h of snap.hooks || []) {
+    const k = `${h.name}|${h.event}|${h.type}`;
+    hookKeys.set(k, (hookKeys.get(k) || 0) + 1);
+  }
+  const dupHooks = [...hookKeys.entries()].filter(([, n]) => n > 1);
+  record('钩子无重复（name+event+type）', dupHooks.length === 0, dupHooks.map(([k, n]) => `${k}×${n}`).join('; ') || 'ok');
+  const rawDefault = (snap.roles || []).filter((r) => r.isDefault === 1);
+  record('默认角色原始计数为 1', rawDefault.length === 1, `${rawDefault.length}`);
 }
+
+// 审计不可变 + 拒绝原因非空（监控 AI 补强）
+const audit = await get('/api/config/audit?limit=100').catch(() => ({ status: 0, json: null }));
+const denied = Array.isArray(audit.json) ? audit.json.filter((a) => a.allowed === 0) : [];
+record('审计拒绝记录带原因', denied.every((a) => String(a.reason || '').trim().length > 0), `${denied.length} denied`);
 
 const chatPreview = await get('/api/config/preview?scope=chat').catch(() => ({ status: 0, json: null }));
 const pv = chatPreview.json;
 if (snap) {
   const roleName = (snap.roles || []).find((r) => r.isDefault === 1)?.name;
-  const firstConstraint = (snap.constraints || []).find((c) => c.enabled !== 0);
   record('chat 注入预览包含默认角色', !!roleName && pv?.role?.name === roleName, `${pv?.role?.name}`);
-  record('chat 注入预览包含约束标题', !!firstConstraint && String(pv?.text || '').includes(firstConstraint.title), firstConstraint?.title || 'none');
+  // 全部 chat 适用约束都应出现在预览（不只第一条）
+  const chatScope = (snap.constraints || []).filter((c) => c.enabled !== 0 && (c.scope === 'all' || c.scope === 'chat'));
+  const missing = chatScope.filter((c) => !String(pv?.text || '').includes(c.title));
+  record('chat 注入预览覆盖全部适用约束', missing.length === 0, missing.length ? missing.map((c) => c.title).join(',') : `${chatScope.length} 条`);
 }
 
 const pipePreview = await get('/api/config/preview?scope=pipeline').catch(() => ({ status: 0, json: null }));
 record('pipeline 注入预览可取', pipePreview.status === 200 && typeof pipePreview.json?.text === 'string', `len=${pipePreview.json?.text?.length ?? 0}`);
+if (snap) {
+  const pipeScope = (snap.constraints || []).filter((c) => c.enabled !== 0 && (c.scope === 'all' || c.scope === 'pipeline'));
+  const missingPipe = pipeScope.filter((c) => !String(pipePreview.json?.text || '').includes(c.title));
+  record('pipeline 注入预览覆盖全部适用约束', missingPipe.length === 0, missingPipe.length ? missingPipe.map((c) => c.title).join(',') : `${pipeScope.length} 条`);
+}
 
 const tools = await get('/api/mcp/tools').catch(() => ({ status: 0, json: null }));
 const toolNames = (tools.json?.tools || []).map((t) => t.name);

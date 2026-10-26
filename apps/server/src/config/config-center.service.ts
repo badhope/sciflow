@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { sqlite } from '../db/database';
 import { checkOutboundUrl, allowPrivateOutbound } from '../common/outbound-guard';
 import {
-  CORE_PROTECTED, PERMISSION_MODES, decidePermission, normalizePermissionMode,
+  CORE_PROTECTED, PERMISSION_MODES, PERMISSION_RANK, decidePermission, parsePermissionMode,
   type ConfigCategory, type PermissionMode, type PermissionDecision,
 } from './permission';
 import { CONFIG_PRESETS, SEED_CONSTRAINTS, SEED_HOOKS, SEED_ROLE, type ConfigPreset } from './config-presets';
@@ -47,7 +47,14 @@ export class ConfigCenterService {
 
   getPermissionMode(): PermissionMode {
     const row = sqlite.prepare("SELECT value FROM app_setting WHERE key='config_permission_mode'").get() as { value?: string } | undefined;
-    return normalizePermissionMode(row?.value);
+    // 未设置 → 产品默认「全面放开」；读到非法值 → fail-closed 回落 strict 并告警（防脏数据静默提权）
+    if (row?.value === undefined) return 'unrestricted';
+    const parsed = parsePermissionMode(row.value);
+    if (!parsed) {
+      this.logger.warn(`[config] 非法权限档「${row.value}」已按 strict 处理`);
+      return 'strict';
+    }
+    return parsed;
   }
 
   getPermissionInfo() {
@@ -59,11 +66,27 @@ export class ConfigCenterService {
     };
   }
 
+  /**
+   * 切换权限档（专用门禁，独立于类别矩阵）：
+   *  - 非法值直接 400（不再静默回落）
+   *  - 降档（变严格）自由；升档（变宽松）每次最多一级，防止 strict 一键解除成 unrestricted
+   *  - strict 下仍允许升到 balanced（否则用户永远无法解锁），但禁止直接跳到 open/unrestricted
+   */
   setPermissionMode(mode: unknown, actor = 'ui') {
-    const next = normalizePermissionMode(mode);
-    if (!PERMISSION_MODES.some((m) => m.value === next)) throw new BadRequestException('非法权限档');
+    const next = parsePermissionMode(mode);
+    if (!next) {
+      this.audit({ actor, category: 'permission', action: 'set_mode', target: 'permission', allowed: 0, reason: `非法权限档：${String(mode)}` });
+      throw new BadRequestException(`非法权限档：${String(mode)}（可选 strict/balanced/open/unrestricted）`);
+    }
+    const current = this.getPermissionMode();
+    const delta = PERMISSION_RANK[next] - PERMISSION_RANK[current];
+    if (delta > 1) {
+      const reason = `不允许从「${current}」一步跳到「${next}」：每次最多放宽一级（需先切到 ${PERMISSION_MODES[PERMISSION_RANK[current] + 1]?.value ?? '更高档'}）`;
+      this.audit({ actor, category: 'permission', action: 'set_mode', target: 'permission', allowed: 0, reason });
+      throw new BadRequestException(reason);
+    }
     this.upsertSetting('config_permission_mode', next);
-    this.audit({ actor, category: 'permission', action: 'set_mode', target: 'permission', detail: JSON.stringify({ mode: next }) });
+    this.audit({ actor, category: 'permission', action: 'set_mode', target: 'permission', detail: JSON.stringify({ from: current, to: next }) });
     return this.getPermissionInfo();
   }
 
@@ -99,8 +122,15 @@ export class ConfigCenterService {
 
   updateRole(id: string, patch: { name?: string; systemPrompt?: string; isDefault?: boolean; enabled?: number }, actor = 'ui') {
     this.assertAllowed('role', actor);
-    const row = sqlite.prepare('SELECT id FROM config_role WHERE id = ?').get(id);
+    const row = sqlite.prepare('SELECT id, is_default FROM config_role WHERE id = ?').get(id) as { id?: string; is_default?: number } | undefined;
     if (!row) throw new NotFoundException('角色不存在');
+    // 不变量：始终恰好一个可用默认角色。禁止把唯一默认角色降级/停用（否则对话静默回落内置提示词）
+    if (row.is_default === 1 && (patch.isDefault === false || patch.enabled === 0)) {
+      const others = sqlite.prepare('SELECT id FROM config_role WHERE id != ? AND is_default = 0 AND enabled != 0').get(id);
+      if (!others) throw new BadRequestException('至少保留一个可用默认角色：请先把其他角色设为默认，再停用/降级当前角色');
+      if (patch.enabled === 0) throw new BadRequestException('默认角色不可停用：请先把其他角色设为默认');
+      // 允许取消默认（已有其他候选角色时由调用方显式再设置默认）
+    }
     if (patch.isDefault) sqlite.prepare('UPDATE config_role SET is_default = 0').run();
     const sets: string[] = [];
     const vals: unknown[] = [];
@@ -192,6 +222,10 @@ export class ConfigCenterService {
       const url = (JSON.parse(cfgText) as { url?: string }).url;
       if (!url || !/^https?:\/\//.test(url)) throw new BadRequestException('webhook 钩子必须配置 http(s) URL');
     }
+    // 同名同事件同类型已存在 → 400（防止重复注入；DB 另有唯一索引兜底）
+    const dup = sqlite.prepare('SELECT id FROM config_hook WHERE name = ? AND event = ? AND type = ?')
+      .get(body.name.trim(), String(body.event), String(body.type));
+    if (dup) throw new BadRequestException(`钩子「${body.name.trim()}」已存在（同事件同类型），请先删除或改名`);
     const id = randomUUID();
     sqlite.prepare('INSERT INTO config_hook (id, name, event, type, config, enabled, priority, created_at, updated_at) VALUES (?,?,?,?,?,1,?,?,?)')
       .run(id, body.name.trim(), String(body.event), String(body.type), cfgText, Number.isFinite(Number(body.priority)) ? Number(body.priority) : 100, nowMs(), nowMs());
@@ -355,15 +389,23 @@ export class ConfigCenterService {
    * 导入配置包（离线分享 / 从外部下载的 JSON）：merge=true 追加，merge=false 先清空用户自建项再写入。
    * 与其它写操作一样过权限矩阵 + 审计；非法条目逐条跳过并回报，不因单条坏数据整体失败。
    */
-  importBundle(bundle: unknown, opts: { merge?: boolean } = {}, actor = 'ui') {
+  importBundle(bundle: unknown, opts: { merge?: boolean; applyPermission?: boolean } = {}, actor = 'ui') {
     this.assertAllowed('constraint', actor);
     const b = bundle as { roles?: unknown; constraints?: unknown; hooks?: unknown; permission?: { mode?: unknown } } | null;
     if (!b || typeof b !== 'object') throw new BadRequestException('配置包格式错误：需要 JSON 对象');
     const errors: string[] = [];
     let rolesAdded = 0, constraintsAdded = 0, hooksAdded = 0;
     if (opts.merge === false) {
+      // 覆盖模式：先快照将被删除的条目并写入审计（审计可证明「谁删了什么」）
+      const doomedConstraints = sqlite.prepare("SELECT id, title FROM config_constraint WHERE source = 'user'").all() as { id: string; title: string }[];
+      const doomedHooks = sqlite.prepare("SELECT id, name FROM config_hook WHERE name NOT LIKE '[预设]%'").all() as { id: string; name: string }[];
+      this.audit({
+        actor, category: 'constraint', action: 'bulk_delete',
+        target: 'import:replace',
+        detail: JSON.stringify({ constraints: doomedConstraints, hooks: doomedHooks }).slice(0, 3000),
+      });
       sqlite.prepare("DELETE FROM config_constraint WHERE source = 'user'").run();
-      sqlite.prepare("DELETE FROM config_hook WHERE name NOT LIKE '[预设]%' AND name NOT IN ('结尾自检')").run();
+      sqlite.prepare("DELETE FROM config_hook WHERE name NOT LIKE '[预设]%'").run();
     }
     if (Array.isArray(b.roles)) {
       this.assertAllowed('role', actor);
@@ -414,10 +456,12 @@ export class ConfigCenterService {
         hooksAdded += 1;
       }
     }
-    if (b.permission && typeof b.permission === 'object') {
+    // 导入包不自动应用 permission.mode（防止借导入提权）；需显式 applyPermission=true 且走同一升档门禁
+    if (b.permission && typeof b.permission === 'object' && opts.applyPermission === true) {
       const mode = (b.permission as { mode?: unknown }).mode;
-      if (PERMISSION_MODES.some((m) => m.value === mode)) this.setPermissionMode(mode, actor);
-      else errors.push('permission: 非法 mode');
+      try { this.setPermissionMode(mode, actor); } catch (e: unknown) { errors.push(`permission: ${String((e as Error)?.message || e)}`); }
+    } else if (b.permission) {
+      errors.push('permission: 已忽略（导入不自动改权限档，如需应用请显式 applyPermission）');
     }
     this.audit({ actor, category: 'constraint', action: 'import', target: 'bundle', detail: JSON.stringify({ rolesAdded, constraintsAdded, hooksAdded, merge: opts.merge !== false, errors: errors.slice(0, 5) }) });
     return { ok: true, rolesAdded, constraintsAdded, hooksAdded, errors };
