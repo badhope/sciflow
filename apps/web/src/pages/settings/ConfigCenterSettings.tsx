@@ -103,7 +103,7 @@ export function ConfigCenterSettings() {
                 // 升档每次最多一级：远端会 400，这里提前把不可选档位置灰（保留当前档与降档）
                 const rank: Record<string, number> = { strict: 0, balanced: 1, open: 2, unrestricted: 3 };
                 const disabled = rank[m.value] - rank[snap.permission.mode] > 1;
-                return { value: m.value, label: `${m.label} — ${m.description}${disabled ? '（需逐级解锁）' : ''}` };
+                return { value: m.value, label: `${m.label} — ${m.description}${disabled ? '（需逐级解锁）' : ''}`, disabled };
               })}
             />
             <div className="text-[11px] text-slate-400">放宽权限每次最多一级（防误触一键放开）；收紧可任意降档。</div>

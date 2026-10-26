@@ -187,7 +187,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttrib
 );
 
 export function Select({ options, value, onChange, className = '' }: {
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; disabled?: boolean }[];
   value: string;
   onChange: (v: string) => void;
   className?: string;
@@ -199,7 +199,7 @@ export function Select({ options, value, onChange, className = '' }: {
       className={`rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-900 outline-none transition-all duration-150 focus:border-teal-500 hover:border-slate-400 dark:hover:border-slate-600 ${className}`}
     >
       {options.map((o) => (
-        <option key={o.value} value={o.value}>
+        <option key={o.value} value={o.value} disabled={o.disabled === true}>
           {o.label}
         </option>
       ))}
