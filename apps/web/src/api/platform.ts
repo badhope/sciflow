@@ -60,6 +60,8 @@ export const platform = {
     deleteHook: (id: string) => request<ConfigHook[]>(`/api/config/hooks/${id}`, { method: 'DELETE' }),
     applyPreset: (id: string) => request<ConfigSnapshot>(`/api/config/presets/${id}/apply`, { method: 'POST' }),
     preview: (scope: 'chat' | 'pipeline') => request<ConfigPreview>(`/api/config/preview?scope=${scope}`),
+    exportBundle: () => request<Record<string, unknown>>('/api/config/export'),
+    importBundle: (bundle: unknown, merge = true) => request<{ ok: boolean; rolesAdded: number; constraintsAdded: number; hooksAdded: number; errors: string[] }>('/api/config/import', { method: 'POST', body: JSON.stringify({ bundle, merge }) }),
   },
   settings: {
     get: () => request<AppSettings>(`/api/settings`),

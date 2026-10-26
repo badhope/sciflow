@@ -70,3 +70,6 @@ dist-release
 # 审计临时截图/产物
 tmp-shots/
 tmp-ux2/
+
+# 工作区临时目录（子代理/调试脚本产物）
+.tmp/

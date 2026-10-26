@@ -126,6 +126,7 @@
 | 7 | **无项目也能配置**：ChatService 的 `useTools` 不再要求 projectId，配置类工具在任意对话可用；对话工具步数上限 12、单轮工具调用上限 24（一次对话完成多项配置） | `apps/server/src/chat/chat.service.ts` | 实测一次对话完成 4 项配置（角色+约束+钩子+预览，工具调用 4 次） |
 | 8 | **审计只追加**：`config_audit` 记录 actor（ui/cli/chat）、类别、动作、allowed、reason；被拒操作必须留痕；任何档位不得删除或改写审计 | `config-center.service.ts audit/listAudit` | 回归「strict 拒绝配置写入」「拒绝操作写入审计」 |
 | 9 | **预设离线可用**：内置 4 套（学术严谨/高效产出/审稿人视角/数据处理型），应用幂等（只替换 `source=preset` 的约束与 `[预设]` 前缀钩子）；外部来源用「粘贴导入」承接，不依赖外网 | `apps/server/src/config/config-presets.ts` | 回归「预设重复应用不叠加」 |
+| 10 | **导入导出**：`GET /api/config/export` 输出角色/约束/钩子/权限（不含审计与密钥）；`POST /api/config/import` 幂等（同标题同规则、同名同事件同类型跳过），`--replace` 清空用户自建项，单条坏数据只跳过并回报；写操作同样过权限矩阵与审计 | `apps/server/src/config/config-center.service.ts exportBundle/importBundle` · `config-cli.ts` · `ConfigCenterSettings.tsx` | `config-center.spec.ts` 导入导出 4 条 + CLI 实测两次导入不叠加 |
 
 **运行时巡检**：`node scripts/monitor_config_center.mjs --base <url> --log <log>` 只读检查 14 项（服务健康/配置完整/注入预览/工具暴露/对话真实返回+usage/日志无 error），退出码非 0 即有异常，供监控 AI/CI 使用。
 

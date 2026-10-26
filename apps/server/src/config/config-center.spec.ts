@@ -134,3 +134,55 @@ describe('配置中心·预设', () => {
     expect(() => svc.applyPreset('nope')).toThrow(/预设不存在/);
   });
 });
+
+describe('配置中心·导入导出', () => {
+  beforeEach(() => { fresh(); });
+
+  it('导出的包不含审计字段，导入后配置生效且含跳过统计', () => {
+    const svc = fresh();
+    svc.createConstraint({ title: '导出测试约束', rule: '导出规则' }, 'test');
+    const bundle = svc.exportBundle();
+    expect(JSON.stringify(bundle)).not.toContain('config_audit');
+    expect(bundle.constraints.some((c) => c.title === '导出测试约束')).toBe(true);
+    const r = svc.importBundle({
+      roles: [{ name: '导入角色', systemPrompt: '导入提示词', isDefault: true }],
+      constraints: [{ title: '导入约束', rule: '导入规则', level: 'must', scope: 'chat' }, { title: '', rule: 'x' }],
+      hooks: [{ name: '导入钩子', event: 'chat:before', type: 'prompt_inject', config: { text: '导入钩子文本' } }, { name: '坏钩子', event: 'bad', type: 'prompt_inject' }],
+    }, { merge: true }, 'cli');
+    expect(r.rolesAdded).toBe(1);
+    expect(r.constraintsAdded).toBe(1);
+    expect(r.hooksAdded).toBe(1);
+    expect(r.errors.length).toBe(2);
+    expect(svc.listRoles().some((x) => x.name === '导入角色' && x.isDefault === 1)).toBe(true);
+    expect(svc.preview('chat').text).toContain('导入钩子文本');
+    expect(svc.listAudit(20).some((a) => (a as { action: string }).action === 'import')).toBe(true);
+  });
+
+  it('导入也受权限矩阵约束（strict 拒绝）', () => {
+    const svc = fresh();
+    svc.setPermissionMode('strict');
+    expect(() => svc.importBundle({ constraints: [{ title: 'x', rule: 'y' }] }, {}, 'ui')).toThrow(/严格/);
+  });
+
+  it('重复导入同一配置包不叠加（同标题同规则跳过）', () => {
+    const svc = fresh();
+    const bundle = { constraints: [{ title: '幂等约束', rule: '幂等规则' }], hooks: [{ name: '幂等钩子', event: 'chat:before', type: 'prompt_inject', config: { text: 'x' } }] };
+    const first = svc.importBundle(bundle, { merge: true }, 'test');
+    expect(first.constraintsAdded).toBe(1);
+    expect(first.hooksAdded).toBe(1);
+    const second = svc.importBundle(bundle, { merge: true }, 'test');
+    expect(second.constraintsAdded).toBe(0);
+    expect(second.hooksAdded).toBe(0);
+    expect(svc.listConstraints().filter((c) => c.title === '幂等约束')).toHaveLength(1);
+  });
+
+  it('replace 模式清空用户自建约束后写入', () => {
+    const svc = fresh();
+    svc.createConstraint({ title: '旧的用户约束', rule: 'old' }, 'test');
+    const r = svc.importBundle({ constraints: [{ title: '新的导入约束', rule: 'new' }] }, { merge: false }, 'test');
+    expect(r.constraintsAdded).toBe(1);
+    const titles = svc.listConstraints().map((c) => c.title);
+    expect(titles).toContain('新的导入约束');
+    expect(titles).not.toContain('旧的用户约束');
+  });
+});

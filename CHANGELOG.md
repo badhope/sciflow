@@ -13,6 +13,7 @@
 - **CLI 对等入口**：`sciflow config status|permission|role|constraint|hook|preset|preview|audit`，与 Web/对话同一服务；写操作带 `X-Sciflow-Actor: cli` 审计来源。
 - **技能开关真实生效**：停用「文献检索 / 知识库问答 / 写作辅助」会同步裁掉对应 MCP 工具；配置工具不受影响。
 - **内置预设 4 套**（离线）：学术严谨型、高效产出型、审稿人视角、数据处理型；应用幂等。
+- **配置包导入 / 导出**：`GET /api/config/export` / `POST /api/config/import`（`sciflow config export|import`，设置页「导出 JSON / 粘贴导入」）。导出不含审计与密钥；导入幂等（同标题同规则/同名同事件同类型跳过），`--replace` 可覆盖用户自建项，单条坏数据只跳过不整体失败。
 - **运行时巡检脚本** `scripts/monitor_config_center.mjs`：14 项只读检查（含对话真实返回与 usage、日志无 error），供监控 / CI 使用。
 - 设置页新增「配置中心」分区：权限档、一键预设、角色、约束（带注入预览）、钩子、审计。
 
@@ -27,9 +28,9 @@
 - **配置类对话工具在无项目时不可用**：此前 `useTools` 依赖 projectId，导致空库用户无法通过对话完成设置。
 
 ### Tests
-- 新增 `apps/server/src/config/permission.spec.ts`（6）、`config-center.spec.ts`（11）、`agent/agent-skill-gating.spec.ts`（4）、`packages/ai/src/prompt-augmentation.spec.ts`（6）。
+- 新增 `apps/server/src/config/permission.spec.ts`（6）、`config-center.spec.ts`（15）、`agent/agent-skill-gating.spec.ts`（4）、`packages/ai/src/prompt-augmentation.spec.ts`（6）。
 - 回归脚本新增配置中心 16 条断言（快照/约束增删停用与注入/钩子增删与拦截/权限拒绝与审计/预设幂等）。
-- 门禁：server 188+ / web 81 / lint 0 error / typecheck ×2 / build ×2。
+- 门禁：server 196 / web 81 / lint 0 error / typecheck ×2 / build ×2 / final_acceptance 21/21 / 回归 PASS 202。
 
 ## [1.2.0] - 2026-10-26
 

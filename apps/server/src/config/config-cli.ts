@@ -178,6 +178,35 @@ export function registerConfigCommands(program: Command, localApi: Api): void {
     });
 
   config
+    .command('export')
+    .description('导出配置包（角色/约束/钩子/权限）到 stdout 或文件')
+    .option('--out <path>', '写入文件（缺省打印到 stdout）')
+    .action(async (opts: { out?: string }) => {
+      const bundle = await localApi('/api/config/export');
+      const text = JSON.stringify(bundle, null, 2);
+      if (opts.out) {
+        const { writeFileSync } = await import('node:fs');
+        writeFileSync(opts.out, text, 'utf-8');
+        console.log(`配置包已写入 ${opts.out}`);
+      } else {
+        console.log(text);
+      }
+    });
+
+  config
+    .command('import')
+    .description('从 JSON 文件导入配置包（--merge 默认追加；--replace 覆盖用户自建项）')
+    .argument('<file>', '配置包 JSON 路径')
+    .option('--replace', '覆盖模式（清空用户自建约束/钩子后写入）', false)
+    .action(async (file: string, opts: { replace?: boolean }) => {
+      const { readFileSync } = await import('node:fs');
+      const bundle = JSON.parse(readFileSync(file, 'utf-8'));
+      const r = await localApi('/api/config/import', { method: 'POST', body: { bundle, merge: opts.replace !== true } });
+      console.log(`导入完成：角色 ${r.rolesAdded} / 约束 ${r.constraintsAdded} / 钩子 ${r.hooksAdded}`);
+      if (r.errors?.length) console.log(`跳过 ${r.errors.length} 条：${r.errors.map((e: string) => `\n  - ${e}`).join('')}`);
+    });
+
+  config
     .command('audit')
     .description('查看配置审计（含被拒的操作与原因）')
     .option('--limit <n>', '条数', '50')

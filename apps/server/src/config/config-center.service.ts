@@ -339,6 +339,90 @@ export class ConfigCenterService {
     return this.snapshot();
   }
 
+  /** 导出：可分享/备份的配置包（不含审计与密钥，任何档位可导出） */
+  exportBundle() {
+    return {
+      version: 1,
+      exportedAt: nowMs(),
+      permission: { mode: this.getPermissionMode() },
+      roles: this.listRoles().map((r) => ({ name: r.name, systemPrompt: r.systemPrompt, isDefault: r.isDefault === 1 })),
+      constraints: this.listConstraints().map((c) => ({ title: c.title, rule: c.rule, level: c.level, scope: c.scope, enabled: c.enabled === 1, sortOrder: c.sortOrder })),
+      hooks: this.listHooks().map((h) => ({ name: h.name, event: h.event, type: h.type, config: h.config, enabled: h.enabled === 1, priority: h.priority })),
+    };
+  }
+
+  /**
+   * 导入配置包（离线分享 / 从外部下载的 JSON）：merge=true 追加，merge=false 先清空用户自建项再写入。
+   * 与其它写操作一样过权限矩阵 + 审计；非法条目逐条跳过并回报，不因单条坏数据整体失败。
+   */
+  importBundle(bundle: unknown, opts: { merge?: boolean } = {}, actor = 'ui') {
+    this.assertAllowed('constraint', actor);
+    const b = bundle as { roles?: unknown; constraints?: unknown; hooks?: unknown; permission?: { mode?: unknown } } | null;
+    if (!b || typeof b !== 'object') throw new BadRequestException('配置包格式错误：需要 JSON 对象');
+    const errors: string[] = [];
+    let rolesAdded = 0, constraintsAdded = 0, hooksAdded = 0;
+    if (opts.merge === false) {
+      sqlite.prepare("DELETE FROM config_constraint WHERE source = 'user'").run();
+      sqlite.prepare("DELETE FROM config_hook WHERE name NOT LIKE '[预设]%' AND name NOT IN ('结尾自检')").run();
+    }
+    if (Array.isArray(b.roles)) {
+      this.assertAllowed('role', actor);
+      for (const r of b.roles as Record<string, unknown>[]) {
+        const name = String(r?.name || '').trim();
+        if (!name) { errors.push('role: 缺少 name'); continue; }
+        if (r?.isDefault === true) sqlite.prepare('UPDATE config_role SET is_default = 0').run();
+        const existing = sqlite.prepare('SELECT id FROM config_role WHERE name = ?').get(name) as { id?: string } | undefined;
+        if (existing?.id) {
+          sqlite.prepare('UPDATE config_role SET system_prompt = ?, is_default = ?, enabled = 1, updated_at = ? WHERE id = ?')
+            .run(String(r?.systemPrompt || ''), r?.isDefault === true ? 1 : 0, nowMs(), existing.id);
+        } else {
+          sqlite.prepare('INSERT INTO config_role (id, name, system_prompt, is_default, enabled, created_at, updated_at) VALUES (?,?,?,?,1,?,?)')
+            .run(randomUUID(), name, String(r?.systemPrompt || ''), r?.isDefault === true ? 1 : 0, nowMs(), nowMs());
+        }
+        rolesAdded += 1;
+      }
+    }
+    if (Array.isArray(b.constraints)) {
+      for (const c of b.constraints as Record<string, unknown>[]) {
+        const title = String(c?.title || '').trim();
+        const rule = String(c?.rule || '').trim();
+        if (!title || !rule) { errors.push('constraint: 缺少 title/rule'); continue; }
+        const level = CONSTRAINT_LEVELS.includes(String(c?.level)) ? String(c?.level) : 'must';
+        const scope = CONSTRAINT_SCOPES.includes(String(c?.scope)) ? String(c?.scope) : 'all';
+        // 幂等：同标题同规则已存在则跳过（重复导入/备份恢复不会叠加）
+        const dup = sqlite.prepare('SELECT id FROM config_constraint WHERE title = ? AND rule = ?').get(title, rule);
+        if (dup) { continue; }
+        sqlite.prepare('INSERT INTO config_constraint (id, title, rule, level, scope, enabled, sort_order, source, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+          .run(randomUUID(), title, rule, level, scope, c?.enabled === false ? 0 : 1, Number(c?.sortOrder) || 0, 'import', nowMs(), nowMs());
+        constraintsAdded += 1;
+      }
+    }
+    if (Array.isArray(b.hooks)) {
+      this.assertAllowed('hook', actor);
+      for (const h of b.hooks as Record<string, unknown>[]) {
+        const name = String(h?.name || '').trim();
+        if (!name) { errors.push('hook: 缺少 name'); continue; }
+        if (!HOOK_EVENTS.includes(String(h?.event))) { errors.push(`hook ${name}: 非法 event`); continue; }
+        if (!HOOK_TYPES.includes(String(h?.type))) { errors.push(`hook ${name}: 非法 type`); continue; }
+        const cfgText = typeof h?.config === 'string' ? String(h.config) : JSON.stringify(h?.config ?? {});
+        try { JSON.parse(cfgText); } catch { errors.push(`hook ${name}: config 非 JSON`); continue; }
+        // 幂等：同名同事件同类型已存在则跳过
+        const dupHook = sqlite.prepare('SELECT id FROM config_hook WHERE name = ? AND event = ? AND type = ?').get(name, String(h.event), String(h.type));
+        if (dupHook) { continue; }
+        sqlite.prepare('INSERT INTO config_hook (id, name, event, type, config, enabled, priority, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
+          .run(randomUUID(), name, String(h.event), String(h.type), cfgText, h?.enabled === false ? 0 : 1, Number(h?.priority) || 100, nowMs(), nowMs());
+        hooksAdded += 1;
+      }
+    }
+    if (b.permission && typeof b.permission === 'object') {
+      const mode = (b.permission as { mode?: unknown }).mode;
+      if (PERMISSION_MODES.some((m) => m.value === mode)) this.setPermissionMode(mode, actor);
+      else errors.push('permission: 非法 mode');
+    }
+    this.audit({ actor, category: 'constraint', action: 'import', target: 'bundle', detail: JSON.stringify({ rolesAdded, constraintsAdded, hooksAdded, merge: opts.merge !== false, errors: errors.slice(0, 5) }) });
+    return { ok: true, rolesAdded, constraintsAdded, hooksAdded, errors };
+  }
+
   /** 一次性快照：设置页一次请求拿全（角色/约束/钩子/权限/预设/审计/核心保护项） */
   snapshot() {
     return {

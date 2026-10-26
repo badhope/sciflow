@@ -22,6 +22,8 @@ export function ConfigCenterSettings() {
   const [err, setErr] = useState('');
   const [open, setOpen] = useState<Record<string, boolean>>({ permission: true, roles: true, constraints: true, hooks: false, audit: false });
   const [preview, setPreview] = useState<{ scope: 'chat' | 'pipeline'; text: string } | null>(null);
+  const [importText, setImportText] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
   const loadedOnce = useRef(false);
 
   const load = useCallback(async () => {
@@ -123,6 +125,54 @@ export function ConfigCenterSettings() {
           ))}
         </div>
         <div className="mt-2 text-[11px] text-slate-400">预设只替换 <span className="font-mono">source=preset</span> 的约束与预设钩子，自建项保留。</div>
+      </div>
+
+      {/* 导入 / 导出（离线分享与备份） */}
+      <div className="rounded-lg border border-slate-200 dark:border-slate-800 mb-3 p-3">
+        <div className="flex flex-wrap items-center gap-2 mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+          <Sparkles size={14} className="text-teal-600" /> 导入 / 导出配置包
+          <span className="text-[11px] font-normal text-slate-400">可备份、可分享、可粘贴外部 JSON（不依赖外网）</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <Button variant="outline" size="sm" onClick={() => void run('export', async () => {
+            const bundle = await api.config.exportBundle();
+            const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `sciflow-config-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+          }, '配置包已导出')}>
+            <Save size={12} /> 导出 JSON
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setImportOpen((v) => !v)}>
+            <Plus size={12} /> 粘贴导入
+          </Button>
+        </div>
+        {importOpen && (
+          <div className="mt-2 space-y-2">
+            <Textarea rows={4} className="font-mono text-[11px]" placeholder={`粘贴配置包 JSON，例如：
+{
+  "roles": [{"name":"我的角色","systemPrompt":"...","isDefault":true}],
+  "constraints": [{"title":"必须引用","rule":"...","level":"must","scope":"all"}],
+  "hooks": [{"name":"语气","event":"chat:before","type":"prompt_inject","config":{"text":"..."}}]
+}`} value={importText} onChange={(e) => setImportText(e.target.value)} />
+            <div className="flex gap-1.5">
+              <Button variant="outline" size="sm" disabled={!importText.trim() || busy === 'import'}
+                onClick={() => void run('import', async () => {
+                  const parsed = JSON.parse(importText);
+                  const r = await api.config.importBundle(parsed, true);
+                  setImportText('');
+                  setImportOpen(false);
+                  const extra = r.errors?.length ? `（跳过 ${r.errors.length} 条）` : '';
+                  setMsg(`导入完成：角色 ${r.rolesAdded} / 约束 ${r.constraintsAdded} / 钩子 ${r.hooksAdded}${extra}`);
+                }, '配置包已导入')}>
+                {busy === 'import' ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} 导入（追加）
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => { setImportText(''); setImportOpen(false); }}>取消</Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 角色 */}
