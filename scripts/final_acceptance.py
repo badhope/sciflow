@@ -180,6 +180,11 @@ code, out = run("node apps/server/dist/apps/server/src/cli.js project list", env
 record("F2 project list", code == 0)
 code, out = run("node apps/server/dist/apps/server/src/cli.js pipeline status", env={"DATABASE_PATH": DB})
 record("F3 缺参报错", code != 0 and "required option" in out)
+# 配置中心 CLI（与 Web/对话同一服务）：status / preview 必须可用且输出真实内容
+code, out = run("node apps/server/dist/apps/server/src/cli.js config status", env={"DATABASE_PATH": DB, "SCIFLOW_BASE": BASE})
+record("F4 CLI config status", code == 0 and "权限档" in out and "核心保护项" in out, out.strip().splitlines()[0] if out.strip() else "")
+code, out = run("node apps/server/dist/apps/server/src/cli.js config preview --scope chat", env={"DATABASE_PATH": DB, "SCIFLOW_BASE": BASE})
+record("F5 CLI config preview", code == 0 and "【全局约束" in out, out.strip().splitlines()[0] if out.strip() else "")
 
 # ---------- cleanup ----------
 def _cleanup():

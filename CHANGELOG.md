@@ -38,7 +38,7 @@
 ### Tests
 - 新增 `apps/server/src/config/permission.spec.ts`（6）、`config-center.spec.ts`（22）、`agent/agent-skill-gating.spec.ts`（4）、`packages/ai/src/prompt-augmentation.spec.ts`（6）、`apps/web/src/pages/settings/ConfigCenterSettings.test.tsx`（6）。
 - 回归脚本新增配置中心 16 条断言（快照/约束增删停用与注入/钩子增删与拦截/权限拒绝与审计/预设幂等）。
-- 门禁：server 203 / web 87 / lint 0 error / typecheck ×2 / build ×2 / final_acceptance 21/21 / 回归 PASS 205 / 巡检 19/19。
+- 门禁：server 203 / web 87 / lint 0 error / typecheck ×2 / build ×2 / final_acceptance **23/23**（新增 CLI config status/preview 两项）/ 回归 PASS 205 / 巡检 19/19（已接入 CI）。
 
 ## [1.2.0] - 2026-10-26
 
