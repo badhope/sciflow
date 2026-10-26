@@ -107,7 +107,10 @@ AI_MOCK=1 AI_RPM_CAP=120 DATABASE_PATH=/tmp/sciflow_regression.db PORT=3000 \
 SCIFLOW_BASE=http://localhost:3000 AI_MOCK=1 python3 scripts/full_regression.py
 ```
 
-- 回归基线（本机实测）：mock 网关 **PASS 165 / FAIL 0 / KNOWN 0**（KNOWN 机制保留，当前空集）。
+- 回归基线（本机实测）：mock 网关 **PASS 205 / FAIL 0 / KNOWN 0**（KNOWN 机制保留，当前空集）。
+- 配置中心另有 19 项只读巡检（已接入 CI regression job）：
+  `node scripts/monitor_config_center.mjs --base http://localhost:3000 --log /tmp/server.log`
+- 完整验收矩阵：`python scripts/final_acceptance.py`（**23 项**，含 CLI `config status/preview` 冒烟）。
 - mock 模式跑端到端流水线时务必把 `AI_RPM_CAP` 调大（如 120），否则默认令牌桶会等待导致超时。
 
 ## 6. 代码风格红线
