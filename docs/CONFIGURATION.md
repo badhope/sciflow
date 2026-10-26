@@ -37,11 +37,37 @@ AI_MODEL=deepseek-chat                     # 你开通的模型名
 pnpm install && pnpm dev        # 或 node apps/server/dist/apps/server/src/cli.js health
 ```
 
+> 也可以完全不用 `.env`：启动后在设置 → 模型路由 → 添加厂商，填 Base URL + Key 会自动检测可用模型并匹配上下文/输出/工具调用能力，点「测试连接」确认后保存并激活即可（v1.2）。
+
 **验收**：浏览器开 `http://localhost:3000/api/docs`，`/api/health` 返回 200 即通。若 `settings/check` 返回 503，九成是 Key 填错或模型名不存在——先别看代码，去厂商控制台核对模型名（DeepSeek 叫 `deepseek-chat`，豆包叫 `doubao-seed-*`，名字对不上一切白搭）。
 
 ### 一条新手最容易踩的坑
 
 `.env` 必须放在 `apps/server/` 下（不是仓库根目录）。从根目录启动时它也会被显式加载，但放错了位置你会对着「配置明明写了却不生效」耗半小时——别问是怎么知道的。
+
+---
+
+## 设置页 / CLI / 对话三入口改配置（v1.3）
+
+模型、角色、约束、钩子、权限都可以不改 `.env` 直接在应用内配置；三条入口写的是同一份数据，改完立即生效：
+
+| 入口 | 怎么用 | 适合 |
+|---|---|---|
+| 设置页 | 浏览器 → 设置 → 模型路由 / 配置中心 | 图形化逐项调整、看注入预览与审计 |
+| CLI | `sciflow config status` / `permission` / `role` / `constraint` / `hook` / `preset` / `export` / `import` / `preview` / `audit` | 脚本化、批量导入导出、无 GUI 环境 |
+| 对话 | 在任意对话里让 AI 调用 `config.*` 工具（如「新增一条约束：所有数值必须带单位」） | 一句话完成多项设置 |
+
+```bash
+# 例：CLI 新增约束 → 下一次对话立刻注入
+sciflow config constraint add "输出必须带单位" --rule "所有数值必须带单位" --level must --scope all
+sciflow config preview --scope chat        # 看到实际注入文本，与模型收到的一致
+sciflow config export --out my-config.json # 备份/分享（不含审计与密钥）
+sciflow config import my-config.json       # 幂等导入，重复导入不会叠加
+```
+
+**权限档**：`strict`（只读）/ `balanced` / `open` / `unrestricted`（默认全面放开）。核心保护项（鉴权、密钥与加密、SSRF、审计日志、数据库路径、监听地址与端口、不可逆数据操作）任何档位都不可改；放宽权限每次最多一级，防止误触一键放开。
+
+**运行时巡检**：`node scripts/monitor_config_center.mjs --base http://127.0.0.1:3000 --log <日志>`，19 项只读检查，退出码非 0 即有异常（CI 的 regression job 已接入）。
 
 ---
 
