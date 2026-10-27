@@ -1,5 +1,5 @@
 /**
- * 扩展中心服务（v1.4）：统一管理 skill / mcp / role / constraint / hook / prompt 七类资产。
+ * 扩展中心服务（v1.4）：统一管理 skill / mcp / role / constraint / hook / prompt 六类资产。
  *
  * 设计要点：
  *  - **单一事实源**：所有资产存 `extension_asset` 一张表；首次启动幂等播种内置目录。

@@ -55,6 +55,19 @@ export interface Reference {
   isDuplicateOf?: string;
 }
 
+/** 学术库发现检索的结果（未入库：无 id/projectId/createdAt，需走导入接口才成为 Reference） */
+export type DiscoveredReference = {
+  title: string;
+  authors?: string[] | string;
+  year?: number | null;
+  venue?: string;
+  doi?: string;
+  url?: string;
+  abstract?: string;
+  citationCount?: number;
+  source?: string;
+};
+
 /** 文献录入入参（authors 兼容数组与 JSON 字符串两种形态） */
 export type ReferenceInput = {
   title: string;

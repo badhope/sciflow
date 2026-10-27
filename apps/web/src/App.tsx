@@ -9,7 +9,7 @@ import { api } from './api/client';
 import { isNetworkError } from './api/core';
 import type { KnowledgeSearchHit, Project, Reference } from './types';
 import { errMsg } from './components/ui';
-import { applyTheme, readStoredTheme, resolveTheme, systemPrefersDark, THEME_OPTIONS, type ThemeMode } from './lib/theme';
+import { applyTheme, readStoredStyle, readStoredTheme, resolveTheme, systemPrefersDark, THEME_OPTIONS, type ThemeMode, type ThemeStyle } from './lib/theme';
 import { AuthGate } from './components/AuthGate';
 import { AppShell, ShellNavGroup, ShellNavItem, useAppShell } from './components/AppShell';
 import { BrandLockup } from './components/BrandMark';
@@ -163,10 +163,19 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
   submission: ({ project }) => (project ? <PageErrorBoundary pageName="投稿辅助"><SuspensePage name="投稿辅助"><SubmissionPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
 };
 
-export const ThemeContext = createContext<{ theme: 'light' | 'dark'; mode: ThemeMode; setMode: (m: ThemeMode) => void; toggle: () => void }>({
+export const ThemeContext = createContext<{
+  theme: 'light' | 'dark';
+  mode: ThemeMode;
+  style: ThemeStyle;
+  setMode: (m: ThemeMode) => void;
+  setStyle: (s: ThemeStyle) => void;
+  toggle: () => void;
+}>({
   theme: 'light',
   mode: 'system',
+  style: 'sciflow',
   setMode: () => undefined,
+  setStyle: () => undefined,
   toggle: () => undefined,
 });
 
@@ -204,6 +213,9 @@ function AppInner() {
   const [projectQuery, setProjectQuery] = useState('');
   const [commandOpen, setCommandOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => readStoredTheme());
+  /** 视觉风格（与明暗正交）：6 套主题包，持久化在 sciflow-theme-style */
+  const [themeStyle, setThemeStyleState] = useState<ThemeStyle>(() => readStoredStyle());
+  const setThemeStyle = useCallback((next: ThemeStyle) => setThemeStyleState(next), []);
   /** 系统偏好单独存 state，主题在渲染期派生（避免 effect 里 setState 造成级联渲染） */
   const [systemDark, setSystemDark] = useState<boolean>(() => systemPrefersDark());
   const theme: 'light' | 'dark' = themeMode === 'system' ? (systemDark ? 'dark' : 'light') : themeMode;
@@ -228,13 +240,17 @@ function AppInner() {
   );
 
   useEffect(() => {
-    localStorage.setItem('sciflow-theme', themeMode);
+    try { localStorage.setItem('sciflow-theme', themeMode); } catch { /* 隐私模式 */ }
   }, [themeMode]);
 
-  // 主题落到 <html>（唯一外部副作用）；theme 为派生值
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+    try { localStorage.setItem('sciflow-theme-style', themeStyle); } catch { /* 隐私模式 */ }
+  }, [themeStyle]);
+
+  // 主题落到 <html>（唯一外部副作用）：风格 + 明暗 + theme-color
+  useEffect(() => {
+    applyTheme(theme, themeStyle);
+  }, [theme, themeStyle]);
 
   // 跟随系统：系统主题变化时更新 systemDark（仅订阅，不在回调外 setState）
   useEffect(() => {
@@ -365,7 +381,7 @@ function AppInner() {
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, mode: themeMode, setMode: setThemeMode, toggle: () => setThemeMode((m) => (resolveTheme(m) === 'dark' ? 'light' : 'dark')) }}>
+    <ThemeContext.Provider value={{ theme, mode: themeMode, style: themeStyle, setMode: setThemeMode, setStyle: setThemeStyle, toggle: () => setThemeMode((m) => (resolveTheme(m) === 'dark' ? 'light' : 'dark')) }}>
       <ToastContext.Provider value={toast}>
         {/* 全局登录门：仅 AUTH_MODE=jwt 企业模式可见，本地/桌面模式零干扰 */}
         <AuthGate />
@@ -681,11 +697,11 @@ function SidebarContent({
 /** Cmd+K 命令面板：搜索导航项 + 快捷动作 + 内容搜索（文献/知识库） */
 function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onClose: () => void; onNavigate: (v: View) => void; onNewProject: () => void; projectId: string | null }) {
   const [q, setQ] = useState('');
-  const { setMode } = useContext(ThemeContext);
+  const { setMode, setStyle } = useContext(ThemeContext);
   // F-3.1：命令清单单一来源 lib/commands.ts（label+keywords+hotkey 声明、run 注入），过滤走 filterCommands 双通道
   const commands = useMemo(
-    () => buildCommands({ onNavigate, onNewProject, setThemeMode: setMode, navGroups: NAV_GROUPS.map((g) => ({ label: g.label, items: g.items.map((n) => ({ key: n.key, label: n.label })) })) }),
-    [onNavigate, onNewProject, setMode],
+    () => buildCommands({ onNavigate, onNewProject, setThemeMode: setMode, setThemeStyle: setStyle, navGroups: NAV_GROUPS.map((g) => ({ label: g.label, items: g.items.map((n) => ({ key: n.key, label: n.label })) })) }),
+    [onNavigate, onNewProject, setMode, setStyle],
   );
 
   const filtered = useMemo(() => filterCommands(commands, q), [commands, q]);

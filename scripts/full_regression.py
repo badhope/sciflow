@@ -408,7 +408,18 @@ if qid:
 st, d2 = req("GET", "/api/quality")
 check("质量评分列表 GET", st == 200 and isinstance(d2, list), f"{st}")
 
-# ---------- 8. 文献调研（本地文献库检索，已移除国外在线源） ----------
+# ---------- 8. 文献调研（本地文献库检索 + 学术库发现检索） ----------
+# v1.7：学术库发现检索（AI_MOCK=1 时必须优雅降级为 enabled=false，不触网）
+st, d = req("POST", "/api/references/discover", {"query": "graph neural network", "limit": 3})
+check("学术库发现检索（mock 下优雅降级）",
+      st == 201 or st == 200,
+      f"st={st}")
+if st in (200, 201) and isinstance(d, dict):
+    check("发现检索返回结构化契约（enabled/hits/notice）",
+          isinstance(d.get("enabled"), bool) and isinstance(d.get("hits"), list) and isinstance(d.get("notice"), str),
+          f"keys={sorted(d.keys())}")
+    check("AI_MOCK 下不访问外网（enabled=false）", d.get("enabled") is False, f"enabled={d.get('enabled')}")
+
 st, d = req("POST", "/api/references/search", {"query": "graph neural network node classification", "limit": 5})
 hits = d.get("hits") if isinstance(d, dict) else (d if isinstance(d, list) else [])
 check("文献检索 search（本地文献库）", st in (200, 201) and isinstance(hits, list), f"st={st} hits={len(hits) if isinstance(hits, list) else 0}")

@@ -33,6 +33,7 @@ function baseDeps(over: Partial<PipelineGraphDeps> = {}): PipelineGraphDeps {
     renderCitations: (_p, _d, content) => content,
     crossEnrich: async () => ({ libraryHits: [], knowledgeHits: [], notice: null, meta: { lib: [], kn: [] }, summary: '检索到 0 条' }),
     researchDepth: () => 1,
+    noveltyCheck: async () => ({ overlap: 10, similar: [], advice: '测试桩' }),
     notify: async (taskId, key, status, output, retryCount, extra) => {
       notifyCalls.push({ key, status, output, extra });
       await defaultNotify(taskId, key, status, output, retryCount, extra);

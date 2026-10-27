@@ -14,6 +14,7 @@ import { McpToolList } from './settings/McpToolList';
 import { PersonaSettings } from './settings/PersonaSettings';
 import { ConfigCenterSettings } from './settings/ConfigCenterSettings';
 import { ExtensionCenter, ExtensionQuickAdd } from './settings/ExtensionCenter';
+import { AppearanceSettings } from './settings/AppearanceSettings';
 
 const ModelIcon = ({ ok }: { ok?: boolean }) =>
   ok === undefined ? null : ok ? <CheckCircle2 size={16} className="text-emerald-500" /> : <XCircle size={16} className="text-rose-500" />;
@@ -323,6 +324,7 @@ function SettingsLayout() {
    * 现在按真实顺序组织，并把「连接测试」补进导航（原来有卡片却没有入口）。
    */
   const sections = useMemo(() => [
+    { id: 'settings-appearance', label: '外观与主题' },
     { id: 'settings-ai', label: 'AI 服务' },
     { id: 'settings-extensions', label: '扩展中心' },
     { id: 'settings-config', label: '配置中心' },
@@ -394,9 +396,7 @@ function SettingsLayout() {
     target.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
     return () => target.removeEventListener('scroll', onScroll);
-    onScroll();
-    return () => window.removeEventListener('scroll', onScroll, { capture: true } as EventListenerOptions);
-  }, [activeSection, sections]);
+  }, [sections]);
 
   return (
     <div className="page-container">
@@ -417,6 +417,9 @@ function SettingsLayout() {
           </button>
         ))}
       </nav>
+
+      {/* 外观与主题：风格包 + 明暗模式 */}
+      <AppearanceSettings />
 
       {/* AI 配置总览 */}
       <Card className="p-4 mb-4" id="settings-ai">

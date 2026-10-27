@@ -1,7 +1,22 @@
+import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import { MermaidBlock } from '../../components/MermaidBlock';
+
+/**
+ * 代码块分流：```mermaid 交给 MermaidBlock 真实渲染（流水线自动配图的产物格式），
+ * 其余语言仍按普通代码块展示。此前 mermaid 源码在预览里只是一坨文本 —— 图表等于没生成。
+ */
+function CodeBlock({ className, children, ...rest }: ComponentPropsWithoutRef<'code'> & { children?: ReactNode }) {
+  const isMermaid = /language-mermaid/.test(className || '');
+  if (isMermaid) {
+    const code = String(Array.isArray(children) ? children.join('') : children ?? '').replace(/\r?\n$/, '');
+    return <MermaidBlock code={code} />;
+  }
+  return <code className={className} {...rest}>{children}</code>;
+}
 
 /**
  * WritingPreview — Markdown 预览区（含文末参考文献列表渲染）。
@@ -23,7 +38,15 @@ export function WritingPreview({
     <div className={`reading-surface flex-1 min-w-0 h-full overflow-y-auto p-6 prose prose-sm prose-headings:font-semibold prose-a:text-teal-600 dark:prose-invert ${editorMode === 'split' ? 'w-1/2' : 'w-full'}`}>
       {content.trim() ? (
         <>
-          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+          <ReactMarkdown
+          remarkPlugins={[remarkMath]}
+          rehypePlugins={[rehypeKatex]}
+          components={{
+            // 包一层容器拿到 language-mermaid：pre > code 两层都要接管，否则 pre 会把 figure 再包成代码块
+            pre: ({ children }) => <>{children}</>,
+            code: CodeBlock,
+          }}
+        >
             {content}
           </ReactMarkdown>
           {exported.length > 0 && (

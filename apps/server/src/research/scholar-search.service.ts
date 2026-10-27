@@ -11,6 +11,9 @@
  *  - 只写元数据（标题/作者/年份/期刊/DOI/摘要），不下载全文，不伪造字段。
  */
 import { Injectable, Logger } from '@nestjs/common';
+import { eq } from 'drizzle-orm';
+import { db } from '../db/database';
+import { appSettings } from '../db/schema';
 
 export interface ScholarHit {
   title: string;
@@ -210,6 +213,17 @@ export class ScholarSearchService {
     if (process.env.AI_MOCK === '1') return false;
     const flag = (readSetting('scholar_search') || process.env.SCHOLAR_SEARCH || 'on').trim().toLowerCase();
     return flag !== 'off' && flag !== '0' && flag !== 'false';
+  }
+
+  /** 供 HTTP 入口使用：自己读 app_setting（与流水线同一开关，避免「流水线关了、文献页还在联网」） */
+  isEnabledNow(): boolean {
+    return this.isEnabled((key) => {
+      try {
+        return db.select().from(appSettings).where(eq(appSettings.key, key)).get()?.value ?? '';
+      } catch {
+        return '';
+      }
+    });
   }
 
   /**

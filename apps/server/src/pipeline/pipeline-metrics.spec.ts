@@ -32,3 +32,33 @@ describe('Agent 用量按日聚合的本地日界', () => {
     expect(normalizeAgentDate(ts)).toBe('2026-06-01');
   });
 });
+
+// v1.7：新颖性预检的重叠度口径（纯函数；之前只有 LLM 主观判断，结论不可复现）
+import { noveltyOverlap, tokenizeForMatch } from './pipeline-metrics';
+
+describe('选题重叠度（新颖性预检）', () => {
+  it('同题（含副标题）判高重叠，而不是被长标题摊薄', () => {
+    const topic = 'heterophilic graph node classification';
+    const titles = ['Heterophilic Graph Neural Networks for Node Classification: A Survey'];
+    expect(noveltyOverlap(topic, titles)).toBeGreaterThanOrEqual(70);
+  });
+
+  it('跨域高被引论文不会误判为同题', () => {
+    const topic = 'heterophilic graph node classification';
+    const titles = ['Deep Residual Learning for Image Recognition'];
+    expect(noveltyOverlap(topic, titles)).toBeLessThan(40);
+  });
+
+  it('取候选集最大值，且夹在 0-100', () => {
+    const topic = '图神经网络 节点分类';
+    expect(noveltyOverlap(topic, ['无关标题', '图神经网络节点分类方法综述'])).toBeGreaterThan(0);
+    expect(noveltyOverlap(topic, [])).toBe(0);
+    expect(noveltyOverlap('', ['x'])).toBe(0);
+    expect(noveltyOverlap(topic, [topic])).toBeLessThanOrEqual(100);
+  });
+
+  it('分词覆盖中英文（中文二元组 + 拉丁词）', () => {
+    expect(tokenizeForMatch('graph 图神经网络')).toContain('graph');
+    expect(tokenizeForMatch('图神经网络')).toContain('图神');
+  });
+});

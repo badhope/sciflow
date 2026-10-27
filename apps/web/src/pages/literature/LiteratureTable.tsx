@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef, type SortingState } from '@tanstack/react-table';
 import { ExtractionHeatmap } from './ExtractionHeatmap';
 import { BookOpenCheck, FileDown, FlaskConical, Loader2, ShieldCheck, StickyNote, Trash2, Upload } from 'lucide-react';
-import type { EvidenceResult, PaperComparisonResult, Project, Reference, ReferenceGraph, DeepDiveResult, GapResult, ExtractedPaper, ExtractionField, ExtractionTableResult, ScreeningItem } from '../../types';
+import type { DiscoveredReference, EvidenceResult, PaperComparisonResult, Project, Reference, ReferenceGraph, DeepDiveResult, GapResult, ExtractedPaper, ExtractionField, ExtractionTableResult, ScreeningItem } from '../../types';
 import { Badge, Button, Card, CollapsibleCard, ConfirmDialog, Empty, ErrorBox, Input, Spinner, Textarea, jsonText, errMsg } from '../../components/ui';
 import { ChartEmpty, Donut, HBar } from '../../components/charts';
 import { ToastContext } from '../../App';
@@ -36,8 +36,8 @@ export interface LiteratureTableProps {
   project: Project;
   refs: Reference[];
   setRefs: (updater: (prev: Reference[]) => Reference[]) => void;
-  hits: Reference[];
-  setHits: (r: Reference[]) => void;
+  hits: (Reference | DiscoveredReference)[];
+  setHits: (r: (Reference | DiscoveredReference)[]) => void;
   searching: boolean;
   setSearching: (v: boolean) => void;
   query: string;
@@ -99,7 +99,8 @@ export interface LiteratureTableProps {
   graphLoading: boolean;
 }
 
-const authors = (a: string) => jsonText<string[]>(a, []).join(', ') || '佚名';
+const authors = (a: string | string[] | undefined) =>
+  (Array.isArray(a) ? a : jsonText<string[]>(a ?? '', [])).join(', ') || '佚名';
 
 export function LiteratureTable(props: LiteratureTableProps) {
   const {
@@ -121,6 +122,10 @@ export function LiteratureTable(props: LiteratureTableProps) {
   } = props;
 
   const toast = useContext(ToastContext);
+
+  /** 检索范围：本地库（离线 LIKE）或学术库（OpenAlex/Crossref/arXiv 在线元数据） */
+  const [scope, setScope] = useState<'local' | 'scholar'>('local');
+  const [discoverNotice, setDiscoverNotice] = useState('');
 
   // 手动添加表单
   const [addTitle, setAddTitle] = useState('');
@@ -166,9 +171,19 @@ export function LiteratureTable(props: LiteratureTableProps) {
     if (!query.trim()) return;
     setSearching(true);
     setError('');
+    setDiscoverNotice('');
     try {
-      const results = await api.references.search(query.trim(), 8, project.id);
-      setHits(results);
+      if (scope === 'scholar') {
+        const res = await api.references.discover(query.trim(), 10);
+        // 学术库结果按标题去重：已在本地库的条目标记为「已导入」，避免重复入库
+        const localTitles = new Set(refs.map((r) => r.title.trim().toLowerCase()));
+        setHits(res.hits.map((h) => ({ ...h, source: h.source || 'scholar' })));
+        setImported(() => new Set(res.hits.filter((h) => localTitles.has(h.title.trim().toLowerCase())).map((h) => h.title)));
+        setDiscoverNotice(res.notice);
+      } else {
+        const results = await api.references.search(query.trim(), 8, project.id);
+        setHits(results);
+      }
     } catch (e: unknown) {
       setError(errMsg(e));
     } finally {
@@ -203,7 +218,7 @@ export function LiteratureTable(props: LiteratureTableProps) {
     }
   };
 
-  const importOne = async (hit: Reference) => {
+  const importOne = async (hit: Reference | DiscoveredReference) => {
     try {
       const r = await api.references.create(project.id, hit);
       toast('success', '文献已加入文献库');
@@ -603,7 +618,12 @@ export function LiteratureTable(props: LiteratureTableProps) {
   };
 
   return (
-    <>
+    /*
+      必须包一层单容器：本组件是「左列」的一个网格项，但内部有检索/结果/文献库/筛选/抽取等多张卡。
+      若直接返回 Fragment，`grid lg:grid-cols-2` 会把每张卡各自当成一个网格项，检索结果卡会被
+      排到右列、把 AI 工具面板挤到下一行（v1.7 学术库检索命中 15 条时实测暴露）。
+    */
+    <div className="min-w-0 space-y-4">
       {/*
         检索 / 导入 / 核验的错误此前被解构为 _error 后彻底丢弃（用户点了按钮没反应，也看不到原因）。
         这里统一置于页面顶部，可手动关闭。
@@ -618,14 +638,38 @@ export function LiteratureTable(props: LiteratureTableProps) {
       )}
 
       {/* 检索区 */}
-      <Card tone="accent" className="p-4 mb-4">
-        <div className="flex items-center gap-1.5 mb-2.5 text-slate-700 dark:text-slate-200 font-semibold">
-          <FlaskConical size={15} className="text-teal-600 dark:text-teal-300" /> 文献调研
+      <Card tone="accent" className="p-4">
+        <div className="flex flex-wrap items-center gap-2 mb-2.5">
+          <span className="text-slate-700 dark:text-slate-200 font-semibold flex items-center gap-1.5">
+            <FlaskConical size={15} className="text-teal-600 dark:text-teal-300" /> 文献调研
+          </span>
+          {/* 检索范围切换：本地库 = 离线；学术库 = OpenAlex/Crossref/arXiv 在线元数据 */}
+          <div role="tablist" aria-label="检索范围" className="ml-auto flex rounded-lg border border-slate-200 p-0.5 dark:border-slate-700">
+            {([
+              { id: 'local' as const, label: '本地文献库', hint: '离线检索已录入条目' },
+              { id: 'scholar' as const, label: '学术库检索', hint: '在线查找真实论文元数据（免 Key）' },
+            ]).map((t) => (
+              <button
+                key={t.id}
+                role="tab"
+                aria-selected={scope === t.id}
+                title={t.hint}
+                onClick={() => { setScope(t.id); setHits([]); setDiscoverNotice(''); setImported(() => new Set<string>()); }}
+                className={`rounded-md px-2.5 py-1 text-[11px] transition-colors ${
+                  scope === t.id
+                    ? 'bg-teal-600 font-medium text-white dark:bg-teal-500 dark:text-slate-900'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Input
             className="flex-1 min-w-52"
-            placeholder="在我的文献库中检索标题 / 作者 / 摘要，如：图神经网络"
+            placeholder={scope === 'local' ? '在已录入的文献库中检索标题 / 作者 / 摘要，如：图神经网络' : '检索全球学术库，建议用英文关键词，如：heterophilic graph residual aggregation'}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && search()}
@@ -637,7 +681,12 @@ export function LiteratureTable(props: LiteratureTableProps) {
             {showAdd ? <Trash2 size={15} /> : <FlaskConical size={15} />} {showAdd ? '收起添加' : '手动添加文献'}
           </Button>
         </div>
-        <div className="text-xs text-slate-400 dark:text-slate-500 mt-2">这里检索的是你已录入的本地文献库（离线可用，不联网）。还没有文献？试试：粘贴 DOI、导入 BibTeX、或手动录入</div>
+        <div className="text-xs text-slate-400 dark:text-slate-500 mt-2">
+          {scope === 'local'
+            ? '本地文献库检索：离线可用，只查已录入条目。还没有文献？试试右上角「学术库检索」，或粘贴 DOI / 导入 BibTeX / 手动录入。'
+            : '学术库检索：实时查询 OpenAlex · Crossref · arXiv（只返回元数据，不下载全文、不入库；命中条目需点「导入」才进入本地库）。'}
+          {discoverNotice && <span className="ml-1 text-teal-600 dark:text-teal-400">{discoverNotice}</span>}
+        </div>
 
         {/* 手动添加表单 */}
         {showAdd && (
@@ -662,7 +711,7 @@ export function LiteratureTable(props: LiteratureTableProps) {
 
       {/* 检索结果 */}
       {hits.length > 0 && (
-        <Card tone="panel" className="p-4 mb-4">
+        <Card tone="panel" className="p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">检索结果（{hits.length} 篇）</span>
             <Button variant="success" className="text-xs" onClick={importAll}>
@@ -671,7 +720,7 @@ export function LiteratureTable(props: LiteratureTableProps) {
           </div>
           <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
             {hits.map((h, i) => (
-              <div key={i} className="flex items-start gap-3 border border-slate-100 dark:border-slate-800 rounded-lg p-3 hover:border-teal-300 hover:shadow-[0_2px_10px_-4px_rgba(13,148,136,0.18)] transition-all duration-150">
+              <div key={i} className="flex items-start gap-3 border border-slate-100 dark:border-slate-800 rounded-lg p-3 hover:border-teal-300 hover:shadow-[0_2px_10px_-4px_var(--focus-ring-color)] transition-all duration-150">
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{h.title}</div>
                   <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
@@ -1135,6 +1184,6 @@ export function LiteratureTable(props: LiteratureTableProps) {
         onConfirm={confirmRemoveRef}
         onClose={() => setDeletingRef(null)}
       />
-    </>
+    </div>
   );
 }

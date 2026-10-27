@@ -107,11 +107,13 @@ AI_MOCK=1 AI_RPM_CAP=120 DATABASE_PATH=/tmp/sciflow_regression.db PORT=3000 \
 SCIFLOW_BASE=http://localhost:3000 AI_MOCK=1 python3 scripts/full_regression.py
 ```
 
-- 回归基线（本机实测）：mock 网关 **PASS 220 / FAIL 0 / KNOWN 0**（KNOWN 机制保留，当前空集）。
+- 回归基线（本机实测 v1.7）：mock 网关 **PASS 221 / FAIL 0 / KNOWN 0**（KNOWN 机制保留，当前空集；含 v1.7 新增学术库发现检索 3 项）。
 - 配置中心另有 19 项只读巡检（已接入 CI regression job）：
   `node scripts/monitor_config_center.mjs --base http://localhost:3000 --log /tmp/server.log`
 - 完整验收矩阵：`python scripts/final_acceptance.py`（**23 项**，含 CLI `config status/preview` 冒烟）。
 - 扩展中心测试：`apps/server/src/extensions/extensions.service.spec.ts`（18）+ `apps/web/src/pages/settings/ExtensionCenter.test.tsx`（11）。
+- 主题风格包：`apps/web/src/lib/theme.test.ts`（6 条，含两维正交与非法值回落）；改 `styles/themes.css` 后必须跑一次 `pnpm --filter @sciflow/web test`。
+- 单测基线（v1.7）：server **268** / web **111** / desktop **5**。
 - mock 模式跑端到端流水线时务必把 `AI_RPM_CAP` 调大（如 120），否则默认令牌桶会等待导致超时。
 
 ## 6. 代码风格红线

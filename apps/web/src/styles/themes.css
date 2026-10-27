@@ -1,0 +1,825 @@
+/* ===========================================================================
+   主题风格包（v1.7）
+   ---------------------------------------------------------------------------
+   与明暗正交：`data-theme` 决定视觉语言，`.dark` 决定明暗。
+   每套包覆盖三层：
+     1) 调色板（--color-slate-* / --color-teal-* …）——Tailwind 工具类编译后
+        引用这些变量，因此覆盖变量即整站换肤，无需改组件类名。
+     2) 品牌与语义 token（--brand-* / --background / --border …）。
+     3) 形状与氛围（圆角刻度、阴影、间距密度、字体、玻璃层）。
+   注意：调色板必须保持 50(最浅)→950(最深) 的单调顺序——
+   组件里大量成对使用 `bg-slate-50 dark:bg-slate-900`，反向会直接破版。
+   =========================================================================== */
+
+/* ───────────────────────────── 学术经典 ───────────────────────────── */
+:root[data-theme='academic'] {
+  --color-slate-50: #faf7f2;
+  --color-slate-100: #f2ece3;
+  --color-slate-200: #e5dccd;
+  --color-slate-300: #d2c4b0;
+  --color-slate-400: #9c8b76;
+  --color-slate-500: #7a6a55;
+  --color-slate-600: #5f5140;
+  --color-slate-700: #4a3f31;
+  --color-slate-800: #332b21;
+  --color-slate-900: #241e17;
+  --color-slate-950: #171310;
+
+  --color-teal-50: #fbf3f2;
+  --color-teal-100: #f6e3e1;
+  --color-teal-200: #ecc7c3;
+  --color-teal-300: #dda39d;
+  --color-teal-400: #c4736b;
+  --color-teal-500: #a84e45;
+  --color-teal-600: #8c3a32;
+  --color-teal-700: #7c2d2d;
+  --color-teal-800: #5f2323;
+  --color-teal-900: #4a1d1d;
+
+  --brand-400: #c4736b;
+  --brand-500: #a84e45;
+  --brand-600: #8c3a32;
+  --brand-700: #7c2d2d;
+  --brand-grad: linear-gradient(135deg, #8c3a32 0%, #7c2d2d 55%, #5f2323 100%);
+  --on-brand: #fffdf8;
+  --brand-grad-soft: linear-gradient(135deg, rgba(140, 58, 50, 0.08), rgba(124, 45, 45, 0.05));
+  --brand-glow: 0 2px 10px rgba(124, 45, 45, 0.14);
+  --card-shadow: none;
+  --sh-card: none;
+  --sh-card-hover: 0 2px 8px rgba(60, 45, 30, 0.10);
+  --bg-app: #f7f2e8;
+  --ink: #2a2118;
+
+  --background: #f7f2e8;
+  --foreground: #2a2118;
+  --card: #fffdf8;
+  --card-foreground: #2a2118;
+  --popover: #fffdf8;
+  --popover-foreground: #2a2118;
+  --primary: #8c3a32;
+  --primary-foreground: #fffdf8;
+  --secondary: #f0e8da;
+  --secondary-foreground: #4a3f31;
+  --muted: #f2ebde;
+  --muted-foreground: #6d5f4d;
+  --accent: #f3e7dc;
+  --accent-foreground: #7c2d2d;
+  --destructive: #a4262c;
+  --border: #ded2bf;
+  --input: #ded2bf;
+  --ring: #7c2d2d;
+
+  --viz-series-1: #7c2d2d;
+  --viz-series-2: #6b4f14;
+  --viz-series-3: #2f4858;
+  --viz-series-4: #5b6e4a;
+  --viz-series-5: #8a5a2b;
+  --viz-series-6: #6d5f4d;
+
+  --r-sm: 2px;
+  --r-md: 3px;
+  --r-lg: 4px;
+  --r-xl: 6px;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.1875rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.375rem;
+
+  --spacing: 0.245rem;
+  --font-heading: var(--font-read);
+  --glass-bg: rgba(247, 242, 232, 0.9);
+  --glass-blur: blur(6px);
+  --bubble-user-ink: #fffdf8;
+  --code-bg: #241e17;
+  --code-fg: #efe6d6;
+  --code-border: rgba(120, 100, 70, 0.35);
+  --link: #7c2d2d;
+  --selection-bg: rgba(124, 45, 45, 0.16);
+  --scrollbar-thumb: #cdbfa9;
+  --scrollbar-thumb-hover: #b3a189;
+  --skeleton-a: rgba(120, 100, 70, 0.10);
+  --skeleton-b: rgba(120, 100, 70, 0.18);
+  --ambient-1: rgba(124, 45, 45, 0.035);
+  --ambient-2: rgba(107, 79, 20, 0.03);
+  --focus-ring-color: rgba(124, 45, 45, 0.45);
+  --focus-ring-w: 2px;
+  --sidebar-tint: #fbf6ec;
+}
+:root[data-theme='academic'].dark {
+  --color-slate-400: #a1907c;
+  --color-teal-500: #c4736b;
+  --color-teal-600: #d98f86;
+
+  --brand-500: #c4736b;
+  --brand-600: #d98f86;
+  --brand-700: #e8b4ac;
+  --brand-grad: linear-gradient(135deg, #b8625a 0%, #a84e45 55%, #8c3a32 100%);
+  --on-brand: #1c1814;
+  --brand-grad-soft: linear-gradient(135deg, rgba(196, 115, 107, 0.10), rgba(168, 78, 69, 0.06));
+  --brand-glow: 0 2px 12px rgba(196, 115, 107, 0.16);
+  --card-shadow: none;
+  --sh-card: none;
+  --sh-card-hover: 0 2px 10px rgba(0, 0, 0, 0.45);
+  --bg-app: #1c1814;
+  --ink: #e8e0d2;
+
+  --background: #1c1814;
+  --foreground: #e8e0d2;
+  --card: #241f19;
+  --card-foreground: #e8e0d2;
+  --popover: #241f19;
+  --popover-foreground: #e8e0d2;
+  --primary: #c4736b;
+  --primary-foreground: #1c1814;
+  --secondary: #2c2620;
+  --secondary-foreground: #d8cdba;
+  --muted: #2c2620;
+  --muted-foreground: #b3a691;
+  --accent: #35291f;
+  --accent-foreground: #f0c987;
+  --destructive: #e08a8a;
+  --border: #3a322a;
+  --input: #3a322a;
+  --ring: #c4736b;
+
+  --viz-series-1: #d98f86;
+  --viz-series-2: #e0b96a;
+  --viz-series-3: #8fb0c9;
+  --viz-series-4: #a9c48f;
+  --viz-series-5: #d9a06a;
+  --viz-series-6: #b3a691;
+
+  --glass-bg: rgba(28, 24, 20, 0.9);
+  --code-bg: #14110e;
+  --code-fg: #e8e0d2;
+  --code-border: rgba(140, 120, 90, 0.30);
+  --link: #e8b4ac;
+  --selection-bg: rgba(196, 115, 107, 0.22);
+  --scrollbar-thumb: #3a322a;
+  --scrollbar-thumb-hover: #4d4238;
+  --skeleton-a: rgba(200, 180, 150, 0.08);
+  --skeleton-b: rgba(200, 180, 150, 0.15);
+  --ambient-1: rgba(196, 115, 107, 0.05);
+  --ambient-2: rgba(224, 185, 106, 0.03);
+  --focus-ring-color: rgba(196, 115, 107, 0.55);
+  --sidebar-tint: #201b16;
+}
+
+/* ───────────────────────────── 暖色纸感 ───────────────────────────── */
+:root[data-theme='paper'] {
+  --color-slate-50: #fdfaf4;
+  --color-slate-100: #f7f1e6;
+  --color-slate-200: #ece2d1;
+  --color-slate-300: #dccfb9;
+  --color-slate-400: #a89880;
+  --color-slate-500: #857562;
+  --color-slate-600: #6a5b49;
+  --color-slate-700: #544638;
+  --color-slate-800: #3a3026;
+  --color-slate-900: #2b241c;
+  --color-slate-950: #1e1913;
+
+  --color-teal-50: #fdf6ec;
+  --color-teal-100: #f9ebd6;
+  --color-teal-200: #f2d6ac;
+  --color-teal-300: #e8bb7a;
+  --color-teal-400: #db9c48;
+  --color-teal-500: #c07f2c;
+  --color-teal-600: #9a5b1f;
+  --color-teal-700: #7d4818;
+  --color-teal-800: #633a15;
+  --color-teal-900: #4f2f14;
+
+  --brand-400: #db9c48;
+  --brand-500: #c07f2c;
+  --brand-600: #9a5b1f;
+  --brand-700: #7d4818;
+  --brand-grad: linear-gradient(135deg, #db9c48 0%, #b87333 52%, #9a5b1f 100%);
+  --on-brand: #2b1a06;
+  --brand-grad-soft: linear-gradient(135deg, rgba(219, 156, 72, 0.12), rgba(154, 91, 31, 0.07));
+  --brand-glow: 0 8px 28px rgba(184, 115, 51, 0.18), 0 2px 8px rgba(154, 91, 31, 0.12);
+  --card-shadow: 0 2px 4px rgba(90, 66, 32, 0.05), 0 14px 34px -18px rgba(90, 66, 32, 0.22);
+  --sh-card: 0 2px 4px rgba(90, 66, 32, 0.05), 0 14px 34px -18px rgba(90, 66, 32, 0.22);
+  --sh-card-hover: 0 10px 30px -12px rgba(90, 66, 32, 0.26);
+  --bg-app: #faf6ee;
+  --ink: #2b241c;
+
+  --background: #faf6ee;
+  --foreground: #2b241c;
+  --card: #fffdf7;
+  --card-foreground: #2b241c;
+  --popover: #fffdf7;
+  --popover-foreground: #2b241c;
+  --primary: #b87333;
+  --primary-foreground: #2b1a06;
+  --secondary: #f4ebdc;
+  --secondary-foreground: #544638;
+  --muted: #f4ebdc;
+  --muted-foreground: #6f5f4b;
+  --accent: #fbf0dd;
+  --accent-foreground: #8a4f18;
+  --destructive: #b3382f;
+  --border: #e8dbc7;
+  --input: #e8dbc7;
+  --ring: #b87333;
+
+  --viz-series-1: #b87333;
+  --viz-series-2: #7d6a2f;
+  --viz-series-3: #4a6b7c;
+  --viz-series-4: #7a5c7e;
+  --viz-series-5: #a8543a;
+  --viz-series-6: #6f5f4b;
+
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+
+  --spacing: 0.255rem;
+  --font-heading: var(--font-read);
+  --glass-bg: rgba(250, 246, 238, 0.88);
+  --glass-blur: blur(10px);
+  --bubble-user-ink: #2b1a06;
+  --code-bg: #2b241c;
+  --code-fg: #f3ead9;
+  --code-border: rgba(140, 110, 70, 0.30);
+  --link: #8a4f18;
+  --selection-bg: rgba(184, 115, 51, 0.20);
+  --scrollbar-thumb: #d8c9b2;
+  --scrollbar-thumb-hover: #c0ae93;
+  --skeleton-a: rgba(150, 120, 80, 0.10);
+  --skeleton-b: rgba(150, 120, 80, 0.18);
+  --ambient-1: rgba(219, 156, 72, 0.07);
+  --ambient-2: rgba(184, 115, 51, 0.04);
+  --focus-ring-color: rgba(184, 115, 51, 0.45);
+  --focus-ring-w: 2px;
+  --sidebar-tint: #fdf9f1;
+}
+:root[data-theme='paper'].dark {
+  --color-slate-400: #a89880;
+  --color-teal-500: #db9c48;
+  --color-teal-600: #e8bb7a;
+
+  --brand-500: #db9c48;
+  --brand-600: #e8bb7a;
+  --brand-700: #f0cd97;
+  --brand-grad: linear-gradient(135deg, #db9c48 0%, #c07f2c 55%, #9a5b1f 100%);
+  --on-brand: #221d18;
+  --brand-grad-soft: linear-gradient(135deg, rgba(219, 156, 72, 0.12), rgba(192, 127, 44, 0.07));
+  --brand-glow: 0 8px 30px rgba(219, 156, 72, 0.16);
+  --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.35), 0 14px 34px -18px rgba(219, 156, 72, 0.14);
+  --sh-card: 0 2px 4px rgba(0, 0, 0, 0.35), 0 14px 34px -18px rgba(219, 156, 72, 0.14);
+  --sh-card-hover: 0 10px 30px -12px rgba(219, 156, 72, 0.22);
+  --bg-app: #221d18;
+  --ink: #ece3d4;
+
+  --background: #221d18;
+  --foreground: #ece3d4;
+  --card: #2a241e;
+  --card-foreground: #ece3d4;
+  --popover: #2a241e;
+  --popover-foreground: #ece3d4;
+  --primary: #db9c48;
+  --primary-foreground: #221d18;
+  --secondary: #332b23;
+  --secondary-foreground: #dccfbc;
+  --muted: #332b23;
+  --muted-foreground: #b8a890;
+  --accent: #3a2e22;
+  --accent-foreground: #e0a458;
+  --destructive: #e08076;
+  --border: #443a2f;
+  --input: #443a2f;
+  --ring: #db9c48;
+
+  --viz-series-1: #e0a458;
+  --viz-series-2: #c9b26a;
+  --viz-series-3: #8fb0c9;
+  --viz-series-4: #b9a2c9;
+  --viz-series-5: #d98a6a;
+  --viz-series-6: #b8a890;
+
+  --glass-bg: rgba(34, 29, 24, 0.9);
+  --code-bg: #171310;
+  --code-fg: #ece3d4;
+  --code-border: rgba(160, 130, 90, 0.28);
+  --link: #e0a458;
+  --selection-bg: rgba(219, 156, 72, 0.24);
+  --scrollbar-thumb: #443a2f;
+  --scrollbar-thumb-hover: #574a3c;
+  --skeleton-a: rgba(200, 170, 130, 0.08);
+  --skeleton-b: rgba(200, 170, 130, 0.15);
+  --ambient-1: rgba(219, 156, 72, 0.06);
+  --ambient-2: rgba(192, 127, 44, 0.04);
+  --focus-ring-color: rgba(219, 156, 72, 0.5);
+  --sidebar-tint: #261f19;
+}
+
+/* ───────────────────────────── 现代极简 ───────────────────────────── */
+:root[data-theme='minimal'] {
+  --color-slate-50: #fafafa;
+  --color-slate-100: #f4f4f5;
+  --color-slate-200: #e4e4e7;
+  --color-slate-300: #d4d4d8;
+  --color-slate-400: #a1a1aa;
+  --color-slate-500: #71717a;
+  --color-slate-600: #52525b;
+  --color-slate-700: #3f3f46;
+  --color-slate-800: #27272a;
+  --color-slate-900: #18181b;
+  --color-slate-950: #09090b;
+
+  --color-teal-50: #eff6ff;
+  --color-teal-100: #dbeafe;
+  --color-teal-200: #bfdbfe;
+  --color-teal-300: #93c5fd;
+  --color-teal-400: #60a5fa;
+  --color-teal-500: #3b82f6;
+  --color-teal-600: #2563eb;
+  --color-teal-700: #1d4ed8;
+  --color-teal-800: #1e40af;
+  --color-teal-900: #1e3a8a;
+
+  --brand-400: #60a5fa;
+  --brand-500: #3b82f6;
+  --brand-600: #2563eb;
+  --brand-700: #1d4ed8;
+  --brand-grad: linear-gradient(135deg, #3b82f6 0%, #2563eb 60%, #1d4ed8 100%);
+  --on-brand: #ffffff;
+  --brand-grad-soft: linear-gradient(135deg, rgba(59, 130, 246, 0.07), rgba(37, 99, 235, 0.04));
+  --brand-glow: 0 2px 12px rgba(37, 99, 235, 0.14);
+  --card-shadow: none;
+  --sh-card: none;
+  --sh-card-hover: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --bg-app: #fafafa;
+  --ink: #111111;
+
+  --background: #fafafa;
+  --foreground: #111111;
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #3f3f46;
+  --muted: #f4f4f5;
+  --muted-foreground: #666666;
+  --accent: #eff6ff;
+  --accent-foreground: #1d4ed8;
+  --destructive: #dc2626;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #2563eb;
+
+  --viz-series-1: #2563eb;
+  --viz-series-2: #52525b;
+  --viz-series-3: #7c3aed;
+  --viz-series-4: #0891b2;
+  --viz-series-5: #c2410c;
+  --viz-series-6: #71717a;
+
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 10px;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+
+  --spacing: 0.245rem;
+  --font-heading: var(--font-ui);
+  --glass-bg: rgba(250, 250, 250, 0.9);
+  --glass-blur: blur(8px);
+  --bubble-user-ink: #ffffff;
+  --code-bg: #18181b;
+  --code-fg: #f4f4f5;
+  --code-border: rgba(0, 0, 0, 0.08);
+  --link: #2563eb;
+  --selection-bg: rgba(37, 99, 235, 0.16);
+  --scrollbar-thumb: #d4d4d8;
+  --scrollbar-thumb-hover: #a1a1aa;
+  --skeleton-a: rgba(0, 0, 0, 0.04);
+  --skeleton-b: rgba(0, 0, 0, 0.08);
+  --ambient-1: transparent;
+  --ambient-2: transparent;
+  --focus-ring-color: rgba(37, 99, 235, 0.45);
+  --focus-ring-w: 2px;
+  --sidebar-tint: #ffffff;
+}
+:root[data-theme='minimal'].dark {
+  --color-slate-400: #a1a1aa;
+  --color-teal-500: #60a5fa;
+  --color-teal-600: #93c5fd;
+
+  --brand-500: #60a5fa;
+  --brand-600: #93c5fd;
+  --brand-700: #bfdbfe;
+  --brand-grad: linear-gradient(135deg, #3b82f6 0%, #2563eb 60%, #1d4ed8 100%);
+  --on-brand: #ffffff;
+  --brand-grad-soft: linear-gradient(135deg, rgba(96, 165, 250, 0.10), rgba(59, 130, 246, 0.05));
+  --card-shadow: none;
+  --sh-card: none;
+  --sh-card-hover: 0 1px 4px rgba(255, 255, 255, 0.06);
+  --bg-app: #0d0d0d;
+  --ink: #f2f2f2;
+
+  --background: #0d0d0d;
+  --foreground: #f2f2f2;
+  --card: #161616;
+  --card-foreground: #f2f2f2;
+  --popover: #161616;
+  --popover-foreground: #f2f2f2;
+  --primary: #60a5fa;
+  --primary-foreground: #0d0d0d;
+  --secondary: #1f1f1f;
+  --secondary-foreground: #d4d4d8;
+  --muted: #1f1f1f;
+  --muted-foreground: #a3a3a3;
+  --accent: #1a2333;
+  --accent-foreground: #93c5fd;
+  --destructive: #f87171;
+  --border: #2a2a2a;
+  --input: #2a2a2a;
+  --ring: #60a5fa;
+
+  --viz-series-1: #60a5fa;
+  --viz-series-2: #a1a1aa;
+  --viz-series-3: #a78bfa;
+  --viz-series-4: #22d3ee;
+  --viz-series-5: #fb923c;
+  --viz-series-6: #a3a3a3;
+
+  --glass-bg: rgba(13, 13, 13, 0.9);
+  --code-bg: #000000;
+  --code-fg: #f2f2f2;
+  --code-border: rgba(255, 255, 255, 0.10);
+  --link: #93c5fd;
+  --selection-bg: rgba(96, 165, 250, 0.22);
+  --scrollbar-thumb: #2a2a2a;
+  --scrollbar-thumb-hover: #3f3f46;
+  --skeleton-a: rgba(255, 255, 255, 0.04);
+  --skeleton-b: rgba(255, 255, 255, 0.09);
+  --ambient-1: transparent;
+  --ambient-2: transparent;
+  --focus-ring-color: rgba(96, 165, 250, 0.5);
+  --sidebar-tint: #111111;
+}
+
+/* ─────────────────────────── 暗夜实验室 ─────────────────────────── */
+:root[data-theme='night'] {
+  --color-slate-50: #eef4fa;
+  --color-slate-100: #dbe7f2;
+  --color-slate-200: #b9cbdd;
+  --color-slate-300: #8fa8c0;
+  --color-slate-400: #6b8299;
+  --color-slate-500: #556a7f;
+  --color-slate-600: #41525f;
+  --color-slate-700: #2c3a47;
+  --color-slate-800: #1b2530;
+  --color-slate-900: #101821;
+  --color-slate-950: #070b10;
+
+  --color-teal-50: #ecfeff;
+  --color-teal-100: #cffafe;
+  --color-teal-200: #a5f3fc;
+  --color-teal-300: #67e8f9;
+  --color-teal-400: #22d3ee;
+  --color-teal-500: #06b6d4;
+  --color-teal-600: #0891b2;
+  --color-teal-700: #0e7490;
+  --color-teal-800: #155e75;
+  --color-teal-900: #164e63;
+
+  --brand-400: #67e8f9;
+  --brand-500: #22d3ee;
+  --brand-600: #06b6d4;
+  --brand-700: #0e7490;
+  --brand-grad: linear-gradient(135deg, #22d3ee 0%, #06b6d4 52%, #0891b2 100%);
+  --on-brand: #04141a;
+  --brand-grad-soft: linear-gradient(135deg, rgba(34, 211, 238, 0.12), rgba(6, 182, 212, 0.07));
+  --brand-glow: 0 8px 30px rgba(34, 211, 238, 0.18), 0 2px 8px rgba(6, 182, 212, 0.12);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 30px -16px rgba(34, 211, 238, 0.18);
+  --sh-card: 0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 30px -16px rgba(34, 211, 238, 0.18);
+  --sh-card-hover: 0 12px 34px -14px rgba(34, 211, 238, 0.26);
+  --bg-app: #f2f6fa;
+  --ink: #0f1a24;
+
+  --background: #f2f6fa;
+  --foreground: #0f1a24;
+  --card: #ffffff;
+  --card-foreground: #0f1a24;
+  --popover: #ffffff;
+  --popover-foreground: #0f1a24;
+  --primary: #0891b2;
+  --primary-foreground: #ffffff;
+  --secondary: #e8eef5;
+  --secondary-foreground: #2c3a47;
+  --muted: #e8eef5;
+  --muted-foreground: #5a6b7a;
+  --accent: #e6f7fb;
+  --accent-foreground: #0e7490;
+  --destructive: #dc2626;
+  --border: #d8e3ee;
+  --input: #d8e3ee;
+  --ring: #0891b2;
+
+  --viz-series-1: #0891b2;
+  --viz-series-2: #22d3ee;
+  --viz-series-3: #2563eb;
+  --viz-series-4: #7c3aed;
+  --viz-series-5: #f97316;
+  --viz-series-6: #64748b;
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 18px;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+
+  --spacing: 0.242rem;
+  --font-heading: var(--font-ui);
+  --glass-bg: rgba(242, 246, 250, 0.88);
+  --glass-blur: blur(12px);
+  --bubble-user-ink: #04141a;
+  --code-bg: #0a0f16;
+  --code-fg: #d6e4f0;
+  --code-border: rgba(34, 211, 238, 0.16);
+  --link: #0e7490;
+  --selection-bg: rgba(8, 145, 178, 0.18);
+  --scrollbar-thumb: #c3d2e0;
+  --scrollbar-thumb-hover: #a5b8ca;
+  --skeleton-a: rgba(15, 26, 36, 0.05);
+  --skeleton-b: rgba(15, 26, 36, 0.10);
+  --ambient-1: rgba(34, 211, 238, 0.06);
+  --ambient-2: rgba(8, 145, 178, 0.04);
+  --focus-ring-color: rgba(8, 145, 178, 0.45);
+  --focus-ring-w: 2px;
+  --sidebar-tint: #f7fbfe;
+}
+:root[data-theme='night'].dark {
+  --color-slate-400: #8ba1b6;
+  --color-teal-500: #22d3ee;
+  --color-teal-600: #67e8f9;
+
+  --brand-500: #22d3ee;
+  --brand-600: #67e8f9;
+  --brand-700: #a5f3fc;
+  --brand-grad: linear-gradient(135deg, #22d3ee 0%, #06b6d4 52%, #0891b2 100%);
+  --on-brand: #04141a;
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.6), 0 10px 32px -14px rgba(34, 211, 238, 0.22);
+  --sh-card: 0 1px 2px rgba(0, 0, 0, 0.6), 0 10px 32px -14px rgba(34, 211, 238, 0.22);
+  --sh-card-hover: 0 14px 38px -12px rgba(34, 211, 238, 0.3);
+  --bg-app: #0a0f16;
+  --ink: #d6e4f0;
+
+  --background: #0a0f16;
+  --foreground: #d6e4f0;
+  --card: #0d1520;
+  --card-foreground: #d6e4f0;
+  --popover: #0d1520;
+  --popover-foreground: #d6e4f0;
+  --primary: #22d3ee;
+  --primary-foreground: #04141a;
+  --secondary: #141d28;
+  --secondary-foreground: #cbdbe8;
+  --muted: #141d28;
+  --muted-foreground: #8ba1b6;
+  --accent: #10222e;
+  --accent-foreground: #67e8f9;
+  --destructive: #fb7185;
+  --border: #1e2b3a;
+  --input: #1e2b3a;
+  --ring: #22d3ee;
+
+  --viz-series-1: #22d3ee;
+  --viz-series-2: #67e8f9;
+  --viz-series-3: #60a5fa;
+  --viz-series-4: #a78bfa;
+  --viz-series-5: #fb923c;
+  --viz-series-6: #8ba1b6;
+
+  --glass-bg: rgba(10, 15, 22, 0.9);
+  --code-bg: #060a0f;
+  --code-fg: #d6e4f0;
+  --code-border: rgba(34, 211, 238, 0.18);
+  --link: #67e8f9;
+  --selection-bg: rgba(34, 211, 238, 0.22);
+  --scrollbar-thumb: #1e2b3a;
+  --scrollbar-thumb-hover: #2c3d50;
+  --skeleton-a: rgba(214, 228, 240, 0.06);
+  --skeleton-b: rgba(214, 228, 240, 0.12);
+  --ambient-1: rgba(34, 211, 238, 0.09);
+  --ambient-2: rgba(6, 182, 212, 0.05);
+  --focus-ring-color: rgba(34, 211, 238, 0.55);
+  --sidebar-tint: #0b1119;
+}
+
+/* ────────────────────────── 高对比无障碍 ────────────────────────── */
+:root[data-theme='contrast'] {
+  --color-slate-50: #ffffff;
+  --color-slate-100: #f2f2f2;
+  --color-slate-200: #d9d9d9;
+  --color-slate-300: #b3b3b3;
+  --color-slate-400: #767676;
+  --color-slate-500: #595959;
+  --color-slate-600: #404040;
+  --color-slate-700: #262626;
+  --color-slate-800: #1a1a1a;
+  --color-slate-900: #0d0d0d;
+  --color-slate-950: #000000;
+
+  --color-teal-50: #eef2ff;
+  --color-teal-100: #e0e7ff;
+  --color-teal-200: #c7d2fe;
+  --color-teal-300: #a5b4fc;
+  --color-teal-400: #818cf8;
+  --color-teal-500: #4f46e5;
+  --color-teal-600: #0000ee;
+  --color-teal-700: #0000cc;
+  --color-teal-800: #0000aa;
+  --color-teal-900: #000088;
+
+  --brand-400: #4f46e5;
+  --brand-500: #0000ee;
+  --brand-600: #0000cc;
+  --brand-700: #0000aa;
+  --brand-grad: linear-gradient(135deg, #0000ee 0%, #0000cc 60%, #0000aa 100%);
+  --on-brand: #ffffff;
+  --brand-grad-soft: linear-gradient(135deg, #eef2ff, #eef2ff);
+  --brand-glow: none;
+  --card-shadow: none;
+  --sh-card: none;
+  --sh-card-hover: none;
+  --bg-app: #ffffff;
+  --ink: #000000;
+
+  --background: #ffffff;
+  --foreground: #000000;
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+  --primary: #0000ee;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f2f2;
+  --secondary-foreground: #000000;
+  --muted: #f2f2f2;
+  --muted-foreground: #404040;
+  --accent: #eef2ff;
+  --accent-foreground: #0000aa;
+  --destructive: #b30000;
+  --border: #000000;
+  --input: #000000;
+  --ring: #0000ee;
+
+  --viz-series-1: #0000ee;
+  --viz-series-2: #b30000;
+  --viz-series-3: #006600;
+  --viz-series-4: #7a3e00;
+  --viz-series-5: #660099;
+  --viz-series-6: #000000;
+
+  --r-sm: 0px;
+  --r-md: 2px;
+  --r-lg: 2px;
+  --r-xl: 4px;
+  --radius-sm: 0px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 4px;
+
+  --spacing: 0.255rem;
+  --font-heading: var(--font-ui);
+  --glass-bg: #ffffff;
+  --glass-blur: none;
+  --bubble-user-ink: #ffffff;
+  --code-bg: #000000;
+  --code-fg: #ffffff;
+  --code-border: #ffffff;
+  --link: #0000ee;
+  --selection-bg: #ffff00;
+  --scrollbar-thumb: #000000;
+  --scrollbar-thumb-hover: #404040;
+  --skeleton-a: #f2f2f2;
+  --skeleton-b: #d9d9d9;
+  --ambient-1: transparent;
+  --ambient-2: transparent;
+  --focus-ring-color: #0000ee;
+  --focus-ring-w: 3px;
+  --sidebar-tint: #ffffff;
+}
+:root[data-theme='contrast'].dark {
+  --color-slate-400: #b3b3b3;
+  --color-teal-500: #66b3ff;
+  --color-teal-600: #99ccff;
+
+  --brand-500: #66b3ff;
+  --brand-600: #99ccff;
+  --brand-700: #cce5ff;
+  --brand-grad: linear-gradient(135deg, #66b3ff 0%, #3399ff 60%, #0077dd 100%);
+  --on-brand: #000000;
+  --brand-grad-soft: linear-gradient(135deg, #101030, #101030);
+  --bg-app: #000000;
+  --ink: #ffffff;
+
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: #0a0a0a;
+  --card-foreground: #ffffff;
+  --popover: #0a0a0a;
+  --popover-foreground: #ffffff;
+  --primary: #66b3ff;
+  --primary-foreground: #000000;
+  --secondary: #1a1a1a;
+  --secondary-foreground: #ffffff;
+  --muted: #1a1a1a;
+  --muted-foreground: #d9d9d9;
+  --accent: #101030;
+  --accent-foreground: #a5b4fc;
+  --destructive: #ff8080;
+  --border: #ffffff;
+  --input: #ffffff;
+  --ring: #66b3ff;
+
+  --viz-series-1: #66b3ff;
+  --viz-series-2: #ff8080;
+  --viz-series-3: #80ff80;
+  --viz-series-4: #ffd280;
+  --viz-series-5: #d9a5ff;
+  --viz-series-6: #ffffff;
+
+  --glass-bg: #000000;
+  --code-bg: #000000;
+  --code-fg: #ffffff;
+  --code-border: #ffffff;
+  --link: #66b3ff;
+  --selection-bg: #ffff00;
+  --scrollbar-thumb: #ffffff;
+  --scrollbar-thumb-hover: #b3b3b3;
+  --skeleton-a: #1a1a1a;
+  --skeleton-b: #262626;
+  --focus-ring-color: #66b3ff;
+  --sidebar-tint: #0a0a0a;
+}
+
+/* ───────────── 风格层的形状/密度差异（变量无法表达的部分） ───────────── */
+
+/* 标题字体：学术与纸感走衬线，极简收紧字距 */
+h1, h2, h3, .page-hero__title, .markdown-body h1, .markdown-body h2, .markdown-body h3 {
+  font-family: var(--font-heading, var(--font-ui));
+}
+:root[data-theme='minimal'] h1,
+:root[data-theme='minimal'] h2,
+:root[data-theme='minimal'] h3,
+:root[data-theme='minimal'] .page-hero__title { letter-spacing: -0.03em; }
+:root[data-theme='academic'] h1,
+:root[data-theme='academic'] h2,
+:root[data-theme='paper'] h1,
+:root[data-theme='paper'] h2 { letter-spacing: 0.005em; }
+
+/* 高对比：2px 实线边框 + 3px 焦点框 + 禁用一切半透明叠加 */
+:root[data-theme='contrast'] .surface,
+:root[data-theme='contrast'] .surface-panel,
+:root[data-theme='contrast'] .surface-inset { border-width: 2px; }
+:root[data-theme='contrast'] .glass-header {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-theme='contrast'] button:focus-visible,
+:root[data-theme='contrast'] a:focus-visible,
+:root[data-theme='contrast'] input:focus-visible,
+:root[data-theme='contrast'] textarea:focus-visible,
+:root[data-theme='contrast'] select:focus-visible,
+:root[data-theme='contrast'] [tabindex]:focus-visible {
+  outline: 3px solid var(--focus-ring-color);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+:root[data-theme='contrast'] .skeleton { animation: none; }
+
+/* 学术/极简/高对比：去掉品牌氛围光与渐变分隔线（这些是"AI 产品味"的来源） */
+:root[data-theme='minimal'] #root::before,
+:root[data-theme='contrast'] #root::before { display: none; }
+:root[data-theme='minimal'] .brand-divider,
+:root[data-theme='contrast'] .brand-divider { background: var(--border); }
+
+/* 侧栏底色跟随风格（默认用卡片色；学术/纸感用略带暖调的纸面） */
+:root[data-theme='academic'] .app-shell__sidebar,
+:root[data-theme='paper'] .app-shell__sidebar,
+:root[data-theme='night'] .app-shell__sidebar,
+:root[data-theme='minimal'] .app-shell__sidebar,
+:root[data-theme='contrast'] .app-shell__sidebar { background: var(--sidebar-tint); }
+
+/* 阅读面：学术/纸感略增字号与行高（论文长读） */
+:root[data-theme='academic'] .reading-surface .markdown-body,
+:root[data-theme='paper'] .reading-surface .markdown-body { font-size: 15.5px; line-height: 1.95; }

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./styles/themes.css";
 @plugin "@tailwindcss/typography";
 /* streamdown（流式 Markdown 渲染）的 utility 类扫描 */
 @source "../node_modules/streamdown/dist/*.js";
@@ -41,7 +42,7 @@
   --secondary: #eef2f7;
   --secondary-foreground: #334155;
   --muted: #eef2f7;
-  --muted-foreground: #64748b;
+  --muted-foreground: #5d6d85;
   --accent: #e6f4f2;
   --accent-foreground: #0f766e;
   --destructive: #e11d48;
@@ -90,8 +91,29 @@
 
   --sh-card: 0 1px 2px rgba(23, 32, 44, 0.05), 0 8px 24px -14px rgba(23, 32, 44, 0.12);
   --sh-overlay: 0 24px 60px -24px rgba(9, 15, 28, 0.35), 0 2px 8px rgba(9, 15, 28, 0.08);
+  --sh-card-hover: 0 10px 28px rgba(23, 32, 44, 0.12);
 
   --dur-1: 120ms; --dur-2: 200ms;
+
+  /* ---- 主题风格层默认值（v1.7）：被 :root[data-theme] 风格包覆盖 ---- */
+  --font-heading: var(--font-ui);
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-blur: blur(12px) saturate(1.4);
+  --bubble-user-ink: #ffffff;
+  --code-bg: #0f172a;
+  --code-fg: #e2e8f0;
+  --code-border: rgba(148, 163, 184, 0.18);
+  --link: var(--brand-600);
+  --selection-bg: color-mix(in srgb, var(--brand-500) 22%, transparent);
+  --scrollbar-thumb: #c3cede;
+  --scrollbar-thumb-hover: #9fb0c9;
+  --skeleton-a: rgba(148, 163, 184, 0.12);
+  --skeleton-b: rgba(148, 163, 184, 0.22);
+  --ambient-1: rgba(13, 148, 136, 0.06);
+  --ambient-2: rgba(8, 145, 178, 0.04);
+  --focus-ring-color: rgba(13, 148, 136, 0.40);
+  --focus-ring-w: 2px;
+  --sidebar-tint: var(--card);
 
   /* ---- 字体族（三档语义，全部系统字体、零 CDN）---- */
   --font-ui: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Inter, "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
@@ -161,6 +183,17 @@
   --viz-series-4: #a78bfa;
   --viz-series-5: #fb923c;
   --viz-series-6: #94a3b8;
+
+  --glass-bg: rgba(9, 15, 29, 0.72);
+  --selection-bg: color-mix(in srgb, var(--brand-500) 26%, transparent);
+  --scrollbar-thumb: #334155;
+  --scrollbar-thumb-hover: #475569;
+  --skeleton-a: rgba(148, 163, 184, 0.10);
+  --skeleton-b: rgba(148, 163, 184, 0.20);
+  --ambient-1: rgba(13, 148, 136, 0.09);
+  --ambient-2: rgba(8, 145, 178, 0.06);
+  --focus-ring-color: rgba(20, 184, 166, 0.45);
+  --sh-card-hover: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 
 html, body, #root {
@@ -200,27 +233,25 @@ body {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(900px 460px at 82% -12%, rgba(13, 148, 136, 0.06), transparent 62%),
-    radial-gradient(680px 320px at -6% -4%, rgba(8, 145, 178, 0.04), transparent 58%);
+    radial-gradient(900px 460px at 82% -12%, var(--ambient-1), transparent 62%),
+    radial-gradient(680px 320px at -6% -4%, var(--ambient-2), transparent 58%);
 }
 .dark #root::before {
   background:
-    radial-gradient(1000px 480px at 86% -12%, rgba(13, 148, 136, 0.09), transparent 62%),
-    radial-gradient(760px 340px at -6% -4%, rgba(8, 145, 178, 0.06), transparent 58%);
+    radial-gradient(1000px 480px at 86% -12%, var(--ambient-1), transparent 62%),
+    radial-gradient(760px 340px at -6% -4%, var(--ambient-2), transparent 58%);
 }
 
 /* 文本选区：品牌色一以贯之 */
 ::selection {
-  background: color-mix(in srgb, var(--brand-500) 22%, transparent);
+  background: var(--selection-bg);
 }
 
 /* 细滚动条 */
 *::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-thumb { background: #c3cede; border-radius: 4px; }
-*::-webkit-scrollbar-thumb:hover { background: #9fb0c9; }
+*::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 *::-webkit-scrollbar-track { background: transparent; }
-.dark *::-webkit-scrollbar-thumb { background: #334155; }
-.dark *::-webkit-scrollbar-thumb:hover { background: #475569; }
 
 /* ---- 品牌动效 token ---- */
 @keyframes pulse-dot {
@@ -266,7 +297,7 @@ body {
 }
 .card-lift:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 28px rgba(23, 32, 44, 0.12);
+  box-shadow: var(--sh-card-hover);
 }
 
 /* ---- Surface 体系（对应 ui.tsx 的 SurfaceTone）----------------------------
@@ -435,8 +466,8 @@ body {
 }
 .input-focus-ring:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.30);
-  border-color: #0d9488;
+  box-shadow: 0 0 0 var(--focus-ring-w) var(--focus-ring-color);
+  border-color: var(--ring);
 }
 
 /* Global focus-visible ring for all interactive elements */
@@ -448,7 +479,7 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.40);
+  box-shadow: 0 0 0 var(--focus-ring-w) var(--focus-ring-color);
 }
 
 /* 骨架屏 shimmer */
@@ -457,7 +488,7 @@ select:focus-visible {
   100% { background-position: 400px 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, rgba(148, 163, 184, 0.12) 25%, rgba(148, 163, 184, 0.22) 37%, rgba(148, 163, 184, 0.12) 63%);
+  background: linear-gradient(90deg, var(--skeleton-a) 25%, var(--skeleton-b) 37%, var(--skeleton-a) 63%);
   background-size: 400px 100%;
   animation: shimmer 1.4s infinite linear;
   border-radius: 6px;
@@ -467,8 +498,7 @@ select:focus-visible {
 .page-container { width: 100%; max-width: var(--page-max); margin-inline: auto; }
 
 /* 用户气泡：teal-600 白字仅 3.7:1，改用品牌 600 深一档（4.86:1） */
-.bubble-user { background: var(--brand-600); color: #fff; }
-.dark .bubble-user { background: #0f766e; }
+.bubble-user { background: var(--brand-600); color: var(--bubble-user-ink); }
 
 /* 品牌渐变文字/图标辅助 */
 .brand-gradient-text {
@@ -513,8 +543,8 @@ select:focus-visible {
 /* 侧边栏品牌区（墨流 2.0）：左上品牌光晕 + 底部渐变分隔线 */
 .shell-brand-zone {
   position: relative;
-  background: radial-gradient(140% 110% at 0% 0%, rgba(13, 148, 136, 0.07), transparent 58%),
-    radial-gradient(90% 60% at 100% 100%, rgba(8, 145, 178, 0.04), transparent 55%);
+  background: radial-gradient(140% 110% at 0% 0%, var(--ambient-1), transparent 58%),
+    radial-gradient(90% 60% at 100% 100%, var(--ambient-2), transparent 55%);
 }
 .shell-brand-zone::after {
   content: "";
@@ -523,11 +553,11 @@ select:focus-visible {
   right: 12px;
   bottom: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(13, 148, 136, 0.28), rgba(2, 132, 199, 0.28), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-500) 28%, transparent), color-mix(in srgb, var(--brand-600) 28%, transparent), transparent);
 }
 .dark .shell-brand-zone {
-  background: radial-gradient(140% 110% at 0% 0%, rgba(13, 148, 136, 0.10), transparent 58%),
-    radial-gradient(90% 60% at 100% 100%, rgba(8, 145, 178, 0.06), transparent 55%);
+  background: radial-gradient(140% 110% at 0% 0%, var(--ambient-1), transparent 58%),
+    radial-gradient(90% 60% at 100% 100%, var(--ambient-2), transparent 55%);
 }
 
 /* 登录门氛围：居中卡片后的两团品牌光晕（比全局光晕更聚焦） */
@@ -536,15 +566,15 @@ select:focus-visible {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(720px 420px at 50% -8%, rgba(13, 148, 136, 0.16), transparent 62%),
-    radial-gradient(520px 300px at 12% 108%, rgba(8, 145, 178, 0.10), transparent 60%),
-    radial-gradient(460px 260px at 90% 96%, rgba(11, 111, 196, 0.08), transparent 58%);
+    radial-gradient(720px 420px at 50% -8%, color-mix(in srgb, var(--brand-500) 16%, transparent), transparent 62%),
+    radial-gradient(520px 300px at 12% 108%, color-mix(in srgb, var(--brand-600) 10%, transparent), transparent 60%),
+    radial-gradient(460px 260px at 90% 96%, color-mix(in srgb, var(--brand-500) 8%, transparent), transparent 58%);
 }
 .dark .auth-glow {
   background:
-    radial-gradient(720px 420px at 50% -8%, rgba(13, 148, 136, 0.22), transparent 62%),
-    radial-gradient(520px 300px at 12% 108%, rgba(8, 145, 178, 0.14), transparent 60%),
-    radial-gradient(460px 260px at 90% 96%, rgba(11, 111, 196, 0.12), transparent 58%);
+    radial-gradient(720px 420px at 50% -8%, color-mix(in srgb, var(--brand-500) 20%, transparent), transparent 62%),
+    radial-gradient(520px 300px at 12% 108%, color-mix(in srgb, var(--brand-600) 13%, transparent), transparent 60%),
+    radial-gradient(460px 260px at 90% 96%, color-mix(in srgb, var(--brand-500) 11%, transparent), transparent 58%);
 }
 
 /* 卡片顶部品牌高光线（登录门等品牌卡用） */
@@ -565,32 +595,27 @@ select:focus-visible {
 
 /* 顶部 header 玻璃质感 */
 .glass-header {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(12px) saturate(1.4);
-  -webkit-backdrop-filter: blur(12px) saturate(1.4);
-}
-.dark .glass-header {
-  background: rgba(9, 15, 29, 0.72);
-  backdrop-filter: blur(12px) saturate(1.2);
-  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
 }
 
 /* 卡片品牌边框辉光（可交互卡 hover 时） */
 .card-glow {
-  border-color: rgba(13, 148, 136, 0.35);
-  box-shadow: var(--card-shadow), 0 0 0 1px rgba(13, 148, 136, 0.06);
+  border-color: color-mix(in srgb, var(--brand-500) 35%, transparent);
+  box-shadow: var(--card-shadow), 0 0 0 1px color-mix(in srgb, var(--brand-500) 6%, transparent);
 }
 
 /* 品牌分割细线（模块之间用渐变色线分隔，线性感） */
 .brand-divider {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(13, 148, 136, 0.35), rgba(2, 132, 199, 0.35), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-500) 35%, transparent), color-mix(in srgb, var(--brand-600) 35%, transparent), transparent);
 }
 
 /* 品牌状态呼吸点（流水线 running 用） */
 @keyframes brand-breathe {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.35); }
-  50% { box-shadow: 0 0 0 4px rgba(13, 148, 136, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-500) 35%, transparent); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-500) 0%, transparent); }
 }
 .brand-breathe { animation: brand-breathe 1.8s ease-in-out infinite; }
 
@@ -652,7 +677,7 @@ kbd {
   position: fixed;
   inset: 0;
   z-index: 55;
-  background: rgba(9, 15, 28, 0.45);
+  background: color-mix(in srgb, #090f1c 45%, transparent);
   backdrop-filter: blur(2px);
   animation: fade-in var(--dur-fast) var(--ease);
 }
@@ -1100,8 +1125,7 @@ kbd {
   border-left: 3px solid var(--brand-400);
   color: var(--muted-foreground);
 }
-.markdown-body a { color: var(--brand-600); text-decoration: underline; text-underline-offset: 2px; }
-.dark .markdown-body a { color: #5eead4; }
+.markdown-body a { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
 .markdown-body code {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 0.88em;
@@ -1115,9 +1139,9 @@ kbd {
   padding: 0.85em 1em;
   border-radius: 10px;
   overflow-x: auto;
-  background: #0f172a;
-  color: #e2e8f0;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: var(--code-bg);
+  color: var(--code-fg);
+  border: 1px solid var(--code-border);
   font-size: 12.5px;
   line-height: 1.6;
 }
@@ -1128,6 +1152,9 @@ kbd {
 .markdown-body th { background: color-mix(in srgb, var(--brand-500) 7%, transparent); font-weight: 600; }
 .markdown-body hr { border: 0; border-top: 1px solid var(--border); margin: 1.1em 0; }
 .markdown-body .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.2em 0; }
+
+/* Mermaid 图表：SVG 默认按内容宽度渲染（窄图很小），统一撑到容器宽度并限高避免长图失控 */
+.mermaid-figure > svg { width: 100%; max-width: 860px; height: auto; }
 
 /* Streamdown 默认留白偏大（space-y-4 / text-xl 标题），在对话气泡内收紧到阅读节奏 */
 .markdown-body > div { row-gap: 0.45rem; }
@@ -1141,13 +1168,13 @@ kbd {
 
 /* CodeMirror 暗色配色对齐应用 navy 主题（默认 one-dark 是中性灰，和卡片/侧栏不协调） */
 .dark .cm-editor { background: var(--card) !important; color: var(--foreground); }
-.dark .cm-editor .cm-gutters { background: color-mix(in srgb, var(--card) 88%, #000) !important; color: #64748b; border-right: 1px solid var(--border) !important; }
-.dark .cm-editor .cm-activeLine { background: rgba(20, 184, 166, 0.06) !important; }
-.dark .cm-editor .cm-activeLineGutter { background: rgba(20, 184, 166, 0.10) !important; }
-.dark .cm-editor .cm-content { caret-color: #5eead4; }
+.dark .cm-editor .cm-gutters { background: color-mix(in srgb, var(--card) 88%, #000) !important; color: var(--muted-foreground); border-right: 1px solid var(--border) !important; }
+.dark .cm-editor .cm-activeLine { background: color-mix(in srgb, var(--brand-500) 8%, transparent) !important; }
+.dark .cm-editor .cm-activeLineGutter { background: color-mix(in srgb, var(--brand-500) 12%, transparent) !important; }
+.dark .cm-editor .cm-content { caret-color: var(--brand-700); }
 .dark .cm-editor .cm-selectionBackground,
-.dark .cm-editor.cm-focused .cm-selectionBackground { background: rgba(45, 212, 191, 0.22) !important; }
-.dark .cm-editor .cm-cursor { border-left-color: #5eead4; }
+.dark .cm-editor.cm-focused .cm-selectionBackground { background: color-mix(in srgb, var(--brand-500) 26%, transparent) !important; }
+.dark .cm-editor .cm-cursor { border-left-color: var(--brand-700); }
 
 /* ═══════════════════════════════════════════════════════════════════
    项目阶段条（Flow-first 叙事）
@@ -1206,7 +1233,7 @@ kbd {
   padding: 0 4px;
   border-radius: 999px;
   background: var(--amber-500);
-  color: #1f1300;
+  color: var(--on-brand);
   font-size: 10px;
   font-weight: 600;
   display: inline-flex; align-items: center; justify-content: center;
@@ -1350,10 +1377,10 @@ kbd {
 .settings-nav__item:hover { background: var(--muted); color: var(--foreground); }
 .settings-nav__item--active {
   background: var(--brand-grad);
-  color: #fff;
+  color: var(--on-brand);
   font-weight: 600;
 }
-.settings-nav__item--active:hover { background: var(--brand-grad); color: #fff; }
+.settings-nav__item--active:hover { background: var(--brand-grad); color: var(--on-brand); }
 
 /* 长列表绘制优化：视口外的资料/文献/任务行不参与布局与绘制。
    用 content-visibility 而非虚拟滚动——零 JS、零依赖，且不破坏搜索/锚点。 */

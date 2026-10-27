@@ -2,6 +2,43 @@
 
 本项目格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，语义化版本号。以下按 `git log` 自底向上归纳历轮功能与修复，未含真实密钥。
 
+## [1.7.0] - 2026-10-28
+
+主题多样化 + 科研能力补齐批次：把「只有明暗两种外观」升级为 6 套风格包，并补上对标科研工具的三处硬缺口（学术库发现检索、自动配图可渲染、选题新颖性预检进入自动化流水线）。
+
+### Added
+- **6 套主题风格包（与明暗正交）**：科研青绿（默认）/ 学术经典（纸墨衬线·零阴影·2px 圆角）/ 暖色纸感（米黄纸底·柔影·长读）/ 现代极简（纯灰阶·单强调色·去氛围光）/ 暗夜实验室（深蓝黑·霓虹青·等宽数字）/ 高对比无障碍（纯黑白·2px 边框·3px 焦点框·WCAG AAA）。
+  - 实现方式：Tailwind v4 工具类编译为 `var(--color-*)`，风格包只覆盖调色板 + 品牌/语义 token + 圆角/阴影/密度/字体刻度，**2600+ 处类名零改动**即可整站换肤（`apps/web/src/styles/themes.css`，约 700 行，gzip 后仍为个位数 KB）。
+  - 新增 `data-theme` 维度与 `applyTheme(resolved, style)` 单一写入点；`theme-color` meta 随主题更新；`index.html` 预置脚本同时写风格与明暗，刷新无闪变。
+  - 设置页新增「外观与主题」分区（置顶）：6 张真实 token 绘制的预览卡 + 明暗三态；命令面板新增 6 条「风格：X」命令；`lib/theme.ts` 新增 `THEME_STYLES` 单一事实源与 `readStoredStyle`（非法值回落默认）。
+- **学术库发现检索（文献页）**：新增 `POST /api/references/discover`，文献页检索区加「本地文献库 / 学术库检索」切换。学术库走 OpenAlex + Crossref + arXiv（免 Key），只返回元数据不入库，命中项按标题去重标记「已导入」。此前三源检索只被流水线内部调用，UI 上新项目没有任何发现文献的入口。
+- **自动配图真实渲染**：新增 `MermaidBlock`（按需 `import('mermaid')`，绝不进主包）接管写作预览里的 ```mermaid 代码块。此前流水线「自动配图」生成的图表在预览中只是一段代码文本，图表价值为 0。深色/风格切换时自动重绘；语法错误保留源码 + 提示，不炸页面。
+- **新颖性预检节点（流水线第 2 步）**：`novelty-check` 在文献调研前用学术库比对近 8 年同题工作，输出「重叠度（高/中/低）+ 相近工作 + 改题建议」；重叠度 ≥70% 时把提醒写入产物「研究说明」，不只留在日志里。重叠度口径为纯函数 `noveltyOverlap`（以选题 token 为分母取最相近标题覆盖率），零 LLM 调用、结论可复现。可在设置页单独关闭。
+- **`pipeline-metrics` 新增纯函数 + 4 条单测**：`tokenizeForMatch`（中英分词，与学术检索门禁同规则）、`noveltyOverlap`。
+
+### Changed
+- **主题层去除硬编码颜色**：`index.css` 中 `:root/.dark` 之外的 19 处 hex + 40 处 rgba 全部收敛为 token（玻璃层 `--glass-bg/--glass-blur`、代码块 `--code-bg/fg/border`、链接 `--link`、选区 `--selection-bg`、滚动条、骨架屏、氛围光 `--ambient-1/2`、焦点环 `--focus-ring-color/-w`、气泡前景 `--bubble-user-ink`），使每套风格包都能接管代码块/编辑器/玻璃顶栏，而不是只换卡片底色。
+- **对比度还债**：`--muted-foreground` 由 `#64748b`（在 `#f4f6fb` 上 4.40:1，低于 AA）调至 `#5d6d85`（4.87:1）；`--font-heading` 引入，学术/纸感两套用衬线标题。
+- **Electron 启动底色跟随系统明暗**（原来固定 `#f4f6fb`，深色用户启动闪白一帧）。
+- **默认明暗由 `light` 改为 `system`**（`lib/theme.ts` 与 `index.html` 预置脚本原本不一致，导致首帧按 system 渲染、挂载后被翻回浅色，实测约 41ms 的深→浅闪变）。
+
+### Security
+- **流水线端点补归属校验（IDOR）**：`PipelineController` 此前完全没有 `ProjectAccessService` 校验，而 documents / references / knowledge 全部都有——企业模式（`AUTH_MODE=jwt`）下，知道 taskId 的任一账号可读他人流水线的主题、产物文档 id 与执行轨迹，也可替他人项目起流水线烧对方 token。现在 `create/list/:id/confirm-outline/stop/rerun/delete` 全部按「任务 → 项目 → 归属」断言，非本人一律 404（不泄露存在性）；列表在企业模式必须显式传 projectId，本地模式保持零登录全量返回（CLI/回归依赖）。新增 `pipeline-access.spec.ts` 9 条。
+
+### Fixed
+- **文献页检索结果卡排到右列**：`LiteratureTable` 直接返回 Fragment，而它是 `grid lg:grid-cols-2` 的一个网格项——命中多时（学术库检索 15-20 条）结果卡会各自成为网格项，把 AI 工具面板挤到下一行、整页错位。现在包单容器 + `space-y-4`。
+- **设置页滚动监听的死代码**：`useEffect` 里 `return` 之后的两条语句永不执行（`onScroll()` 与一个错误的 `window.removeEventListener`），且依赖 `[activeSection, sections]` 导致每次高亮变化都重建监听。改为 `[sections]` 单依赖 + 真实容器监听。
+- **`--on-brand` 误用**：阶段条徽标前景写死 `#1f1300`，在深色/高对比主题下不可读，改用 `--on-brand`。
+- **文献检索结果类型**：`hits` 原声明为本地 `Reference[]`，接学术库元数据时缺 `id/projectId` 等字段；结果卡按可选字段渲染（已核对每条使用点）。
+- **`.tmp-brand-mark.txt` 空文件**清理。
+
+### Verification
+- server **268 passed / 36 files**（新增选题重叠度 4 条 + 流水线归属校验 9 条）；web **111 passed / 16 files**（新增主题包契约 4 条）；desktop 5 passed；mock 全量回归 **PASS 221 / FAIL 0**。
+- `pnpm lint` 0 problem；typecheck ×2 通过；`pnpm -r build` 全绿（mermaid 拆为独立异步 chunk，主包无 mermaid 代码）。
+- `scripts/final_acceptance.py` **23/23**；`scripts/full_regression.py`（全新库 + AI_MOCK=1，端口 3101）**PASS 221 / FAIL 0 / KNOWN 0**。
+- 浏览器实测（1600×1000，真实后端 3100 + vite 5273）：6 套风格 × 明暗共 12 张截图；点选风格即时生效、`meta[theme-color]` 同步、刷新后保持；写作预览 mermaid 渲染出 SVG；文献页「学术库检索」切换可见；设置页流水线步骤编辑器出现「新颖性预检」（10 步）。
+- 对比度脚本核算 12 组正文/辅助文字组合，正文 ≥13:1、辅助 ≥4.87:1，高对比主题 21:1。
+
 ## [1.6.0] - 2026-10-27
 
 品牌与界面打磨批次：全站视觉体系重做（品牌 3.0 标志 / 七种表面层级 / 三档字体），修掉一批「所有卡片长得一样」的信息架构问题，并把境外模型依赖的可用性问题在 UI 上摊开。

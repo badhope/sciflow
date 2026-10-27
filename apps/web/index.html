@@ -11,11 +11,16 @@
     <script>
       (function () {
         try {
+          var styles = ['sciflow', 'academic', 'paper', 'minimal', 'night', 'contrast'];
+          var s = localStorage.getItem('sciflow-theme-style');
+          document.documentElement.dataset.theme = styles.indexOf(s) >= 0 ? s : 'sciflow';
           var m = localStorage.getItem('sciflow-theme') || 'system';
           var dark = m === 'dark' || (m === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
           if (dark) document.documentElement.classList.add('dark');
           document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
-        } catch (e) {}
+        } catch (e) {
+          document.documentElement.dataset.theme = 'sciflow';
+        }
       })();
     </script>
   </head>

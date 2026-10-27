@@ -208,11 +208,37 @@ docker compose -f docker-compose.prod.yml up -d   # 生产配置
 | `HOST` | 127.0.0.1 | 监听地址（0.0.0.0 触发安全闸） |
 | `SANDBOX_TIMEOUT_MS` | 10000 | Python 沙箱单次执行超时 |
 | `DATABASE_PATH` | `apps/server/data/sciflow.db` | SQLite 路径 |
+| `SCHOLAR_SEARCH` | on | 学术检索（OpenAlex/Crossref/arXiv）总开关；`off` 后流水线新颖性预检/文献补充与文献页「学术库检索」同时关闭（也可用设置页 `scholar_search`）。`AI_MOCK=1` 时强制关闭 |
 | `AI_MOCK` | 0 | 1 = 进程内 mock 网关（CI / 无网环境） |
 
 环境变量是首层兜底；运行期在设置页改的（厂商切换、搜索 provider）落 `app_setting` 表，**运行期配置优先于环境变量**——调试「改了没生效」时先看设置页。
 
 ---
+
+## 外观与主题（v1.7）
+
+主题分两个正交维度，均在「设置 → 外观与主题」里切换（也可用 ⌘K 命令面板搜「风格」）：
+
+| 维度 | 存储键 | 取值 |
+|---|---|---|
+| 风格（视觉语言） | `sciflow-theme-style` | `sciflow`（默认）/ `academic` / `paper` / `minimal` / `night` / `contrast` |
+| 明暗 | `sciflow-theme` | `light` / `dark` / `system`（默认跟随系统） |
+
+- 风格包只覆盖 CSS 变量（调色板 / 品牌 / 语义 / 圆角 / 阴影 / 密度 / 字体），不改组件类名；新增风格只需在 `apps/web/src/styles/themes.css` 加一段 `:root[data-theme='x']`，并在 `apps/web/src/lib/theme.ts` 的 `THEME_STYLES` 登记元数据。
+- 高对比无障碍包额外关闭玻璃模糊与氛围光、2px 实线边框、3px 焦点框（WCAG AAA 正文 21:1）。
+- 主题选择存在浏览器 localStorage（本机），不写数据库、不上传；刷新由 `index.html` 预置脚本还原，无闪变。
+
+### 学术检索与新颖性预检
+
+```bash
+# 学术库发现检索（只返回元数据，不入库）
+curl -X POST http://127.0.0.1:3100/api/references/discover   -H 'content-type: application/json'   -d '{"query":"heterophilic graph node classification","limit":5}'
+
+# 关闭学术检索（离线/合规场景）
+SCHOLAR_SEARCH=off
+```
+
+流水线「新颖性预检」步骤在文献调研前执行：取近 8 年同题工作，算选题 token 覆盖率（objective，零 LLM），重叠度 ≥70% 时把提醒写进产物「研究说明」。可在设置页关闭该步骤；学术检索关闭时该步骤自动跳过（不影响流水线）。
 
 ## 质量检查器（确定性，v1.5）
 

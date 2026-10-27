@@ -19,7 +19,7 @@ import { WebSearchService } from '../websearch/websearch.service';
 import { ConfigCenterService } from '../config/config-center.service';
 import { ScholarSearchService } from '../research/scholar-search.service';
 import { buildWebHits, isWebSearchEnabled } from './pipeline-websearch';
-import { normalizeKnScore } from './pipeline-metrics';
+import { normalizeKnScore, noveltyOverlap } from './pipeline-metrics';
 import { envInt } from '../../../../packages/core/src/env';
 
 /** UI 步骤条（单一来源：packages/core/pipeline-steps） */
@@ -194,6 +194,7 @@ export class PipelineService implements OnModuleInit {
       trackBudget: (taskId, caller) => this.trackBudget(taskId, caller),
       stepEnabled: (key) => this.stepEnabled(key),
       researchDepth: () => this.researchDepth(),
+      noveltyCheck: (topic) => this.noveltyCheck(topic),
       logger: this.logger,
     };
     this.graph = buildPipelineGraph(deps);
@@ -278,6 +279,11 @@ export class PipelineService implements OnModuleInit {
 
   listByProject(projectId: string) {
     return db.select().from(pipelineTasks).where(eq(pipelineTasks.projectId, projectId)).orderBy(pipelineTasks.createdAt);
+  }
+
+  /** 全量任务（仅本地单用户模式使用；企业模式由 controller 拒绝） */
+  listAll() {
+    return db.select().from(pipelineTasks).orderBy(pipelineTasks.createdAt);
   }
 
   remove(id: string) {
@@ -447,6 +453,45 @@ export class PipelineService implements OnModuleInit {
     } catch {
       return '';
     }
+  }
+
+  /**
+   * 新颖性预检（v1.7，对标 Elicit / Undermind 的「这个题目是不是已经有人做了」）。
+   *
+   * 设计取舍：
+   *  - 不调 LLM：只看学术库返回的真实标题/年份，用 token 重叠度算客观指标，零 token 成本、
+   *    结论可复现（LLM 判断"新颖性"会随机漂移，且对未见过的文献会编）。
+   *  - 不写库：预检结果只进步骤输出与（高重叠时）产物研究说明，避免污染参考文献池。
+   *  - 只取近 8 年：科研选题撞车主要发生在近期工作，老论文不影响新颖性判断。
+   */
+  private async noveltyCheck(topic: string): Promise<{
+    skipped?: boolean;
+    overlap: number;
+    similar: { title: string; year: number | null; venue: string; doi: string }[];
+    advice: string;
+  }> {
+    if (!this.scholar.isEnabled((k) => this.readSetting(k))) {
+      return { skipped: true, overlap: 0, similar: [], advice: '学术检索关闭' };
+    }
+    const hits = await this.scholar.search([topic], 8);
+    if (!hits.length) {
+      return { skipped: false, overlap: 0, similar: [], advice: '学术库未找到相近工作，选题可能较新；建议再用 1-2 组同义词复核' };
+    }
+    const recent = hits.filter((h) => !h.year || h.year >= new Date().getFullYear() - 8);
+    const pool = recent.length ? recent : hits;
+    // 重叠度口径收敛到纯函数（pipeline-metrics.noveltyOverlap，含单测）：以选题 token 为分母，
+    // 取最相近一篇标题的覆盖率，避免长标题把同题论文摊薄成"较新颖"的假绿灯。
+    const best = noveltyOverlap(topic, pool.map((h) => h.title));
+    const similar = pool
+      .slice(0, 5)
+      .map((h) => ({ title: h.title, year: h.year, venue: h.venue, doi: h.doi }));
+    const advice =
+      best >= 70
+        ? '重叠度高：建议把研究问题收窄到具体子问题/新数据集/新评估协议，或在大纲里显式对比这几篇并说明增量'
+        : best >= 40
+          ? '重叠度中等：选题方向已有人做，需在引言明确差异化定位（方法/数据/场景/评价维度至少一项不同）'
+          : '重叠度低：相近工作较少，注意确认是"真空白"还是"检索词未覆盖"';
+    return { overlap: best, similar, advice };
   }
 
   private stepEnabled(key: string): boolean {

@@ -33,6 +33,8 @@ export const PipelineAnnotation = Annotation.Root({
   /** 联网检索线索（默认关闭；仅进 summary/展示，不入参考文献库） */
   enrichedWebHits: Annotation<PaperHit[]>({ reducer: (_a, b) => b, default: () => [] }),
   researchNotice: Annotation<string | undefined>({ reducer: (_a, b) => b, default: () => undefined }),
+  /** 新颖性预检结论（v1.7）：重叠度过高时随产物落一段研究说明，提醒作者核实选题 */
+  noveltyNotice: Annotation<string | undefined>({ reducer: (_a, b) => b, default: () => undefined }),
   literatureSummary: Annotation<string>({ reducer: (_a, b) => b, default: () => '' }),
   outline: Annotation<Outline | undefined>({ reducer: (_a, b) => b, default: () => undefined }),
   outlineVariants: Annotation<string[]>({ reducer: (_a, b) => b, default: () => [] }),
@@ -61,6 +63,16 @@ export interface PipelineGraphDeps {
   trackBudget(taskId: string, caller: string): void;
   /** 研究深度（1-3）：literature 节点按轮递归检索；实现方读 app_setting pipeline_research_depth */
   researchDepth(): number;
+  /**
+   * 新颖性预检（v1.7）：用学术库检索同主题近期工作，给出「重叠度 + 相似工作 + 改题建议」。
+   * 只读（不写文献库、不消耗 LLM token），失败由实现方返回 skipped 结果。
+   */
+  noveltyCheck(topic: string): Promise<{
+    skipped?: boolean;
+    overlap: number;
+    similar: { title: string; year: number | null; venue: string; doi: string }[];
+    advice: string;
+  }>;
   /** 分章起草（服务层实现，内部并行；onProgress 用于逐节进度通知）。 */
   runDrafting(
     taskId: string,
@@ -102,6 +114,35 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
       const keywords = planned.keywords.length ? planned.keywords : [s.task.topic];
       await deps.notify(s.taskId, 'topic-verify', 'done', `检索词：${keywords.slice(0, 4).join(' / ')}`);
       return { verifiedTopic: s.task.topic, plan: { searchStrategy: { keywords } } };
+    })
+    .addNode('novelty-check', async (s: PipelineGraphState) => {
+      if (!deps.stepEnabled('novelty-check')) {
+        await deps.notify(s.taskId, 'novelty-check', 'running');
+        await deps.notify(s.taskId, 'novelty-check', 'skipped', '用户已禁用新颖性预检');
+        return {};
+      }
+      await deps.notify(s.taskId, 'novelty-check', 'running');
+      let result: Awaited<ReturnType<PipelineGraphDeps['noveltyCheck']>>;
+      try {
+        result = await deps.noveltyCheck(s.task.topic);
+      } catch (e: any) {
+        deps.logger.warn(`新颖性预检失败（已忽略，不阻断流水线）: ${e?.message || e}`);
+        await deps.notify(s.taskId, 'novelty-check', 'done', '预检不可用（学术检索失败，已跳过）');
+        return {};
+      }
+      if (result.skipped) {
+        await deps.notify(s.taskId, 'novelty-check', 'done', '预检不可用（学术检索关闭或离线）');
+        return {};
+      }
+      // 阈值语义：>=70% 高度重叠（同题概率高）；40-70% 有较多相近工作；<40% 相对新颖
+      const level = result.overlap >= 70 ? '高' : result.overlap >= 40 ? '中' : '低';
+      const top = result.similar.slice(0, 3).map((x) => `「${x.title}」${x.year ? `（${x.year}）` : ''}`).join('；');
+      const output = `重叠度 ${result.overlap}%（${level}）${top ? ` · 相近工作：${top}` : ''} · ${result.advice}`;
+      await deps.notify(s.taskId, 'novelty-check', 'done', output);
+      // 高重叠时把提醒带进产物「研究说明」，避免"撞题"结论只存在于流水线日志里
+      return result.overlap >= 70
+        ? { noveltyNotice: `选题新颖性预检：与现有工作重叠度 ${result.overlap}%（高）。${result.advice}${top ? ` 相近工作：${top}` : ''}` }
+        : {};
     })
     .addNode('literature', async (s: PipelineGraphState) => {
       if (!deps.stepEnabled('literature')) {
@@ -428,11 +469,14 @@ ${refAppendix}` : ''}`;
       await deps.notify(s.taskId, 'complete', 'running');
       const docId = s.documentId!;
       db.update(documents).set({ status: 'final', updatedAt: Date.now() }).where(eq(documents.id, docId)).run();
-      if (s.researchNotice) {
+      const notes = [s.researchNotice, s.noveltyNotice].filter((x): x is string => Boolean(x));
+      if (notes.length) {
         const cur = db.select().from(documents).where(eq(documents.id, docId)).get();
         const body = cur?.content ?? '';
-        if (!body.includes('研究阶段未在本地文献库')) {
-          writeDocumentContent(docId, body + `\n\n---\n\n## 研究说明\n\n> ${s.researchNotice}\n`, '追加研究说明');
+        const missing = notes.filter((n) => !body.includes(n.slice(0, 24)));
+        if (missing.length) {
+          const block = missing.map((n) => `> ${n.replace(/\n/g, '\n> ')}`).join('\n>\n');
+          writeDocumentContent(docId, `${body}\n\n---\n\n## 研究说明\n\n${block}\n`, '追加研究说明');
         }
       }
       try {
@@ -450,7 +494,8 @@ ${refAppendix}` : ''}`;
       return {};
     })
     .addEdge(START, 'topic-verify')
-    .addEdge('topic-verify', 'literature')
+    .addEdge('topic-verify', 'novelty-check')
+    .addEdge('novelty-check', 'literature')
     .addEdge('literature', 'outline-gen')
     .addEdge('outline-gen', 'outline-gate')
     .addEdge('outline-gate', 'doc-create')

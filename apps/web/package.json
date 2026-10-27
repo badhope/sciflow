@@ -1,6 +1,6 @@
 {
   "name": "@sciflow/web",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,6 +21,7 @@
     "graphology-layout-forceatlas2": "^0.10.1",
     "katex": "^0.18.9",
     "lucide-react": "^0.525.0",
+    "mermaid": "^11.17.2",
     "msw": "^3.0.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

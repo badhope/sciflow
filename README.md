@@ -11,13 +11,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![version](https://img.shields.io/badge/version-1.6.0-black.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.7.0-black.svg)](CHANGELOG.md)
 
 > **🌐 语言 / Language：[中文](README.md) · [English](README.en.md)**
 
 > **仓库镜像（五平台同步）**
 > [GitCode](https://gitcode.com/badhope/sciflow) · [Gitee](https://gitee.com/badhope/sciflow) · [GitHub · badhope](https://github.com/badhope/sciflow) · [GitHub · x33834](https://github.com/x33834/sciflow) · [GitHub · Morningstar202604](https://github.com/Morningstar202604/sciflow)
-> GitHub 三仓运行同一套 CI：lint · typecheck ×2 · vitest ×2 · build ×2 · mock 全量回归（184 项）· promptfoo 契约评估 · Playwright 冒烟；GitCode 与 Gitee 同步同一发布树。
+> GitHub 三仓运行同一套 CI：lint · typecheck ×2 · vitest ×2 · build ×2 · mock 全量回归· promptfoo 契约评估 · Playwright 冒烟；GitCode 与 Gitee 同步同一发布树。
 
 <!-- 架构一览（Mermaid 随 README 渲染，无需图片资产） -->
 
@@ -40,6 +40,7 @@ flowchart LR
 
 ## 🗞 最近更新
 
+- **2026-10-28 · v1.7.0**：**主题多样化**——6 套风格包（科研青绿 / 学术经典 / 暖色纸感 / 现代极简 / 暗夜实验室 / 高对比无障碍）× 独立明暗，设置页可视化选卡、命令面板可切、刷新保持；补三处对标缺口：**学术库发现检索**（文献页直接查 OpenAlex/Crossref/arXiv，不再只能查本地库）、**自动配图真实渲染**（mermaid 图表在写作预览里出图，此前只是一段代码）、**新颖性预检**（流水线第 2 步，先判断题目是否已被人做，重叠度≥70% 写进产物研究说明）。主题层把 59 处硬编码颜色收敛为 token，代码块/编辑器/玻璃顶栏/滚动条随风格变化；顺带修掉设置页滚动监听死代码、默认明暗与首屏脚本不一致导致的 41ms 闪变。
 - **2026-10-27 · v1.6.0**：品牌与界面打磨——品牌标志 3.0（单一连续笔势，取代易退化的同心圆弧）、七种表面层级（panel/inset/metric/accent/warning/danger/plain，终结「61 处卡片长得一样」）、三档字体栈（界面/论文阅读/等宽，全部系统字体零 CDN）、设置页 11 锚点重建、写作工具面板三组归并、厂商预置改为国内优先并标注境外项替代路径；图表层拆分使 recharts 从主包剥离（主包 0 引用，436KB 按需加载）。
 - **2026-10-27 · v1.5.0**：真实论文全流程验收——用 u2-flash 从 UI 端到端跑通多篇完整论文；新增**确定性客观质量检查器**（六维硬指标 + 学术诚信检测，同文本必然同分同指纹）作为质量门唯一判定依据；内置免 Key 学术检索（OpenAlex/Crossref/arXiv）与文献相关性门禁；修复润色并发死锁、产物不可见、写作页 `?doc=` 失效、导出作者 JSON、失败任务不可重跑等 12 项实测缺陷。
 - **2026-10-26 · v1.4.0**：扩展中心——内置 87 条科研资产（20 MCP / 31 技能 / 10 角色 / 10 约束 / 4 钩子 / 12 提示词，含 13 项 SciFlow 私有优势工具）随仓库发布、默认启用；四种添加入口（手填/粘贴/拖拽 ZIP/一键 AI 生成）+ 对话与 CLI 入口；停用即撤回对应子系统配置。
@@ -88,19 +89,21 @@ flowchart LR
 | 色彩 | 品牌渐变三档均 ≥ 4.5:1（白字），`--on-brand` 在深色模式自动切深墨字（≥ 6.8:1） |
 | 布局 | 内容页统一 `--page-max: 1152px`；导航/工具栏/内容三区固定，页面只负责内容 |
 | 排版 | 正文 14px / 辅助 12px / 下限 11px；中英文混排统一行高 1.6–1.75 |
-| 主题 | 浅色 / 深色 / 跟随系统（`index.html` 预置脚本，刷新无闪白） |
+| 主题 | **6 套风格包 × 明暗两态**（科研青绿 / 学术经典 / 暖色纸感 / 现代极简 / 暗夜实验室 / 高对比无障碍），设置页「外观与主题」可视化选卡，命令面板 `风格：X` 可切；`index.html` 预置脚本同写明暗与风格，刷新无闪变 |
 | 无障碍 | 全站 h1、焦点环、Modal 焦点陷阱、Esc、触屏操作常显、危险操作二次确认 |
 
 ## ✨ 特性
 
 ### 写作与定稿
 - **大纲先行（outline-first）**：AI 生成研究计划与章节大纲，写作页编辑 / 预览 / 分栏三态切换。
-- **分章起草 + Agentic RAG**：每章边写边查本地知识库，文内 `[n]` 锚点与文末列表一一对应。
+- **分章起草**：按大纲逐章生成，起草前注入文献池（[Ref:n] 锚点）与程序记忆里的写作风格；文内 `[n]` 锚点与文末列表一一对应。
+- **自动配图可渲染**：流水线生成的 mermaid 图表在写作预览中真实渲染为 SVG（按需加载 mermaid，不进主包），深浅色主题自动重绘，语法错误保留源码与提示。
 - **学术润色**：三段式润色（原文 + 润色文 + 理由）、中英互译、降重改写；自动保护图表与「参考文献」尾部不被洗掉。
 - **多版本历史 + 版本 diff**：每次定稿留存快照，逐版本 LCS 文本比对（`VersionDiffModal`）。
 - **一键导出**：Markdown / Word(.docx) / LaTeX / HTML，投稿交稿即用（导出逻辑与界面入口均已接通）。
 
 ### 引用与文献
+- **学术库发现检索**：文献页可切换「本地文献库 / 学术库检索」，直接查 OpenAlex · Crossref · arXiv（免 Key，只返回元数据不入库，命中项标记已在库的条目，批量导入走进指纹去重）。
 - **8 种引用样式**：APA / IEEE / Vancouver / **GB/T 7714** / Nature / Chicago / Springer / ACS。
 - **文内锚点重排**：顺序编码制正文 `[n]` 保持插入序；著者-年制按正文首现自动加 a/b 后缀重排（`CiteReorderButton`）。
 - **BibTeX / RIS 导入导出**：文献库元数据去重指纹、`reading_status` 状态机（unread / reading / read / cited）。
@@ -111,7 +114,8 @@ flowchart LR
 - 本地 **sqlite-vec 向量 ANN + FTS5 trigram 全文**混合检索（嵌入模型不可用时自动回退全文；中文查询 3-gram OR 展开）；知识库资料与文献双向绑定，命中块带来源作者/年份卡片。
 
 ### 全自动流水线
-- **LangGraph 编排 + 人工确认点**：主题验证 → 文献调研 → 大纲生成 → **大纲人工确认（interrupt）** → 分章起草（并行，并发数可配）→ **7 维质量门**（<80 触发 Reflexion 回炉，最多 3 轮，自动取最高分轮次定稿）→ 润色 → 引用格式化；对话工作台内直接确认与续跑。
+- **新颖性预检（v1.7）**：文献调研之前先用学术库近 8 年同题工作比对，输出「重叠度 + 相近工作 + 改题建议」；≥70% 时把提醒写入产物「研究说明」。纯客观口径（选题 token 覆盖率，零 LLM 调用、可复现），可在设置页单独关闭。
+- **LangGraph 编排 + 人工确认点**：主题验证 → **新颖性预检** → 文献调研 → 大纲生成 → **大纲人工确认（interrupt）** → 分章起草（并行，并发数可配）→ **7 维质量门**（<80 触发 Reflexion 回炉，最多 3 轮，自动取最高分轮次定稿）→ 润色 → 引用格式化；对话工作台内直接确认与续跑。
 - **研究深度（对标 deep research 的 depth 语义）**：标准 / 深入 / 彻底三档——文献调研按轮递归，第 2+ 轮由 Planner 依据上一轮发现给出新检索词，命中跨轮去重合并，零新增自动收敛。
 - **反共识大纲变体（反同质化引擎）**：大纲阶段一次产出「主推方案 + 2 个反共识变体」（挑战主流假设 / 另起组织框架），工作台与流水线页均可一键切换对比后采用；模型不支持时自动回退单大纲。
 - **Checkpoint 断点续跑**：服务重启后自动恢复中断任务，从草稿阶段幂等续跑。
@@ -155,7 +159,11 @@ flowchart LR
 | 配置自由度 | **配置中心**：角色 / 约束工程 / 钩子 / 权限档 / 审计；设置页、`sciflow config` CLI、对话工具三入口同源，改完即生效 | 无 | 仅内置 | 部分 | 部分 |
 | 模型自由度 | **OpenAI 兼容 / Anthropic / Gemini 三协议 + 自动检测模型与能力 + 连接测试（fast/strong 双档路由）** | 指定云模型 | 内置 | 自带 Key | 内置 |
 | 开放集成 | **MCP 协议双向：可被 Claude 调用，也可接入外部 MCP；CLI headless 出稿** | — | API | CLI | — |
+| 文献发现 | **文献页直接查 OpenAlex/Crossref/arXiv（免 Key）+ 相关性门禁 + 批量导入去重** | 多轮检索 | 内置检索 | 网页检索 | — |
+| 选题新颖性 | **流水线首步客观重叠度预检（同题先验）** | 多视角提问 | 部分 | — | — |
 | 引用管理 | **8 种 CSL 样式实时重排 + 引用体检 + 文献库指纹去重** | 脚注 | 抽取表 | 引用列表 | 来源标注 |
+| 自动配图 | **mermaid 图表真实渲染（按需加载）+ 导出保留源码** | — | — | — | — |
+| 外观可定制 | **6 套风格包 × 明暗 + 高对比无障碍** | 浅/深 | 浅/深 | 浅/深 | 浅/深 |
 | 投稿环节 | **选刊匹配 / Cover Letter / 审稿回复 / 状态跟踪** | — | — | — | — |
 | 中文科研适配 | **GB/T 7714、国内期刊库、中文分词检索** | 弱 | 弱 | 弱 | 弱 |
 | 数据主权 | 单机 SQLite / Docker / 桌面端，Key 不落第三方 | 云端 | 云 SaaS | 视部署 | 云端 |
@@ -167,9 +175,9 @@ flowchart LR
 | 端 | 技术 |
 | --- | --- |
 | 后端 `apps/server` | NestJS 11 · TypeScript（strict）· Drizzle ORM · better-sqlite3（WAL）· Vercel AI SDK（OpenAI 兼容）· LangGraph（编排 / 断点续跑 / 人工确认）· MCP 官方 SDK · zod · helmet + pino · MSW 进程内 mock 网关 |
-| 前端 `apps/web` | React 19 · Vite 6 · TypeScript · Tailwind CSS v4 · TanStack Query / Table · Recharts · sigma.js + graphology · streamdown（流式 Markdown）· CodeMirror 6 · react-markdown + KaTeX |
+| 前端 `apps/web` | React 19 · Vite 6 · TypeScript · Tailwind CSS v4（主题风格包走 CSS 变量覆盖）· TanStack Query / Table · Recharts · sigma.js + graphology · streamdown（流式 Markdown）· CodeMirror 6 · react-markdown + KaTeX · mermaid（按需异步 chunk） |
 | 桌面端 `apps/desktop` | Electron 41（内嵌 Node 24，原生支持 require(ESM)）· 内嵌后端（`ELECTRON_RUN_AS_NODE`）· 本地 SQLite（userData 隔离，打包时自动按 Electron ABI 重编原生模块）· electron-builder 三平台打包 · electron-updater 自动更新（opt-in） |
-| 工程 | pnpm workspace · vitest（server 139 / web 73）· Playwright 冒烟 · promptfoo 契约评估 · GitHub Actions 三 job（类型/单测/构建 · 全量回归 · E2E+评测）· Python 3 回归脚本（184 项） |
+| 工程 | pnpm workspace · vitest（server 268 / web 111 / desktop 5）· Playwright 冒烟 · promptfoo 契约评估 · GitHub Actions 三 job（类型/单测/构建 · 全量回归 · E2E+评测）· Python 3 回归脚本 |
 
 **架构概览**
 
@@ -281,7 +289,7 @@ SciFlow 支持**任意 OpenAI 兼容端点**，只需要填 `base_url` + `model`
 pnpm --filter @sciflow/server typecheck
 pnpm --filter @sciflow/web typecheck
 
-# 单元测试（vitest：server 139 条 + web 73 条）
+# 单元测试（vitest：server 268 条 + web 111 条 + desktop 5 条）
 pnpm --filter @sciflow/server test
 pnpm --filter @sciflow/web test
 

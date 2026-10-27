@@ -1,6 +1,7 @@
 import { HttpCode, Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, Header, Req, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ReferencesService, PaperHit } from './references.service';
 import { ProjectAccessService } from '../common/project-access.service';
+import { ScholarSearchService } from '../research/scholar-search.service';
 import type { AuthPayload } from '../auth/auth.service';
 
 @Controller('references')
@@ -8,7 +9,41 @@ export class ReferencesController {
   constructor(
     private readonly references: ReferencesService,
     private readonly access: ProjectAccessService,
+    private readonly scholar: ScholarSearchService,
   ) {}
+
+  /**
+   * 学术发现检索（OpenAlex + Crossref + arXiv，免 Key）。
+   *
+   * 之前三源检索只被流水线内部调用，文献页只能检索「已录入的本地库」——
+   * 新项目在 UI 上没有任何发现文献的入口（这是与 Elicit / ResearchRabbit 最大的体验差距）。
+   * 本接口只返回元数据、不自动入库；导入仍走 POST /references/import（指纹去重）。
+   */
+  @Post('discover')
+  async discover(@Body() body: { query?: string; limit?: number }) {
+    const query = String(body?.query || '').trim();
+    if (!query) return { enabled: this.scholar.isEnabledNow(), hits: [] as PaperHit[], notice: '请输入检索词' };
+    if (!this.scholar.isEnabledNow()) {
+      return { enabled: false, hits: [] as PaperHit[], notice: '学术检索已关闭（SCHOLAR_SEARCH=off 或离线模式）' };
+    }
+    const limit = Math.max(1, Math.min(20, Number(body?.limit) || 10));
+    const hits = await this.scholar.search([query], limit);
+    return {
+      enabled: true,
+      hits: hits.map((h) => ({
+        title: h.title,
+        authors: h.authors,
+        year: h.year,
+        venue: h.venue,
+        doi: h.doi,
+        url: h.url,
+        abstract: h.abstract,
+        citationCount: h.citationCount,
+        source: 'scholar' as const,
+      })),
+      notice: hits.length ? `命中 ${hits.length} 条（OpenAlex / Crossref / arXiv）` : '未命中：换更具体的英文检索词通常效果更好',
+    };
+  }
 
   /** 文献库内检索（不自动入库；projectId 可选，用于限定当前项目） */
   @Post('search')

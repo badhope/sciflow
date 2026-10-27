@@ -78,6 +78,7 @@ function StepTimeline({ steps }: { steps: PipelineStep[] }) {
 /** 多 Agent 协作映射：每个流水线步骤由哪个 Agent 角色负责（对标 Deep Research / Agent Laboratory 分工） */
 const AGENT_MAP: Record<string, { role: string; tone: 'blue' | 'green' | 'teal' | 'amber' | 'slate' }> = {
   'topic-verify': { role: 'Planner', tone: 'slate' },
+  'novelty-check': { role: 'Scout', tone: 'teal' },
   literature: { role: 'Researcher', tone: 'blue' },
   outline: { role: 'Planner', tone: 'slate' },
   drafting: { role: 'Writer', tone: 'green' },
@@ -647,7 +648,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
                     key={t.id}
                     className={`rounded-lg px-3 py-2 cursor-pointer border transition-all duration-150 ${
                       activeId === t.id
-                        ? 'border-teal-300 dark:border-teal-700 bg-teal-50/80 dark:bg-teal-900/25 border-l-[3px] border-l-teal-500 shadow-[0_2px_12px_-4px_rgba(13,148,136,0.35)]'
+                        ? 'border-teal-300 dark:border-teal-700 bg-teal-50/80 dark:bg-teal-900/25 border-l-[3px] border-l-teal-500 shadow-[0_2px_12px_-4px_var(--focus-ring-color)]'
                         : 'border-slate-100 dark:border-slate-800 hover:border-teal-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
                     }`}
                     onClick={() => setActiveId(t.id)}

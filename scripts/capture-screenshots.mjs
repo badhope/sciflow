@@ -68,14 +68,42 @@ async function main() {
     console.log(`OK  ${s.name.padEnd(18)} ${s.label}  (${kb} KB)`);
   }
 
-  // 深色主题（跟随系统态）：settings-dark.png
+  // 深色主题：settings-dark.png
+  // 坑（v1.7 修复）：App 挂载后会把 themeMode 写进 localStorage（默认 system 时也写），
+  // 单靠 emulateMedia({colorScheme:'dark'}) 在已有 localStorage 的上下文里不再生效。
+  // 必须显式写入 'dark'（用户点击「深色」时的真实存储值），截到的才是深色。
   currentShot = 'settings-dark.png';
+  await page.evaluate(() => localStorage.setItem('sciflow-theme', 'dark'));
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.goto(`${BASE}/#/settings`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(2000);
+  const darkApplied = await page.evaluate(() => document.documentElement.classList.contains('dark'));
+  if (!darkApplied) throw new Error('深色主题未生效：settings-dark.png 会截成浅色（检查 localStorage sciflow-theme）');
   await page.screenshot({ path: path.join(OUT, 'settings-dark.png'), fullPage: false });
   console.log(`OK  settings-dark.png   深色主题 (${(fs.statSync(path.join(OUT, 'settings-dark.png')).size / 1024).toFixed(0)} KB)`);
+  await page.evaluate(() => localStorage.setItem('sciflow-theme', 'system'));
   await page.emulateMedia({ colorScheme: 'light' });
+
+  // 多主题预览（v1.7）：每套风格一张亮色 + 一张深色，供 README/文档选图
+  for (const theme of ['sciflow', 'academic', 'paper', 'minimal', 'night', 'contrast']) {
+    for (const mode of ['light', 'dark']) {
+      currentShot = `theme-${theme}-${mode}.png`;
+      await page.evaluate(([t, m]) => {
+        localStorage.setItem('sciflow-theme-style', t);
+        localStorage.setItem('sciflow-theme', m);
+      }, [theme, mode]);
+      await page.goto(`${BASE}/#/settings`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(900);
+      const ok = await page.evaluate(([t, m]) => document.documentElement.dataset.theme === t && document.documentElement.classList.contains('dark') === (m === 'dark'), [theme, mode]);
+      if (!ok) throw new Error(`主题未生效：${theme}/${mode}`);
+      await page.screenshot({ path: path.join(OUT, currentShot), fullPage: false });
+      console.log(`OK  ${currentShot.padEnd(24)} ${theme}/${mode}`);
+    }
+  }
+  await page.evaluate(() => {
+    localStorage.setItem('sciflow-theme-style', 'sciflow');
+    localStorage.setItem('sciflow-theme', 'system');
+  });
 
   if (docId) {
     currentShot = 'writing.png';

@@ -151,6 +151,22 @@
 | 9 | **对话入口**：MCP 工具 `extension.list/create/toggle/generate`；`extension.list` 对模型同样过滤 private（外部客户端不掌握私有资产清单） | `mcp.service.ts` · `agent-tool-bridge.ts` allowlist | 实测 MCP 工具数 23 且含 4 个 extension.* |
 | 10 | **CLI 对等**：`sciflow ext list|toggle|import|export|reset`，与 Web/对话同一 REST 服务 | `apps/server/src/config/config-cli.ts registerExtensionCommands` | CLI 实测 list/toggle/import/export |
 
+## §2.21 v1.7 主题风格包与科研能力补齐契约（2026-10-28）
+
+本批次把「明暗两态」升级为「风格 × 明暗」正交体系，并把三处对标科研工具的硬缺口接进自动化流水线。契约如下，禁止回退。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **主题两维正交**：`data-theme`（风格，6 套）与 `.dark`（明暗）互不覆盖；`applyTheme(resolved, style)` 是唯一写入点（同时写 data-theme / class / colorScheme / theme-color）。禁止在组件里手写 `classList.toggle('dark')` | `lib/theme.ts` · `App.tsx ThemeContext` | `theme.test.ts` 4 条（6 套齐备 / 元数据完整 / 两维互不覆盖 / 非法值回落） |
+| 2 | **风格包只覆盖 token**：`styles/themes.css` 每套包覆盖调色板（`--color-*`）、品牌与语义 token、圆角/阴影/密度/字体刻度；不得用 `!important` 大面积压组件，不得改组件类名。调色板必须保持 50→950 单调（组件大量成对使用 `bg-slate-50 dark:bg-slate-900`，反向即破版） | `apps/web/src/styles/themes.css` | 构建产物：`.text-slate-800{color:var(--color-slate-800)}` 仍成立；6 主题计算样式探针 |
+| 3 | **首屏无闪变**：`index.html` 预置脚本必须同时写 `data-theme` 与 `.dark`，且默认值与 `readStoredTheme()` 一致（均为 `system`）。历史上的 41ms 深→浅闪变源于两处默认值不一致 | `apps/web/index.html` · `lib/theme.ts` | 浏览器实测（无存储 + 系统深色） |
+| 4 | **主题不得只换卡片**：代码块、CodeMirror、玻璃顶栏、滚动条、选区、骨架屏、氛围光、焦点环全部走 token（`--code-*` / `--glass-*` / `--scrollbar-*` / `--selection-bg` / `--skeleton-*` / `--ambient-*` / `--focus-ring-*`）；`index.css` 的 `:root/.dark` 块外不得出现裸 hex | `index.css` | 脚本扫描（块外 hex = 2，均为注释/导出物） |
+| 5 | **高对比主题是真无障碍**：2px 实线边框、3px 焦点框、关闭 backdrop-filter 与氛围光、正文 21:1；不得只做「配色更艳」 | `themes.css :root[data-theme='contrast']` | 对比度脚本核算 |
+| 6 | **学术库发现检索只读**：`POST /api/references/discover` 只返回元数据，不入库、不下载全文；开关与流水线同一 `scholar_search` 设置（`isEnabledNow()`），AI_MOCK=1 时返回 `enabled:false` | `references.controller.ts discover` · `ScholarSearchService.isEnabledNow` | 实测 3 条真实命中（2025 异配图论文） |
+| 7 | **新颖性预检零 LLM**：重叠度用纯函数 `noveltyOverlap`（选题 token 为分母取最相近标题覆盖率），不得引入 LLM 判断（会漂移且对未见文献会编）；≥70% 必须写入产物「研究说明」，不只留日志；失败必须 fail-soft（预检不可用不阻断流水线） | `pipeline-metrics.ts noveltyOverlap` · `pipeline.graph.ts novelty-check` | `pipeline-metrics.spec.ts` 4 条 + 图节点 try/catch |
+| 8 | **自动配图必须可渲染**：写作预览的 ```mermaid 代码块由 `MermaidBlock` 渲染为 SVG；mermaid 必须按需 `import()`（主包禁止引用）；渲染失败保留源码 + 提示，不得白屏 | `components/MermaidBlock.tsx` · `WritingPreview.tsx CodeBlock` | 构建产物：主 chunk 无 mermaid；浏览器实测 SVG 出图 |
+| 9 | **步骤清单仍单一来源**：新增步骤必须同时写入 `packages/core/pipeline-steps.ts`（key/label/configurable/uiStep）与 graph 的 `.addNode`/`.addEdge`，且 graph 的 `stepEnabled()` 使用同名 key | `pipeline-steps.ts` · `pipeline.graph.ts` · `PipelineService.stepEnabled` | 设置页实测 10 步；`customization` API 返回含 novelty-check |
+
 ## §2.20 v1.6 品牌与界面体系契约（2026-10-27）
 
 界面打磨不是"换配色"，而是把**信息层级、品牌识别、依赖可达性**三件事固化成契约，避免回退。

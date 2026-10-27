@@ -38,10 +38,12 @@ export function BrandMark({
       {tinted && (
         <defs>
           {/* 笔势渐变：青绿（起）→ 湖蓝（中）→ 深蓝（收），与 --brand-grad 同源 */}
+          {/* 停靠色改用主题 token：品牌渐变在三套主题包（学术/纸感/极简…）下颜色不同，
+              写死 teal→sky 会让 logo 与按钮/导航高亮脱节（v1.7 主题化）。 */}
           <linearGradient id={strokeId} x1="40" y1="8" x2="8" y2="40" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#12b3a3" />
-            <stop offset="0.5" stopColor="#0b8fb4" />
-            <stop offset="1" stopColor="#0a63ba" />
+            <stop offset="0" stopColor="var(--brand-400, #14b8a6)" />
+            <stop offset="0.5" stopColor="var(--brand-500, #0f9e94)" />
+            <stop offset="1" stopColor="var(--brand-600, #0b7f78)" />
           </linearGradient>
           <filter id={glowId} x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur stdDeviation="0.7" result="b" />
