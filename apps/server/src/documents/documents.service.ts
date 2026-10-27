@@ -7,6 +7,7 @@ import './csl-register'; // 注册官方补缺样式（IEEE/GB-T 7714/Nature/Chi
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
 import { documents, citations, references, polishRecords, qualityReports, reviewComments, experiments, pipelineTasks } from '../db/schema';
+import { checkPaperQuality } from '../../../../packages/core/src/quality-audit';
 import { Document, Packer, Paragraph, HeadingLevel, AlignmentType } from 'docx';
 import { AiService } from '../ai/ai.service';
 import { ReferencesService } from '../references/references.service';
@@ -405,7 +406,10 @@ export class DocumentsService {
       lines.push('## 参考文献');
       lines.push('');
       refList.forEach((r, i) => {
-        lines.push(`${i + 1}. ${r.title}${r.authors && r.authors !== '[]' ? ` — ${r.authors}` : ''}${r.year ? ` (${r.year})` : ''}${r.venue ? `, ${r.venue}` : ''}${r.doi ? `, DOI: ${r.doi}` : ''}`);
+        // authors 在库里是 JSON 数组字符串：必须 parseAuthors 后再拼，
+        // 否则导出成 `— ["Sitao Luan","Chenqing Hua"]` 这种数组字面量（实测缺陷；docx 导出已在下方处理正确）
+        const authors = parseAuthorArr(r.authors).join(', ');
+        lines.push(`${i + 1}. ${r.title}${authors ? ` — ${authors}` : ''}${r.year ? ` (${r.year})` : ''}${r.venue ? `, ${r.venue}` : ''}${r.doi ? `, DOI: ${r.doi}` : ''}`);
       });
     }
     return { markdown: lines.join('\n'), filename: `${doc.title.replace(/[\\/:*?"<>|]/g, '_')}.md` };
@@ -556,6 +560,23 @@ export class DocumentsService {
       )
       .join('\n');
   }
+  /**
+   * 客观质量检查：确定性规则引擎（packages/core/quality-audit）。
+   * 与 LLM 7 维评审互补——LLM 评「好不好」，这里评「合不合格」，后者可复现、可对比。
+   */
+  objectiveAudit(id: string) {
+    const doc = db.select().from(documents).where(eq(documents.id, id)).get();
+    if (!doc) throw new NotFoundException('文档不存在');
+    const content = String(doc.content || '');
+    // 仓库引用契约：正文只有 [n] 锚点，列表由前端/导出渲染；所以把 citation 表条数传给检查器，
+    // 否则会把「没有内嵌参考文献块」误判成硬伤（实测踩到）。
+    const citationCount = (db.select().from(citations).where(eq(citations.documentId, id)).all() || []).length;
+    const report = checkPaperQuality(content, { citationCount });
+    // 附带历史 LLM 评分，便于对照「机械分」与「模型分」的漂移
+    const history = db.select().from(qualityReports).where(eq(qualityReports.documentId, id)).all()
+      .map((r) => ({ totalScore: r.totalScore, createdAt: r.createdAt, scores: r.scores }));
+    return { documentId: id, title: doc.title, report, llmHistory: history.slice(-5) };
+  }
 }
 
 // ---------- citation-js 引文格式化（替代手写 8 样式渲染器） ----------
@@ -657,4 +678,5 @@ function formatRefEntry8(ref: RefLite, format: string, index: number, yearOverri
     return formatted.replace(/\)\./, `${yearOverride.replace(/\d/g, '')}).`);
   }
   return formatted;
+
 }

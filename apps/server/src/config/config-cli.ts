@@ -287,3 +287,46 @@ export function registerExtensionCommands(program: Command, localApi: Api): void
       console.log(`已恢复 ${r.restored} 条内置资产`);
     });
 }
+
+
+/** 客观质量检查 CLI：docs quality --doc <id> / --file <path> */
+export function registerQualityCommands(program: Command, localApi: Api): void {
+  const q = program.command('quality').description('客观质量检查（确定性规则引擎，不调模型）');
+
+  q
+    .command('check')
+    .description('检查一篇文档：六维硬指标 + 硬伤 + 指纹（同文本分数恒定）')
+    .option('--doc <id>', '文档 ID（读库）')
+    .option('--file <path>', '本地 Markdown 文件（离线检查）')
+    .option('--citations <n>', '已知的参考文献条数（离线检查纯正文且列表不在正文时用，避免误判「无参考文献」硬伤）')
+    .option('--json', '输出完整 JSON')
+    .action(async (opts: { doc?: string; file?: string; citations?: string; json?: boolean }) => {
+      let report: any;
+      if (opts.file) {
+        const { readFileSync } = await import('node:fs');
+        const { checkPaperQuality } = await import('../../../../packages/core/src/quality-audit');
+        const content = readFileSync(opts.file, 'utf-8');
+        // 纯正文（列表由前端/导出渲染）文件：正文只有 [n] 锚点时不能据此判「无参考文献」硬伤。
+        // 默认按 externalRefs 处理（引用维度按锚点计 8/20 并说明原因）；给了 --citations N 才逐条核对总数。
+        const citationCount = opts.citations !== undefined ? Math.max(0, Number(opts.citations) || 0) : undefined;
+        report = { documentId: null, title: opts.file, report: checkPaperQuality(content, { citationCount, externalRefs: citationCount === undefined }), llmHistory: [] };
+      } else if (opts.doc) {
+        report = await localApi(`/api/documents/${opts.doc}/objective-audit`);
+      } else {
+        throw new Error('需要 --doc <id> 或 --file <path>');
+      }
+      if (opts.json) {
+        console.log(JSON.stringify(report, null, 2));
+        return;
+      }
+      const r = report.report;
+      console.log(`# ${report.title ?? report.documentId}`);
+      console.log(`总分：${r.totalScore}/100  指纹：${r.fingerprint}`);
+      console.log(`统计：${r.stats.chars} 字符 / ${r.stats.sections} 章节 / ${r.stats.uniqueCitations} 引用 / ${r.stats.referenceEntries} 文献条目`);
+      console.table(r.dimensions.map((d: any) => ({ 维度: d.label, 得分: `${d.score}/20`, 证据: d.evidence.join('；').slice(0, 80) })));
+      if (r.hardFails.length) {
+        console.log('硬伤：');
+        r.hardFails.forEach((f: string) => console.log(`  - ${f}`));
+      }
+    });
+}

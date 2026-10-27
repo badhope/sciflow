@@ -151,6 +151,31 @@
 | 9 | **对话入口**：MCP 工具 `extension.list/create/toggle/generate`；`extension.list` 对模型同样过滤 private（外部客户端不掌握私有资产清单） | `mcp.service.ts` · `agent-tool-bridge.ts` allowlist | 实测 MCP 工具数 23 且含 4 个 extension.* |
 | 10 | **CLI 对等**：`sciflow ext list|toggle|import|export|reset`，与 Web/对话同一 REST 服务 | `apps/server/src/config/config-cli.ts registerExtensionCommands` | CLI 实测 list/toggle/import/export |
 
+## §2.19 v1.5 客观质量检查器与真实论文流水线契约（2026-10-27）
+
+用 u2-flash 从 UI 端到端跑通多篇完整论文后固化：质量判定必须确定性可复现，起草必须名实相符，参考文献必须主题相关，润色不得挂死。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **门禁唯一依据是客观分**：`checkPaperQuality()` 六维各 20 分归一 100，硬伤封顶 40（空文 0）；LLM 分只作回炉建议，不参与合格判定——同一稿实测 LLM 在 27–59 漂移，取 min 会导致无意义回炉 | `packages/core/src/quality-audit.ts` · `pipeline.graph.ts effectiveScore` | `quality-audit.spec.ts` 23 条（含 100 次同分同指纹） |
+| 2 | **确定性要求**：纯函数、无随机/时间/网络；入口先归一 `
+
+`；任何带 `/g` 的模式只能经无状态克隆测试（`testAny`）——否则 `lastIndex` 会污染后续判定 | 同上 `testAny / text.replace(/
+
+?/g)` | spec「CRLF 等价」「/g 状态隔离 50 次」 |
+| 3 | **学术诚信（名实相符）**：自述「不报告新的原始实验」却写「实验结果表明…优于/提升/有效」且无结果表/带数值指标 → 硬伤封顶 40。本系统不运行实验，任何本文实证结论都属编造 | `NO_EXPERIMENT_DISCLAIMER` · `EXPERIMENT_RESULT_CLAIM` · `EXPERIMENT_EVIDENCE` | spec 4 条（含真实验稿不误伤） |
+| 4 | **结构按文章类型判定**：综述/框架类要求 引言/讨论/结论（「方法」可由框架/机理/评估协议承担，「结果」可由评估/分析承担）；实证类（有结果表或带百分数指标）才要求完整 IMRaD | 同上 `SYNONYMS / isReviewLike` | spec「综述类不误罚」「实证类仍要求」 |
+| 5 | **起草名实相符**：`DRAFT_SECTION` 明令禁止把文献结论写成「本文实验表明」；`planResearch`/`WRITE_OUTLINE` 禁止把「跑实验并报告新结果」列为目标——大纲不设实验章节，只设「评估协议设计 / 已有实证证据归纳」 | `packages/ai/src/prompts.ts` | 真实跑批全文 0 处虚构实证结论 |
+| 6 | **引用池一致性**：起草 prompt 的 `[Ref:N]` 与渲染必须用同一输入（projectId + topic + keywords）重算同一池；池排序按 token 相关度（不按被引数），相关条目 ≥8 时剔除零相关旧条目 | `refsForDraft/referencesForPrompt` · `buildRefsPrompt/renderCitations` 签名 | 真实跑批 19/19 条主题相关 |
+| 7 | **评审附录编号**：必须 `citation JOIN reference ORDER BY citations.created_at`（= 正文首次出现序），不得用文献池顺序拼附录 | `pipeline.graph.ts reviewRefRows` | 评审不再误报「引用编号错乱」 |
+| 8 | **学术检索只收相关**：OpenAlex/Crossref/arXiv 三源合并后过「标题≥1 token + 合计≥2 token + 覆盖≥2 个检索词分组」门禁，再按覆盖数排序 | `ScholarSearchService.search` | 真实跑批离线验证 20 条全为 GNN 主题 |
+| 9 | **润色不得嵌套限流**：`polish()` 不得再包 `this.limit`（`complete()` 内已有同一 p-limit，嵌套会饿死）；并行润色 + 单段 90s 超时 + 600s 总看门狗，失败保留原文 | `packages/ai/src/ai.service.ts polish` | 真实跑批 14 段 90s 完成（原 5.5h 挂死） |
+| 10 | **LLM 评审 fail-soft**：评审空响应/解析失败只降级为「仅客观检查」，不得把已起草完成的流水线判 failed | `pipeline.graph.ts try/catch reviewResult` | 真实事故复现（第 3 轮 failed → 修复后第 4/5 轮完成） |
+| 11 | **产物必须可见**：工作台优先展示任务产物文档（`task.documentId` > 显式选择清理 > 最新一篇）；写作页 `?doc=` 变化必须同步（原只在挂载时读一次） | `WorkspacePage.tsx` · `WritingPage.tsx` | 浏览器实测两次（旧稿 → 新稿） |
+| 12 | **失败可重跑**：`POST /api/pipeline/:id/rerun` 沿用原主题新建任务（运行中拒绝，AI 未配置拒绝）；流水线页失败卡片给按钮 | `PipelineService.rerun` · `PipelinePage.tsx` | `pipeline-rerun.spec.ts` 4 条 |
+| 13 | **导出格式**：Markdown/docx 的参考文献作者必须 `parseAuthors()` 后再拼，禁止直接把 JSON 数组字符串写进正文 | `documents.service.ts exportMarkdown` | 导出实测「— Soroush Vahidi (2025), arXiv」 |
+| 14 | **检查器可复用**：API `GET /api/documents/:id/objective-audit`、CLI `quality check`、写作页「客观检查器」面板三处共用同一纯函数；前端切换文档必须清空上一份报告 | `documents.controller.ts` · `config-cli.ts` · `WritingToolsPanel.tsx` | CLI + UI 实测同分同指纹 |
+
 ## §2.9 模块化布局（M3，2026-10-18）
 
 **分层定案**：`packages/` = 核心能力层，`apps/server/src` = 接口层（controller/module/websearch/settings 等）。

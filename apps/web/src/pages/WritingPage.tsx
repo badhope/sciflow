@@ -7,7 +7,7 @@ import { api } from '../api/client';
 import { ChatPanel } from './ChatPanel';
 import { ToastContext } from '../App';
 import type {
-  CitationRow, Doc, DocVersionEntry, Experiment, Outline, Project, QualityReport,
+  CitationRow, Doc, DocVersionEntry, Experiment, ObjectiveQualityReport, Outline, Project, QualityReport,
   Reference, ResearchDesignResult, ReviewComment, SimulatedReviewResult,
 } from '../types';
 import type { VersionSnapshot } from './VersionDiffModal';
@@ -114,6 +114,10 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
 
   /* ============ 质量与关联数据 ============ */
   const [qualityReport, setQualityReport] = useState<QualityReport | null>(null);
+  /** 客观检查器（确定性）：可手动重跑，结果不受模型漂移影响 */
+  const [objectiveReport, setObjectiveReport] = useState<ObjectiveQualityReport | null>(null);
+  const [objectiveLoading, setObjectiveLoading] = useState(false);
+  const [objectiveError, setObjectiveError] = useState<string | null>(null);
   const [docExperiments, setDocExperiments] = useState<Experiment[]>([]);
   const [experimentsOpen, setExperimentsOpen] = useState(false);
 
@@ -129,8 +133,18 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
   const docs: Doc[] = useMemo(() => docsQuery.data ?? [], [docsQuery.data]);
   const refs: Reference[] = useMemo(() => refsQuery.data ?? [], [refsQuery.data]);
   const loadDocs = () => qc.invalidateQueries({ queryKey: ['docs', project.id] });
-  // 首选中为渲染期派生（React 官方「调整 state」模式，无 effect）
-  if (docId === null && docs.length > 0) setDocId(docs[0].id);
+  /**
+   * 首选中为渲染期派生（React 官方「调整 state」模式，无 effect）。
+   *  - `initialDocId` 来自 URL ?doc=：它在同项目内变化时（从工作台/总览点「完整编辑器」打开指定稿）
+   *    必须同步过来。历史 bug：只在 useState 初始化时读一次，之后点任何文档都打开同一篇。
+   *  - 无指定时取**最新一篇**：docs 按 updatedAt 升序，docs[0] 是最旧的，会导致「刚跑完的稿子打不开」。
+   */
+  const [syncedInitialDocId, setSyncedInitialDocId] = useState<string | null>(initialDocId);
+  if (initialDocId && initialDocId !== syncedInitialDocId) {
+    setSyncedInitialDocId(initialDocId);
+    setDocId(initialDocId);
+  }
+  if (docId === null && docs.length > 0) setDocId(docs[docs.length - 1].id);
 
   // 当前文档（React Query）；远程 → 可编辑草稿的同步走渲染期守卫（syncedDocId），不写 effect
   const docQuery = useQuery({ queryKey: ['doc', docId], queryFn: () => api.documents.get(docId!), enabled: !!docId });
@@ -260,6 +274,32 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
     () => (qualityReport ? jsonText<Record<string, number>>(qualityReport.scores, {}) : {}),
     [qualityReport],
   );
+
+  /** 运行客观检查器：显式按钮触发；同一正文多次运行分数与指纹必然一致 */
+  const runObjectiveAudit = useCallback(async () => {
+    if (!docId) return;
+    setObjectiveLoading(true);
+    setObjectiveError(null);
+    try {
+      const r = await api.documents.objectiveAudit(docId);
+      setObjectiveReport(r.report);
+    } catch (e) {
+      setObjectiveError(e instanceof Error ? e.message : '客观检查失败');
+    } finally {
+      setObjectiveLoading(false);
+    }
+  }, [docId]);
+
+  /**
+   * 切换文档时清空客观报告（渲染期守卫，不用 effect —— 项目 lint 禁止 effect 内 setState）。
+   * 否则切文档后会继续显示上一篇的分数与指纹，是最容易被误读成「这篇论文得了 93」的体验事故。
+   */
+  const [objectiveDocId, setObjectiveDocId] = useState<string | null>(null);
+  if (objectiveDocId !== docId) {
+    setObjectiveDocId(docId);
+    if (objectiveReport !== null) setObjectiveReport(null);
+    if (objectiveError !== null) setObjectiveError(null);
+  }
 
   const snapshots = useMemo<VersionSnapshot[]>(() => {
     if (!doc) return [];
@@ -904,6 +944,10 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
                 qualityReport={qualityReport}
                 qualityScores={qualityScores}
                 scoreColor={scoreColor}
+                objectiveReport={objectiveReport}
+                objectiveLoading={objectiveLoading}
+                objectiveError={objectiveError}
+                onRunObjectiveAudit={runObjectiveAudit}
                 docExperiments={docExperiments}
                 experimentsOpen={experimentsOpen}
                 onToggleExperiments={() => setExperimentsOpen((v) => !v)}

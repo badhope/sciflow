@@ -17,6 +17,7 @@ import { buildPipelineGraph, type PipelineGraphDeps, type StepStatusWire } from 
 import type { Outline, PipelineTaskRow, ResearchPlan } from './pipeline-state';
 import { WebSearchService } from '../websearch/websearch.service';
 import { ConfigCenterService } from '../config/config-center.service';
+import { ScholarSearchService } from '../research/scholar-search.service';
 import { buildWebHits, isWebSearchEnabled } from './pipeline-websearch';
 import { normalizeKnScore } from './pipeline-metrics';
 import { envInt } from '../../../../packages/core/src/env';
@@ -86,6 +87,7 @@ export class PipelineService implements OnModuleInit {
     private readonly trace: AgentTraceService,
     private readonly websearch: WebSearchService,
     private readonly config: ConfigCenterService,
+    private readonly scholar: ScholarSearchService,
   ) {}
 
   onModuleInit() {
@@ -105,9 +107,11 @@ export class PipelineService implements OnModuleInit {
         generateFigures: (t, o, c) => this.ai.generateFigures(t, o, c),
       },
       runDrafting: (taskId, title, outline, refsPrompt, styleHint, reflexion, onProgress) =>
-        this.runDrafting(taskId, title, outline, refsPrompt, styleHint, reflexion, onProgress),      buildRefsPrompt: (projectId) => this.referencesForPrompt(projectId),
-      renderCitations: (projectId, docId, content, meta) => {
-        const refPool = this.refsForDraft(projectId);
+        this.runDrafting(taskId, title, outline, refsPrompt, styleHint, reflexion, onProgress),
+      buildRefsPrompt: (projectId, topic, keywords) => this.referencesForPrompt(projectId, undefined, topic, keywords),
+      renderCitations: (projectId, docId, content, meta, topic, keywords) => {
+        // 必须与起草时的池输入完全一致（projectId/topic/keywords），[Ref:N] 编号才不会错位
+        const refPool = this.refsForDraft(projectId, topic, keywords);
         return this.citationRenderer.render(docId, content, refPool, [], [], meta.kn);
       },
       crossEnrich: async (projectId, topic, plan) => {
@@ -122,6 +126,30 @@ export class PipelineService implements OnModuleInit {
             }
           } catch (e: any) {
             this.logger.warn(`文献库检索失败 [${q}]: ${e?.message || e}`);
+          }
+        }
+        // 内置学术检索（免 Key）：本地库为空/不足时用 OpenAlex + Crossref + arXiv 补真实文献元数据，
+        // 否则全新项目的起草阶段完全没有参考文献，引用闭环必然为空（客观质量分被引用维度拖死）。
+        if (this.scholar.isEnabled((k) => this.readSetting(k))) {
+          try {
+            const existingTitles = new Set([...seen.values()].map((h) => String(h.title || '').toLowerCase().trim()));
+            // 英文检索词优先（OpenAlex/Crossref 对中文长句检索噪声大），主题串殿后兜底
+            const kws = [...(plan.searchStrategy?.keywords || []).filter(Boolean), topic].filter(Boolean).slice(0, 4);
+            const scholarHits = await this.scholar.search(kws.map(String), 8);
+            let added = 0;
+            for (const h of scholarHits) {
+              const key = h.doi ? `doi:${h.doi.toLowerCase()}` : `t:${String(h.title).toLowerCase().trim()}`;
+              if (seen.has(key) || existingTitles.has(String(h.title).toLowerCase().trim())) continue;
+              seen.set(key, {
+                title: h.title, authors: h.authors, year: h.year, venue: h.venue, doi: h.doi, url: h.url,
+                abstract: h.abstract, source: 'scholar', citationCount: h.citationCount,
+              });
+              existingTitles.add(String(h.title).toLowerCase().trim());
+              added += 1;
+            }
+            if (added) this.logger.log(`[scholar] 学术检索补充 ${added} 条真实文献（openalex/crossref/arxiv）`);
+          } catch (e: any) {
+            this.logger.warn(`学术检索失败（已忽略，不影响流程）：${e?.message || e}`);
           }
         }
         const enriched = await this.crossEnrichResearch(projectId, topic, plan, [...seen.values()]);
@@ -221,6 +249,25 @@ export class PipelineService implements OnModuleInit {
     this.budget.set(task.id, 0);
     void this.invokeGraph(task.id, { taskId: task.id, task: this.getTaskRow(task.id) });
     return this.get(task.id);
+  }
+
+  /**
+   * 重跑一个已结束（failed / interrupted / completed）的任务：用同一主题、同一项目起一条新任务。
+   *
+   * 为什么需要：失败任务的唯一出路原来是「删除 + 重新输入主题启动」，主题还得多打一遍；
+   * 用户实测被卡住的 5.5h 任务连重跑按钮都没有。这里复用 create() 的全部前置校验
+   * （项目存在、AI 已配置、同项目 running 互斥、pipeline:before 钩子），只把 topic 带过来，
+   * 并记录 retryOf 便于追踪来源。
+   */
+  async rerun(id: string) {
+    const src = db.select().from(pipelineTasks).where(eq(pipelineTasks.id, id)).get();
+    if (!src) throw new NotFoundException('流水线任务不存在');
+    if (src.status === 'running' || src.status === 'awaiting_confirmation') {
+      throw new BadRequestException('该任务仍在运行中，请先停止后再重跑');
+    }
+    const created = await this.create(src.projectId, src.topic);
+    this.logger.log(`[流水线] 任务 ${id.slice(0, 8)} 重跑 → 新任务 ${created.id.slice(0, 8)}（主题：${src.topic.slice(0, 40)}）`);
+    return created;
   }
 
   get(id: string) {
@@ -514,6 +561,29 @@ export class PipelineService implements OnModuleInit {
   }
 
   // ─── 起草（并行：p-limit，AI_DRAFT_CONCURRENCY 可配，默认 3；onProgress 逐节进度） ────
+  /**
+   * 分章起草后处理（实测发现的两类污染）：
+   *  1. 模型自己又输出一遍 `## 章节标题` → 与 runDrafting 前缀重复，出现同名章节两次；
+   *  2. 模型在每章末尾自造「## 参考文献」列表 → 文档变成 N 份参考文献、并把正文截断成首章。
+   * 这里剥掉模型复述的标题与自造参考文献块；真正的参考文献由 citation renderer 统一渲染。
+   */
+  static sanitizeSectionDraft(raw: string, sectionTitle: string): string {
+    let text = String(raw || '').trim();
+    if (!text) return '';
+    const NL = String.fromCharCode(10);
+    // 去掉开头的代码围栏
+    text = text.replace(new RegExp('^```(?:markdown|md)?\\s*' + NL, 'i'), '').replace(new RegExp(NL + '```\\s*$'), '');
+    const esc = sectionTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // 剥掉开头复述的标题（允许带序号，如 "## 3 问题定义…"）
+    text = text.replace(new RegExp(`^#{1,4}\\s*(?:\\d+[.、]?\\s*)?${esc}\\s*${NL}+`, 'i'), '');
+    // 截断模型自造的参考文献/引用列表块（从其标题起到文末）
+    const cut = text.search(new RegExp(NL + '#{2,4}\\s*(参考文献|References|引用文献)\\s*' + NL, 'i'));
+    if (cut >= 0) text = text.slice(0, cut);
+    // 末尾孤立的 "参考文献：" 行
+    text = text.replace(new RegExp(NL + '+参考文献[:：]?\\s*$', 'i'), '');
+    return text.trim();
+  }
+
   private async runDrafting(
     taskId: string,
     title: string,
@@ -533,7 +603,8 @@ export class PipelineService implements OnModuleInit {
       sections.map((sec, i) =>
         this.draftingLimit(async () => {
           const sectionTitle = typeof sec === 'string' ? sec : sec.title;
-          const content = await this.ai.draftSection(sectionTitle, outlineJson, ctx);
+          const draftRaw = await this.ai.draftSection(sectionTitle, outlineJson, ctx);
+          const content = PipelineService.sanitizeSectionDraft(String(draftRaw || ''), String(sectionTitle));
           this.trackBudget(taskIdRef, 'draftSection'); // H2：起草成本打点（起草占全流程 token 大头）
           done += 1;
           onProgress?.(done, sections.length);
@@ -544,17 +615,43 @@ export class PipelineService implements OnModuleInit {
     return parts.sort((a, b) => a.i - b.i).map((p) => p.text).join('\n\n');
   }
 
-  private refsForDraft(projectId: string) {
+  /**
+   * 起草用参考文献池：**按与主题的相关性排序**，而不是按引用数。
+   *
+   * 历史事故（本轮实测）：原实现按 citationCount 降序，导致池子里前几条是
+   * DeepLab / Bagging 这类高被引通用论文，模型只能引用它们 → 论文引用与主题无关。
+   * 现在：标题/摘要与主题词+检索词的重合度优先（token 级匹配，中英文各自有效），
+   * 引用数只作为同分时的次要排序。
+   *
+   * 关键约束：起草 prompt 的 [Ref:N] 编号与本池顺序一一对应，渲染引用时必须用
+   * 完全相同的输入（projectId, topic, keywords）重算同一池，否则锚点错位。
+   * 相关条目 ≥8 时直接丢弃零相关条目（旧库遗留的离题文献不再混入起草提示词）。
+   */
+  private refsForDraft(projectId: string, topic?: string, keywords?: string[]) {
     const all = this.references.list(projectId);
     const meta = all.filter((r) => { const a = parseStringList(r.authors); return a.length > 0 && !!r.year; });
-    return meta.sort((a, b) => (b.citationCount || 0) - (a.citationCount || 0)).slice(0, 20);
+    const termSet = new Set(PipelineService.tokenize([topic || '', ...(keywords || [])].filter(Boolean).join(' ')));
+    const relevance = (r: { title?: string | null; abstract?: string | null; venue?: string | null }): number => {
+      if (!termSet.size) return 0;
+      const hay = new Set(PipelineService.tokenize(`${r.title || ''} ${r.abstract || ''} ${r.venue || ''}`));
+      let hit = 0;
+      for (const t of termSet) if (hay.has(t)) hit += 1;
+      return hit / termSet.size;
+    };
+    const scored = meta.map((r) => ({ r, rel: relevance(r) }));
+    const relevant = scored.filter((x) => x.rel > 0);
+    const pool = topic && termSet.size && relevant.length >= 8 ? relevant : scored;
+    return pool
+      .sort((a, b) => b.rel - a.rel || (b.r.citationCount || 0) - (a.r.citationCount || 0))
+      .slice(0, 20)
+      .map((x) => x.r);
   }
 
   /** 项目 → 最近一次联网检索线索（只用于起草 prompt 的背景参考，不落文献库） */
   private readonly webHintForProject = new Map<string, PaperHit[]>();
 
-  private referencesForPrompt(projectId: string, refs?: ReturnType<PipelineService['refsForDraft']>): string {
-    const pool = refs ?? this.refsForDraft(projectId);
+  private referencesForPrompt(projectId: string, refs?: ReturnType<PipelineService['refsForDraft']>, topic?: string, keywords?: string[]): string {
+    const pool = refs ?? this.refsForDraft(projectId, topic, keywords);
     const lines = pool.map((r, i) => `[Ref:${i + 1}] ${r.title}（${r.authors}，${r.year || 'n.d.'}，${r.venue}${r.doi ? `，DOI:${r.doi}` : ''}）`);
     // 联网检索线索（未入库）单列，明确标注「不可直接引用」：避免模型把网页摘要当同行评议文献
     if (this.webHintForProject.size) {

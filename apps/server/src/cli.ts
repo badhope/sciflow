@@ -25,7 +25,7 @@ import { Command } from 'commander';
 import { NestFactory } from '@nestjs/core';
 
 import { APP_VERSION } from './common/version';
-import { registerConfigCommands, registerExtensionCommands } from './config/config-cli';
+import { registerConfigCommands, registerExtensionCommands, registerQualityCommands } from './config/config-cli';
 
 const CLI_VERSION = APP_VERSION;
 
@@ -271,6 +271,7 @@ program
 
 registerConfigCommands(program, localApi);
 registerExtensionCommands(program, localApi);
+registerQualityCommands(program, localApi);
 
 const mcp = program.command('mcp').description('MCP 协议');
 mcp

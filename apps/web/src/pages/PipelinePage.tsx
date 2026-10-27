@@ -504,6 +504,22 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
     }
   };
 
+  /** 重跑已结束任务：保留原主题起一条新流水线（失败任务不必删了重输） */
+  const [rerunning, setRerunning] = useState(false);
+  const rerunTask = async (task: PipelineTask) => {
+    setRerunning(true);
+    try {
+      const t = await api.pipeline.rerun(task.id);
+      await refresh();
+      setActiveId(t.id);
+      toast('success', `已按原主题重跑，新任务 ${t.id.slice(0, 8)}…`);
+    } catch (e: unknown) {
+      toast('error', '重跑失败：' + errMsg(e));
+    } finally {
+      setRerunning(false);
+    }
+  };
+
   const statusText: Record<string, { text: string; tone: 'blue' | 'amber' | 'green' | 'red' }> = {    running: { text: '执行中', tone: 'blue' },
     awaiting_confirmation: { text: '等待大纲确认', tone: 'amber' },
     completed: { text: '已完成', tone: 'green' },
@@ -712,16 +728,19 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
                     {active.status === 'interrupted' ? (
                       <>
                         <span className="font-medium text-amber-600 dark:text-amber-400">中断说明：</span>
-                        服务重启时，已进入写作阶段（有产物文档）的任务会按断点自动续跑；中断于前半段（尚无产物文档）的任务不提供单任务重跑——
-                        可删除本任务后在上方重新启动一条新流水线。
+                        服务重启时，已进入写作阶段（有产物文档）的任务会按断点自动续跑；中断于前半段的任务可直接重跑（沿用原主题起新任务）。
                       </>
                     ) : (
                       <>
                         <span className="font-medium text-rose-600 dark:text-rose-400">失败说明：</span>
-                        质量门自动回炉仍失败时不提供单任务重跑；请查看上方错误信息，调整主题或文献后删除本任务并重新启动。
-                        若刚重启服务，稍后刷新本页——进行中的任务会自动恢复。
+                        上方为真实失败原因。可先按提示处理（检查模型连通性/降低并发/补充文献），再一键重跑——沿用原主题，无需重新输入。
                       </>
                     )}
+                    <div className="mt-2">
+                      <Button variant="outline" className="text-xs px-2 py-1" onClick={() => void rerunTask(active)} loading={rerunning}>
+                        重跑本任务（沿用主题）
+                      </Button>
+                    </div>
                   </div>
                 )}
 

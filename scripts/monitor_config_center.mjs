@@ -47,14 +47,19 @@ async function get(path, init) {
 }
 
 async function chatOnce(message = '只回复两个字：正常') {
+  // projectId 必填：chat/stream 需要项目上下文（此前脚本不传，服务端 4xx 却显示成 tokens=0）
+  const projects = await get('/api/projects').catch(() => ({ json: [] }));
+  const pid = Array.isArray(projects.json) && projects.json[0]?.id;
+  if (!pid) return { ok: false, text: '', usage: undefined, error: '没有可用项目（无法测试对话）' };
   const res = await fetch(`${BASE}/api/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, history: [] }),
+    body: JSON.stringify({ message, history: [], projectId: pid }),
     signal: AbortSignal.timeout(120_000),
   });
   const raw = await res.text();
-  const deltas = [...raw.matchAll(/data: (\{.*?\})\n\n/g)].map((m) => { try { return JSON.parse(m[1]); } catch { return {}; } });
+  // SSE 分隔符可能是 \n\n 或 \r\n\r\n（Windows/代理会改写），两种都要认
+  const deltas = [...raw.matchAll(/data: (\{.*?\})\r?\n\r?\n/g)].map((m) => { try { return JSON.parse(m[1]); } catch { return {}; } });
   const text = deltas.map((d) => d.delta || '').join('');
   const usage = deltas.find((d) => d.usage)?.usage;
   return { ok: res.ok && text.length > 0, text, usage, error: deltas.find((d) => d.error)?.error };

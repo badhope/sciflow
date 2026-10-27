@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![version](https://img.shields.io/badge/version-1.4.0-black.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.5.0-black.svg)](CHANGELOG.md)
 
 > **🌐 语言 / Language：[中文](README.md) · [English](README.en.md)**
 
@@ -40,6 +40,7 @@ flowchart LR
 
 ## 🗞 最近更新
 
+- **2026-10-27 · v1.5.0**：真实论文全流程验收——用 u2-flash 从 UI 端到端跑通多篇完整论文；新增**确定性客观质量检查器**（六维硬指标 + 学术诚信检测，同文本必然同分同指纹）作为质量门唯一判定依据；内置免 Key 学术检索（OpenAlex/Crossref/arXiv）与文献相关性门禁；修复润色并发死锁、产物不可见、写作页 `?doc=` 失效、导出作者 JSON、失败任务不可重跑等 12 项实测缺陷。
 - **2026-10-26 · v1.4.0**：扩展中心——内置 87 条科研资产（20 MCP / 31 技能 / 10 角色 / 10 约束 / 4 钩子 / 12 提示词，含 13 项 SciFlow 私有优势工具）随仓库发布、默认启用；四种添加入口（手填/粘贴/拖拽 ZIP/一键 AI 生成）+ 对话与 CLI 入口；停用即撤回对应子系统配置。
 - **2026-10-26 · v1.3.0**：配置中心（角色/约束工程/钩子/权限矩阵/审计）三入口同源——设置页、`sciflow config` CLI、对话工具 `config.*` 均可配置且立即生效；全面放开权限档 + 核心保护项锁定；内置 4 套预设；运行时巡检脚本。
 - **2026-10-26 · v1.2.0**：设置页自定义连接升级——三协议（OpenAI 兼容 / Anthropic / Gemini）、填地址+Key 自动检测模型并匹配上下文/输出/工具调用能力、表单内连接测试；真实 UniSound u2-flash 浏览器端到端验证。
@@ -118,6 +119,7 @@ flowchart LR
 
 ### 质量与评审
 - **7 维质量评分**：文献 / 逻辑 / 引用 / 语言 / 创新 / 图表 / 格式（0–100），Recharts 雷达图 + 历史评分对比。
+- **客观质量检查器（确定性）**：结构 / 篇幅 / 引用闭环 / 可读性 / 修辞严谨 / 学术诚信六维硬指标，纯函数零随机，同文本必然同分同指纹；硬伤（占位符、空文、重复段落、长篇零引用、名实不符）直接封顶 40。质量门以客观分为准，LLM 分仅作改进建议——LLM 同一稿实测漂移 27–59，不能当验收依据。CLI `sciflow quality check` + 写作页面板 + `GET /api/documents/:id/objective-audit` 三处共用同一实现。
 - **审稿闭环**：审稿意见结构化解析、逐条回复模板、修回截止日倒计时。
 
 ### 投稿辅助

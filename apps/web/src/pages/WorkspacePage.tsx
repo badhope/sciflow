@@ -184,11 +184,27 @@ export function WorkspacePage({
     api.knowledge.list(project.id).then((list) => setKbByName(new Map(list.map((d) => [d.name, d])))).catch(() => undefined);
   }, [project.id]);
 
+  /**
+   * 恢复未完成流水线：taskId 此前只由本页「启动」按钮写入，刷新/切项目/重进页面后
+   * 运行中的任务（尤其 awaiting_confirmation 等待确认大纲）会从界面消失，用户无法确认 → 流程卡死。
+   * 这里按项目拉最近任务，若有 running/awaiting_confirmation 则接管显示。
+   */
+  const activePipelineQuery = useQuery({
+    queryKey: ['pipeline-active', project.id],
+    queryFn: () => api.pipeline.list(project.id),
+    refetchInterval: 5000,
+  });
+  // 派生而非 effect：显式 taskId 优先，否则接管最近一个活跃任务（不在 effect 中 setState）
+  const liveTask = (activePipelineQuery.data || [])
+    .filter((t) => t.status === 'running' || t.status === 'awaiting_confirmation')
+    .slice(-1)[0];
+  const effectiveTaskId = taskId ?? liveTask?.id ?? null;
+
   // 流水线轮询：仅在有活动任务时以 2.5s 间隔刷新（React Query refetchInterval）
   const taskQuery = useQuery({
-    queryKey: ['pipeline-task', taskId],
-    queryFn: () => api.pipeline.get(taskId!),
-    enabled: !!taskId,
+    queryKey: ['pipeline-task', effectiveTaskId],
+    queryFn: () => api.pipeline.get(effectiveTaskId!),
+    enabled: !!effectiveTaskId,
     refetchInterval: (q) => {
       const t = q.state.data as PipelineTask | undefined;
       if (!t) return 2500;
@@ -196,14 +212,33 @@ export function WorkspacePage({
     },
   });
   const task: PipelineTask | undefined = taskQuery.data;
-  // 选中文档为「派生」：显式选择 > 流水线产物 > 传入初值 > 列表首个（不在 effect 里写 state）
-  const effectiveDocId = docId ?? task?.documentId ?? initialDocId ?? docs[0]?.id ?? null;
+  /**
+   * 选中文档的优先级：显式选择 > 流水线产物 > 传入初值 > 列表首个。
+   *
+   * 历史缺陷（本轮实测）：流水线完成后 docId 仍为空，于是落到 docs[0]（`orderBy(updatedAt)` 是
+   * 升序，docs[0] 反而是最旧的那篇），用户看到的是上一轮的旧稿，新产物只躺在下拉框里找不到
+   * ——「跑完了却说没产出」。现在把「本任务对应的文档」提到最前；无任务时取最新一篇。
+   */
+  const effectiveDocId = docId ?? task?.documentId ?? initialDocId ?? docs[docs.length - 1]?.id ?? null;
   useEffect(() => {
     if (task?.documentId) {
       void qc.invalidateQueries({ queryKey: ['docs', project.id] });
       void qc.invalidateQueries({ queryKey: ['doc', task.documentId] });
     }
   }, [task?.documentId, task?.status, project.id, qc]);
+  /**
+   * 任务完成时把视图切到它的产物文档。
+   * 仅靠 effectiveDocId 的派生优先级不够：用户若在运行期间点过别的文档（docId 被写死），
+   * 跑完仍停在旧稿。这里在 running/awaiting → completed 的瞬间清掉显式选择，
+   * 让优先级回落到 task.documentId（用 ref 记住上一个状态，避免每次渲染都清）。
+   */
+  const prevTaskStatus = useRef<string | null>(null);
+  useEffect(() => {
+    const status = task?.status ?? null;
+    const wasActive = prevTaskStatus.current === 'running' || prevTaskStatus.current === 'awaiting_confirmation';
+    if (task?.documentId && status === 'completed' && wasActive) setDocId(null);
+    prevTaskStatus.current = status;
+  }, [task?.status, task?.documentId]);
 
   const docQuery = useQuery({
     queryKey: ['doc', effectiveDocId],
@@ -405,10 +440,10 @@ export function WorkspacePage({
     },
   });
   const confirmOutline = useMutation({
-    mutationFn: (chosen?: Outline) => api.pipeline.confirmOutline(taskId!, chosen),
+    mutationFn: (chosen?: Outline) => api.pipeline.confirmOutline(effectiveTaskId!, chosen),
     onSuccess: () => {
       setChosenVariant(null);
-      void qc.invalidateQueries({ queryKey: ['pipeline-task', taskId] });
+      void qc.invalidateQueries({ queryKey: ['pipeline-task', effectiveTaskId] });
     },
   });
   const newDoc = useMutation({

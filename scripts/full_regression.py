@@ -360,15 +360,21 @@ if runid:
             doc_id = final.get("documentId")
             check("流水线 e2e·documentId 回写", bool(doc_id), f"doc={doc_id}")
             step_map = {s["key"]: s for s in final.get("steps", [])}
-            check("流水线 e2e·质量门落库总分≥80", step_map.get("quality-gate", {}).get("output", "").startswith("总分 8"),
-                  str(step_map.get("quality-gate", {}).get("output")))
+            # v1.5 契约：门禁分数以确定性客观检查器为准，不再断言「≥80」——
+            # mock 网关会重复输出段落，触发真实「重复段落」硬伤（40 分封顶），那是正确行为。
+            # 这里断言的是**一致性**：流水线落库分数必须等于同一文书的客观检查分数。
+            qg_out = step_map.get("quality-gate", {}).get("output", "")
+            sa, audit = req("GET", f"/api/documents/{doc_id}/objective-audit")
+            audit_score = ((audit or {}).get("report") or {}).get("totalScore") if sa == 200 else None
+            check("流水线 e2e·质量门分=客观检查分", bool(qg_out.startswith("总分 ")) and audit_score is not None and qg_out == f"总分 {audit_score}/100",
+                  f"gate={qg_out!r} audit={audit_score}")
             tv_step = step_map.get("topic-verify", {})
             check("流水线 e2e·F-2.7 步骤起止时间戳", isinstance(tv_step.get("startedAt"), int) and isinstance(tv_step.get("endedAt"), int),
                   f"startedAt={tv_step.get('startedAt')} endedAt={tv_step.get('endedAt')}")
             # qualityReports / citations(format=pipeline) 产物断言
             sq, qd = req("GET", f"/api/quality?documentId={doc_id}")
-            check("流水线 e2e·qualityReports 落库", sq == 200 and isinstance(qd, list) and len(qd) >= 1 and qd[0].get("totalScore", 0) >= 80,
-                  f"st={sq} n={len(qd) if isinstance(qd, list) else '?'}")
+            check("流水线 e2e·qualityReports 落库且分=客观分", sq == 200 and isinstance(qd, list) and len(qd) >= 1 and qd[0].get("totalScore") == audit_score,
+                  f"st={sq} n={len(qd) if isinstance(qd, list) else '?'} score={(qd[0].get('totalScore') if isinstance(qd, list) and qd else None)} audit={audit_score}")
             sc, cd = req("GET", f"/api/documents/{doc_id}/citations")
             n_pipe = sum(1 for c in cd if c.get("format") == "pipeline") if isinstance(cd, list) else 0
             check("流水线 e2e·citations 回填 format=pipeline", sc == 200 and n_pipe >= 1, f"st={sc} n={n_pipe}")

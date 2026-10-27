@@ -1,7 +1,7 @@
-import { ClipboardCheck, FlaskConical, Gauge, History, Loader2, Mail, MessageSquare, Sparkles, Upload, ArrowDownToLine, Trash2 } from 'lucide-react';
+import { ClipboardCheck, FlaskConical, Gauge, History, Loader2, Mail, MessageSquare, ShieldCheck, Sparkles, Upload, ArrowDownToLine, Trash2 } from 'lucide-react';
 import { Badge, Button, Select, Spinner, Textarea } from '../../components/ui';
 import { HBar } from '../../components/charts';
-import type { DocVersionEntry, Experiment, Outline, QualityReport, ReviewComment, SimulatedReviewResult, ResearchDesignResult } from '../../types';
+import type { DocVersionEntry, Experiment, ObjectiveQualityReport, Outline, QualityReport, ReviewComment, SimulatedReviewResult, ResearchDesignResult } from '../../types';
 
 /**
  * WritingToolsPanel —— 写作页「AI 工具」标签页内容。
@@ -60,6 +60,11 @@ export interface WritingToolsPanelProps {
   qualityReport: QualityReport | null;
   qualityScores: Record<string, number>;
   scoreColor: (v: number, good?: number, mid?: number) => string | undefined;
+  /* 客观质量检查器（确定性规则引擎） */
+  objectiveReport: ObjectiveQualityReport | null;
+  objectiveLoading: boolean;
+  objectiveError: string | null;
+  onRunObjectiveAudit: () => void;
   /* 实验 */
   docExperiments: Experiment[];
   experimentsOpen: boolean;
@@ -97,6 +102,7 @@ export function WritingToolsPanel(props: WritingToolsPanelProps) {
     onGenerateLetter, onImportComments, generatingLetter, importingComments,
     onChangeCommentStatus, replyId, replyDraft, onReplyDraft, onStartReply, onCancelReply, onSaveReply, savingReply, onRemoveComment, letter,
     qualityReport, qualityScores, scoreColor,
+    objectiveReport, objectiveLoading, objectiveError, onRunObjectiveAudit,
     docExperiments, experimentsOpen, onToggleExperiments, onInsertExperiment,
     versionsOpen, onToggleVersions, snapshots, onOpenDiff,
     snapshotMsg, snapshotBusy, onSnapshotMsg, onCreateSnapshot,
@@ -293,13 +299,61 @@ export function WritingToolsPanel(props: WritingToolsPanelProps) {
       <section>
         <div className={`${SEC} flex items-center gap-1`}>
           <Gauge size={12} className="text-teal-600" aria-hidden="true" /> 质量评分
-          {qualityReport && <span className="text-[11px] text-slate-400">总分 {qualityReport.totalScore}</span>}
+          {qualityReport && <span className="text-[11px] text-slate-400">LLM 总分 {qualityReport.totalScore}</span>}
         </div>
         {!qualityReport ? (
-          <div className="text-xs text-slate-400">暂无评分，可到「质量评分」页运行 7 维评分。</div>
+          <div className="text-xs text-slate-400">暂无 LLM 评分，可到「质量评分」页运行 7 维评分。</div>
         ) : (
           <HBar max={100} items={Object.entries(qualityScores).map(([k, v]) => ({ label: k, value: Math.round(Number(v) || 0), color: scoreColor(Math.round(Number(v) || 0), 75, 60) }))} />
         )}
+
+        {/* 客观检查器：确定性硬指标，同一正文永远同分（LLM 分会漂移，不能当验收依据） */}
+        <div className="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-800">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+              <ShieldCheck size={12} className="text-teal-600" aria-hidden="true" /> 客观检查器
+              {objectiveReport && (
+                <span className={objectiveReport.totalScore >= 80 ? 'text-green-600' : objectiveReport.totalScore >= 60 ? 'text-amber-600' : 'text-red-600'}>
+                  {objectiveReport.totalScore}/100
+                </span>
+              )}
+            </span>
+            <button className="text-[11px] text-teal-600 hover:underline disabled:opacity-50 dark:text-teal-400" onClick={onRunObjectiveAudit} disabled={objectiveLoading}>
+              {objectiveLoading ? '检查中…' : objectiveReport ? '重新检查' : '运行检查'}
+            </button>
+          </div>
+          {objectiveError && <div className="mb-1 rounded bg-red-50 p-1.5 text-[11px] text-red-600 dark:bg-red-900/20 dark:text-red-300">{objectiveError}</div>}
+          {!objectiveReport ? (
+            <div className="text-[11px] text-slate-400">五维硬指标 + 学术诚信检测；同一正文结果恒定，可用于验收与对比。</div>
+          ) : (
+            <div className="space-y-1.5">
+              {/* 维度是 20 分制：换算成百分制再上色，否则 17/20 会被 70/50 阈值误判成红色差评 */}
+              <HBar max={20} items={objectiveReport.dimensions.map((d) => ({ label: `${d.label} ${d.score}/20`, value: d.score, color: scoreColor(Math.round((d.score / 20) * 100), 85, 60) }))} />
+              {objectiveReport.hardFails.length > 0 && (
+                <div className="rounded bg-red-50 p-1.5 text-[11px] leading-relaxed text-red-700 dark:bg-red-900/20 dark:text-red-300">
+                  <div className="mb-0.5 font-medium">硬伤 {objectiveReport.hardFails.length} 项（总分封顶 40）</div>
+                  <ul className="list-disc pl-4">
+                    {objectiveReport.hardFails.map((f, i) => <li key={i}>{f}</li>)}
+                  </ul>
+                </div>
+              )}
+              <div className="text-[10px] text-slate-400">
+                指纹 {objectiveReport.fingerprint} · {objectiveReport.stats.chars} 字符 · {objectiveReport.stats.sections} 章 · 引用 {objectiveReport.stats.uniqueCitations} 个
+              </div>
+              <details className="text-[11px] text-slate-500 dark:text-slate-400">
+                <summary className="cursor-pointer select-none">查看证据</summary>
+                <ul className="mt-1 space-y-1">
+                  {objectiveReport.dimensions.map((d) => (
+                    <li key={d.key}>
+                      <span className="font-medium">{d.label} {d.score}/20：</span>
+                      {d.evidence.join('；')}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* 关联实验 */}

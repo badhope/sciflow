@@ -112,6 +112,45 @@ export interface QualityReport {
   createdAt: number;
 }
 
+/** 客观质量检查器（确定性规则引擎）单维度报告 */
+export interface ObjectiveQualityDimension {
+  key: string;
+  label: string;
+  score: number;
+  weight: number;
+  evidence: string[];
+}
+
+/** 客观质量检查器 API 响应外壳（report 内才是五维报告） */
+export interface ObjectiveAuditResponse {
+  documentId: string;
+  title: string;
+  report: ObjectiveQualityReport;
+  llmHistory: { totalScore: number; createdAt: number; scores: string | Record<string, number> }[];
+}
+
+/** GET /api/documents/:id/objective-audit 的 report 字段 —— 同一文本必然同分同指纹 */
+export interface ObjectiveQualityReport {
+  totalScore: number;
+  dimensions: ObjectiveQualityDimension[];
+  hardFails: string[];
+  stats: {
+    chars: number;
+    cjkChars: number;
+    englishWords: number;
+    sections: number;
+    paragraphs: number;
+    sentences: number;
+    citations: number;
+    referenceEntries: number;
+    uniqueCitations: number;
+    avgSentenceChars: number;
+    duplicateParagraphs: number;
+    placeholderHits: number;
+  };
+  fingerprint: string;
+}
+
 export interface PipelineStep {
   key: string;
   label: string;

@@ -177,7 +177,24 @@ function AppInner() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [pickedProjectId, setCurrentProjectId] = useState<string | null>(null);
+  /**
+   * 当前项目持久化：此前只存 React state，刷新/切页后回落到列表第一个项目，
+   * 用户在自己项目里刷新会被"传送到"另一个项目（实测踩到）。存 localStorage 按工作区恢复。
+   */
+  const [pickedProjectId, setCurrentProjectId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('sciflow.currentProjectId');
+    } catch {
+      return null;
+    }
+  });
+  const selectProject = useCallback((id: string | null) => {
+    setCurrentProjectId(id);
+    try {
+      if (id) localStorage.setItem('sciflow.currentProjectId', id);
+      else localStorage.removeItem('sciflow.currentProjectId');
+    } catch { /* 隐私模式忽略 */ }
+  }, []);
   const qc = useQueryClient();
   const [showNewProject, setShowNewProject] = useState(false);
   const [newName, setNewName] = useState('');
@@ -302,7 +319,7 @@ function AppInner() {
     if (!newName.trim()) return;
     const p = await api.projects.create(newName.trim());
     void qc.invalidateQueries({ queryKey: ['projects'] });
-    setCurrentProjectId(p.id);
+    selectProject(p.id);
     setNewName('');
     setShowNewProject(false);
     setCommandOpen(false);
@@ -321,7 +338,7 @@ function AppInner() {
     if (!deletingProject) return;
     await api.projects.remove(deletingProject.id);
     void qc.invalidateQueries({ queryKey: ['projects'] });
-    if (currentProjectId === deletingProject.id) setCurrentProjectId(null);
+    if (currentProjectId === deletingProject.id) selectProject(null);
     toast('info', '项目已删除');
     setDeletingProject(null);
   };
@@ -378,7 +395,7 @@ function AppInner() {
                 onSelectView={setView}
                 projects={filteredProjects}
                 currentProjectId={currentProjectId}
-                onSelectProject={(id) => setCurrentProjectId(id)}
+                onSelectProject={selectProject}
                 projectQuery={projectQuery}
                 onProjectQuery={setProjectQuery}
                 onRefresh={() => void qc.invalidateQueries({ queryKey: ['projects'] })}

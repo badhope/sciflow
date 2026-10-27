@@ -32,6 +32,12 @@ export class PipelineController {
     return this.pipeline.stop(id);
   }
 
+  /** 重跑已结束的任务（同主题起新任务；失败任务不再只能「删了重输」） */
+  @Post(':id/rerun')
+  rerun(@Param('id') id: string) {
+    return this.pipeline.rerun(id);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.pipeline.remove(id);

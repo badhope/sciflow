@@ -30,6 +30,12 @@ export class DocumentsController {
   }
 
   /** B-4.3 引用体检：锚点×落库交叉审计（幽灵引用/无 DOI 黄牌/绿牌） */
+  /** 客观质量检查（确定性规则引擎，不调模型）：同一文本多次调用必得同一分数 */
+  @Get(':id/objective-audit')
+  objectiveAudit(@Param('id') id: string) {
+    return this.documents.objectiveAudit(id);
+  }
+
   @Get(':id/citation-audit')
   citationAudit(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
     this.access.assertDocument(id, req.user);

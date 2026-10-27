@@ -200,36 +200,66 @@ ${references}`
   async polish(text: string, mode: 'polish' | 'reduce' = 'polish'): Promise<{ original: string; polished: string; reason: string }> {
     const parts = text.split(/(?=^## )/m).filter((s) => s.trim().length > 0);
     const target = parts.length > 1 ? parts : [text];
-    const polishedParts: string[] = [];
-    const reasons: string[] = [];
     const polishCustom = this.getCustomPrompt('polish');
-    for (const part of target) {
-      const polishPrompt = polishCustom ? `${polishCustom}
+    // 并行润色：这里绝不能再包一层 this.limit —— complete() 内部已有同一个 p-limit 闸门，
+    // 嵌套排队在外层并发 ≥ 闸门并发数时会永久饿死（实测 AI_RPM_CAP 小值时整条流水线挂死）。
+    this.logger.log(`[润色] 开始：${target.length} 段并行`);
+    const t0 = Date.now();
+    let outcomes = await Promise.race([
+      Promise.all(
+        target.map(async (part, i) => {
+          const polishPrompt = polishCustom ? `${polishCustom}
 
 待处理正文：
 ${part}` : prompts.POLISH(part, mode);
-      const raw = await this.complete([{ role: 'user', content: polishPrompt }], { temperature: 0.4, maxTokens: 8192, context: 'polish' });
-      let parsed: Partial<{ original: string; polished: string; reason: string }> = {};
-      try {
-        parsed = this.jsonOf<{ original: string; polished: string; reason: string }>(raw);
-      } catch {
-        parsed = { polished: raw };
-      }
-      let piece = String(parsed.polished || part || '').trim();
-      // 处理 AI 嵌套输出：polished 字段本身又是 JSON 对象文本
-      if (piece.startsWith('{') && (piece.includes('"original"') || piece.includes('"reason"') || piece.includes('"polished"'))) {
-        try {
-          const nested = this.jsonOf<{ original?: string; polished?: string; reason?: string }>(piece);
-          piece = String(nested.polished || nested.original || piece).trim();
-        } catch { /* 保持原样 */ }
-      }
-      polishedParts.push(piece);
-      if (parsed.reason) reasons.push(String(parsed.reason).trim());
+          // 输出上限按输入长度估算（中文约 1 token/字，润色通常 ≤1.5 倍），夹取 1024-8192
+          const est = Math.min(8192, Math.max(1024, Math.ceil(part.length * 1.5)));
+          try {
+            // 润色是「锦上添花」步骤：单段最多重试 1 次、单次 90s 超时；
+            // 失败保留原文（fail-soft），不能让上游空响应把整条流水线拖成 failed。
+            const raw = await this.complete([{ role: 'user', content: polishPrompt }], {
+              temperature: 0.4, maxTokens: est, context: 'polish', retries: 1, signal: AbortSignal.timeout(90_000),
+            });
+            let parsed: Partial<{ original: string; polished: string; reason: string }> = {};
+            try {
+              parsed = this.jsonOf<{ original: string; polished: string; reason: string }>(raw);
+            } catch {
+              parsed = { polished: raw };
+            }
+            let piece = String(parsed.polished || part || '').trim();
+            // 处理 AI 嵌套输出：polished 字段本身又是 JSON 对象文本
+            if (piece.startsWith('{') && (piece.includes('"original"') || piece.includes('"reason"') || piece.includes('"polished"'))) {
+              try {
+                const nested = this.jsonOf<{ original?: string; polished?: string; reason?: string }>(piece);
+                piece = String(nested.polished || nested.original || piece).trim();
+              } catch { /* 保持原样 */ }
+            }
+            // 润色失败保护：模型返回空/过短 → 保留原文
+            if (!piece || piece.length < part.length * 0.3) {
+              return { i, piece: part, reason: `第 ${i + 1} 段润色输出异常（保留原文）` };
+            }
+            return { i, piece, reason: parsed.reason ? String(parsed.reason).trim() : '' };
+          } catch (e: any) {
+            return { i, piece: part, reason: `第 ${i + 1} 段润色失败（保留原文）：${String(e?.message || e).slice(0, 120)}` };
+          }
+        }),
+      ),
+      // 总看门狗：即使单个 complete 的 abort 失效，也绝不让润色挂死流水线（fail-soft 保留原文）
+      new Promise<null>((resolve) => {
+        const timer = setTimeout(() => resolve(null), 600_000);
+        timer.unref?.();
+      }),
+    ]);
+    if (outcomes === null) {
+      this.logger.warn(`[润色] 总看门狗超时（600s），全部段落保留原文`);
+      outcomes = target.map((part, i) => ({ i, piece: part, reason: `第 ${i + 1} 段润色整体超时（保留原文）` }));
     }
+    outcomes.sort((a, b) => a.i - b.i);
+    this.logger.log(`[润色] 完成：${target.length} 段，耗时 ${Math.round((Date.now() - t0) / 1000)}s`);
     return {
       original: text.trim(),
-      polished: polishedParts.join('\n\n'),
-      reason: reasons.join('；') || '分段润色完成',
+      polished: outcomes.map((o) => o.piece).join(String.fromCharCode(10) + String.fromCharCode(10)),
+      reason: outcomes.map((o) => o.reason).filter(Boolean).join('；') || '分段润色完成',
     };
   }
 

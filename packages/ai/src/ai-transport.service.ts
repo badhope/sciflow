@@ -68,6 +68,8 @@ export interface CompleteOptions {
   tools?: ToolSet;
   /** 允许多步工具调用（默认 1，即单轮） */
   maxSteps?: number;
+  /** 失败重试次数（默认 4；润色等长输出场景应降低，避免空响应重试把流水线拖死） */
+  retries?: number;
 }
 
 /**
@@ -172,10 +174,17 @@ export class AiTransportService {
     this.toolCalling = tc === undefined || tc === null ? true : Number(tc) !== 0;
   }
 
-  /** 单次请求的输出上限：优先显式参数；否则用厂商上报值（不得超过上下文窗口），未知回落 4096 */
+  /**
+   * 单次请求的输出上限：优先显式参数；否则用厂商上报值，但**夹到 8192**。
+   *
+   * 历史事故（本轮实测）：u2-flash 上报 max_output=131072，若原样下发，模型会一直生成到
+   * 上限，单章起草耗时 170s+ 直接触发 180s 请求超时，流水线反复失败。
+   * 学术章节 800-1500 字，8192 tokens 足够；需要更长输出的调用方显式传 maxTokens。
+   */
   protected defaultMaxOutput(): number {
-    if (this.maxOutput > 0 && this.contextWindow > 0) return Math.max(1, Math.min(this.maxOutput, this.contextWindow));
-    if (this.maxOutput > 0) return this.maxOutput;
+    const reported = this.maxOutput > 0 ? this.maxOutput : 0;
+    const cap = this.contextWindow > 0 ? Math.min(reported || this.contextWindow, this.contextWindow) : reported;
+    if (cap > 0) return Math.max(1, Math.min(cap, 8192));
     return 4096;
   }
 
@@ -406,7 +415,7 @@ ${augmentation}` };
           return { text, usage };
         },
         {
-          retries: 4,
+          retries: opts.retries ?? 4,
           factor: 2,
           minTimeout: 2000,
           maxTimeout: 60_000,

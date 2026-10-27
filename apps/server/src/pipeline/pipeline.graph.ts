@@ -3,9 +3,11 @@ import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db, sqlite } from '../db/database';
-import { pipelineTasks, documents, reflexionLogs, memoryLogs, polishRecords, qualityReports } from '../db/schema';
+import { pipelineTasks, documents, reflexionLogs, memoryLogs, polishRecords, qualityReports, citations, references } from '../db/schema';
 import type { Outline, PaperHit, QualityReport, ResearchPlan, ResearchTraceEntry, PipelineTaskRow } from './pipeline-state';
 import { splitTailBlock, stripTailBlocks } from './tail-blocks';
+import { parseAuthors } from '../common/authors';
+import { checkPaperQuality, type ObjectiveQualityReport } from '../../../../packages/core/src/quality-audit';
 
 /**
  * 主流水线图（LangGraph）：
@@ -69,10 +71,10 @@ export interface PipelineGraphDeps {
     reflexion: string,
     onProgress?: (done: number, total: number) => void,
   ): Promise<string>;
-  /** 文献库 → prompt 引用串。 */
-  buildRefsPrompt(projectId: string): string;
-  /** 引用锚点渲染（citation-js CSL）：正文 [n] 锚点 + 文末参考文献块。 */
-  renderCitations(projectId: string, docId: string, content: string, meta: { lib: { title: string; score: number }[]; kn: PaperHit[] }): string;
+  /** 文献库 → prompt 引用串。topic/keywords 决定相关性排序，起草与渲染必须传同一组值。 */
+  buildRefsPrompt(projectId: string, topic?: string, keywords?: string[]): string;
+  /** 引用锚点渲染（citation-js CSL）：正文 [n] 锚点 + 文末参考文献块。topic/keywords 必须与起草时一致。 */
+  renderCitations(projectId: string, docId: string, content: string, meta: { lib: { title: string; score: number }[]; kn: PaperHit[] }, topic?: string, keywords?: string[]): string;
   /** 跨库检索增强（文献 + 知识库 + 可选联网检索）。 */
   crossEnrich(
     projectId: string,
@@ -251,7 +253,7 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
         const reflexion = reflexionNote(s.taskId);
         const procedural = proceduralMemory(task.projectId);
         const styleHint = procedural ? `\n写作风格参考（来自记忆库）：${procedural}` : '';
-        const refsPrompt = deps.buildRefsPrompt(task.projectId);
+        const refsPrompt = deps.buildRefsPrompt(task.projectId, task.topic, s.plan?.searchStrategy?.keywords);
         if (retry === 0) snapshotBeforeOverwrite(docId, '流水线起草前自动快照');
         // 「分章起草」开关：关闭时跳过 LLM 起草，直接用现有正文进入评审
         // （历史 bug：该开关写进 pipeline_config 但 graph 从不读取，UI 显示已关闭却照常起草）
@@ -277,7 +279,7 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
           const m = (prev?.content || '').match(/## 图表[\s\S]*?$/);
           if (m) prevFigures = `\n\n---\n\n${m[0]}`;
         }
-        const rendered = deps.renderCitations(task.projectId, docId, draftContent, researchMeta);
+        const rendered = deps.renderCitations(task.projectId, docId, draftContent, researchMeta, task.topic, s.plan?.searchStrategy?.keywords);
         let finalContent = rendered + prevFigures;
         // 自动配图只在「真的起草出了正文」时才有意义：起草被禁用时正文可能是占位串，
         // 给它配图会产出「空正文 + 图表」这种无意义产物。
@@ -299,8 +301,65 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
           break;
         }
         const latest = db.select().from(documents).where(eq(documents.id, docId)).get();
-        const reviewResult = await deps.ai.reviewPaper(doc.title || task.topic, latest?.content ?? '');
-        report = { totalScore: reviewResult.totalScore, feedback: reviewResult.feedback };
+        /**
+         * 评审输入的参考文献清单必须按 **citation 插入序**（= 正文 [n] 首次出现序）编号，
+         * 而不是文献池顺序。历史 bug：用 buildRefsPrompt（池顺序）拼附录，正文写 [18] 是
+         * 「语言建模表示退化」，附录第 18 条却是听力损伤论文，评审因此判定「引用严重错误」——
+         * 评审看到的是编号错位，不是真的引错。现在直接 join citation + reference 按 createdAt 排。
+         */
+        const reviewRefRows = db
+          .select({ title: references.title, authors: references.authors, year: references.year, venue: references.venue, doi: references.doi, createdAt: citations.createdAt })
+          .from(citations)
+          .innerJoin(references, eq(citations.referenceId, references.id))
+          .where(eq(citations.documentId, docId))
+          .all()
+          .sort((a, b) => a.createdAt - b.createdAt);
+        const refAppendix = reviewRefRows
+          .map((r, i) => {
+            // authors 是 JSON 数组字符串，直接拼会给评审看到 ["A","B"] 这种噪声
+            const authors = parseAuthors(r.authors).slice(0, 3).join(', ') || 'n.d.';
+            return `[${i + 1}] ${r.title}（${authors}，${r.year || 'n.d.'}，${r.venue || ''}${r.doi ? `，DOI:${r.doi}` : ''}）`;
+          })
+          .join('\n');
+        const reviewContent = `${latest?.content ?? ''}${refAppendix ? `
+
+## 参考文献
+
+${refAppendix}` : ''}`;
+        /**
+         * LLM 评审必须 fail-soft。
+         *
+         * 实测事故（u2-flash）：评审走 generateObject + json_schema，模型偶发返回空响应，
+         * completeStructured 的 pRetry 配置是「失败即抛」，于是「评审这一步挂了」直接把整条
+         * 已起草完成的流水线判 failed，白烧 7 节草稿。门禁分数本来就以客观检查器为准
+         * （见下面 effectiveScore），LLM 评审只提供改进建议，因此这里降级为空建议继续走。
+         */
+        let reviewResult: { scores?: Record<string, number>; feedback: string; totalScore: number };
+        try {
+          reviewResult = await deps.ai.reviewPaper(doc.title || task.topic, reviewContent);
+        } catch (e: any) {
+          const msg = String(e?.message || e).slice(0, 160);
+          deps.logger.warn(`[质量门] LLM 评审不可用，仅用客观检查继续：${msg}`);
+          reviewResult = { scores: {}, feedback: `LLM 评审不可用（${msg}）；本轮仅依据客观检查器判定。`, totalScore: 0 };
+          await deps.notify(s.taskId, 'quality-gate', 'running', `LLM 评审不可用，改用客观检查（${msg.slice(0, 60)}）`, retry);
+        }
+        // 客观检查（确定性规则）：与 LLM 评分互补——LLM 可能漂移，硬指标不会
+        const citCount = db.select().from(citations).where(eq(citations.documentId, docId)).all().length;
+        const objective: ObjectiveQualityReport = checkPaperQuality(latest?.content ?? '', { citationCount: citCount });
+        deps.logger.log(`[质量门] LLM ${reviewResult.totalScore}/100（机械）客观 ${objective.totalScore}/100 指纹 ${objective.fingerprint}${objective.hardFails.length ? ` 硬伤 ${objective.hardFails.length} 项` : ''}`);
+        /**
+         * 门禁分数 = 客观分（确定性、可复现）。
+         *
+         * 为什么不再与 LLM 分取 min：实测同一篇稿 LLM 在 27/42/35/41 之间随机漂移（提示词与稿件完全一致），
+         * 取 min 会让「内容没变差但 LLM 心情变了」反复触发回炉（烧钱且无意义）。
+         * LLM 的 feedback 仍然保留给回炉提示词做改进建议，但不参与是否合格的判定。
+         */
+        const effectiveScore = objective.totalScore;
+        const objectiveNote = objective.hardFails.length
+          ? `\n\n[客观检查] ${objective.hardFails.join('；')}`
+          : `\n\n[客观检查] ${objective.totalScore}/100（${objective.dimensions.map((d) => `${d.label} ${d.score}`).join(' / ')}）`;
+        report = { totalScore: effectiveScore, feedback: `${reviewResult.feedback}${objectiveNote}` };
+        deps.logger.log(`[质量门] 采用客观分 ${effectiveScore}（LLM 参考 ${reviewResult.totalScore}，指纹 ${objective.fingerprint}）`);
         // 质量报告落库（每轮评分一行；GET /api/quality?documentId 历史可查）
         db.insert(qualityReports)
           .values({
