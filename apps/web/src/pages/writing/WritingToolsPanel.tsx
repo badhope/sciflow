@@ -108,8 +108,18 @@ export function WritingToolsPanel(props: WritingToolsPanelProps) {
     snapshotMsg, snapshotBusy, onSnapshotMsg, onCreateSnapshot,
   } = props;
 
+  /**
+   * 工具面板分组（原实现 9 个 section 完全等权，用户不知道从哪开始）：
+   *  - 写作辅助：摘要 / 研究设计 / 章节起草 / 润色翻译
+   *  - 评审与质量：模拟评审 / 意见闭环 / 质量评分 + 客观检查器
+   *  - 过程资产：关联实验 / 版本历史
+   * 每组一个带标题的分区容器，组内再网格排布，形成两级层次。
+   */
   return (
-    <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+    <div className="writing-tools">
+      <div className="writing-tools__group">
+        <div className="writing-tools__group-title">写作辅助</div>
+        <div className="writing-tools__grid">
       {/* 摘要与关键词 */}
       <section>
         <div className={SEC}>论文摘要 + 关键词</div>
@@ -204,6 +214,12 @@ export function WritingToolsPanel(props: WritingToolsPanelProps) {
       </section>
 
       {/* 模拟同行评审 */}
+        </div>
+      </div>
+
+      <div className="writing-tools__group">
+        <div className="writing-tools__group-title">评审与质量</div>
+        <div className="writing-tools__grid">
       <section>
         <div className={SEC}>模拟同行评审（3 审稿人 + 主编决定）</div>
         <Button variant="outline" className="text-xs w-full" onClick={onRunReview} disabled={aiBusy}>
@@ -357,6 +373,12 @@ export function WritingToolsPanel(props: WritingToolsPanelProps) {
       </section>
 
       {/* 关联实验 */}
+        </div>
+      </div>
+
+      <div className="writing-tools__group">
+        <div className="writing-tools__group-title">过程资产</div>
+        <div className="writing-tools__grid">
       <section>
         <button className={`w-full flex items-center justify-between ${SEC}`} onClick={onToggleExperiments}>
           <span className="flex items-center gap-1"><FlaskConical size={12} className="text-teal-600" aria-hidden="true" /> 关联实验</span>
@@ -423,5 +445,7 @@ export function WritingToolsPanel(props: WritingToolsPanelProps) {
         )}
       </section>
     </div>
+        </div>
+      </div>
   );
 }

@@ -637,7 +637,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
       ) : (
         <div className="grid lg:grid-cols-3 gap-4 [&>*]:min-w-0">
           {/* 任务列表 */}
-          <Card className="p-3 lg:col-span-1">
+          <Card tone="inset" className="p-3 lg:col-span-1">
             <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">任务记录</div>
             <div className="space-y-1.5">
               {tasks.map((t) => {
@@ -746,7 +746,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
 
                 {/* 研究计划（Phase 1a：Planner）+ ReAct 轨迹（Phase 1b） */}
                 {activePlan && (
-                  <Card className="p-3 mb-3 bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
+                  <Card tone="inset" className="mb-3 p-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
                         <Brain size={13} className="text-teal-500" /> Planner 研究计划
@@ -779,7 +779,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
                 )}
 
                 {activeTrace.length > 0 && (
-                  <Card className="p-3 mb-3 bg-blue-50/50 border-blue-200">
+                  <Card tone="inset" className="mb-3 p-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="flex items-center gap-1.5 text-xs font-semibold text-blue-700">
                         <Zap size={13} className="text-blue-500" /> ReAct 自主检索轨迹（think → act → observe）
@@ -842,7 +842,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
 
                 {/* 大纲确认区 */}
                 {active.status === 'awaiting_confirmation' && (
-                  <Card className="p-3 bg-amber-50 border-amber-200">
+                  <Card tone="warning" className="p-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-amber-800">大纲已生成，请确认后继续起草（人工确认）</span>
                       <Button variant="success" className="text-xs" onClick={openConfirm}>

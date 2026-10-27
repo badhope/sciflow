@@ -20,7 +20,7 @@ export function WritingPreview({
   exported: string[];
 }) {
   return (
-    <div className={`flex-1 min-w-0 h-full overflow-y-auto p-4 text-[13.5px] leading-relaxed prose prose-sm prose-headings:font-semibold prose-a:text-teal-600 dark:prose-invert ${editorMode === 'split' ? 'w-1/2' : 'w-full'}`}>
+    <div className={`reading-surface flex-1 min-w-0 h-full overflow-y-auto p-6 prose prose-sm prose-headings:font-semibold prose-a:text-teal-600 dark:prose-invert ${editorMode === 'split' ? 'w-1/2' : 'w-full'}`}>
       {content.trim() ? (
         <>
           <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>

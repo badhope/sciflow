@@ -168,7 +168,7 @@ export function QualityPage({ project }: { project: Project }) {
     <div className="page-container">
       <ErrorBox message={error} />
 
-      <Card className="p-4 mb-4">
+      <Card tone="accent" className="mb-4 p-4">
         <div className="flex items-center gap-2 flex-wrap">
           <Gauge size={16} className="text-teal-600 dark:text-teal-300" />
           <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 mr-2">选择文档进行 7 维质量评分</span>
@@ -190,7 +190,7 @@ export function QualityPage({ project }: { project: Project }) {
         </div>
       </Card>
       {audit && (
-        <Card className="p-4">
+        <Card tone="inset" className="p-4">
           <div className="flex items-center gap-2 mb-2">
             <ListChecks size={16} aria-hidden="true" />
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">引用体检</span>

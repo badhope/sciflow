@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ToastContext } from '../App';
 import { CheckCircle2, Database, FlaskConical, Keyboard, Loader2, Plug, Plus, Power, Server, Trash2, Wand2, Workflow, XCircle, Gauge } from 'lucide-react';
 import { HOTKEY_DOCS, hotkeyLabel } from '../lib/hotkeys-docs';
@@ -315,37 +315,85 @@ function SettingsLayout() {
     }
   };
 
+  /**
+   * 设置页分区导航：**必须与下方 DOM 的真实顺序一致**。
+   * 历史缺陷：导航顺序是 AI→角色→用量→路由→…→MCP→扩展→配置→自定义，
+   * 实际 DOM 是 AI→扩展→配置→角色→用量→…；且 settings-persona / settings-extensions /
+   * settings-config 三个锚点当时在 DOM 里不存在（点了没反应），settings-custom 是空 div。
+   * 现在按真实顺序组织，并把「连接测试」补进导航（原来有卡片却没有入口）。
+   */
   const sections = useMemo(() => [
     { id: 'settings-ai', label: 'AI 服务' },
+    { id: 'settings-extensions', label: '扩展中心' },
+    { id: 'settings-config', label: '配置中心' },
     { id: 'settings-persona', label: '角色与技能' },
     { id: 'settings-usage', label: '用量成本' },
     { id: 'settings-providers', label: '模型路由' },
     { id: 'settings-web', label: '联网搜索' },
     { id: 'settings-check', label: '环境自检' },
+    { id: 'settings-model-test', label: '连接测试' },
     { id: 'settings-mcp', label: 'MCP 工具' },
-    { id: 'settings-extensions', label: '扩展中心' },
-    { id: 'settings-config', label: '配置中心' },
-    { id: 'settings-custom', label: '自定义' },
+    { id: 'settings-custom', label: '高级自定义' },
   ], []);
-  const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  /**
+   * 跳转分区。
+   * 实测坑：本应用的滚动容器是 .app-shell__content（overflowY:auto），不是 window；
+   * 且 `smooth` 滚动在长页面上会被后续的 activeSection 重渲染打断。
+   * 这里显式对容器做 scrollTo（扣除导航条高度），并把导航项自身滚到中间。
+   */
+  const jump = (id: string) => {
+    const node = document.getElementById(id);
+    if (!node) return;
+    const scroller = document.querySelector<HTMLElement>('.app-shell__content');
+    const navH = document.querySelector<HTMLElement>('.settings-nav')?.getBoundingClientRect().height ?? 0;
+    const nav = document.querySelector('.settings-nav');
+    const navBottom = nav ? nav.getBoundingClientRect().bottom : 0;
+    if (scroller) {
+      const top = node.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - navBottom + navH;
+      // 用 auto 而非 smooth：平滑滚动会被 setActiveSection 触发的重渲染打断（实测滚了 0px 就停）
+      scroller.scrollTo({ top, behavior: 'auto' });
+    } else {
+      node.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+    // 导航项只做横向滚动；用 scrollIntoView 会连带滚动主内容容器，把刚滚好的位置又拉回去
+    const navEl = document.querySelector<HTMLElement>('.settings-nav');
+    const navItem = document.querySelector<HTMLElement>(`.settings-nav__item[data-target="${id}"]`);
+    if (navEl && navItem && navEl.scrollWidth > navEl.clientWidth) {
+      navEl.scrollTo({ left: navItem.offsetLeft - navEl.clientWidth / 2 + navItem.offsetWidth / 2, behavior: 'auto' });
+    }
+    jumpLockRef.current = true;
+    setActiveSection(id);
+    window.setTimeout(() => { jumpLockRef.current = false; }, 400);
+  };
 
   // 滚动跟踪：高亮当前视口内的分区（对标大厂设置页的导航激活态）
   const [activeSection, setActiveSection] = useState(sections[0].id);
+  /**
+   * 跳转期间锁定高亮：scrollTo 是异步生效的，滚动监听会在位置真正到位前
+   * 读到旧位置并把 active 改回上一节（实测「点配置中心，高亮停在扩展中心」）。
+   * 锁 400ms 足够覆盖一次即时滚动 + 一次渲染。
+   */
+  const jumpLockRef = useRef(false);
   useEffect(() => {
+    const scroller = document.querySelector<HTMLElement>('.app-shell__content');
     const onScroll = () => {
-      const anchor = document.querySelector<HTMLElement>('.settings-nav');
-      const offset = anchor?.getBoundingClientRect().bottom ?? 80;
+      const nav = document.querySelector<HTMLElement>('.settings-nav');
+      const offset = nav ? nav.getBoundingClientRect().bottom : 80;
+      // 取「顶部已越过导航条底边」的最后一个分区：长分区滚动到一半时也能正确高亮
+      let current = sections[0].id;
       for (const s of sections) {
         const node = document.getElementById(s.id);
         if (!node) continue;
-        const rect = node.getBoundingClientRect();
-        if (rect.top <= offset + 40 && rect.bottom > offset) {
-          if (activeSection !== s.id) setActiveSection(s.id);
-          break;
-        }
+        // 容差取 8px：跳转后目标节点顶部恰好落在导航条下沿，用 24px 容差会被判成上一个分区
+        if (node.getBoundingClientRect().top <= offset + 8) current = s.id;
       }
+      if (jumpLockRef.current) return;
+      setActiveSection((prev) => (prev === current ? prev : current));
     };
-    window.addEventListener('scroll', onScroll, { passive: true, capture: true });
+    const target: HTMLElement | Window = scroller ?? window;
+    target.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => target.removeEventListener('scroll', onScroll);
     onScroll();
     return () => window.removeEventListener('scroll', onScroll, { capture: true } as EventListenerOptions);
   }, [activeSection, sections]);
@@ -361,6 +409,8 @@ function SettingsLayout() {
             key={it.id}
             type="button"
             onClick={() => jump(it.id)}
+            data-target={it.id}
+            aria-current={activeSection === it.id ? 'true' : undefined}
             className={`settings-nav__item ${activeSection === it.id ? 'settings-nav__item--active' : ''}`}
           >
             {it.label}
@@ -411,13 +461,13 @@ function SettingsLayout() {
       </Card>
 
       {/* 扩展中心：内置社区开源资产 + SciFlow 私有优势工具（默认全启用） */}
-      <ExtensionCenter />
+      <div id="settings-extensions"><ExtensionCenter /></div>
 
       {/* 配置中心：角色库 / 约束工程 / 钩子 / 权限 / 预设 / 审计 */}
-      <ConfigCenterSettings />
+      <div id="settings-config"><ConfigCenterSettings /></div>
 
       {/* 角色与技能（persona + skills） */}
-      <PersonaSettings />
+      <div id="settings-persona"><PersonaSettings /></div>
 
       {/* Usage Stats */}
       <div id="settings-usage"><UsageStats /></div>
@@ -472,7 +522,7 @@ function SettingsLayout() {
       </Card>
 
       {/* 快捷键速查（F-3.2）：数据源 lib/hotkeys-docs，与真实注册一一对应（commands.test 锁定） */}
-      <Card className="p-4 mb-4" id="settings-hotkeys">
+      <Card className="p-4 mb-4" id="settings-model-test">
         <SectionTitle>
           <span className="flex items-center gap-2">
             <Keyboard size={16} className="text-teal-600" /> 快捷键速查

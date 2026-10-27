@@ -6,18 +6,49 @@ import { Badge, Button, Card, Input, Modal, Select, SectionTitle, errMsg } from 
 import { useSettings } from './settings-context';
 
 /** 常见厂商只预置「地址 + 协议」，模型名一律由检测结果给出（不写死、不猜） */
-const QUICK_PROVIDERS: { name: string; baseUrl: string; protocol: ModelProtocol; privateOk?: boolean }[] = [
-  { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', protocol: 'openai-compatible' },
-  { name: 'Anthropic Claude', baseUrl: 'https://api.anthropic.com/v1', protocol: 'anthropic-messages' },
-  { name: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', protocol: 'google-gemini' },
-  { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', protocol: 'openai-compatible' },
-  { name: '通义千问', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', protocol: 'openai-compatible' },
-  { name: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', protocol: 'openai-compatible' },
-  { name: 'Kimi', baseUrl: 'https://api.moonshot.cn/v1', protocol: 'openai-compatible' },
-  { name: '豆包·火山方舟', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', protocol: 'openai-compatible' },
-  { name: 'UniSound MaaS', baseUrl: 'https://maas-api.unisound.com/v1', protocol: 'openai-compatible' },
-  { name: 'Ollama 本地', baseUrl: 'http://localhost:11434/v1', protocol: 'openai-compatible', privateOk: true },
+/**
+ * 常见厂商预置：只给「地址 + 协议」，模型名一律由检测结果给出（不写死、不猜）。
+ *
+ * 排序原则（重要）：**国内可直连的排前面**。
+ * 历史问题：OpenAI / Google Gemini 排在前两位，但中国大陆两者都不可直连
+ * （Google 全线阻断，OpenAI 亦会超时/403），新用户点第一个预置必然连接失败，
+ * 会直接判定「这产品不能用」。现改为：国产主流 → 本地 → 海外（海外项显式标注需合规网络）。
+ *
+ * Gemini 协议本身仍保留（企业专线/合规境外通道可用），只是不再作为默认推荐。
+ */
+const QUICK_PROVIDERS: {
+  name: string; baseUrl: string; protocol: ModelProtocol; privateOk?: boolean; region?: 'cn' | 'local' | 'global';
+}[] = [
+  { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', protocol: 'openai-compatible', region: 'cn' },
+  { name: '通义千问（阿里云百炼）', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', protocol: 'openai-compatible', region: 'cn' },
+  { name: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', protocol: 'openai-compatible', region: 'cn' },
+  { name: 'Kimi（月之暗面）', baseUrl: 'https://api.moonshot.cn/v1', protocol: 'openai-compatible', region: 'cn' },
+  { name: '豆包·火山方舟', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', protocol: 'openai-compatible', region: 'cn' },
+  { name: 'UniSound MaaS', baseUrl: 'https://maas-api.unisound.com/v1', protocol: 'openai-compatible', region: 'cn' },
+  { name: '硅基流动 SiliconFlow', baseUrl: 'https://api.siliconflow.cn/v1', protocol: 'openai-compatible', region: 'cn' },
+  { name: '百度千帆', baseUrl: 'https://qianfan.baidubce.com/v2', protocol: 'openai-compatible', region: 'cn' },
+  { name: 'Ollama 本地', baseUrl: 'http://localhost:11434/v1', protocol: 'openai-compatible', privateOk: true, region: 'local' },
+  { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', protocol: 'openai-compatible', region: 'global' },
+  { name: 'Anthropic Claude', baseUrl: 'https://api.anthropic.com/v1', protocol: 'anthropic-messages', region: 'global' },
+  { name: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', protocol: 'google-gemini', region: 'global' },
 ];
+
+/** 区域说明：海外项必须在 UI 上说清楚，不能让用户点完才发现连不通 */
+const REGION_LABEL: Record<'cn' | 'local' | 'global', string> = {
+  cn: '国内直连',
+  local: '本机',
+  global: '需合规网络',
+};
+
+/**
+ * 海外模型不可直连时的替代建议（显示在表单底部，不写死任何第三方中转域名——
+ * 那类地址寿命短、合规性各异，写进产品等于埋雷；只给方法论 + 国内等价替代）。
+ */
+const REPLACE_HINT: Partial<Record<ModelProtocol, string>> = {
+  'google-gemini': 'Gemini 在境内无法直连。可选：① 改选上方国产厂商（DeepSeek / 通义 / 智谱 / Kimi / 豆包）；② 自建 OpenAI 兼容网关指向 Gemini；③ 企业合规专线。',
+  'anthropic-messages': 'Claude 在境内无法直连。可选：① 改选国产厂商；② 自建 OpenAI 兼容网关；③ 部分云厂商提供 Claude 托管（按其文档填写地址与协议）。',
+  'openai-compatible': '',
+};
 
 const PROTOCOL_OPTIONS: { value: ModelProtocol; label: string }[] = [
   { value: 'openai-compatible', label: 'OpenAI 兼容（Chat Completions）' },
@@ -361,22 +392,31 @@ export function ProviderManager({ settings }: { settings: AppSettings | null }) 
         <div className="mb-3">
           <div className="text-xs text-slate-400 dark:text-slate-500 mb-2">常见厂商一键填入（只填地址与协议，模型自动检测）</div>
           <div className="flex flex-wrap gap-1.5">
-            {QUICK_PROVIDERS.map((q) => (
-              <button
-                key={q.name}
-                type="button"
-                className="text-xs rounded-full border border-teal-200 dark:border-teal-800/60 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 px-2.5 py-1 hover:bg-teal-100 dark:hover:bg-teal-900/40"
-                onClick={() => {
-                  discoverSig.current = '';
-                  patch({ name: q.name, baseUrl: q.baseUrl, protocol: q.protocol, model: '', models: [], privateOk: q.privateOk === true });
-                  setDiscoverError('');
-                  setDiscoverInfo('');
-                  setTestResult(null);
-                }}
-              >
-                {q.name}
-              </button>
-            ))}
+            {QUICK_PROVIDERS.map((q) => {
+              const region = q.region ?? 'global';
+              return (
+                <button
+                  key={q.name}
+                  type="button"
+                  title={region === 'global' ? `${q.name}：境内通常不可直连，点选后会提示替代方案` : `${q.name}：${REGION_LABEL[region]}`}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                    region === 'global'
+                      ? 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300'
+                      : 'border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-800/60 dark:bg-teal-900/20 dark:text-teal-300 dark:hover:bg-teal-900/40'
+                  }`}
+                  onClick={() => {
+                    discoverSig.current = '';
+                    patch({ name: q.name, baseUrl: q.baseUrl, protocol: q.protocol, model: '', models: [], privateOk: q.privateOk === true });
+                    setDiscoverError('');
+                    setDiscoverInfo('');
+                    setTestResult(null);
+                  }}
+                >
+                  {q.name}
+                  {region === 'global' && <span className="text-[10px] opacity-70">境外</span>}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -417,6 +457,17 @@ export function ProviderManager({ settings }: { settings: AppSettings | null }) 
             本地 / 内网端点（Ollama、内网网关；云元数据地址仍会拒绝）
           </label>
         </div>
+
+        {/*
+          境外协议替代提示：Google / Anthropic 在境内不可直连，这里给出**可执行的替代路径**，
+          而不是让用户点完预置、等 30 秒超时、再自己猜为什么连不上。
+        */}
+        {REPLACE_HINT[form.protocol] && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 p-2.5 text-xs leading-relaxed text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/15 dark:text-amber-200">
+            <span className="font-semibold">{PROTOCOL_LABEL[form.protocol]} · 网络可达性提示：</span>
+            {REPLACE_HINT[form.protocol]}
+          </div>
+        )}
 
         <div className="mt-4 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">

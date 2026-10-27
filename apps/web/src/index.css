@@ -93,6 +93,11 @@
 
   --dur-1: 120ms; --dur-2: 200ms;
 
+  /* ---- 字体族（三档语义，全部系统字体、零 CDN）---- */
+  --font-ui: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Inter, "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --font-read: "Iowan Old Style", Charter, Georgia, "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC", "SimSun", serif;
+  --font-mono: "SF Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
   /* 阶段条 / 进度统一刻度（品牌渐变作为"进度语言"，不是装饰） */
   --stage-done: var(--brand-600);
   --stage-current: var(--brand-500);
@@ -162,11 +167,24 @@ html, body, #root {
   height: 100%;
 }
 
+/* ---------------------------------------------------------------------------
+   字体栈（品牌层）：不再用「无衬线兜底堆」，而是分三档语义。
+   约束：全部为**本机/系统字体**，不引 CDN（Google Fonts 在国内不可达，
+   会阻塞首屏渲染并造成 FOIT）；也不新增二进制字体文件，保持安装包体积。
+
+   1) 界面字体 --font-ui：拉丁优先几何无衬线，中文回落到各家平台最优黑体。
+      Latin 前置 SF Pro / Segoe UI Variable / Inter（若系统已装）——
+      这三者在字形重心与字距上接近，切换平台不会出现"跳字"。
+   2) 阅读字体 --font-read：论文正文/预览用，中文优先宋体（学术印刷体），
+      拉丁回落到 Charter/Georgia 系；这是"学术产品"与"AI 工具"最直接的区分。
+   3) 等宽 --font-mono：代码、DOI、引用编号。
+--------------------------------------------------------------------------- */
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-family: var(--font-ui);
   background: var(--bg-app);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 .dark body {
   background: var(--bg-app);
@@ -249,6 +267,151 @@ body {
 .card-lift:hover {
   transform: translateY(-2px);
   box-shadow: 0 10px 28px rgba(23, 32, 44, 0.12);
+}
+
+/* ---- Surface 体系（对应 ui.tsx 的 SurfaceTone）----------------------------
+   目标：让「主面板 / 内嵌 / 指标 / 强调 / 警示 / 危险 / 无表面」在视觉上可分。
+   规则：越靠近内容的容器阴影越弱；强调与风险用左侧色条而非通体高饱和。 */
+.surface { border: 1px solid transparent; }
+
+/* 主面板：唯一允许带「发丝边框 + 极浅阴影」的层级 */
+.surface-panel {
+  background: var(--card);
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+  box-shadow: var(--sh-card);
+}
+
+/* ---- 页面抬头（Hero）：项目总览 / 各页首屏的主次锚点 --------------------
+   形态：左侧品牌竖向色条 + 大标题 + 一行元信息；右侧主操作。
+   不用整块卡片，避免与下方内容区抢层级。 */
+.page-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(120deg,
+      color-mix(in srgb, var(--brand-500) 7%, var(--card)) 0%,
+      var(--card) 46%,
+      color-mix(in srgb, var(--blue) 4%, var(--card)) 100%);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.page-hero::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-image: var(--brand-grad);
+  background-color: var(--brand-500);
+}
+.page-hero__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-6) var(--sp-4);
+}
+.page-hero__eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--brand-700);
+  margin-bottom: 6px;
+}
+.page-hero__title {
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+.page-hero__desc {
+  margin-top: 6px;
+  max-width: 62ch;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+.page-hero__actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+/* 偏好设置：折叠态只占一行，展开后在浅底区呈现表单 */
+.page-hero__prefs { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.page-hero__prefs > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 10px var(--sp-6);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: background var(--dur-1) var(--ease);
+}
+.page-hero__prefs > summary::-webkit-details-marker { display: none; }
+.page-hero__prefs > summary:hover { background: color-mix(in srgb, var(--muted) 40%, transparent); }
+.page-hero__prefs-label { font-size: 12px; font-weight: 600; color: var(--secondary-foreground); }
+.page-hero__prefs-hint { font-size: 11px; color: var(--muted-foreground); }
+.page-hero__prefs-chevron { margin-left: auto; color: var(--muted-foreground); transition: transform var(--dur-base) var(--ease); }
+.page-hero__prefs[open] .page-hero__prefs-chevron { transform: rotate(180deg); }
+.page-hero__prefs-body {
+  padding: 0 var(--sp-6) var(--sp-4);
+  animation: details-reveal var(--dur-base) var(--ease);
+}
+@keyframes details-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-hero__prefs-body { animation: none; }
+  .page-hero__prefs-chevron { transition: none; }
+}
+
+/* 内嵌区：无阴影、弱底 —— 放在 panel 内部时不再形成「卡套卡」 */
+.surface-inset {
+  background: color-mix(in srgb, var(--muted) 62%, transparent);
+  border-color: color-mix(in srgb, var(--border) 60%, transparent);
+  box-shadow: none;
+}
+.dark .surface-inset {
+  background: color-mix(in srgb, var(--muted) 55%, var(--card));
+  border-color: color-mix(in srgb, var(--border) 100%, transparent);
+}
+
+/* 指标卡：允许密集并排，去掉边框与阴影，只留极浅品牌底 */
+.surface-metric {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--brand-500) 4%, var(--card)) 0%,
+    var(--card) 62%);
+  border-color: color-mix(in srgb, var(--border) 55%, transparent);
+  box-shadow: none;
+}
+
+/* 强调卡：品牌渐变描边 + 浅品牌底（不用 border-image——
+   它不支持圆角，会导致卡片边缘出现直角）。 */
+.surface-accent {
+  position: relative;
+  background-color: var(--card);
+  background-image: var(--brand-grad-soft);
+  border: 1px solid color-mix(in srgb, var(--brand-500) 30%, var(--border));
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--brand-600) 8%, transparent);
+}
+
+/* 警示卡：琥珀左条 + 极浅底（失败/需人工介入） */
+.surface-warning {
+  background: color-mix(in srgb, var(--amber-500) 7%, var(--card));
+  border-color: color-mix(in srgb, var(--amber-500) 32%, var(--border));
+  border-left-width: 3px;
+  box-shadow: none;
+}
+
+/* 危险区：玫红边 + 极浅底（删除/重置） */
+.surface-danger {
+  background: color-mix(in srgb, var(--rose-500) 6%, var(--card));
+  border-color: color-mix(in srgb, var(--rose-500) 30%, var(--border));
+  box-shadow: none;
 }
 
 /* ---- Micro-interactions ---- */
@@ -341,7 +504,9 @@ select:focus-visible {
 /* Logo 徽标：渐变底 + 极浅描边（釉面高光已移除，几何标志本身足够） */
 .brand-logo {
   background-image: var(--brand-grad);
-  color: var(--on-brand);
+  /* 徽标内图形恒为白色：--on-brand 在暗色主题下是深墨色（给渐变按钮文字用），
+     沿用到徽标上会出现「浅青渐变底 + 深色笔画」糊成一团（实测截图整块变白）。 */
+  color: #ffffff;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 1px 2px rgba(9, 42, 77, 0.20);
 }
 
@@ -551,19 +716,28 @@ kbd {
 /* ═══════════════════════════════════════════════════════════════════
    图表层样式
    ═══════════════════════════════════════════════════════════════════ */
+/* 指标卡：数据密集区允许 4-6 个并排，因此去掉边框与阴影（与 panel 区分），
+   改用「左侧 2px 品牌色标 + 只留极浅底」；数值用等宽数字保证多卡对齐。 */
 .metric-card {
-  display: flex; flex-direction: column; gap: 6px;
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 16px 15px;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  box-shadow: var(--card-shadow);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--brand-500) 55%, transparent);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--brand-500) 3.5%, var(--card)) 0%,
+    var(--card) 58%);
+  box-shadow: none;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 .metric-card:hover {
-  border-color: rgba(13, 148, 136, 0.20);
-  box-shadow: var(--card-shadow), 0 0 0 1px rgba(13, 148, 136, 0.04);
+  border-color: color-mix(in srgb, var(--brand-500) 32%, var(--border));
+  border-left-color: var(--brand-500);
 }
+/* 空态占位（value=0）时弱化，避免一屏全是 0 还在抢注意力 */
+.metric-card:has(.metric-card__value:only-child) { opacity: 0.9; }
 .metric-card__label {
   display: flex; align-items: center; gap: 6px;
   font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
@@ -576,6 +750,105 @@ kbd {
 }
 .metric-card__value { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; color: var(--foreground); }
 .metric-card__delta, .metric-card__hint { font-size: 11px; color: var(--muted-foreground); }
+
+/* ---- 功能入口紧凑导航条（替代 5 张等大卡片）---- */
+.page-container .page-quicknav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.page-container .page-quicknav__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  justify-content: center;
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--secondary-foreground);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.page-container .page-quicknav__item:hover {
+  background: var(--card);
+  color: var(--brand-700);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+.page-container .page-quicknav__item svg { color: color-mix(in srgb, var(--brand-600) 70%, var(--muted-foreground)); }
+
+/* 全链路待办小卡：嵌在 inset 面板内，因此不能再套一层白底（卡套卡）。 */
+.mini-stat {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: var(--card);
+  text-align: left;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.dark .mini-stat {
+  /* inset 面板本身已经是「比卡片稍亮」的弱底，小卡再半透明会糊成一片（实测暗色下几乎不可见） */
+  background: color-mix(in srgb, var(--card) 55%, var(--muted));
+  border-color: color-mix(in srgb, var(--border) 120%, transparent);
+}
+.mini-stat.is-clickable:hover {
+  border-color: color-mix(in srgb, var(--brand-500) 40%, var(--border));
+  background: var(--card);
+}
+.mini-stat[disabled] { cursor: default; }
+
+/* 空态容器：虚线边 + 极浅底（区别于正常内容卡；避免「空态也像有数据」的误读） */
+.empty-surface {
+  border: 1px dashed color-mix(in srgb, var(--border) 110%, transparent);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--muted) 26%, transparent);
+}
+
+/* ---- 写作工具面板分组（WritingToolsPanel）---- */
+.writing-tools { display: flex; flex-direction: column; gap: var(--sp-5); }
+.writing-tools__group-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  margin-bottom: var(--sp-2);
+  padding-left: 2px;
+}
+.writing-tools__grid {
+  display: grid;
+  gap: var(--sp-3);
+  grid-template-columns: 1fr;
+  /* 关键：各 section 高度不同时 grid 默认拉伸，会留出大片空白（实测「写作辅助」下方一整屏空白） */
+  align-items: start;
+}
+.writing-tools__grid > section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+}
+@container (min-width: 640px) {
+  .writing-tools__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (min-width: 1000px) {
+  .writing-tools__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* 容器查询：工具面板宽度由 Tab 决定，不能按视口断点判断列数 */
+.writing-tools { container-type: inline-size; }
+@media (max-width: 640px) {
+  .page-container .page-quicknav { display: grid; grid-template-columns: repeat(2, 1fr); }
+}
 
 .chart-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -784,7 +1057,28 @@ kbd {
    对话 Markdown 排版（Streamdown 输出）
    目标：代码块/表格/公式/列表在气泡内也有稳定节奏，和写作预览一致
    ============================================================ */
-.markdown-body { font-size: 14px; line-height: 1.75; word-break: break-word; }
+/* 阅读态排版（论文正文/预览）：用 --font-read 做「学术印刷体」，
+   与界面字体明确分层——这是阅读产品与工具产品的核心区别之一。
+   仅正文与预览使用；标题仍 inherit 界面字体，保证与导航/按钮同族。 */
+.markdown-body {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.75;
+  word-break: break-word;
+}
+.reading-surface .markdown-body,
+.markdown-reading {
+  font-family: var(--font-read);
+  font-size: 15px;
+  line-height: 1.9;
+  letter-spacing: 0.002em;
+}
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  font-family: var(--font-ui);
+}
 .markdown-body > *:first-child { margin-top: 0; }
 .markdown-body > *:last-child { margin-bottom: 0; }
 .markdown-body p { margin: 0.5em 0; }
@@ -1060,3 +1354,12 @@ kbd {
   font-weight: 600;
 }
 .settings-nav__item--active:hover { background: var(--brand-grad); color: #fff; }
+
+/* 长列表绘制优化：视口外的资料/文献/任务行不参与布局与绘制。
+   用 content-visibility 而非虚拟滚动——零 JS、零依赖，且不破坏搜索/锚点。 */
+.list-heavy > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+}
+/* 滚动条常驻，避免筛选/分页切换时整页左右跳动 */
+html { scrollbar-gutter: stable; }

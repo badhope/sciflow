@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![version](https://img.shields.io/badge/version-1.5.0-black.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.6.0-black.svg)](CHANGELOG.md)
 
 > **🌐 语言 / Language：[中文](README.md) · [English](README.en.md)**
 
@@ -40,6 +40,7 @@ flowchart LR
 
 ## 🗞 最近更新
 
+- **2026-10-27 · v1.6.0**：品牌与界面打磨——品牌标志 3.0（单一连续笔势，取代易退化的同心圆弧）、七种表面层级（panel/inset/metric/accent/warning/danger/plain，终结「61 处卡片长得一样」）、三档字体栈（界面/论文阅读/等宽，全部系统字体零 CDN）、设置页 11 锚点重建、写作工具面板三组归并、厂商预置改为国内优先并标注境外项替代路径；图表层拆分使 recharts 从主包剥离（主包 0 引用，436KB 按需加载）。
 - **2026-10-27 · v1.5.0**：真实论文全流程验收——用 u2-flash 从 UI 端到端跑通多篇完整论文；新增**确定性客观质量检查器**（六维硬指标 + 学术诚信检测，同文本必然同分同指纹）作为质量门唯一判定依据；内置免 Key 学术检索（OpenAlex/Crossref/arXiv）与文献相关性门禁；修复润色并发死锁、产物不可见、写作页 `?doc=` 失效、导出作者 JSON、失败任务不可重跑等 12 项实测缺陷。
 - **2026-10-26 · v1.4.0**：扩展中心——内置 87 条科研资产（20 MCP / 31 技能 / 10 角色 / 10 约束 / 4 钩子 / 12 提示词，含 13 项 SciFlow 私有优势工具）随仓库发布、默认启用；四种添加入口（手填/粘贴/拖拽 ZIP/一键 AI 生成）+ 对话与 CLI 入口；停用即撤回对应子系统配置。
 - **2026-10-26 · v1.3.0**：配置中心（角色/约束工程/钩子/权限矩阵/审计）三入口同源——设置页、`sciflow config` CLI、对话工具 `config.*` 均可配置且立即生效；全面放开权限档 + 核心保护项锁定；内置 4 套预设；运行时巡检脚本。

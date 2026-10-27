@@ -113,7 +113,7 @@ export function LiteratureTable(props: LiteratureTableProps) {
     showExtraction, setShowExtraction,
     showImport, setShowImport, bibText, setBibText, importing, setImporting,
     showAdd, setShowAdd,
-    busy: _busy, setBusy: _setBusy, error: _error, setError,
+    busy: _busy, setBusy: _setBusy, error, setError,
     setSummary: _setSummary, setExtracted: _setExtracted, setEvidence: _setEvidence, question: _question, setQuestion: _setQuestion,
     setDeepDive, deepDiveRef: _deepDiveRef, setDeepDiveRef,
     setGapResult: _setGapResult, gapTopic: _gapTopic, setGapTopic: _setGapTopic,
@@ -604,8 +604,21 @@ export function LiteratureTable(props: LiteratureTableProps) {
 
   return (
     <>
+      {/*
+        检索 / 导入 / 核验的错误此前被解构为 _error 后彻底丢弃（用户点了按钮没反应，也看不到原因）。
+        这里统一置于页面顶部，可手动关闭。
+      */}
+      {error && (
+        <div className="mb-3">
+          <ErrorBox message={error} />
+          <div className="mt-1 text-right">
+            <button type="button" className="text-[11px] text-slate-500 hover:text-slate-700 dark:text-slate-400" onClick={() => setError('')}>关闭提示</button>
+          </div>
+        </div>
+      )}
+
       {/* 检索区 */}
-      <Card className="p-4 mb-4">
+      <Card tone="accent" className="p-4 mb-4">
         <div className="flex items-center gap-1.5 mb-2.5 text-slate-700 dark:text-slate-200 font-semibold">
           <FlaskConical size={15} className="text-teal-600 dark:text-teal-300" /> 文献调研
         </div>
@@ -649,7 +662,7 @@ export function LiteratureTable(props: LiteratureTableProps) {
 
       {/* 检索结果 */}
       {hits.length > 0 && (
-        <Card className="p-4 mb-4">
+        <Card tone="panel" className="p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">检索结果（{hits.length} 篇）</span>
             <Button variant="success" className="text-xs" onClick={importAll}>

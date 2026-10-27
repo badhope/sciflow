@@ -96,7 +96,37 @@ export function IconButton({
   );
 }
 
-export function Card({ children, className = '', onClick, hover, padded = true, as = 'div', id }: {
+/**
+ * 表面层级（Surface）。
+ *
+ * 历史问题：全站 61 处 <Card> 只有一种视觉（白底 + 同一边框 + 同一阴影），
+ * 「指标 / 图表 / 表单 / 列表 / 强调 / 危险区」全长得一样 → 页面没有层级，
+ * 也就是「AI 打造」的味道：每个块都在喊同样大声。
+ *
+ * 按**信息角色**给七种表面，页面按语义选用，而不是统一套白卡：
+ *  - `panel`   主面板：白底 + 发丝边框 + 极浅阴影（默认，承载主要内容）
+ *  - `inset`   内嵌区：无阴影、弱底（放在 panel 内部的子区块，避免卡套卡）
+ *  - `metric`  指标卡：无边框、极浅品牌底（数据密集区，允许并排 4-6 个）
+ *  - `accent`  强调卡：品牌渐变描边 + 浅品牌底（关键结论、当前任务）
+ *  - `warning` 警示卡：琥珀底 + 左边线（风险/失败/需人工介入）
+ *  - `danger`  危险区：玫红边 + 浅玫红底（删除/重置类操作）
+ *  - `plain`   无表面：纯容器（列表行、空态、编辑器外壳）
+ */
+export type SurfaceTone = 'panel' | 'inset' | 'metric' | 'accent' | 'warning' | 'danger' | 'plain';
+
+const SURFACES: Record<SurfaceTone, string> = {
+  panel: 'surface-panel',
+  inset: 'surface-inset',
+  metric: 'surface-metric',
+  accent: 'surface-accent',
+  warning: 'surface-warning',
+  danger: 'surface-danger',
+  plain: '',
+};
+
+export function Card({
+  children, className = '', onClick, hover, padded = true, as = 'div', id, tone = 'panel',
+}: {
   children: ReactNode;
   className?: string;
   onClick?: () => void;
@@ -106,13 +136,15 @@ export function Card({ children, className = '', onClick, hover, padded = true, 
   as?: 'div' | 'section' | 'article';
   /** 锚点 id（设置页/文档页内导航用） */
   id?: string;
+  /** 表面语义（见 SURFACES 注释）：按信息角色选，不再一律白卡 */
+  tone?: SurfaceTone;
 }) {
   const Tag = as;
   return (
     <Tag
       id={id}
       onClick={onClick}
-      className={`bg-[var(--card)] text-[var(--card-foreground)] rounded-[var(--r-md)] border border-slate-200/80 dark:border-slate-800 shadow-[var(--sh-card)] ${padded ? 'p-4' : ''} ${hover ? 'card-lift cursor-pointer' : ''} ${className}`}
+      className={`surface ${SURFACES[tone]} text-[var(--card-foreground)] rounded-[var(--r-md)] ${padded ? 'p-4' : ''} ${hover ? 'card-lift cursor-pointer' : ''} ${className}`}
     >
       {children}
     </Tag>
@@ -149,7 +181,8 @@ export function EmptyState({ title, hint, illustration, action, compact }: {
 }) {
   const IllustrationComp = illustration ? ILLUSTRATIONS[illustration] : null;
   return (
-    <div className={`flex flex-col items-center justify-center text-center ${compact ? 'py-8' : 'py-14'} px-6`}>
+    // 空态用「虚线框 + 极浅底」：它是「此处尚未有内容」的占位，不该长得像一张正常内容卡
+    <div className={`empty-surface flex flex-col items-center justify-center text-center ${compact ? 'py-8' : 'py-14'} px-6`}>
       {IllustrationComp ? (
         <IllustrationComp className="w-24 h-20 mb-2 opacity-90" />
       ) : (

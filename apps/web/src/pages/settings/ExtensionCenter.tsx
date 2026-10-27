@@ -117,7 +117,7 @@ export function ExtensionCenter({ defaultKind }: { defaultKind?: ExtensionKind }
       {assets.length === 0 ? (
         <div className="text-xs text-slate-400 py-4 text-center">该分类暂无资产，点「添加资产」新增</div>
       ) : (
-        <div className="space-y-1.5 max-h-[520px] overflow-y-auto">
+        <div className="list-heavy space-y-1.5 max-h-[520px] overflow-y-auto">
           {assets.map((a) => (
             <div key={a.id} className="rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2">
               <div className="flex flex-wrap items-center gap-2">

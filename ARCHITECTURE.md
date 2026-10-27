@@ -151,6 +151,24 @@
 | 9 | **对话入口**：MCP 工具 `extension.list/create/toggle/generate`；`extension.list` 对模型同样过滤 private（外部客户端不掌握私有资产清单） | `mcp.service.ts` · `agent-tool-bridge.ts` allowlist | 实测 MCP 工具数 23 且含 4 个 extension.* |
 | 10 | **CLI 对等**：`sciflow ext list|toggle|import|export|reset`，与 Web/对话同一 REST 服务 | `apps/server/src/config/config-cli.ts registerExtensionCommands` | CLI 实测 list/toggle/import/export |
 
+## §2.20 v1.6 品牌与界面体系契约（2026-10-27）
+
+界面打磨不是"换配色"，而是把**信息层级、品牌识别、依赖可达性**三件事固化成契约，避免回退。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **品牌标志唯一来源**：`BrandMark` 是全站 logo 的单一实现（与 `public/favicon.svg` 同源几何）；三层语义不可删——主笔（粗细渐变 S）、主流线（贯穿细线）、成果节点（实心圆+外环）。禁止退回"圆环 + 渐变"式通用图形 | `components/BrandMark.tsx` | `BrandMark.test.tsx` 5 条（结构齐备 / inverse 不用渐变 / 词标与标语） |
+| 2 | **三种变体分工**：`mono`（跟随 currentColor）/ `gradient`（浅底彩色）/ `inverse`（品牌渐变底上的纯白反白）。品牌徽标容器 `.brand-logo` 内图形恒为白色（`--on-brand` 是给渐变按钮文字用的，暗色下是深墨色） | 同上 + `index.css .brand-logo` | 暗色模式实测（曾整块变白） |
+| 3 | **七种表面按信息角色选用**：`panel` 主面板（唯一带阴影）/ `inset` 内嵌（无阴影）/ `metric` 指标（无边框、可密集并排）/ `accent` 强调（品牌描边）/ `warning` 警示（琥珀左条）/ `danger` 危险区 / `plain` 纯容器。规则：**越靠近内容的容器阴影越弱**；禁止 `Card` 套 `Card` | `components/ui.tsx SurfaceTone` · `index.css .surface-*` | `ui.test.tsx` 4 条（各 tone 类名独立 / inset 不带 panel / plain 无表面类） |
+| 4 | **三档字体栈，零 CDN**：`--font-ui`（界面）/ `--font-read`（论文正文与预览，中文宋体+拉丁衬线）/ `--font-mono`。全部系统字体，不引 Google Fonts（境内不可达且阻塞首屏），不新增字体文件 | `index.css :root` + `.reading-surface` | 构建产物无字体外链 |
+| 5 | **页面抬头（Hero）**：每页首屏必须有唯一主任务锚点（标题 + 元信息 + 主操作）；低频配置（如项目写作偏好）折叠进 `<details>`，不占首屏最贵位置 | `DashboardPage.tsx .page-hero` | 浏览器实测（亮/暗/390px） |
+| 6 | **功能入口不得与主内容争层级**：5 个功能入口用紧凑分段导航条（`.page-quicknav`），不用 5 张等大卡片压在草稿列表之前 | `DashboardPage.tsx` | 浏览器实测 |
+| 7 | **设置页导航必须等于真实 DOM**：`sections` 数组顺序与页面 id 顺序一致；每个 id 必须在 DOM 中存在；跳转用滚动容器 `.app-shell__content` 而非 window（应用是壳内滚动），并锁定高亮 400ms 防重渲染回弹 | `SettingsPage.tsx` | 浏览器实测 4 个锚点逐个跳转（scrollTop + active 双验证） |
+| 8 | **境外模型必须显式标注**：厂商预置按「国内直连 → 本地 → 境外」排序；`region: 'global'` 的项在按钮上加「境外」角标，选中后在表单底部给替代路径说明（国产厂商 / 自建兼容网关 / 合规专线）。不写死任何第三方中转域名（寿命短、合规性各异） | `ProviderManager.tsx QUICK_PROVIDERS / REPLACE_HINT` | 类型 + 浏览器实测 |
+| 9 | **图表层按依赖拆分**：零依赖的 `MetricCard / ChartEmpty / SegBar / Sparkline / ProgressRing` 在 `charts-primitives.tsx`；recharts 组件（Donut/HBar/LineChart）在 `charts.tsx` 并 re-export 基础件，调用方 import 路径不变。约束：**主包不得引用 recharts** | `components/charts*.tsx` | 构建产物校验：主 chunk 中 `recharts` 出现次数为 0 |
+| 10 | **列表与空态语义**：空态用 `.empty-surface`（虚线 + 极浅底），不得长得像正常内容卡；长列表用 `.list-heavy`（`content-visibility:auto`）；全局 `scrollbar-gutter: stable` | `ui.tsx EmptyState` · `index.css` | 浏览器实测 |
+| 11 | **错误不得被吞**：页面级 `error` 必须渲染（`ErrorBox` + 可关闭）；禁止解构为 `_error` 后丢弃 | `LiteratureTable.tsx` | 浏览器实测（检索失败可见） |
+
 ## §2.19 v1.5 客观质量检查器与真实论文流水线契约（2026-10-27）
 
 用 u2-flash 从 UI 端到端跑通多篇完整论文后固化：质量判定必须确定性可复现，起草必须名实相符，参考文献必须主题相关，润色不得挂死。
