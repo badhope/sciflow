@@ -1,11 +1,16 @@
-import { Body, Controller, Delete, Get, Headers, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ConfigCenterService } from './config-center.service';
+import { AdminGuard } from '../auth/admin.guard';
 
 /**
  * 配置中心 REST（Web 设置页 / CLI / 对话工具共用同一服务）。
  * 所有写操作内部走权限矩阵 + 审计；核心保护项不经此控制器暴露。
+ *
+ * v1.8：整个控制器加 AdminGuard —— 权限档 / 注入钩子 / 角色提示词是实例级配置，
+ * 企业模式下 member 改权限档即可放开自身限制（内部矩阵只防"降档"不防"他人提权"）。
  */
 @Controller('config')
+@UseGuards(AdminGuard)
 export class ConfigController {
   constructor(private readonly config: ConfigCenterService) {}
 

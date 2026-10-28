@@ -105,7 +105,9 @@ export const writing = {
       ),
   },
   memory: {
-    list: (type?: string, q = '') => request<MemoryItem[]>(`/api/memory?type=${type || ''}&q=${encodeURIComponent(q)}`),
+    /** projectId 必传（企业模式下服务端强制）：记忆是项目级资源，跨项目混列会泄露他人研究摘要 */
+    list: (type?: string, q = '', projectId?: string) =>
+      request<MemoryItem[]>(`/api/memory?type=${type || ''}&q=${encodeURIComponent(q)}${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ''}`),
     add: (type: 'episodic' | 'procedural', content: string, projectId?: string, keywords: string[] = []) =>
       request<MemoryItem>('/api/memory', { method: 'POST', body: JSON.stringify({ type, content, projectId, keywords }) }),
     remove: (id: string) => request<{ ok: boolean }>(`/api/memory/${id}`, { method: 'DELETE' }),

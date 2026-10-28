@@ -1,7 +1,10 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { UsageService } from './usage.service';
+import { AdminGuard } from '../auth/admin.guard';
 
+/** 成本汇总 API：全实例聚合（含所有账号的 token 消耗），v1.8 起企业模式仅 admin 可读 */
 @Controller('usage')
+@UseGuards(AdminGuard)
 export class UsageController {
   constructor(private readonly usage: UsageService) {}
 

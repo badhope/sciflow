@@ -160,6 +160,34 @@ curl http://127.0.0.1:3000/api/web/config
 
 ---
 
+## 企业模式：权限分两层（v1.8）
+
+`AUTH_MODE=jwt` 时按「数据面 / 配置面」两层隔离；本地/桌面模式（默认 `none`）两层都放行，零登录体验不变。
+
+| 层 | 覆盖范围 | 判定 | 拒绝码 |
+|---|---|---|---|
+| 数据面 | 项目 + 全部子资源：文档 / 文献 / 知识库 / 记忆 / 实验 / 研究设计稿 / 审稿意见 / 评分报告 / 执行轨迹 / 投稿 / 流水线任务 | `ProjectAccessService.assertXxx(id, user)`：子资源 → 项目 → owner | **404**（不泄露存在性） |
+| 配置面 | 模型厂商与 Key、baseURL、连接测试、权限档、角色/约束/钩子、扩展资产、成本用量、联网 provider、期刊库增删 | `AdminGuard`（类级 `@UseGuards`） | **403** |
+| 聚合面 | `dashboard/overview`、`memory`、`documents` 列表不带 projectId | controller 显式判断 | **403 / 400** |
+
+为什么配置面必须按角色而不是按项目：改 `baseURL` 就能把**全实例**的请求（含他人稿件）引到自己的服务器；
+改权限档就能放开自身限制。这些不属于任何项目，只能按角色判定。
+
+### 快速自检（部署后跑一遍）
+
+```bash
+BASE=http://127.0.0.1:3100
+# 1) 无 token 必须 401（jwt 模式）
+curl -s -o /dev/null -w '%{http_code}
+' $BASE/api/settings
+
+# 2) 首个注册用户 = admin
+curl -s -X POST $BASE/api/auth/register -H 'content-type: application/json'   -d '{"email":"admin@example.com","password":"<8+>","name":"Admin"}'
+
+# 3) 第二个用户（需 ALLOW_REGISTRATION=1 启动）= member，然后逐项验 404/403
+#    完整断言清单：apps/server/src/common/project-access-subresources.spec.ts
+```
+
 ## 安全姿势：什么时候必须开认证
 
 默认零登录（`AUTH_MODE=none`），服务只监听 `127.0.0.1`——单机使用，这是最省心的姿势。

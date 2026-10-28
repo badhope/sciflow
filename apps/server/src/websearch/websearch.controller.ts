@@ -3,14 +3,17 @@
  *  - POST /api/web/search?q=...       执行搜索（按当前 provider 分发，带缓存+降级）
  *  - GET  /api/web/config             当前 provider 配置（key 掩码回显）
  *  - PUT  /api/web/config             保存 provider 配置（开源 SearXNG 填 URL；商业引擎用户自填 Key）
+ *
+ * v1.8：加 AdminGuard —— provider Key 是实例级密钥，企业模式下 member 不应能读写。
  */
 
 import { Body, Controller, Get, Post, Put, UseGuards } from '@nestjs/common';
 import { WebSearchService } from './websearch.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AdminGuard } from '../auth/admin.guard';
 
 @Controller('web')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, AdminGuard)
 export class WebSearchController {
   constructor(private readonly ws: WebSearchService) {}
 

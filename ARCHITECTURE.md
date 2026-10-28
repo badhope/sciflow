@@ -151,6 +151,23 @@
 | 9 | **对话入口**：MCP 工具 `extension.list/create/toggle/generate`；`extension.list` 对模型同样过滤 private（外部客户端不掌握私有资产清单） | `mcp.service.ts` · `agent-tool-bridge.ts` allowlist | 实测 MCP 工具数 23 且含 4 个 extension.* |
 | 10 | **CLI 对等**：`sciflow ext list|toggle|import|export|reset`，与 Web/对话同一 REST 服务 | `apps/server/src/config/config-cli.ts registerExtensionCommands` | CLI 实测 list/toggle/import/export |
 
+## §2.22 v1.8 归属校验收口与实例级配置分级（2026-10-28）
+
+企业模式（`AUTH_MODE=jwt`）此前只有 5 个控制器有归属校验（documents / references / experiments / projects / pipeline），
+其余 8 个零校验；实例级配置（模型 Key / 权限档 / 钩子 / 扩展资产 / 用量 / 联网 Key）只要求登录。
+本批次把两类边界固化为契约。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **子资源归属必须可断言**：任何「有 projectId 的表」都要有对应的 `assertXxx(id, user)`，语义统一为「子资源 → 项目 → owner」，非 owner 一律 404（不泄露存在性），本地模式 no-op | `common/project-access.service.ts`（knowledge/memory/submission/researchDesign/reviewComment/agentExecution/qualityReport 七类新断言） | `project-access-subresources.spec.ts` 10 条（非 owner 404 / owner 放行 / 幽灵 id 404 / 本地模式全放行 / assertAdmin 三态） |
+| 2 | **控制器不得裸奔**：所有带数据面的 controller 必须注入 `ProjectAccessService` 并在每个 handler 断言。静态扫描（`scan_access.py` 思路）应只剩「无状态 AI 助手」与「全局期刊库只读」6 个端点可豁免 | 13 个 controller | 静态扫描 + `auth-surface.spec.ts` |
+| 3 | **实例级配置按角色分级**：`settings` / `config` / `extensions` / `customization` / `usage` / `websearch` / 期刊库增删 挂 `AdminGuard`（企业模式仅 admin，本地模式放行）。理由：改 baseURL 即可把全实例请求引到自己的服务器，改权限档即可放开自身限制 | `auth/admin.guard.ts` + 上述控制器类级 `@UseGuards(AdminGuard)` | `auth-surface.spec.ts` 2 条（控制器清单 + 三态语义） |
+| 4 | **禁止跨租户聚合**：`dashboard/overview`、`memory`、`documents` 列表在无 projectId 时，企业模式分别 403 / 403 / 400；本地模式保持原全库语义（CLI 与回归依赖） | 对应 controller | JWT 真机验证 23 项 |
+| 5 | **行业口径一致的双分数必须并排**：质量页必须同时展示「客观分（可复现、带指纹、流水线门禁使用）」与「LLM 7 维分（仅参考）」，并明写前者是门禁依据 | `QualityPage.tsx #objective-audit` | `QualityPage.test.tsx` 4 条（自动触发 / 六维+指纹 / 硬伤口径 / 门禁说明） |
+| 6 | **记忆必须项目作用域**：`MemoryPage` 请求必带 projectId；企业模式无 projectId 记忆列表直接 403 | `MemoryPage.tsx` · `memory.controller.ts` | `MemoryPage.test.tsx` 2 条（每个请求都带 projectId / 空态说明） |
+| 7 | **前端不得让成员吃 403**：能改实例配置的页面必须先解析角色；member 看到说明卡 + 个人偏好（外观），而不是整页报错 | `lib/use-auth-role.ts` · `SettingsPage.tsx` | JWT 真机（member 设置页降级视图） |
+| 8 | **筛选后的批量操作只作用于可见集合**：「导入当前结果」必须用 `visibleHits` 而不是 `hits`，避免把被过滤掉的条目静默写入 | `LiteratureTable.tsx importAll` | 按钮文案与实现同源（`导入当前结果`） |
+
 ## §2.21 v1.7 主题风格包与科研能力补齐契约（2026-10-28）
 
 本批次把「明暗两态」升级为「风格 × 明暗」正交体系，并把三处对标科研工具的硬缺口接进自动化流水线。契约如下，禁止回退。

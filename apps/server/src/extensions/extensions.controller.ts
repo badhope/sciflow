@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, UploadedFile, UseInterceptors, Headers } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, UploadedFile, UseInterceptors, Headers, UseGuards } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ExtensionsService, assetKey } from './extensions.service';
+import { AdminGuard } from '../auth/admin.guard';
 
 /**
  * 扩展中心 REST（v1.4）：skill / mcp / role / constraint / hook / prompt 统一资产。
@@ -11,8 +12,12 @@ import { ExtensionsService, assetKey } from './extensions.service';
  *  - 拖拽文件 / ZIP → POST /api/extensions/upload（multipart，支持 .md/.json/.zip）
  *  - 一键 AI 生成 → POST /api/extensions/generate（返回草稿，确认后 POST /api/extensions）
  *  - 对话 → MCP 工具 extension.*（见 mcp.service）
+ *
+ * v1.8：整个控制器加 AdminGuard —— 启停内置资产会改约束/钩子/角色注入，
+ * 属于实例级能力面，企业模式下仅 admin 可改。
  */
 @Controller('extensions')
+@UseGuards(AdminGuard)
 export class ExtensionsController {
   constructor(private readonly extensions: ExtensionsService) {}
 

@@ -1,8 +1,8 @@
 import { useEffect, useState, useContext } from 'react';
-import { Gauge, Loader2, Sparkles, ListChecks } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Gauge, Loader2, ShieldCheck, Sparkles, ListChecks } from 'lucide-react';
 import { api } from '../api/client';
-import type { Doc, Project, QualityReport, CitationAudit } from '../types';
-import { Badge, Button, Card, EmptyState, ErrorBox, Select, jsonText, errMsg } from '../components/ui';
+import type { Doc, Project, QualityReport, CitationAudit, ObjectiveQualityReport } from '../types';
+import { Badge, Button, Card, EmptyState, ErrorBox, Select, Spinner, jsonText, errMsg } from '../components/ui';
 import { ToastContext } from '../App';
 import { HBar, LineChart, ProgressRing } from '../components/charts';
 import { QUALITY_DIMS } from './qualityDims';
@@ -82,6 +82,16 @@ export function QualityPage({ project }: { project: Project }) {
   /** B-4.3 引用体检：锚点×落库交叉审计结果 */
   const [audit, setAudit] = useState<CitationAudit | null>(null);
   const [auditing, setAuditing] = useState(false);
+  /**
+   * 客观检查器（v1.8）：确定性六维硬指标。
+   *
+   * 为什么质量页必须给它一块位置：本页此前只有「LLM 7 维」，而流水线门禁用的是
+   * 客观分（同一稿 LLM 在 27–59 漂移）。用户在这里点「开始评分」看到的分数
+   * 与流水线判定的分数不是一回事，导致「页面 62 分却过闸」的认知冲突。
+   * 现在两套分数并排展示：客观分（可复现、可核对指纹）+ LLM 分（仅参考）。
+   */
+  const [objective, setObjective] = useState<{ docId: string; report: ObjectiveQualityReport } | null>(null);
+  const [objectiveError, setObjectiveError] = useState('');
   const toast = useContext(ToastContext);
 
   const runAudit = async () => {
@@ -102,6 +112,30 @@ export function QualityPage({ project }: { project: Project }) {
       if (d.length) setDocId(d[0].id);
     });
   }, [project.id]);
+
+  /** 切换文档时立即拉客观检查（纯本地规则，无模型成本，无需用户点按钮） */
+  useEffect(() => {
+    if (!docId) return;
+    let cancelled = false;
+    api.documents
+      .objectiveAudit(docId)
+      .then((r) => {
+        if (cancelled) return;
+        setObjective({ docId, report: r.report });
+        setObjectiveError('');
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setObjectiveError(errMsg(e));
+      });
+    return () => { cancelled = true; };
+  }, [docId]);
+
+  /**
+   * 「检查中」由「当前文档 ≠ 报告所属文档」派生，而不是 effect 里 setState：
+   * effect 内同步 setState 会触发级联渲染（react-hooks/set-state-in-effect 拦截）。
+   */
+  const objectiveLoading = Boolean(docId) && objective?.docId !== docId && !objectiveError;
 
   useEffect(() => {
     if (docId)
@@ -176,7 +210,7 @@ export function QualityPage({ project }: { project: Project }) {
             className="w-full sm:w-64"
             options={[{ value: '', label: '选择文档…' }, ...docs.map((d) => ({ value: d.id, label: d.title }))]}
             value={docId}
-            onChange={(v: string) => { setDocId(v); setAudit(null); setReport(null); setSelectedHist(null); }}
+            onChange={(v: string) => { setDocId(v); setAudit(null); setReport(null); setSelectedHist(null); setObjective(null); }}
           />
           <Button onClick={doReview} disabled={scoring || !docId} aria-busy={scoring}>
             {scoring ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Sparkles size={15} aria-hidden="true" />} {scoring ? '评分中…' : '开始评分'}
@@ -189,6 +223,88 @@ export function QualityPage({ project }: { project: Project }) {
           七维：文献充分性 · 逻辑一致性 · 引用规范 · 语言质量 · 创新性 · 图表 · 格式（0-100，总分取均值），结果持久化可历史对比
         </div>
       </Card>
+      {/* 客观检查器：与 LLM 分并排的确定性依据（切换文档即自动出分，零模型成本） */}
+      <Card tone="metric" className="p-4 mb-4" id="objective-audit">
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <ShieldCheck size={16} className="text-teal-600 dark:text-teal-300" aria-hidden="true" />
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">客观检查器（确定性）</span>
+          {objective && (
+            <Badge tone={objective.report.totalScore >= 80 ? 'green' : objective.report.totalScore >= 60 ? 'amber' : 'red'}>
+              {objective.report.totalScore}/100
+            </Badge>
+          )}
+          {objective && (
+            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+              指纹 {objective.report.fingerprint} · 同一正文必然同分
+            </span>
+          )}
+          <span className="ml-auto text-[11px] text-slate-400 dark:text-slate-500">流水线质量门用的就是这个分</span>
+        </div>
+
+        {objectiveLoading && !objective ? (
+          <div className="py-6 flex justify-center"><Spinner label="检查中…" /></div>
+        ) : objectiveError ? (
+          <div className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950/30 dark:text-rose-300" role="alert">
+            客观检查失败：{objectiveError}
+          </div>
+        ) : objective && objective.docId === docId ? (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
+              {objective.report.dimensions.map((d) => (
+                <div key={d.key} className="rounded-lg border border-slate-100 px-2.5 py-2 dark:border-slate-800">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{d.label}</div>
+                  <div className={`text-base font-semibold tabular-nums ${
+                    d.score >= 16 ? 'text-emerald-600 dark:text-emerald-400'
+                      : d.score >= 12 ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-rose-600 dark:text-rose-400'
+                  }`}>
+                    {d.score}<span className="text-[11px] font-normal text-slate-400">/20</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {objective.report.hardFails.length > 0 ? (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-900 dark:bg-rose-950/30">
+                <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-rose-700 dark:text-rose-300">
+                  <AlertTriangle size={13} aria-hidden="true" /> 硬伤 {objective.report.hardFails.length} 项
+                  {/* 封顶口径与检查器一致：空文/过短直接 0，其余硬伤封顶 40 —— 此前统一写「封顶 40」，
+                      遇到空文（0 分）会自相矛盾 */}
+                  <span className="font-normal">
+                    （{objective.report.totalScore === 0 ? '空文/过短直接 0 分' : '总分封顶 40'}）
+                  </span>
+                </div>
+                <ul className="space-y-0.5 text-[11px] text-rose-700 dark:text-rose-300">
+                  {objective.report.hardFails.map((f, i) => <li key={i}>· {f}</li>)}
+                </ul>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+                <CheckCircle2 size={13} aria-hidden="true" /> 未发现硬伤（占位符 / 空文 / 重复段落 / 长篇零引用 / 名实不符）
+              </div>
+            )}
+
+            <details className="mt-3">
+              <summary className="cursor-pointer text-[11px] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                统计明细（{objective.report.stats.chars} 字符 · {objective.report.stats.sections} 章 · {objective.report.stats.uniqueCitations} 个引用锚点）
+              </summary>
+              <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                <span>中文字符 {objective.report.stats.cjkChars}</span>
+                <span>英文词 {objective.report.stats.englishWords}</span>
+                <span>段落 {objective.report.stats.paragraphs}</span>
+                <span>句子 {objective.report.stats.sentences}</span>
+                <span>平均句长 {objective.report.stats.avgSentenceChars}</span>
+                <span>参考文献条目 {objective.report.stats.referenceEntries}</span>
+                <span>重复段落 {objective.report.stats.duplicateParagraphs}</span>
+                <span>占位符命中 {objective.report.stats.placeholderHits}</span>
+              </div>
+            </details>
+          </>
+        ) : (
+          <div className="text-xs text-slate-400 dark:text-slate-500">选择文档后自动检查（纯规则，无模型调用）。</div>
+        )}
+      </Card>
+
       {audit && (
         <Card tone="inset" className="p-4">
           <div className="flex items-center gap-2 mb-2">

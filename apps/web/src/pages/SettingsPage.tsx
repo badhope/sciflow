@@ -15,6 +15,8 @@ import { PersonaSettings } from './settings/PersonaSettings';
 import { ConfigCenterSettings } from './settings/ConfigCenterSettings';
 import { ExtensionCenter, ExtensionQuickAdd } from './settings/ExtensionCenter';
 import { AppearanceSettings } from './settings/AppearanceSettings';
+import { useAuthRole } from '../lib/use-auth-role';
+import { Lock } from 'lucide-react';
 
 const ModelIcon = ({ ok }: { ok?: boolean }) =>
   ok === undefined ? null : ok ? <CheckCircle2 size={16} className="text-emerald-500" /> : <XCircle size={16} className="text-rose-500" />;
@@ -596,6 +598,35 @@ function SettingsLayout() {
 /* ------------------------------------------------------------------ */
 export function SettingsPage() {
   const toast = useContext(ToastContext);
+  const role = useAuthRole();
+
+  /**
+   * 企业模式的普通成员（v1.8）：实例级配置（模型 Key / baseURL / 权限档 / 钩子 /
+   * 扩展资产 / 用量 / 联网 provider）在服务端已收紧为 admin 专属。这里直接给出
+   * 只读说明，而不是让用户点进去吃一墙 403。
+   * 外观与主题属于个人偏好（纯 localStorage），对所有人开放 —— 所以设置页不整页隐藏。
+   */
+  if (role === 'member') {
+    return (
+      <div className="page-container">
+        <Card className="p-5 mb-4" id="settings-member-notice">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+              <Lock size={16} aria-hidden="true" />
+            </span>
+            <div>
+              <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">当前账号是普通成员</div>
+              <div className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                模型接入、权限档、注入钩子、扩展资产、用量统计与联网服务商属于实例级配置，仅管理员可修改。
+                你可以正常使用工作台、写作、文献、知识库、流水线、质量与投稿；如需调整模型或权限，请联系管理员。
+              </div>
+            </div>
+          </div>
+        </Card>
+        <AppearanceSettings />
+      </div>
+    );
+  }
 
   return (
     <SettingsProvider toast={toast}>

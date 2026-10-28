@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![version](https://img.shields.io/badge/version-1.7.0-black.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.8.0-black.svg)](CHANGELOG.md)
 
 > **🌐 语言 / Language：[中文](README.md) · [English](README.en.md)**
 
@@ -40,6 +40,7 @@ flowchart LR
 
 ## 🗞 最近更新
 
+- **2026-10-28 · v1.8.0**：**企业模式安全收口**——归属校验从 5 个控制器补到 13 个（知识库 / 记忆 / 研究设计 / 质量 / 投稿 / 执行轨迹 / 总览 / 对话此前零校验，任一账号可用他人 projectId 读写私有资料）；实例级配置（模型 Key / baseURL / 权限档 / 钩子 / 扩展资产 / 用量 / 联网 Key）从「登录即可改」收紧为**管理员专属**（`AdminGuard`），并用 JWT 真机 23 项断言验证 admin/member 行为。体验侧：**质量页新增客观检查器卡片**（切换文档即出确定性分数 + 指纹 + 硬伤口径，明写"流水线门禁用的就是这个分"，消除双分数认知冲突）；**记忆中心加 KPI 卡与项目隔离**；**学术库结果支持按相关度/最新/高被引排序 + 年份过滤**，「全部导入」改为只导入筛选后集合。
 - **2026-10-28 · v1.7.0**：**主题多样化**——6 套风格包（科研青绿 / 学术经典 / 暖色纸感 / 现代极简 / 暗夜实验室 / 高对比无障碍）× 独立明暗，设置页可视化选卡、命令面板可切、刷新保持；补三处对标缺口：**学术库发现检索**（文献页直接查 OpenAlex/Crossref/arXiv，不再只能查本地库）、**自动配图真实渲染**（mermaid 图表在写作预览里出图，此前只是一段代码）、**新颖性预检**（流水线第 2 步，先判断题目是否已被人做，重叠度≥70% 写进产物研究说明）。主题层把 59 处硬编码颜色收敛为 token，代码块/编辑器/玻璃顶栏/滚动条随风格变化；顺带修掉设置页滚动监听死代码、默认明暗与首屏脚本不一致导致的 41ms 闪变。
 - **2026-10-27 · v1.6.0**：品牌与界面打磨——品牌标志 3.0（单一连续笔势，取代易退化的同心圆弧）、七种表面层级（panel/inset/metric/accent/warning/danger/plain，终结「61 处卡片长得一样」）、三档字体栈（界面/论文阅读/等宽，全部系统字体零 CDN）、设置页 11 锚点重建、写作工具面板三组归并、厂商预置改为国内优先并标注境外项替代路径；图表层拆分使 recharts 从主包剥离（主包 0 引用，436KB 按需加载）。
 - **2026-10-27 · v1.5.0**：真实论文全流程验收——用 u2-flash 从 UI 端到端跑通多篇完整论文；新增**确定性客观质量检查器**（六维硬指标 + 学术诚信检测，同文本必然同分同指纹）作为质量门唯一判定依据；内置免 Key 学术检索（OpenAlex/Crossref/arXiv）与文献相关性门禁；修复润色并发死锁、产物不可见、写作页 `?doc=` 失效、导出作者 JSON、失败任务不可重跑等 12 项实测缺陷。
@@ -170,6 +171,18 @@ flowchart LR
 
 > SciFlow 不参与"谁的云大"的军备竞赛——差异点是**科研产出工程化**：引用可溯源、质量门不达标自动回炉、每步成本与轨迹可审计、一条命令无人值守出稿。
 
+### 企业模式（多账号）的安全边界
+
+`AUTH_MODE=jwt` 时按两层隔离，两者都由测试锁定：
+
+| 层 | 管什么 | 实现 | 违反时 |
+|---|---|---|---|
+| 数据面 | 项目及其所有子资源（文档/文献/知识库/记忆/实验/设计稿/审稿意见/评分/执行轨迹/投稿/流水线） | 每张表对应一个 `assertXxx(id, user)`，「子资源 → 项目 → owner」 | **404**（不泄露存在性） |
+| 配置面 | 实例级：模型厂商与 Key、baseURL、权限档、角色/约束/钩子、扩展资产、成本用量、联网 provider、期刊库增删 | `AdminGuard`（类级） | **403** |
+| 兜底 | 禁止跨租户聚合：总览、记忆、文档列表不带 projectId | controller 显式判断 | **403 / 400** |
+
+本地/桌面模式（默认 `AUTH_MODE=none`）两层都直接放行 —— 单用户零登录体验不变，CLI 与回归脚本行为也不变。
+
 ## 🏗 技术栈
 
 | 端 | 技术 |
@@ -177,7 +190,7 @@ flowchart LR
 | 后端 `apps/server` | NestJS 11 · TypeScript（strict）· Drizzle ORM · better-sqlite3（WAL）· Vercel AI SDK（OpenAI 兼容）· LangGraph（编排 / 断点续跑 / 人工确认）· MCP 官方 SDK · zod · helmet + pino · MSW 进程内 mock 网关 |
 | 前端 `apps/web` | React 19 · Vite 6 · TypeScript · Tailwind CSS v4（主题风格包走 CSS 变量覆盖）· TanStack Query / Table · Recharts · sigma.js + graphology · streamdown（流式 Markdown）· CodeMirror 6 · react-markdown + KaTeX · mermaid（按需异步 chunk） |
 | 桌面端 `apps/desktop` | Electron 41（内嵌 Node 24，原生支持 require(ESM)）· 内嵌后端（`ELECTRON_RUN_AS_NODE`）· 本地 SQLite（userData 隔离，打包时自动按 Electron ABI 重编原生模块）· electron-builder 三平台打包 · electron-updater 自动更新（opt-in） |
-| 工程 | pnpm workspace · vitest（server 268 / web 111 / desktop 5）· Playwright 冒烟 · promptfoo 契约评估 · GitHub Actions 三 job（类型/单测/构建 · 全量回归 · E2E+评测）· Python 3 回归脚本 |
+| 工程 | pnpm workspace · vitest（server 280 / web 117 / desktop 5）· Playwright 冒烟 · promptfoo 契约评估 · GitHub Actions 三 job（类型/单测/构建 · 全量回归 · E2E+评测）· Python 3 回归脚本 |
 
 **架构概览**
 
@@ -289,7 +302,7 @@ SciFlow 支持**任意 OpenAI 兼容端点**，只需要填 `base_url` + `model`
 pnpm --filter @sciflow/server typecheck
 pnpm --filter @sciflow/web typecheck
 
-# 单元测试（vitest：server 268 条 + web 111 条 + desktop 5 条）
+# 单元测试（vitest：server 280 条 + web 117 条 + desktop 5 条）
 pnpm --filter @sciflow/server test
 pnpm --filter @sciflow/web test
 

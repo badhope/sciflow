@@ -126,6 +126,9 @@ export function LiteratureTable(props: LiteratureTableProps) {
   /** 检索范围：本地库（离线 LIKE）或学术库（OpenAlex/Crossref/arXiv 在线元数据） */
   const [scope, setScope] = useState<'local' | 'scholar'>('local');
   const [discoverNotice, setDiscoverNotice] = useState('');
+  /** 学术库结果排序与年份过滤（命中 20 条时逐条翻找体验差；本地库结果不参与） */
+  const [discoverSort, setDiscoverSort] = useState<'relevance' | 'year' | 'cited'>('relevance');
+  const [discoverSince, setDiscoverSince] = useState('');
 
   // 手动添加表单
   const [addTitle, setAddTitle] = useState('');
@@ -166,6 +169,20 @@ export function LiteratureTable(props: LiteratureTableProps) {
       setImporting(false);
     }
   };
+
+  /**
+   * 学术库结果的展示视图：年份过滤 + 排序。
+   * 排序口径明确写死（相关度=服务端返回序 / 年份新→旧 / 被引高→低），不做「智能排序」——
+   * 科研检索里用户需要知道"为什么这条排在前面"。
+   */
+  const visibleHits = useMemo(() => {
+    if (scope !== 'scholar') return hits;
+    const sinceYear = discoverSince ? Number(discoverSince) : 0;
+    const filtered = sinceYear ? hits.filter((h) => (h.year ?? 0) >= sinceYear) : hits.slice();
+    if (discoverSort === 'year') filtered.sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
+    else if (discoverSort === 'cited') filtered.sort((a, b) => (b.citationCount ?? 0) - (a.citationCount ?? 0));
+    return filtered;
+  }, [hits, scope, discoverSort, discoverSince]);
 
   const search = async () => {
     if (!query.trim()) return;
@@ -230,7 +247,9 @@ export function LiteratureTable(props: LiteratureTableProps) {
   };
 
   const importAll = async () => {
-    const pending = hits.filter((h) => !imported.has(h.title));
+    // 只导入「当前可见」结果：用户加了年份/排序筛选后点「全部导入」，预期是导入筛选后的集合，
+    // 而不是把被过滤掉的条目也一并塞进文献库（隐藏操作是数据污染的常见来源）。
+    const pending = visibleHits.filter((h) => !imported.has(h.title));
     if (pending.length === 0) return;
     try {
       const created = await api.references.importMany(project.id, pending);
@@ -713,13 +732,47 @@ export function LiteratureTable(props: LiteratureTableProps) {
       {hits.length > 0 && (
         <Card tone="panel" className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">检索结果（{hits.length} 篇）</span>
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              检索结果（{visibleHits.length}{visibleHits.length !== hits.length ? ` / ${hits.length}` : ''} 篇）
+            </span>
             <Button variant="success" className="text-xs" onClick={importAll}>
-              <FlaskConical size={14} /> 全部导入文献库
+              <FlaskConical size={14} /> 导入当前结果
             </Button>
           </div>
+          {/* 学术库结果的排序/年份筛选：20 条命中时按「最新」或「高被引」看比逐条翻有效得多 */}
+          {scope === 'scholar' && hits.length > 1 && (
+            <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span className="text-slate-400 dark:text-slate-500">排序</span>
+              {([
+                { id: 'relevance' as const, label: '相关度' },
+                { id: 'year' as const, label: '最新' },
+                { id: 'cited' as const, label: '高被引' },
+              ]).map((o) => (
+                <button
+                  key={o.id}
+                  onClick={() => setDiscoverSort(o.id)}
+                  className={`rounded-md px-2 py-0.5 transition-colors ${
+                    discoverSort === o.id
+                      ? 'bg-teal-600 text-white dark:bg-teal-500 dark:text-slate-900'
+                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+              <span className="ml-2 text-slate-400 dark:text-slate-500">年份≥</span>
+              <select
+                value={discoverSince}
+                onChange={(e) => setDiscoverSince(e.target.value)}
+                className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+              >
+                <option value="">不限</option>
+                {[2024, 2022, 2020, 2015].map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          )}
           <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
-            {hits.map((h, i) => (
+            {visibleHits.map((h, i) => (
               <div key={i} className="flex items-start gap-3 border border-slate-100 dark:border-slate-800 rounded-lg p-3 hover:border-teal-300 hover:shadow-[0_2px_10px_-4px_var(--focus-ring-color)] transition-all duration-150">
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{h.title}</div>

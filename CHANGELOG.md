@@ -2,6 +2,45 @@
 
 本项目格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，语义化版本号。以下按 `git log` 自底向上归纳历轮功能与修复，未含真实密钥。
 
+## [1.8.0] - 2026-10-28
+
+安全收口 + 体验补洞批次：把「归属校验」从 5 个控制器补到全部 13 个（企业模式跨租户越权彻底关闭），
+把「实例级配置」从"登录即可改"收紧为管理员专属并给出前端降级视图，质量页补上流水线真正使用的客观分，
+记忆中心补上量化指标与项目作用域。
+
+### Security
+- **补齐 8 个控制器的归属校验（IDOR）**：`knowledge` / `memory` / `research` / `quality` / `submission` / `agent-trace` / `dashboard` / `chat` 此前**完全零校验**（v1.7 只补了 pipeline）。企业模式下任一账号可：
+  - 用他人 projectId 上传/读取知识库资料原文、做跨项目 RAG 问答（他人私有资料进自己的 prompt）
+  - 读他人项目的情景记忆（每次研究的主题与结论摘要）、删他人记忆
+  - 列他人项目的实验设计稿、读写他人文档的审稿意见、用他人正文生成回复信
+  - 按 documentId 读他人稿件的评分与改进建议，按 report id 读任意报告
+  - 列他人项目的投稿记录与事件流（期刊名/稿号/修回截止日）、改他人投稿状态、删他人投稿
+  - 用他人 projectId 读执行轨迹（输入原文/模型/token）、读单次 run 详情
+  - 无 projectId 拉全库总览（他人待确认大纲、超期投稿、低分文档标题）
+  - `GET /documents/:id/objective-audit` 单独漏在 citation-audit 之外
+  - 关闭方式：`ProjectAccessService` 新增 `assertKnowledgeDoc / assertMemory / assertSubmission / assertResearchDesign / assertReviewComment / assertAgentExecution / assertQualityReport`，13 个控制器全部改为「子资源 → 项目 → owner」断言，非本人一律 404（不泄露存在性）；本地模式行为不变。
+- **实例级配置收紧为管理员专属（AdminGuard）**：`settings`（模型厂商/Key/baseURL/连接测试）、`config`（权限档/角色/约束/钩子/预设/审计）、`extensions`（内置资产启停）、`customization`（意图/步骤开关/质量权重/提示词）、`usage`（全实例成本）、`websearch`（provider Key）、`submission` 的期刊库增删。此前只要求登录 —— 任一 member 改 baseURL 即可把全实例请求（含他人稿件）引到自己的服务器，或直接放开权限档。新增 `apps/server/src/auth/admin.guard.ts`；本地模式（AUTH_MODE!=jwt）直接放行，零登录体验不变。
+- **企业模式禁止跨租户聚合**：`dashboard/overview`、`memory` 列表、`documents` 列表在无 projectId 时分别改为 403 / 403 / 400（原来静默返回全库）。
+
+### Added
+- **质量页「客观检查器」卡片**：切换文档即自动出分（纯规则、零模型成本），展示六维分 + FNV 指纹 + 硬伤口径（空文/过短 0 分 vs 其余封顶 40）+ 统计明细。此前该页只有 LLM 7 维分，而流水线门禁用的是客观分 —— 用户会看到「页面 62 分却过闸」的认知冲突。卡片上明写「流水线质量门用的就是这个分」。
+- **记忆中心 KPI 卡片**：记忆总量 / 情景记忆 / 程序记忆 / 近 7 天新增四项量化指标（此前这些数字只能从环形图里读）。空态补一张「两类记忆从哪来」说明卡（含项目隔离说明）。
+- **记忆中心按项目隔离**：`MemoryPage` 新增 `project` 参数，列表与概览请求都带 projectId（企业模式服务端强制）；契约测试锁定「请求一定带 projectId」。
+- **文献发现结果的排序与年份筛选**：学术库命中 20 条时可按「相关度 / 最新 / 高被引」排序 + 年份下限过滤；「全部导入」改为「导入当前结果」，只导入筛选后的集合（隐藏操作是数据污染来源）。
+- **普通成员设置页降级视图**：企业模式 member 打开设置页不再吃一墙 403，改为一张说明卡（哪些是实例级配置、可正常使用哪些功能）+ 外观主题（个人偏好，对所有人开放）。新增 `lib/use-auth-role.ts`（health + /auth/me 派生，带缓存）。
+
+### Changed
+- `App.tsx` 的 `MemoryPage` 传入 `project`；`api.memory.list` 增加 projectId 参数。
+- `pipeline-access.spec.ts` 的「列表」语义扩展到 9 条；`auth-surface.spec.ts` 增加 AdminGuard 契约 2 条。
+
+### Verification
+- server **280 passed / 37 files**（新增子资源归属 10 条 + AdminGuard 契约 2 条）；web **117 passed / 18 files**（新增记忆项目作用域 2 条 + 客观检查器卡片 4 条）；desktop 5 passed。
+- `pnpm lint` 0 problem；typecheck ×2；`pnpm -r build` 全绿。
+- **JWT 模式真机验证**（独立库 + `AUTH_MODE=jwt`）：
+  - admin 注册 → 建项目 → 知识库上传/列表 200；无 token 访问 settings 401；幽灵 projectId 404；无 projectId 记忆 403。
+  - member（第二位注册）：读他人项目文档/知识库/投稿全部 404；settings/config/extensions/customization/usage/websearch 全部 403；提权 `POST /config/permission` 403；自己的项目文档/记忆/总览 200；无 projectId 总览 403、文档列表 400。共 23 项断言全 PASS。
+- 浏览器巡检：11 个页面 × 亮/暗 + 5 个页面 × 390px，无 console 错误、无横向溢出；6 主题 × 明暗 × 4 页面共 48 张截图，主题均真实生效（采样 `--background` / `--card` / `--radius-lg` / `data-theme` 断言）。
+
 ## [1.7.0] - 2026-10-28
 
 主题多样化 + 科研能力补齐批次：把「只有明暗两种外观」升级为 6 套风格包，并补上对标科研工具的三处硬缺口（学术库发现检索、自动配图可渲染、选题新颖性预检进入自动化流水线）。

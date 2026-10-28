@@ -5,6 +5,8 @@ import { ChatService } from './chat.service';
 import { ChatMessage } from '../ai/ai.service';
 import { forwardOpenAiSse } from '../common/sse.helper';
 import { ConfigCenterService } from '../config/config-center.service';
+import { ProjectAccessService } from '../common/project-access.service';
+import type { AuthPayload } from '../auth/auth.service';
 
 export class ChatRequestBody {
   @ApiProperty({ description: '本轮用户提问', example: '图神经网络的消息传递机制是什么？' })
@@ -45,16 +47,28 @@ export class ChatController {
   constructor(
     private readonly chat: ChatService,
     private readonly config: ConfigCenterService,
+    private readonly access: ProjectAccessService,
   ) {}
 
   @Post()
-  async answer(@Body() body: ChatRequestBody) {
+  async answer(@Body() body: ChatRequestBody, @Req() req: { user?: AuthPayload }) {
+    // v1.8：带 projectId 时必须校验归属 —— 否则企业模式可用他人项目上下文做 RAG 问答
+    if (body.projectId) this.access.assertProject(body.projectId, req.user);
     return this.chat.answer(body.message, body.history || [], body.projectId, body.docContext, { model: body.model });
   }
 
   /** SSE 流式问答 */
   @Post('stream')
-  async stream(@Body() body: ChatRequestBody, @Res() res: Response, @Req() req: Request) {
+  async stream(@Body() body: ChatRequestBody, @Res() res: Response, @Req() req: Request & { user?: AuthPayload }) {
+    // v1.8：流式入口同样校验项目归属（SSE 里抛错会断流，因此先校验再写头）
+    if (body.projectId) {
+      try {
+        this.access.assertProject(body.projectId, req.user);
+      } catch (e: any) {
+        res.status(404).json({ error: e?.message || '项目不存在' });
+        return;
+      }
+    }
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -107,8 +121,10 @@ export class ChatController {
 
   /** GET /api/chat/sessions?projectId=... — 项目最近对话摘要列表（前端"对话历史"面板） */
   @Get('sessions')
-  listSessions(@Query('projectId') projectId: string) {
+  listSessions(@Query('projectId') projectId: string, @Req() req?: { user?: AuthPayload }) {
     if (!projectId) return { error: 'projectId required' };
+    // v1.8：会话摘要含提问首句，必须按项目归属校验
+    this.access.assertProject(projectId, req?.user);
     return { sessions: this.chat.listSessionSummaries(projectId) };
   }
 }
