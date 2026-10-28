@@ -113,7 +113,7 @@ SCIFLOW_BASE=http://localhost:3000 AI_MOCK=1 python3 scripts/full_regression.py
 - 完整验收矩阵：`python scripts/final_acceptance.py`（**23 项**，含 CLI `config status/preview` 冒烟）。
 - 扩展中心测试：`apps/server/src/extensions/extensions.service.spec.ts`（18）+ `apps/web/src/pages/settings/ExtensionCenter.test.tsx`（11）。
 - 主题风格包：`apps/web/src/lib/theme.test.ts`（6 条，含两维正交与非法值回落）；改 `styles/themes.css` 后必须跑一次 `pnpm --filter @sciflow/web test`。
-- 单测基线（v1.8）：server **280** / web **117** / desktop **5**。
+- 单测基线（v1.8）：server **285** / web **120** / desktop **5**。
 - mock 模式跑端到端流水线时务必把 `AI_RPM_CAP` 调大（如 120），否则默认令牌桶会等待导致超时。
 
 ### 企业模式（AUTH_MODE=jwt）验证

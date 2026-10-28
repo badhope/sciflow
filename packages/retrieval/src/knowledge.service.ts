@@ -187,6 +187,12 @@ export class KnowledgeService {
   }
 
   /** 项目知识库列表：每条嵌入绑定文献的摘要（未绑定时 reference=null） */
+  /** 全量知识库列表（仅本地单用户模式；企业模式由 controller 拒绝） */
+  async listAll() {
+    const docs = db.select().from(knowledgeDocs).orderBy(knowledgeDocs.createdAt).all();
+    const refMap = this.referenceSummaryMap(docs);
+    return docs.map((d) => ({ ...d, reference: d.referenceId ? (refMap.get(d.referenceId) || null) : null }));
+  }
   async list(projectId: string) {
     const docs = db
       .select()

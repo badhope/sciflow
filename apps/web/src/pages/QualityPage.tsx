@@ -1,7 +1,7 @@
-import { useEffect, useState, useContext } from 'react';
-import { AlertTriangle, CheckCircle2, Gauge, Loader2, ShieldCheck, Sparkles, ListChecks } from 'lucide-react';
+import { useEffect, useMemo, useState, useContext } from 'react';
+import { AlertTriangle, CheckCircle2, Gauge, LayoutList, Loader2, ShieldCheck, Sparkles, ListChecks } from 'lucide-react';
 import { api } from '../api/client';
-import type { Doc, Project, QualityReport, CitationAudit, ObjectiveQualityReport } from '../types';
+import type { Doc, Project, QualityReport, CitationAudit, ObjectiveQualityReport, ProjectQualityOverview } from '../types';
 import { Badge, Button, Card, EmptyState, ErrorBox, Select, Spinner, jsonText, errMsg } from '../components/ui';
 import { ToastContext } from '../App';
 import { HBar, LineChart, ProgressRing } from '../components/charts';
@@ -92,7 +92,21 @@ export function QualityPage({ project }: { project: Project }) {
    */
   const [objective, setObjective] = useState<{ docId: string; report: ObjectiveQualityReport } | null>(null);
   const [objectiveError, setObjectiveError] = useState('');
+  /** 项目内全部文档最新分总览（v1.8）：进入页面即出「哪几篇没达标」 */
+  const [overview, setOverview] = useState<ProjectQualityOverview | null>(null);
+  const [overviewError, setOverviewError] = useState('');
   const toast = useContext(ToastContext);
+
+  /**
+   * 总览列表的前端兜底排序：最差优先，同分按更新时间倒序。
+   * 后端已排过，但 UI 不应依赖接口顺序——否则接口一改顺序，「最需回炉的」就会沉底。
+   */
+  const overviewSorted = useMemo(() => {
+    if (!overview) return [];
+    return [...overview.items].sort(
+      (a, b) => a.objectiveScore - b.objectiveScore || b.updatedAt - a.updatedAt,
+    );
+  }, [overview]);
 
   const runAudit = async () => {
     if (!docId) return;
@@ -106,11 +120,23 @@ export function QualityPage({ project }: { project: Project }) {
     }
   };
 
+  /**
+   * 加载文档列表与总览。
+   * 默认选中最新一篇：docs 按 updatedAt 升序，docs[0] 是最旧的——与 WorkspacePage /
+   * WritingPage 同类 bug（那两处已修，本页漏了），会导致刚改完的稿子不在默认选中里。
+   */
   useEffect(() => {
+    let cancelled = false;
     api.documents.list(project.id).then((d) => {
+      if (cancelled) return;
       setDocs(d);
-      if (d.length) setDocId(d[0].id);
+      if (d.length) setDocId(d[d.length - 1].id);
     });
+    api.quality
+      .projectOverview(project.id)
+      .then((o) => { if (!cancelled) { setOverview(o); setOverviewError(''); } })
+      .catch((e: unknown) => { if (!cancelled) setOverviewError(errMsg(e)); });
+    return () => { cancelled = true; };
   }, [project.id]);
 
   /** 切换文档时立即拉客观检查（纯本地规则，无模型成本，无需用户点按钮） */
@@ -201,6 +227,59 @@ export function QualityPage({ project }: { project: Project }) {
   return (
     <div className="page-container">
       <ErrorBox message={error} />
+
+      {/* 全部文档最新分（v1.8）：进页先回答「哪几篇没达标」，再决定点哪篇细看 */}
+      {overview && overview.total > 0 && (
+        <Card tone="inset" className="mb-4 p-4" id="quality-overview">
+          <div className="flex flex-wrap items-center gap-2 mb-2.5">
+            <LayoutList size={15} className="text-teal-600 dark:text-teal-300" aria-hidden="true" />
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">全部文档最新分</span>
+            <span className="text-[11px] text-slate-400 dark:text-slate-500">按客观分从低到高（最需回炉的在前）</span>
+            <span className="ml-auto flex items-center gap-1.5 text-[11px]">
+              <Badge tone="green">达标 {overview.passed}</Badge>
+              <Badge tone={overview.failed > 0 ? 'red' : 'slate'}>未达标 {overview.failed}</Badge>
+              {overview.unscored > 0 && <Badge tone="amber">空文 {overview.unscored}</Badge>}
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {overviewSorted.map((it) => (
+              <button
+                key={it.documentId}
+                type="button"
+                onClick={() => setDocId(it.documentId)}
+                aria-current={it.documentId === docId ? 'true' : undefined}
+                title={it.hardFails.length ? it.hardFails.join('；') : undefined}
+                className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition-colors ${
+                  it.documentId === docId
+                    ? 'border-teal-400 bg-teal-50/70 dark:border-teal-600 dark:bg-teal-900/20'
+                    : 'border-slate-100 hover:border-teal-300 dark:border-slate-800'
+                }`}
+              >
+                <span className={`w-11 shrink-0 text-right font-semibold tabular-nums ${
+                  it.passed ? 'text-emerald-600 dark:text-emerald-400'
+                    : it.chars === 0 ? 'text-slate-400'
+                      : 'text-rose-600 dark:text-rose-400'
+                }`}>
+                  {it.chars === 0 ? '—' : it.objectiveScore}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">{it.title}</span>
+                {it.hardFailCount > 0 && <Badge tone="red">硬伤 {it.hardFailCount}</Badge>}
+                <span className="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">
+                  {it.llmScore == null ? 'LLM 未评' : `LLM ${it.llmScore}`}
+                </span>
+                <span className="w-16 shrink-0 text-right text-[11px] text-slate-400 dark:text-slate-500">
+                  {it.chars.toLocaleString()} 字
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-400 dark:text-slate-500">
+            左列分数是<span className="font-medium">客观分</span>（对当前正文实时计算，流水线门禁用它）；
+            右侧是最近一次 <span className="font-medium">LLM 评分</span>（历史值，仅供参考，同一稿会漂移）。
+          </p>
+          {overviewError && <div className="mt-1.5 text-[11px] text-rose-600 dark:text-rose-400">{overviewError}</div>}
+        </Card>
+      )}
 
       <Card tone="accent" className="mb-4 p-4">
         <div className="flex items-center gap-2 flex-wrap">

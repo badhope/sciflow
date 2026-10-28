@@ -23,9 +23,17 @@ export class KnowledgeController {
     return this.knowledge.upload(body.projectId, body.name, body.type || 'text', body.content);
   }
 
-  /** 项目知识库列表 */
+  /**
+   * 知识库列表。
+   * 本地模式（AUTH_MODE!=jwt）允许不传 projectId 返回全部 —— 历史行为，回归与 CLI 依赖；
+   * 企业模式必须显式指定并断言归属（避免一次拉走全库资料）。
+   */
   @Get()
   list(@Query('projectId') projectId: string, @Req() req: { user?: AuthPayload }) {
+    if (!projectId) {
+      if (this.access.enforced) this.access.deny('企业模式必须指定 projectId');
+      return this.knowledge.listAll();
+    }
     this.access.assertProject(projectId, req.user);
     return this.knowledge.list(projectId);
   }
@@ -50,7 +58,11 @@ export class KnowledgeController {
   /** 纯检索（不调 LLM，BM25+向量混合，本地零依赖）：body {projectId, query}，返回命中文块（与 query 的 sources 同源） */
   @Post('search')
   search(@Body() body: { projectId: string; query?: string; question?: string }, @Req() req: { user?: AuthPayload }) {
-    this.access.assertProject(body?.projectId, req.user);
+    /**
+     * 归属校验只拦「存在的他人项目」（企业模式）；不存在的 projectId 保持历史契约返回空数组，
+     * 不抛 404 —— 纯检索是只读探测，抛错会让调用方（如全局搜索）整体失败。
+     */
+    if (this.access.enforced) this.access.assertProject(body?.projectId, req.user);
     return this.knowledge.search(body.projectId, body.query || body.question || '', 5);
   }
 
@@ -66,7 +78,8 @@ export class KnowledgeController {
   @Patch(':id/bind')
   bind(@Param('id') id: string, @Body() body: { referenceId: string | null }, @Req() req: { user?: AuthPayload }) {
     this.access.assertKnowledgeDoc(id, req.user);
-    if (body?.referenceId) this.access.assertReference(body.referenceId, req.user);
+    // referenceId 不存在时由 service 报 400（历史契约）；企业模式先拦「存在的他人文献」
+    if (body?.referenceId && this.access.enforced) this.access.assertReference(body.referenceId, req.user);
     return this.knowledge.bind(id, body.referenceId ?? null);
   }
 

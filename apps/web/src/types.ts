@@ -142,6 +142,31 @@ export interface ObjectiveAuditResponse {
   llmHistory: { totalScore: number; createdAt: number; scores: string | Record<string, number> }[];
 }
 
+/** 项目内全部文档的最新分总览（GET /api/quality/project-overview） */
+export interface ProjectQualityOverviewItem {
+  documentId: string;
+  title: string;
+  status: string;
+  updatedAt: number;
+  chars: number;
+  objectiveScore: number;
+  fingerprint: string;
+  hardFailCount: number;
+  hardFails: string[];
+  llmScore: number | null;
+  llmScoredAt: number | null;
+  passed: boolean;
+}
+
+export interface ProjectQualityOverview {
+  projectId: string;
+  total: number;
+  passed: number;
+  failed: number;
+  unscored: number;
+  items: ProjectQualityOverviewItem[];
+}
+
 /** GET /api/documents/:id/objective-audit 的 report 字段 —— 同一文本必然同分同指纹 */
 export interface ObjectiveQualityReport {
   totalScore: number;

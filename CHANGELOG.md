@@ -23,6 +23,7 @@
 - **企业模式禁止跨租户聚合**：`dashboard/overview`、`memory` 列表、`documents` 列表在无 projectId 时分别改为 403 / 403 / 400（原来静默返回全库）。
 
 ### Added
+- **质量页「全部文档最新分」总览卡**：进入页面即列出项目内所有文档的客观分（对当前正文实时计算，零模型成本）+ 最新 LLM 分，按**最差优先**排序，带达标/未达标/空文计数与硬伤徽标；点击任一行切换当前文档。此前只能一篇一篇选文档看分，真实痛点「哪几篇还没达标」无法回答。后端新增 `GET /api/quality/project-overview`（归属校验 + 前端兜底排序，不依赖接口顺序）。
 - **质量页「客观检查器」卡片**：切换文档即自动出分（纯规则、零模型成本），展示六维分 + FNV 指纹 + 硬伤口径（空文/过短 0 分 vs 其余封顶 40）+ 统计明细。此前该页只有 LLM 7 维分，而流水线门禁用的是客观分 —— 用户会看到「页面 62 分却过闸」的认知冲突。卡片上明写「流水线质量门用的就是这个分」。
 - **记忆中心 KPI 卡片**：记忆总量 / 情景记忆 / 程序记忆 / 近 7 天新增四项量化指标（此前这些数字只能从环形图里读）。空态补一张「两类记忆从哪来」说明卡（含项目隔离说明）。
 - **记忆中心按项目隔离**：`MemoryPage` 新增 `project` 参数，列表与概览请求都带 projectId（企业模式服务端强制）；契约测试锁定「请求一定带 projectId」。
@@ -34,7 +35,7 @@
 - `pipeline-access.spec.ts` 的「列表」语义扩展到 9 条；`auth-surface.spec.ts` 增加 AdminGuard 契约 2 条。
 
 ### Verification
-- server **280 passed / 37 files**（新增子资源归属 10 条 + AdminGuard 契约 2 条）；web **117 passed / 18 files**（新增记忆项目作用域 2 条 + 客观检查器卡片 4 条）；desktop 5 passed。
+- server **285 passed / 38 files**（新增子资源归属 10 条 + AdminGuard 契约 2 条 + 质量总览 5 条）；web **120 passed / 18 files**（新增记忆项目作用域 2 条 + 客观检查器卡片 4 条 + 总览/默认选中 3 条）；desktop 5 passed。
 - `pnpm lint` 0 problem；typecheck ×2；`pnpm -r build` 全绿。
 - **JWT 模式真机验证**（独立库 + `AUTH_MODE=jwt`）：
   - admin 注册 → 建项目 → 知识库上传/列表 200；无 token 访问 settings 401；幽灵 projectId 404；无 projectId 记忆 403。

@@ -190,7 +190,7 @@ flowchart LR
 | 后端 `apps/server` | NestJS 11 · TypeScript（strict）· Drizzle ORM · better-sqlite3（WAL）· Vercel AI SDK（OpenAI 兼容）· LangGraph（编排 / 断点续跑 / 人工确认）· MCP 官方 SDK · zod · helmet + pino · MSW 进程内 mock 网关 |
 | 前端 `apps/web` | React 19 · Vite 6 · TypeScript · Tailwind CSS v4（主题风格包走 CSS 变量覆盖）· TanStack Query / Table · Recharts · sigma.js + graphology · streamdown（流式 Markdown）· CodeMirror 6 · react-markdown + KaTeX · mermaid（按需异步 chunk） |
 | 桌面端 `apps/desktop` | Electron 41（内嵌 Node 24，原生支持 require(ESM)）· 内嵌后端（`ELECTRON_RUN_AS_NODE`）· 本地 SQLite（userData 隔离，打包时自动按 Electron ABI 重编原生模块）· electron-builder 三平台打包 · electron-updater 自动更新（opt-in） |
-| 工程 | pnpm workspace · vitest（server 280 / web 117 / desktop 5）· Playwright 冒烟 · promptfoo 契约评估 · GitHub Actions 三 job（类型/单测/构建 · 全量回归 · E2E+评测）· Python 3 回归脚本 |
+| 工程 | pnpm workspace · vitest（server 285 / web 120 / desktop 5）· Playwright 冒烟 · promptfoo 契约评估 · GitHub Actions 三 job（类型/单测/构建 · 全量回归 · E2E+评测）· Python 3 回归脚本 |
 
 **架构概览**
 
@@ -302,7 +302,7 @@ SciFlow 支持**任意 OpenAI 兼容端点**，只需要填 `base_url` + `model`
 pnpm --filter @sciflow/server typecheck
 pnpm --filter @sciflow/web typecheck
 
-# 单元测试（vitest：server 280 条 + web 117 条 + desktop 5 条）
+# 单元测试（vitest：server 285 条 + web 120 条 + desktop 5 条）
 pnpm --filter @sciflow/server test
 pnpm --filter @sciflow/web test
 

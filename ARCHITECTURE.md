@@ -167,6 +167,7 @@
 | 6 | **记忆必须项目作用域**：`MemoryPage` 请求必带 projectId；企业模式无 projectId 记忆列表直接 403 | `MemoryPage.tsx` · `memory.controller.ts` | `MemoryPage.test.tsx` 2 条（每个请求都带 projectId / 空态说明） |
 | 7 | **前端不得让成员吃 403**：能改实例配置的页面必须先解析角色；member 看到说明卡 + 个人偏好（外观），而不是整页报错 | `lib/use-auth-role.ts` · `SettingsPage.tsx` | JWT 真机（member 设置页降级视图） |
 | 8 | **筛选后的批量操作只作用于可见集合**：「导入当前结果」必须用 `visibleHits` 而不是 `hits`，避免把被过滤掉的条目静默写入 | `LiteratureTable.tsx importAll` | 按钮文案与实现同源（`导入当前结果`） |
+| 9 | **总览层必须先回答「哪几篇没达标」**：质量页必须提供项目级文档分总览（客观分对当前正文实时算 + 最新 LLM 分），最差优先；前端必须自带排序兜底，不得依赖接口顺序 | `QualityPage.tsx#quality-overview` · `quality.service.ts projectOverview` | `quality-overview.spec.ts` 5 条（排序/计数/LLM 最新/引用口径/空项目）+ `QualityPage.test.tsx` 3 条（总览渲染/默认选中最新/点击切换） |
 
 ## §2.21 v1.7 主题风格包与科研能力补齐契约（2026-10-28）
 

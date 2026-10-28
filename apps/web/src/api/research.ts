@@ -16,6 +16,7 @@ import type {
   PaperComparisonResult,
   PipelineStepConfig,
   QualityReport,
+  ProjectQualityOverview,
   QualityWeightItem,
   Reference,
   ReferenceGraph,
@@ -145,6 +146,9 @@ export const research = {
     /** 最新一次质量评分（无记录时后端返回 null；接口未就绪时前端 catch 降级为空态） */
     latest: (documentId: string) =>
       request<QualityReport | null>(`/api/quality/latest?documentId=${encodeURIComponent(documentId)}`),
+    /** 项目内全部文档的最新分总览（客观分对当前正文计算，零模型成本） */
+    projectOverview: (projectId: string) =>
+      request<ProjectQualityOverview>(`/api/quality/project-overview?projectId=${encodeURIComponent(projectId)}`),
     /** 差距#7：把最新 quality_report.feedback 结构化为 review_comment（幂等，返回 created/existing） */
     exportComments: (documentId: string) =>
       request<{ created: number; existing: number }>(`/api/quality/export-comments?documentId=${encodeURIComponent(documentId)}`, { method: 'POST' }),
