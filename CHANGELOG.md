@@ -35,12 +35,14 @@
 - `pipeline-access.spec.ts` 的「列表」语义扩展到 9 条；`auth-surface.spec.ts` 增加 AdminGuard 契约 2 条。
 
 ### Verification
-- server **285 passed / 38 files**（新增子资源归属 10 条 + AdminGuard 契约 2 条 + 质量总览 5 条）；web **120 passed / 18 files**（新增记忆项目作用域 2 条 + 客观检查器卡片 4 条 + 总览/默认选中 3 条）；desktop 5 passed。
+- server **285 passed / 38 files**（新增子资源归属 10 条 + AdminGuard 契约 2 条 + 质量总览 5 条）；web **128 passed / 19 files**（新增记忆项目作用域 2 条 + 客观检查器卡片 4 条 + 总览/默认选中 3 条）；desktop 5 passed。
 - `pnpm lint` 0 problem；typecheck ×2；`pnpm -r build` 全绿。
 - **JWT 模式真机验证**（独立库 + `AUTH_MODE=jwt`）：
   - admin 注册 → 建项目 → 知识库上传/列表 200；无 token 访问 settings 401；幽灵 projectId 404；无 projectId 记忆 403。
   - member（第二位注册）：读他人项目文档/知识库/投稿全部 404；settings/config/extensions/customization/usage/websearch 全部 403；提权 `POST /config/permission` 403；自己的项目文档/记忆/总览 200；无 projectId 总览 403、文档列表 400。共 23 项断言全 PASS。
 - 浏览器巡检：11 个页面 × 亮/暗 + 5 个页面 × 390px，无 console 错误、无横向溢出；6 主题 × 明暗 × 4 页面共 48 张截图，主题均真实生效（采样 `--background` / `--card` / `--radius-lg` / `data-theme` 断言）。
+- **`scripts/verify-jwt-access.mjs`（新增，28 项断言）**：自拉独立库 + 独立端口跑真实 HTTP，覆盖数据面 404 / 配置面 403 / 自己资源 200 / 无 token 401 / 跨租户聚合 403·400 / 提权 403；已接入 CI（`types-unit-build` job），失败以非 0 退出。此前这套验证只是一次性临时脚本，删掉就无法复现。
+- **`use-auth-role.test.ts`（新增 8 条）**：角色解析契约 —— 本地模式 none、admin/member 判定、无 token 不误请求、接口异常 fail-closed 到 member、并发 inflight 去重、缓存与 reset（登出/换号不残留）、hook 的 loading→实际值。
 
 ## [1.7.0] - 2026-10-28
 

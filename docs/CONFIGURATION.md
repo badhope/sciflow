@@ -176,16 +176,8 @@ curl http://127.0.0.1:3000/api/web/config
 ### 快速自检（部署后跑一遍）
 
 ```bash
-BASE=http://127.0.0.1:3100
-# 1) 无 token 必须 401（jwt 模式）
-curl -s -o /dev/null -w '%{http_code}
-' $BASE/api/settings
-
-# 2) 首个注册用户 = admin
-curl -s -X POST $BASE/api/auth/register -H 'content-type: application/json'   -d '{"email":"admin@example.com","password":"<8+>","name":"Admin"}'
-
-# 3) 第二个用户（需 ALLOW_REGISTRATION=1 启动）= member，然后逐项验 404/403
-#    完整断言清单：apps/server/src/common/project-access-subresources.spec.ts
+pnpm --filter @sciflow/server build
+node scripts/verify-jwt-access.mjs    # 28 项断言，全自动（自拉独立库与端口，跑完即关）
 ```
 
 ## 安全姿势：什么时候必须开认证

@@ -20,7 +20,8 @@
     "openapi:gen": "pnpm --filter @sciflow/server build && node scripts/openapi-gen.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "backup": "node scripts/backup-db.mjs",
-    "doctor": "node scripts/doctor.mjs"
+    "doctor": "node scripts/doctor.mjs",
+    "verify:jwt": "node scripts/verify-jwt-access.mjs"
   },
   "engines": {
     "node": ">=20"

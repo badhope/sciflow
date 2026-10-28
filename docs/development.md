@@ -113,7 +113,7 @@ SCIFLOW_BASE=http://localhost:3000 AI_MOCK=1 python3 scripts/full_regression.py
 - 完整验收矩阵：`python scripts/final_acceptance.py`（**23 项**，含 CLI `config status/preview` 冒烟）。
 - 扩展中心测试：`apps/server/src/extensions/extensions.service.spec.ts`（18）+ `apps/web/src/pages/settings/ExtensionCenter.test.tsx`（11）。
 - 主题风格包：`apps/web/src/lib/theme.test.ts`（6 条，含两维正交与非法值回落）；改 `styles/themes.css` 后必须跑一次 `pnpm --filter @sciflow/web test`。
-- 单测基线（v1.8）：server **285** / web **120** / desktop **5**。
+- 单测基线（v1.8）：server **285** / web **128** / desktop **5**。
 - mock 模式跑端到端流水线时务必把 `AI_RPM_CAP` 调大（如 120），否则默认令牌桶会等待导致超时。
 
 ### 企业模式（AUTH_MODE=jwt）验证
@@ -121,15 +121,12 @@ SCIFLOW_BASE=http://localhost:3000 AI_MOCK=1 python3 scripts/full_regression.py
 权限边界改动必须做一次真机验证，不能只跑单测（单测里 AUTH_MODE 默认 none，容易全绿但线上 403/404 打脸）：
 
 ```bash
-# 独立库 + 独立端口，避免污染开发库
-AUTH_MODE=jwt ALLOW_REGISTRATION=1 JWT_SECRET=<32+ 随机串>   DATABASE_PATH=/tmp/jwt.db PORT=3102 node apps/server/dist/apps/server/src/main.js
-
-# 首个注册用户 = admin，第二个 = member（ALLOW_REGISTRATION=1）
-# 断言清单见 apps/server/src/common/project-access-subresources.spec.ts 与 docs/CONFIGURATION.md
+pnpm --filter @sciflow/server build
+node scripts/verify-jwt-access.mjs                        # 自拉独立库+端口 3110，28 项断言，跑完即关
+node scripts/verify-jwt-access.mjs --port 3110 --keep     # 保留服务供手工排查
 ```
 
-必查六项：① 无 token → 401；② member 读他人项目 → 404；③ member 改实例配置 → 403；
-④ member 读自己项目 → 200；⑤ 无 projectId 聚合 → 403/400；⑥ 提权（改权限档）→ 403。
+脚本覆盖六类：无 token 401 / 数据面 404 / 配置面 403 / 自己资源 200 / 跨租户聚合 403·400 / 提权 403，失败以非 0 退出可直接接 CI。
 
 ## 6. 代码风格红线
 

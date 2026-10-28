@@ -45,6 +45,10 @@ jobs:
         run: pnpm --filter @sciflow/server build
       - name: Build (web)
         run: pnpm --filter @sciflow/web build
+      - name: Verify enterprise access boundary (28 assertions)
+        # 单测里 AUTH_MODE 默认 none，权限边界永远不会被覆盖；这里用真实 HTTP 跑一遍两层边界
+        run: node scripts/verify-jwt-access.mjs
+        timeout-minutes: 5
 
   regression:
     name: Full mock regression
