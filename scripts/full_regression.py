@@ -1212,6 +1212,44 @@ if p26id:
               and any("未检测到引用" in str(i) for i in (db_.get("issues") or [])),
               f"body={str(db_)[:160]}")
 
+        # 27.6 残留未渲染标记（v1.9.1）：[文献N] 是 citation-renderer 的越界降级产物，
+        # 此前 audit 只认 [n]/[Ref:n]/【n】——「引用全断」被误报成「没有引用」（60 分假绿）
+        req("PATCH", f"/api/documents/{d4id}", {"content": "## 引言\n已有研究表明[文献1]，另有[文献2]与[Ref:3]。"})
+        st7, dc = req("GET", f"/api/documents/{d4id}/citation-audit")
+        check("27.6 残留标记 [文献N]/[Ref:N] 识别为红牌（residualAnchors=3 且 score 重罚）",
+              st7 == 200 and dc.get("residualAnchors") == 3 and dc.get("score", 100) <= 20
+              and any("未渲染的引用标记" in str(i) for i in (dc.get("issues") or [])),
+              f"body={str(dc)[:200]}")
+        # 27.7 客观质量检查器同样拦截残留标记（硬伤封顶 40）
+        st8, dobj = req("GET", f"/api/documents/{d4id}/objective-audit")
+        obj = (dobj or {}).get("report", {})
+        check("27.7 客观检查器：残留标记计入占位硬伤（totalScore 封顶 40）",
+              st8 == 200 and obj.get("hardFails") and any("未渲染引用标记" in str(h) for h in obj.get("hardFails", []))
+              and obj.get("totalScore", 100) <= 40,
+              f"body={str(dobj)[:200]}")
+
+# ---------- 27.8 流水线运行参数（v1.9.1 补接线：预算/重排/联网此前只能改库） ----------
+st, ps = req("GET", "/api/customization/pipeline-settings")
+check("27.8a pipeline-settings 返回运行参数四元组", st == 200 and all(k in ps for k in ("researchDepth", "tokenBudget", "retrievalRerank", "webSearch")),
+      f"st={st} body={str(ps)[:160]}")
+check("27.8b 预算缺省口径与流水线一致（300k）", ps.get("tokenBudget") == 300_000, f"tokenBudget={ps.get('tokenBudget')}")
+st2, ps2 = req("POST", "/api/customization/pipeline-settings", {"tokenBudget": 123456, "retrievalRerank": True, "webSearch": True})
+check("27.8c 四项可写且回读一致", st2 in (200, 201) and ps2.get("tokenBudget") == 123456 and ps2.get("retrievalRerank") is True and ps2.get("webSearch") is True,
+      f"st={st2} body={str(ps2)[:160]}")
+st3, ps3 = req("POST", "/api/customization/pipeline-settings", {"tokenBudget": -5})
+check("27.8d 非法预算 400（不落库）", st3 == 400 and ps2.get("tokenBudget") == 123456, f"st={st3} body={str(ps3)[:120]}")
+st4, ps4 = req("POST", "/api/customization/pipeline-settings", {"researchDepth": 9})
+check("27.8e 非法深度 400", st4 == 400, f"st={st4} body={str(ps4)[:120]}")
+st5, ps5 = req("POST", "/api/customization/pipeline-settings", {"tokenBudget": 300_000, "retrievalRerank": False, "webSearch": False})
+check("27.8f 恢复默认（预算 300k / 两开关 off）", st5 in (200, 201) and ps5.get("tokenBudget") == 300_000 and ps5.get("retrievalRerank") is False and ps5.get("webSearch") is False,
+      f"body={str(ps5)[:160]}")
+
+# 27.9 研究缺口路由（v1.9.1 修复：@Body('field') 被全局管道误判，该路由此前全量 400）
+st, gres = req("POST", "/api/references/gap", {"projectId": p26id, "topic": "图神经网络"})
+check("27.9 references/gap 不再被管道误杀（200/201 或业务性 400，而非「请求体必须是 JSON 对象」）",
+      st in (200, 201) or (st == 400 and "请求体必须是 JSON 对象" not in str(gres)),
+      f"st={st} body={str(gres)[:160]}")
+
 # ---------- 28. v1.0.1 停止接口 / 联网开关 / 分数口径 ----------
 st, d = req("POST", "/api/pipeline", {"projectId": pid, "topic": "停止接口回归验证"})
 stop_id = d.get("id") if st == 201 else None

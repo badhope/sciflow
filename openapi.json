@@ -305,6 +305,20 @@
         ]
       }
     },
+    "/references/discover": {
+      "post": {
+        "operationId": "ReferencesController_discover",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "References"
+        ]
+      }
+    },
     "/references/search": {
       "post": {
         "operationId": "ReferencesController_search",
@@ -763,6 +777,547 @@
         },
         "tags": [
           "References"
+        ]
+      }
+    },
+    "/research/design-review": {
+      "post": {
+        "operationId": "ResearchController_designReview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/comparison": {
+      "post": {
+        "operationId": "ResearchController_compare",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/review": {
+      "post": {
+        "operationId": "ResearchController_review",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/design": {
+      "post": {
+        "operationId": "ResearchController_designExperiment",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      },
+      "get": {
+        "operationId": "ResearchController_listDesigns",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/design/{id}": {
+      "delete": {
+        "operationId": "ResearchController_deleteDesign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/review-comments": {
+      "post": {
+        "operationId": "ResearchController_addReviewComments",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      },
+      "get": {
+        "operationId": "ResearchController_listReviewComments",
+        "parameters": [
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/review-comments/{id}": {
+      "patch": {
+        "operationId": "ResearchController_updateReviewComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      },
+      "delete": {
+        "operationId": "ResearchController_deleteReviewComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/response-letter": {
+      "post": {
+        "operationId": "ResearchController_responseLetter",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/quality": {
+      "post": {
+        "operationId": "QualityController_review",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Quality"
+        ]
+      },
+      "get": {
+        "operationId": "QualityController_history",
+        "parameters": [
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Quality"
+        ]
+      }
+    },
+    "/quality/project-overview": {
+      "get": {
+        "operationId": "QualityController_projectOverview",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Quality"
+        ]
+      }
+    },
+    "/quality/latest": {
+      "get": {
+        "operationId": "QualityController_latest",
+        "parameters": [
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Quality"
+        ]
+      }
+    },
+    "/quality/export-comments": {
+      "post": {
+        "operationId": "QualityController_exportComments",
+        "parameters": [
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Quality"
+        ]
+      }
+    },
+    "/quality/{id}": {
+      "get": {
+        "operationId": "QualityController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Quality"
+        ]
+      }
+    },
+    "/submission/journals": {
+      "post": {
+        "operationId": "SubmissionController_recommend",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      },
+      "get": {
+        "operationId": "SubmissionController_listJournals",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/cover-letter": {
+      "post": {
+        "operationId": "SubmissionController_coverLetter",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/reply-review": {
+      "post": {
+        "operationId": "SubmissionController_replyReview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/journals-lib": {
+      "post": {
+        "operationId": "SubmissionController_addJournal",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/journals-lib/{id}": {
+      "delete": {
+        "operationId": "SubmissionController_removeJournal",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/journals-match": {
+      "post": {
+        "operationId": "SubmissionController_journalsMatch",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/track": {
+      "post": {
+        "operationId": "SubmissionController_createTrack",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      },
+      "get": {
+        "operationId": "SubmissionController_listTracks",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/track/parse-email": {
+      "post": {
+        "operationId": "SubmissionController_parseEmail",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/track/{id}/event": {
+      "post": {
+        "operationId": "SubmissionController_addEvent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/track/{id}": {
+      "patch": {
+        "operationId": "SubmissionController_updateTrack",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      },
+      "delete": {
+        "operationId": "SubmissionController_removeTrack",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
         ]
       }
     },
@@ -1751,6 +2306,29 @@
         ]
       }
     },
+    "/documents/{id}/objective-audit": {
+      "get": {
+        "operationId": "DocumentsController_objectiveAudit",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
     "/documents/{id}/citation-audit": {
       "get": {
         "operationId": "DocumentsController_citationAudit",
@@ -2289,6 +2867,29 @@
         ]
       }
     },
+    "/pipeline/{id}/rerun": {
+      "post": {
+        "operationId": "PipelineController_rerun",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Pipeline"
+        ]
+      }
+    },
     "/chat": {
       "post": {
         "operationId": "ChatController_answer",
@@ -2662,524 +3263,6 @@
         },
         "tags": [
           "Usage"
-        ]
-      }
-    },
-    "/research/design-review": {
-      "post": {
-        "operationId": "ResearchController_designReview",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/research/comparison": {
-      "post": {
-        "operationId": "ResearchController_compare",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/research/review": {
-      "post": {
-        "operationId": "ResearchController_review",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/research/design": {
-      "post": {
-        "operationId": "ResearchController_designExperiment",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      },
-      "get": {
-        "operationId": "ResearchController_listDesigns",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/research/design/{id}": {
-      "delete": {
-        "operationId": "ResearchController_deleteDesign",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/research/review-comments": {
-      "post": {
-        "operationId": "ResearchController_addReviewComments",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      },
-      "get": {
-        "operationId": "ResearchController_listReviewComments",
-        "parameters": [
-          {
-            "name": "documentId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/research/review-comments/{id}": {
-      "patch": {
-        "operationId": "ResearchController_updateReviewComment",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      },
-      "delete": {
-        "operationId": "ResearchController_deleteReviewComment",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/research/response-letter": {
-      "post": {
-        "operationId": "ResearchController_responseLetter",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/quality": {
-      "post": {
-        "operationId": "QualityController_review",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Quality"
-        ]
-      },
-      "get": {
-        "operationId": "QualityController_history",
-        "parameters": [
-          {
-            "name": "documentId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Quality"
-        ]
-      }
-    },
-    "/quality/latest": {
-      "get": {
-        "operationId": "QualityController_latest",
-        "parameters": [
-          {
-            "name": "documentId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Quality"
-        ]
-      }
-    },
-    "/quality/export-comments": {
-      "post": {
-        "operationId": "QualityController_exportComments",
-        "parameters": [
-          {
-            "name": "documentId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Quality"
-        ]
-      }
-    },
-    "/quality/{id}": {
-      "get": {
-        "operationId": "QualityController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Quality"
-        ]
-      }
-    },
-    "/submission/journals": {
-      "post": {
-        "operationId": "SubmissionController_recommend",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      },
-      "get": {
-        "operationId": "SubmissionController_listJournals",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/cover-letter": {
-      "post": {
-        "operationId": "SubmissionController_coverLetter",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/reply-review": {
-      "post": {
-        "operationId": "SubmissionController_replyReview",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/journals-lib": {
-      "post": {
-        "operationId": "SubmissionController_addJournal",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/journals-lib/{id}": {
-      "delete": {
-        "operationId": "SubmissionController_removeJournal",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/journals-match": {
-      "post": {
-        "operationId": "SubmissionController_journalsMatch",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/track": {
-      "post": {
-        "operationId": "SubmissionController_createTrack",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      },
-      "get": {
-        "operationId": "SubmissionController_listTracks",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/track/parse-email": {
-      "post": {
-        "operationId": "SubmissionController_parseEmail",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/track/{id}/event": {
-      "post": {
-        "operationId": "SubmissionController_addEvent",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/track/{id}": {
-      "patch": {
-        "operationId": "SubmissionController_updateTrack",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      },
-      "delete": {
-        "operationId": "SubmissionController_removeTrack",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
         ]
       }
     },
@@ -3592,16 +3675,7 @@
     "/dashboard/overview": {
       "get": {
         "operationId": "DashboardController_overview",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -3616,7 +3690,7 @@
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "1.4.0",
+    "version": "1.9.0",
     "contact": {}
   },
   "tags": [],

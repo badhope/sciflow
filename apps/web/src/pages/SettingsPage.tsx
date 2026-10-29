@@ -182,9 +182,55 @@ function PromptEditor() {
 /* ------------------------------------------------------------------ */
 function PipelineEditor() {
   const { state, togglePipelineStep, resetPipeline } = useSettings();
+  const toast = useContext(ToastContext);
   const [open, setOpen] = useState(false);
   const offCount = state.pipelineSteps.filter((s) => !s.enabled).length;
   const summary = offCount > 0 ? `${state.pipelineSteps.length - offCount}/${state.pipelineSteps.length} 步启用（${offCount} 步已关）` : `${state.pipelineSteps.length} 步全启用（默认）`;
+
+  /**
+   * 运行参数（v1.9.1 补接线）：token 预算 / 检索重排 / 流水线联网检索。
+   * 三者此前只能改库或环境变量——预算耗尽的报错让用户「到设置中调整」，
+   * 但设置里根本没有这一项。这里接入 customization.pipeline-settings 单一入口。
+   */
+  const [runParams, setRunParams] = useState<{ tokenBudget: number; retrievalRerank: boolean; webSearch: boolean } | null>(null);
+  const [budgetDraft, setBudgetDraft] = useState('');
+  const [savingBudget, setSavingBudget] = useState(false);
+  useEffect(() => {
+    if (!open || runParams) return;
+    let cancelled = false;
+    api.customization.getPipelineSettings().then((r) => {
+      if (cancelled) return;
+      setRunParams({ tokenBudget: r.tokenBudget, retrievalRerank: r.retrievalRerank, webSearch: r.webSearch });
+      setBudgetDraft(String(r.tokenBudget));
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [open, runParams]);
+
+  const saveBudget = async () => {
+    const n = Math.floor(Number(budgetDraft));
+    if (!Number.isFinite(n) || n < 0) { toast('error', 'token 预算需为非负整数（0=不限）'); return; }
+    setSavingBudget(true);
+    try {
+      const r = await api.customization.setPipelineSettings({ tokenBudget: n });
+      setRunParams({ tokenBudget: r.tokenBudget, retrievalRerank: r.retrievalRerank, webSearch: r.webSearch });
+      toast('success', '预算已更新，对之后新建的流水线生效');
+    } catch (e: unknown) {
+      toast('error', errMsg(e));
+    } finally {
+      setSavingBudget(false);
+    }
+  };
+
+  const toggleParam = async (patch: { retrievalRerank?: boolean; webSearch?: boolean }) => {
+    try {
+      const r = await api.customization.setPipelineSettings(patch);
+      setRunParams({ tokenBudget: r.tokenBudget, retrievalRerank: r.retrievalRerank, webSearch: r.webSearch });
+    } catch (e: unknown) {
+      toast('error', errMsg(e));
+    }
+  };
+
+  const fmtK = (n: number) => (n >= 10000 ? `${Math.round(n / 1000)}k` : String(n));
 
   return (
     <CollapsibleCard
@@ -224,6 +270,63 @@ function PipelineEditor() {
           <Button variant="outline" className="text-xs" onClick={resetPipeline}>
             恢复默认（全启用）
           </Button>
+        </div>
+
+        <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+          <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">运行参数</div>
+          {!runParams ? (
+            <div className="text-xs text-slate-400">加载中…</div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="text-xs text-slate-700 dark:text-slate-200 w-32 shrink-0" htmlFor="pipeline-token-budget">任务 token 预算</label>
+                <Input
+                  id="pipeline-token-budget"
+                  className="w-40"
+                  inputMode="numeric"
+                  value={budgetDraft}
+                  onChange={(e) => setBudgetDraft(e.target.value)}
+                  placeholder="300000（0=不限）"
+                />
+                <Button variant="outline" className="text-xs" onClick={() => void saveBudget()} disabled={savingBudget}>
+                  {savingBudget ? <Loader2 size={13} className="animate-spin" /> : null} 保存
+                </Button>
+                <span className="text-[11px] text-slate-400">
+                  当前 {runParams.tokenBudget > 0 ? `${fmtK(runParams.tokenBudget)} tokens/任务` : '不限'}；超出后流水线终止并提示
+                </span>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-xs text-slate-700 dark:text-slate-200 w-32 shrink-0">检索重排（LLM）</span>
+                <button
+                  className={`relative w-7 h-4 rounded-full transition-colors ${runParams.retrievalRerank ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                  aria-pressed={runParams.retrievalRerank}
+                  aria-label="检索重排开关"
+                  onClick={() => void toggleParam({ retrievalRerank: !runParams.retrievalRerank })}
+                >
+                  <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${runParams.retrievalRerank ? 'left-3.5' : 'left-0.5'}`} />
+                </button>
+                <span className="text-[11px] text-slate-400 flex-1">
+                  知识库检索后用模型按问题相关性重打分（更准但更慢更贵，默认关）
+                </span>
+                <Badge tone={runParams.retrievalRerank ? 'teal' : 'slate'}>{runParams.retrievalRerank ? '开启' : '关闭'}</Badge>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-xs text-slate-700 dark:text-slate-200 w-32 shrink-0">流水线联网检索</span>
+                <button
+                  className={`relative w-7 h-4 rounded-full transition-colors ${runParams.webSearch ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                  aria-pressed={runParams.webSearch}
+                  aria-label="流水线联网检索开关"
+                  onClick={() => void toggleParam({ webSearch: !runParams.webSearch })}
+                >
+                  <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${runParams.webSearch ? 'left-3.5' : 'left-0.5'}`} />
+                </button>
+                <span className="text-[11px] text-slate-400 flex-1">
+                  文献步骤 0 命中时并入公开网页线索（只作写作参考、不进文献库；provider 在「联网搜索」配置）
+                </span>
+                <Badge tone={runParams.webSearch ? 'teal' : 'slate'}>{runParams.webSearch ? '开启' : '关闭'}</Badge>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </CollapsibleCard>

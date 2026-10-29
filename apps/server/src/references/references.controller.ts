@@ -223,10 +223,21 @@ export class ReferencesController {
     return this.references.deepDive(body.projectId, body.refId);
   }
 
+  /**
+   * 研究缺口定位。
+   *
+   * 历史缺陷（v1.9.1 修复）：此前用 `@Body('projectId')` / `@Body('topic')` 逐字段取参，
+   * 而全局 `InputValidationPipe` 对 `metadata.type === 'body'` 的入参要求「必须是普通 JSON 对象」——
+   * 逐字段取参后管道收到的是 **string**，于是无条件抛 400「请求体必须是 JSON 对象」。
+   * 结果是「研究缺口」这个上架功能**全量不可用**（前端按钮永远失败），
+   * 且因为回归脚本没覆盖该路由，缺陷藏了整整两个版本。
+   * 修复：改为整对象 `@Body()` + 显式校验，管道语义一致。
+   */
   @Post('gap')
-  gap(@Body('projectId') projectId: string, @Body('topic') topic: string, @Req() req: { user?: AuthPayload }) {
-    this.access.assertProject(projectId, req.user);
-    return this.references.gap(projectId, topic || '');
+  gap(@Body() body: { projectId?: string; topic?: string }, @Req() req: { user?: AuthPayload }) {
+    if (!body?.projectId?.trim()) throw new BadRequestException('projectId 必填');
+    this.access.assertProject(body.projectId, req.user);
+    return this.references.gap(body.projectId, body.topic || '');
   }
 
   @Post('evidence')

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { auditCitations, extractAnchorNumbers, splitBodyForAudit, type AuditCitationRow, type AuditReferenceMeta } from './citation-audit';
+import { auditCitations, extractAnchorNumbers, extractResidualAnchors, splitBodyForAudit, type AuditCitationRow, type AuditReferenceMeta } from './citation-audit';
 
 /**
  * 引用体检回归（纯函数）。
@@ -118,5 +118,41 @@ describe('auditCitations', () => {
   it('结构化明细与文案同源（details[].message === issues[]）', () => {
     const r = auditCitations({ content: '正文 [1]', citations: [], references: [] });
     expect(r.details.map((d) => d.message)).toEqual(r.issues);
+  });
+
+  /**
+   * 残留未渲染标记（v1.9.1 新增判定）。
+   * 背景：citation-renderer 对越界锚点的降级产物是 [文献N]；此前 audit 只认
+   * [n]/[Ref:n]/【n】，把「引用全断」误报成「没有引用」（60 分假绿），
+   * 客观质量检查器也只在 >5000 字时才因零锚点报硬伤。
+   */
+  it('残留 [文献N] 被识别为红牌（渲染器自己的降级产物不再隐形）', () => {
+    const r = auditCitations({ content: '正文 [文献1] 与 [文献2]', citations: [], references: [] });
+    expect(r.anchorTotal).toBe(0);
+    expect(r.residualAnchors).toBe(2);
+    expect(r.score).toBeLessThanOrEqual(40); // 残留标记每处 −10 且上不封顶：2 处 ×2 种口径合计应远低于及格线
+    expect(r.issues.some((s) => s.includes('未渲染的引用标记'))).toBe(true);
+    expect(r.details.find((d) => d.code === 'residual-anchor')?.level).toBe('red');
+  });
+
+  it('正文未渲染的 [Ref:N] / [补充文献] 同样计入残留', () => {
+    const residuals = extractResidualAnchors('a [Ref:3] b [补充Ref:2] c [文献1] d [1] e [补充文献]');
+    expect(residuals).toContain('[Ref:3]');
+    expect(residuals).toContain('[补充Ref:2]');
+    expect(residuals).toContain('[文献1]');
+    expect(residuals).toContain('[补充文献]');
+    // 尾部块里的标记不计入（参考文献列表本身可能含 [N] 前缀样式，但 [文献N] 形态只出现在正文）
+    expect(extractResidualAnchors('正文 [文献1]\n\n## 参考文献\n[1] Foo')).toEqual(['[文献1]']);
+  });
+
+  it('有真实锚点 + 残留混合时：两种判定并列，分数双重惩罚', () => {
+    const r = auditCitations({
+      content: '正文 [1] 也提到 [文献3]',
+      citations: [cit('c1', 'r1')],
+      references: [ref('r1')],
+    });
+    expect(r.anchorTotal).toBe(1);
+    expect(r.residualAnchors).toBe(1);
+    expect(r.score).toBe(90); // 100 − 残留 10
   });
 });

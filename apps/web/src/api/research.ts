@@ -177,8 +177,12 @@ export const research = {
       request<QualityWeightItem[]>('/api/customization/quality-weights', { method: 'POST', body: JSON.stringify({ weights }) }),
     getJudgmentMode: () => request<{ mode: string }>('/api/customization/judgment-mode'),
     setJudgmentMode: (mode: string) => request<{ mode: string }>('/api/customization/judgment-mode', { method: 'POST', body: JSON.stringify({ mode }) }),
-    getPipelineSettings: () => request<{ researchDepth: number }>('/api/customization/pipeline-settings'),
-    setPipelineSettings: (patch: { researchDepth?: number }) =>
-      request<{ researchDepth: number }>('/api/customization/pipeline-settings', { method: 'POST', body: JSON.stringify(patch) }),
+    getPipelineSettings: () =>
+      request<{ researchDepth: number; tokenBudget: number; retrievalRerank: boolean; webSearch: boolean }>('/api/customization/pipeline-settings'),
+    setPipelineSettings: (patch: { researchDepth?: number; tokenBudget?: number; retrievalRerank?: boolean; webSearch?: boolean }) =>
+      request<{ researchDepth: number; tokenBudget: number; retrievalRerank: boolean; webSearch: boolean }>(
+        '/api/customization/pipeline-settings',
+        { method: 'POST', body: JSON.stringify(patch) },
+      ),
   },
 };

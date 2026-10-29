@@ -2,6 +2,47 @@
 
 本项目格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，语义化版本号。以下按 `git log` 自底向上归纳历轮功能与修复，未含真实密钥。
 
+## [1.9.1] - 2026-10-29
+
+第二轮「宣称 vs 实现」审计（全路由真实探针 97 条 + 静态接线扫描）修复批次。
+方法：不是看代码写了什么，而是对每个路由发真实 HTTP、对每个配置项追读写两端。
+
+### Fixed
+- **「研究缺口」功能全量不可用（P0）**：`POST /api/references/gap` 用 `@Body('projectId')`
+  逐字段取参，而全局 `InputValidationPipe` 对 body 入参要求「必须是 JSON 对象」——
+  管道收到的是 **string**，于是无条件 400。前端按钮永远失败，且回归脚本没覆盖该路由，
+  缺陷存在两个版本未被发现。修复：管道放行标量（那是 `@Body('x')` 的合法语义），
+  控制器改整对象取参 + 显式校验；回归新增 27.9 断言。
+- **空文献池产出的「伪引用」全链路隐形（P0）**：引用渲染器把越界锚点降级为 `[文献N]`，
+  但引用体检只认 `[n]/[Ref:n]/【n】`、客观质量检查器只认 `[数字]`——于是「引用全断」
+  被报成「没有引用」（60 分），正文里全是读者无法溯源的伪引用却不触发任何硬伤
+  （实测同一稿体检 60 分、客观 77 分、0 硬伤）。修复链：
+  ① 起草 prompt 空池时显式禁用引用标记（此前两条指令自相矛盾，模型只能编造）；
+  ② 引用体检新增 `residualAnchors` 红牌判定（每处 −10 不封顶，落库为空再 −60）；
+  ③ 客观检查器把 `[文献N]/[Ref:N]/[补充文献]` 计入占位硬伤（封顶 40）。
+  回归新增 27.6/27.7。
+- **三个配置项「文档说有、设置里没有」**：`pipeline_token_budget` / `retrieval_rerank` /
+  `websearch_in_pipeline` 此前只能改库或环境变量——预算耗尽的报错让用户「到设置中调整」，
+  `docs/CONFIGURATION.md` 也声称「设置页 websearch_in_pipeline」，实际 UI 无此开关。
+  修复：并入 `GET/POST /api/customization/pipeline-settings`（四元组：深度/预算/重排/联网），
+  设置页「流水线步骤与运行参数」面板新增三项控件；预算缺省口径与流水线统一为 300k。
+
+### Changed
+- 静态 `openapi.json` 重新生成：v1.4.0/147 paths → **v1.9.0/151 paths**（补齐
+  objective-audit / pipeline rerun / references discover / quality project-overview），
+  前端类型定义 `openapi.d.ts` 同步。
+
+### Fixed (2)
+- **mock 网关缺「扩展资产生成器」路由**：`extension.generate`（一键 AI 生成资产）在 mock 模式下
+  必然 JSON 解析失败——该功能在 CI/验收里从未被端到端冒烟过。补 mock 路由后探针 96/96 全绿。
+  教训：匹配特征必须取自 **user message**（`getLastUserContent` 只看最后一条 user），
+  首版用 system 消息里的「资产生成器」做特征，永远不命中。
+
+### Tests
+- server 320（+8：input-validation.pipe 5 条、citation-audit 残留 3 条）
+- 回归 223 → **232**（新增 27.6/27.7/27.8a-f/27.9 共 9 条，全部针对本轮修复）
+- 探针脚本 `scripts/route_probe.py`（96 条真实请求）入库，供后续审计复用；当前 **0 失败**
+
 ## [1.9.0] - 2026-10-29
 
 这次不是加功能，而是**把宣称的能力真正接通**：审计发现三处「文档说有、代码里没有」的假象——

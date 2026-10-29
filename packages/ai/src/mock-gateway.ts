@@ -97,6 +97,34 @@ const ROUTE_TABLE: RouteRule[] = [
   { matches: (p) => p.includes('反共识') && p.includes('"primary"'), respond: () => j({ primary: MOCK_OUTLINE, variants: [{ title: '主流范式的系统性缺陷：对消息传递统一框架的质疑', sections: [{ title: '引言：被掩盖的失败案例', subsections: ['主流叙事如何形成'] }, { title: '消息传递的表达力上界', subsections: ['理论反例'] }, { title: '反例与边界条件', subsections: ['异质图失效场景'] }, { title: '重构研究议程', subsections: ['超越消息传递'] }] }, { title: '以负结果为中心的图神经网络研究断代史', sections: [{ title: '引言：负结果的认识论价值', subsections: [] }, { title: '第一次浪潮及其退潮', subsections: ['谱方法为何沉寂'] }, { title: '断代框架', subsections: ['按学派论战重组'] }, { title: '对未来的启示', subsections: [] }] }] }) },
   // 1.6) F3 实验设计助手
   { matches: (p) => p.includes('实验设计') && p.includes('"sampleHint"'), respond: () => j({ objective: '验证时序感知聚合相对均匀采样能显著提升动态图节点分类性能', variables: { independent: ['邻居采样是否引入时序衰减因子（有/无）'], dependent: ['节点分类 Macro-F1'], controlled: ['训练轮数=200', '隐藏维度=64', '数据集划分固定种子'] }, groups: [{ name: '实验组', role: 'treatment', description: '时序感知采样聚合' }, { name: '对照基线', role: 'control', description: '标准 GraphSAGE 均匀采样' }], sampleHint: '每配置 5 个随机种子，报均值±标准差；配对 t 检验 α=0.05，power≥0.8', procedure: ['固定数据集与划分', '训练实验组与对照组', '汇总指标并做显著性检验'], analysisPlan: ['主指标 Macro-F1 对比表', '消融：去掉时序衰减因子'], risks: ['动态图数据集规模有限，方差可能偏大'] }) },
+  // 1.8) 扩展中心一键 AI 生成（资产生成器）：此前无路由，走默认兜底返回普通文本，
+  // 导致 extension.generate 在 mock 模式（CI/验收）必然 JSON 解析失败——该功能从未被端到端冒烟过。
+  // 注意：匹配特征必须取自 **user message**（ getLastUserContent 只看最后一条 user），
+  // 「资产生成器」在 system 消息里，用它匹配永远不命中。
+  {
+    matches: (p) => p.includes('资产类型：') && p.includes('输出 JSON 示例结构'),
+    respond: (p) => {
+      const kind = /资产类型：(\w+)/.exec(p)?.[1] || 'skill';
+      const brief = /用户需求：([\s\S]*?)\n\n输出 JSON/.exec(p)?.[1]?.trim() || '探针技能';
+      if (kind === 'skill') {
+        return j({
+          kind: 'skill',
+          name: '探针技能（mock）',
+          description: brief.slice(0, 100),
+          manifest: { mode: 'prompt', instructions: '按以下步骤执行：\n1. 明确输入与预期输出\n2. 分三步完成：定位→比对→归纳\n3. 输出结构化结论，不确定处显式标注\n拒答边界：资料不足时说明缺口，不编造。' },
+        });
+      }
+      if (kind === 'role') {
+        return j({
+          kind: 'role',
+          name: '探针角色（mock）',
+          description: brief.slice(0, 100),
+          manifest: { systemPrompt: '你是严谨的科研方法学顾问：先澄清问题，再给可执行建议，并标注不确定性。' },
+        });
+      }
+      return j({ kind, name: `探针${kind}（mock）`, description: brief.slice(0, 100), manifest: {} });
+    },
+  },
   // 2) 论文大纲
   { matches: (p) => p.includes('设计论文大纲') && p.includes('"sections"'), respond: () => j(MOCK_OUTLINE) },
   // 3) ReAct 思考步 —— 一律 done

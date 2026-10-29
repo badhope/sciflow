@@ -50,6 +50,7 @@ export interface CitationAuditIssue {
     | 'anchor-gap'
     | 'missing-doi'
     | 'metadata-conflict'
+    | 'residual-anchor'
     | 'no-anchor'
     | 'ok';
   message: string;
@@ -70,6 +71,10 @@ export interface CitationAuditReport {
   duplicateDoi: string[];
   noDoi: number;
   ghost: number;
+  /** 正文残留的未渲染引用标记数（[文献N] / [Ref:N] / [补充Ref:N]）——渲染链路断裂的物证 */
+  residualAnchors: number;
+  /** 残留标记样本（去重，最多 10 条），供 UI 定位 */
+  residualSamples: string[];
   score: number;
   /** 面向用户的文案（保持字符串数组的历史契约，前端/回归脚本无需改） */
   issues: string[];
@@ -103,6 +108,23 @@ export function extractAnchorNumbers(content: string, tailHeadings?: string[]): 
     if (n > 0) nums.add(n);
   }
   return [...nums].sort((a, b) => a - b);
+}
+
+/**
+ * 提取正文残留的「未渲染引用标记」。
+ *
+ * 背景：`citation-renderer` 把越界锚点降级为 `[文献N]`（不静默丢弃）；而渲染失败的
+ * 另一常见形态是模型直接输出 `[Ref:N]` 但渲染器根本没跑（如手写正文）。
+ * 这两类标记在「报告」语义上是「这条引用没有着落」，但在正文中看起来像引用——
+ * 审计若不识别它们，就会把「引用全断」误报成「没有引用」（假绿 60 分）。
+ */
+export function extractResidualAnchors(content: string, tailHeadings?: string[]): string[] {
+  const body = splitBodyForAudit(content, tailHeadings);
+  const out: string[] = [];
+  for (const m of body.matchAll(/\[\s*文献\s*\d{1,3}\s*\]/g)) out.push(m[0].replace(/\s+/g, ''));
+  for (const m of body.matchAll(/\[\s*(?:补充)?\s*Ref\s*[:：]\s*\d{1,3}\s*\]/gi)) out.push(m[0].replace(/\s+/g, ''));
+  for (const m of body.matchAll(/\[\s*补充文献\s*\]/g)) out.push(m[0].replace(/\s+/g, ''));
+  return out;
 }
 
 /**
@@ -164,7 +186,22 @@ export function auditCitations(input: CitationAuditInput): CitationAuditReport {
   }
   const conflictDois = [...titleByDoi.entries()].filter(([, titles]) => titles.size > 1).map(([doi]) => doi);
 
+  // 残留未渲染标记（[文献N] / [Ref:N] / [补充文献]）：引用渲染链路断裂的物证。
+  // 单独统计是因为 audit 之前的口径只认 [n]/[Ref:n]/【n】三类锚点，
+  // 而渲染器自己产出的降级形态 [文献N] 不在其中 → 「引用全断」被误报成「没有引用」。
+  const residualSamples = extractResidualAnchors(input.content, input.tailHeadings);
+  const residualAnchors = residualSamples.length;
+
   const issues: CitationAuditIssue[] = [];
+  if (residualAnchors > 0) {
+    const uniq = [...new Set(residualSamples)];
+    issues.push({
+      level: 'red',
+      code: 'residual-anchor',
+      message: `红牌：${residualAnchors} 处未渲染的引用标记（${uniq.slice(0, 4).join(' ')}${uniq.length > 4 ? ' …' : ''}）——引用渲染未覆盖或锚点越界，读者会看到无法溯源的伪引用`,
+      items: uniq.slice(0, 10),
+    });
+  }
   if (ghost > 0) {
     issues.push({
       level: 'red',
@@ -220,7 +257,7 @@ export function auditCitations(input: CitationAuditInput): CitationAuditReport {
     issues.push({ level: 'yellow', code: 'missing-doi', message: `黄牌：${noDoi} 条已绑定引用无 DOI，可信度待核` });
   }
 
-  const noAnchors = anchors.length === 0;
+  const noAnchors = anchors.length === 0 && residualAnchors === 0;
   if (noAnchors) {
     issues.push({
       level: 'info',
@@ -232,16 +269,20 @@ export function auditCitations(input: CitationAuditInput): CitationAuditReport {
   }
 
   const base = noAnchors ? 60 : 100;
+  // 「引用断链」按性质重罚：残留标记每处 −10（不封顶，出现越多说明渲染链路断得越彻底）；
+  // 落库引用为空但正文有锚点（含残留伪锚点）再 −60 —— 与历史「有锚点空表」口径一致。
+  const brokenChain = rows.length === 0 && (anchors.length > 0 || residualAnchors > 0) ? 60 : 0;
   const score = Math.max(
     0,
     Math.min(
       100,
       base -
         ghost * 20 -
-        (rows.length === 0 && anchors.length > 0 ? 60 : 0) -
+        brokenChain -
         noDoi * 5 -
         Math.min(20, uncitedCount * 5) -
-        Math.min(10, duplicateDoi.length * 5),
+        Math.min(10, duplicateDoi.length * 5) -
+        residualAnchors * 10,
     ),
   );
 
@@ -255,6 +296,8 @@ export function auditCitations(input: CitationAuditInput): CitationAuditReport {
     duplicateDoi,
     noDoi,
     ghost,
+    residualAnchors,
+    residualSamples,
     score,
     issues: issues.map((i) => i.message),
     details: issues,

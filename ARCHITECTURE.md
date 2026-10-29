@@ -151,6 +151,22 @@
 | 9 | **对话入口**：MCP 工具 `extension.list/create/toggle/generate`；`extension.list` 对模型同样过滤 private（外部客户端不掌握私有资产清单） | `mcp.service.ts` · `agent-tool-bridge.ts` allowlist | 实测 MCP 工具数 23 且含 4 个 extension.* |
 | 10 | **CLI 对等**：`sciflow ext list|toggle|import|export|reset`，与 Web/对话同一 REST 服务 | `apps/server/src/config/config-cli.ts registerExtensionCommands` | CLI 实测 list/toggle/import/export |
 
+## §2.24 v1.9.1 全路由探针与接线真实性契约（2026-10-29）
+
+第二轮审计的方法论：**不看代码写了什么，看运行时真实发生什么**。工具：`scripts/route_probe.py`
+（97 条真实 HTTP 探针，入库可复跑）+ 读写两端扫描（app_setting / env / 前端 API 路径 vs OpenAPI）。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **全局输入管道不得误杀标量**：Nest 的 `@Body('field')` 逐字段取参会把 string 传给管道；管道若强制「必须是对象」，所有逐字段取参的端点全量 400。规则：标量放行、数组仍拒绝 | `common/input-validation.pipe.ts` · `references.controller.ts gap` | `input-validation.pipe.spec.ts` 5 条 + 回归 27.9 |
+| 2 | **新控制器禁止 `@Body('x')` 逐字段取参**（与管道语义强耦合）：一律 `@Body() body: {...}` + 显式校验 | 全部 controller | 代码审阅 |
+| 3 | **引用渲染器的降级产物必须可审计**：`[文献N]`（越界降级）与未渲染的 `[Ref:N]`/`[补充文献]` 是「引用断链」的物证，体检必须红牌（`residualAnchors`，每处 −10 不封顶；落库为空再 −60），客观检查器必须计硬伤（占位封顶 40） | `packages/core/src/citation-audit.ts` · `quality-audit.ts` | 回归 27.6/27.7 + citation-audit.spec 3 条 |
+| 4 | **起草 prompt 不得自相矛盾**：文献池为空时必须显式禁用引用标记（此前要求 `[Ref:编号]` 又给「（无可用文献）」，模型只能编造） | `packages/ai/src/prompts.ts DRAFT_SECTION` | prompt 分支 hasRefs 两侧文案 |
+| 5 | **配置三处可达性**：`pipeline_token_budget` / `retrieval_rerank` / `websearch_in_pipeline` 必须经 `GET/POST /api/customization/pipeline-settings` 读写，设置页有对应控件；禁止「报错让用户去设置，设置里却没有」 | `customization.service.ts` · `SettingsPage.tsx PipelineEditor` | 回归 27.8a-f |
+| 6 | **预算缺省口径单一**：键不存在 = 300k（与 `trackBudget` 一致），存在时 0 = 不限；两处读数不得分叉 | `customization.service.ts` vs `pipeline.service.ts` | 回归 27.8b |
+| 7 | **静态 OpenAPI 契约必须随版本再生**：`openapi.json` / `openapi.d.ts` 落后 5 个小版本（1.4.0→1.9.0）属于文档失真；发版前必须 `pnpm openapi:gen` | `openapi.json` · `apps/web/src/api/openapi.d.ts` | version 字段 = package version |
+| 8 | **审计手段入库**：`scripts/route_probe.py` 是全路由真实探针（建项目/文档/文献 → GET 全量 → POST 写操作），新路由合入时同步补探针 | `scripts/route_probe.py` | 本轮 97 条全通过 |
+
 ## §2.23 v1.9 检索链路真实性、模块边界与引用体检契约（2026-10-29）
 
 本轮做的是「把宣称的能力真正接通」，而不是加功能。三条历史假象被修掉：向量检索从未产出过向量、

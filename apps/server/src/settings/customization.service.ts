@@ -5,6 +5,7 @@ import { db } from '../db/database';
 import { appSettings, customIntents, customPrompts, pipelineConfigs } from '../db/schema';
 import { parseJson } from '../common/json-guard';
 import { PIPELINE_STEPS } from '../common/pipeline-steps';
+import { isWebSearchEnabled } from '../pipeline/pipeline-websearch';
 
 /** 高度自定义：意图库 + 提示词 用户可配置（系统默认仅作兜底） */
 
@@ -95,21 +96,58 @@ export class CustomizationService {
     return { ok: true };
   }
 
-  // ---------- 流水线运行参数（研究深度） ----------
-  /** 研究深度 1-3：literature 节点按轮递归检索的轮数（app_setting pipeline_research_depth） */
+  // ---------- 流水线运行参数（研究深度 / token 预算 / 检索重排 / 联网检索） ----------
+  /**
+   * 运行参数读取（v1.9.1 扩展）。
+   *
+   * 历史缺口：`pipeline_token_budget` / `retrieval_rerank` / `websearch_in_pipeline`
+   * 此前**只能改库或环境变量**——流水线预算耗尽的报错让用户「到设置中调整」，
+   * 但设置里根本没有这一项；docs/CONFIGURATION.md 也声称「设置页 websearch_in_pipeline」。
+   * 这里把三者并入唯一的设置接口，让声明真正可达。
+   */
   getPipelineSettings() {
-    const row = db.select().from(appSettings).where(eq(appSettings.key, 'pipeline_research_depth')).get();
-    const n = Math.floor(Number(row?.value));
-    return { researchDepth: Number.isFinite(n) ? Math.max(1, Math.min(3, n)) : 1 };
+    const read = (key: string): string => {
+      try {
+        return db.select().from(appSettings).where(eq(appSettings.key, key)).get()?.value ?? '';
+      } catch {
+        return '';
+      }
+    };
+    const depthRaw = Math.floor(Number(read('pipeline_research_depth')));
+    // 预算缺省口径必须与 PipelineService.trackBudget 一致：键不存在 = 300k；存在时 0 = 不限
+    const budgetKey = read('pipeline_token_budget');
+    const budgetRaw = budgetKey === '' ? 300_000 : Math.floor(Number(budgetKey));
+    return {
+      researchDepth: Number.isFinite(depthRaw) ? Math.max(1, Math.min(3, depthRaw)) : 1,
+      // 0 = 不限（与 PipelineService.trackBudget 的口径一致）
+      tokenBudget: Number.isFinite(budgetRaw) && budgetRaw >= 0 ? budgetRaw : 300_000,
+      retrievalRerank: read('retrieval_rerank') === 'on' || process.env.RETRIEVAL_RERANK === 'on',
+      webSearch: isWebSearchEnabled((k) => read(k)),
+    };
   }
 
-  setPipelineSettings(patch: { researchDepth?: number }) {
+  setPipelineSettings(patch: { researchDepth?: number; tokenBudget?: number; retrievalRerank?: boolean; webSearch?: boolean }) {
+    const upsert = (key: string, value: string) => {
+      const existing = db.select().from(appSettings).where(eq(appSettings.key, key)).get();
+      if (existing) db.update(appSettings).set({ value }).where(eq(appSettings.key, key)).run();
+      else db.insert(appSettings).values({ key, value }).run();
+    };
     if (patch.researchDepth !== undefined) {
       const n = Math.floor(Number(patch.researchDepth));
       if (!Number.isFinite(n) || n < 1 || n > 3) throw new BadRequestException('研究深度需为 1-3 的整数');
-      const existing = db.select().from(appSettings).where(eq(appSettings.key, 'pipeline_research_depth')).get();
-      if (existing) db.update(appSettings).set({ value: String(n) }).where(eq(appSettings.key, 'pipeline_research_depth')).run();
-      else db.insert(appSettings).values({ key: 'pipeline_research_depth', value: String(n) }).run();
+      upsert('pipeline_research_depth', String(n));
+    }
+    if (patch.tokenBudget !== undefined) {
+      const n = Math.floor(Number(patch.tokenBudget));
+      // 上限 100M：防止把「不限」误填成超大数导致前端进度条溢出
+      if (!Number.isFinite(n) || n < 0 || n > 100_000_000) throw new BadRequestException('token 预算需为 0-100000000 的整数（0=不限）');
+      upsert('pipeline_token_budget', String(n));
+    }
+    if (patch.retrievalRerank !== undefined) {
+      upsert('retrieval_rerank', patch.retrievalRerank ? 'on' : 'off');
+    }
+    if (patch.webSearch !== undefined) {
+      upsert('websearch_in_pipeline', patch.webSearch ? 'on' : 'off');
     }
     return this.getPipelineSettings();
   }
