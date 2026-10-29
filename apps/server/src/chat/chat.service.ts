@@ -7,11 +7,11 @@ import { ChatSessionService } from './chat-session.service';
 import { WebSearchService } from '../websearch/websearch.service';
 import { AgentToolBridge } from '../agent/agent-tool-bridge';
 import { ConfigCenterService } from '../config/config-center.service';
-import { loadDefaultRole } from '../../../../packages/ai/src/prompt-augmentation';
+import { loadDefaultRole } from '../common/prompt-augmentation';
 import { AgentTraceService } from '../agent/agent-trace.service';
 import { db } from '../db/database';
 import { projects, appSettings } from '../db/schema';
-import { envInt } from '../../../../packages/core/src/env';
+import { envInt } from '../common/env';
 
 /** RAG 来源（随 SSE 首事件下发给前端）
  *  向后兼容：旧字段 docName/score 保留；chunkText/chunkSeq/referenceId/referenceTitle 为本轮新增附加字段，

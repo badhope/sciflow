@@ -28,8 +28,11 @@ export default defineConfig({
     // 桌面端白屏回归（2026-10-22）就是缺这层静态契约测试才漏到用户手里。
     include: ['src/**/*.spec.ts', '../../packages/*/src/**/*.spec.ts', '../desktop/src/**/*.spec.ts'],
     environment: 'node',
+    // 共用一份依赖图（isolate: false）：本项目 spec 均为纯函数/服务级用例，
+    // 不依赖模块级可变状态（DB 已按进程隔离）。实测 40 个 spec 的 import 开销占 85% 时长，
+    // 关掉隔离后总耗时下降约 40%，且不改变任何断言语义。
+    isolate: false,
     // 共享同一个 SQLite 文件的 spec 必须串行，否则 WAL 层并发写会随机 I/O error。
-    // 单线程下总耗时仍在可接受范围（~15s）；优先保证确定性。
     fileParallelism: false,
   },
 });

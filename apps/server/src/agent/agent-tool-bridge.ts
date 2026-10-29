@@ -7,7 +7,7 @@ import { db } from '../db/database';
 import { appSettings, llmCallLogs } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { envInt } from '../../../../packages/core/src/env';
+import { envInt } from '../common/env';
 
 /**
  * Agent 工具桥：把 SciFlow 的 MCP 工具（科研能力 + 配置中心）暴露给模型，形成真正的 tool-calling 链路。

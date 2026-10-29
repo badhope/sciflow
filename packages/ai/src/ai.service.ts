@@ -8,6 +8,9 @@ import { AiTransportService, ChatMessage, ChatStreamOptions } from './ai-transpo
 import { startMockGateway } from './mock-gateway';
 import { jsonrepair } from 'jsonrepair';
 import { parseJson } from '../../core/src/json-guard';
+import { embedMany } from 'ai';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
 /**
  * 统一 AI 服务（domain 编排层）
@@ -525,6 +528,43 @@ ${response}`
   }
 
   /** 研究缺口定位（zod 结构化校验） */
+  /**
+   * 远程文本嵌入（OpenAI 兼容 /embeddings；也兼容 Anthropic、Gemini 的嵌入端点）。
+   *
+   * 为什么放在这一层：向量检索此前只有本地 GGUF 一条路（且调用了不存在的 API，
+   * 实际从未产出向量）。绝大多数用户已经配了云端模型 Key，`/embeddings` 是同厂商
+   * 的附带能力，零额外配置即可让「向量 + 全文」混合检索真正跑起来。
+   * 维度契约由调用方（EmbeddingService）守：这里只负责把向量原样返回，不做截断。
+   */
+  async embedTexts(texts: string[], opts: { model?: string } = {}): Promise<number[][] | null> {
+    if (!texts.length) return [];
+    if (this.mockMode) return null; // mock 网关不实现 /embeddings，直接降级全文检索
+    const modelId = opts.model || process.env.EMBEDDING_API_MODEL || this.config.model;
+    if (!modelId) return null;
+    const embeddingModel = this.buildEmbeddingModel(this.protocol, this.baseUrl, this.apiKey, modelId);
+    if (!embeddingModel) return null;
+    const { embeddings } = await embedMany({ model: embeddingModel, values: texts, maxRetries: 1 });
+    return embeddings.map((e) => Array.from(e as unknown as ArrayLike<number>));
+  }
+
+  /** 按协议构造 embedding 模型（与 chat 侧同一套协议判定，避免第二套映射表） */
+  protected buildEmbeddingModel(
+    protocolValue: string,
+    baseUrl: string,
+    apiKey: string,
+    modelId: string,
+  ): Parameters<typeof embedMany>[0]['model'] | null {
+    const base = String(baseUrl || '').replace(/\/+$/, '');
+    if (protocolValue === 'anthropic-messages') {
+      // Anthropic Messages 协议本身不提供 /embeddings（官方 SDK 的 textEmbeddingModel 返回 never）。
+      // 返回 null → 调用方降级全文检索，不做「假装支持」的静默失败。
+      return null;
+    }
+    if (protocolValue === 'google-gemini') {
+      return createGoogleGenerativeAI({ name: 'sciflow', baseURL: base, apiKey }).textEmbeddingModel(modelId);
+    }
+    return createOpenAICompatible({ name: 'sciflow', baseURL: base, apiKey }).textEmbeddingModel(modelId);
+  }
   /**
    * B-3.3 可选 LLM 重排：对融合检索的候选块按问题相关性打分（0-10）。
    * 开关 app_setting retrieval_rerank（默认 off）——重排多一次 LLM 调用，仅高质量问答场景开启。

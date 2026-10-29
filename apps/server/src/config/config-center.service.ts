@@ -13,7 +13,7 @@ import {
   type ConfigCategory, type PermissionMode, type PermissionDecision,
 } from './permission';
 import { CONFIG_PRESETS, SEED_CONSTRAINTS, SEED_HOOKS, SEED_ROLE, type ConfigPreset } from './config-presets';
-import { hookMatchesKeywords, loadPromptAugmentation } from '../../../../packages/ai/src/prompt-augmentation';
+import { hookMatchesKeywords, loadPromptAugmentation } from '../common/prompt-augmentation';
 
 export interface RoleRow {
   id: string; name: string; systemPrompt: string; isDefault: number; enabled: number; createdAt: number; updatedAt: number;

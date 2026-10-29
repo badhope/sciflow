@@ -4,7 +4,8 @@ import { AiService } from '../ai/ai.service';
 import { DB_PATH, sqlite, vecLoaded } from '../db/database';
 import { encryptSecret, decryptSecret } from '../common/secret-crypto';
 import { allowPrivateOutbound, checkOutboundUrl } from '../common/outbound-guard';
-import { fetchModelCatalog, normalizeProtocol, type DiscoveredModel } from '../../../../packages/ai/src/model-catalog';
+import { fetchModelCatalog, normalizeProtocol, type DiscoveredModel } from '../common/model-catalog';
+import { EmbeddingService } from '../knowledge/embedding.service';
 
 export interface AppSettings {
   ai: {
@@ -91,7 +92,10 @@ function parseModelsJson(raw: unknown): DiscoveredModel[] {
 export class SettingsService {
   private modelsCache: { at: number; models: string[] } | null = null;
 
-  constructor(private readonly ai: AiService) {}
+  constructor(
+    private readonly ai: AiService,
+    private readonly embedding: EmbeddingService,
+  ) {}
 
   async getSettings(): Promise<AppSettings> {
     let models: string[] = [];
@@ -132,7 +136,8 @@ export class SettingsService {
     // 检索栈能力：向量扩展 / 嵌入模型 / 全文索引，逐项给出「可用 or 降级原因 + 修复指引」
     const retrieval = (() => {
       const vector = vecLoaded;
-      const model = Boolean(process.env.EMBEDDING_MODEL_PATH);
+      const emb = this.embedding.status();
+      const model = emb.backend !== 'none';
       const fts = (() => {
         try {
           sqlite.prepare("SELECT rowid FROM knowledge_chunk_fts LIMIT 1").get();
@@ -143,9 +148,17 @@ export class SettingsService {
       })();
       const notes: string[] = [];
       if (!vector) notes.push('sqlite-vec 扩展未加载：向量检索将降级为全文检索（排查 SCIFLOW_NO_VEC / 原生扩展兼容性）');
-      if (!model) notes.push('未配置本地嵌入模型：仅使用全文检索（设置 EMBEDDING_MODEL_PATH 指向 GGUF 文件即可启用语义检索）');
+      if (!model) {
+        notes.push(
+          '嵌入后端不可用：仅使用全文检索。可二选一启用语义检索——① 放置 384 维 GGUF（bge-small-zh-v1.5）并设 EMBEDDING_MODEL_PATH；② 已配置模型 Key 时设 EMBEDDING_PROVIDER=api 走厂商 /embeddings',
+        );
+      } else if (emb.backend === 'api') {
+        notes.push('嵌入后端：远程 /embeddings（沿用当前模型厂商的 baseURL 与 Key），无需本地模型文件');
+      } else {
+        notes.push(`嵌入后端：本地 GGUF（${emb.modelPath}，${emb.dimension} 维）`);
+      }
       if (!fts) notes.push('全文索引表不可用：检索会回退 LIKE 扫描，长文档下速度较慢');
-      return { vector, embeddingModel: model, fullText: fts, ok: fts, notes };
+      return { vector, embeddingModel: model, embeddingBackend: emb.backend, fullText: fts, ok: fts, notes };
     })();
     return {
       database: { ok: dbOk, path: DB_PATH },

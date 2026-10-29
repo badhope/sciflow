@@ -391,14 +391,32 @@ export function QualityPage({ project }: { project: Project }) {
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">引用体检</span>
             <Badge tone={audit.score >= 80 ? 'green' : audit.score >= 50 ? 'amber' : 'red'}>{audit.score}/100</Badge>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs mb-2">
             <div className="p-2 rounded-md bg-slate-50 dark:bg-slate-900">锚点 {audit.anchorTotal}</div>
             <div className="p-2 rounded-md bg-slate-50 dark:bg-slate-900">落库 {audit.citationRows}</div>
             <div className="p-2 rounded-md bg-slate-50 dark:bg-slate-900 text-rose-600 dark:text-rose-400">幽灵 {audit.ghost}</div>
             <div className="p-2 rounded-md bg-slate-50 dark:bg-slate-900 text-amber-600 dark:text-amber-400">无 DOI {audit.noDoi}</div>
+            <div className="p-2 rounded-md bg-slate-50 dark:bg-slate-900 text-amber-600 dark:text-amber-400">未引用 {audit.uncitedCount ?? 0}</div>
+            <div className="p-2 rounded-md bg-slate-50 dark:bg-slate-900 text-amber-600 dark:text-amber-400">重复 DOI {audit.duplicateDoi?.length ?? 0}</div>
           </div>
+          {!!audit.missingAnchors?.length && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 mb-1">锚点断号：{audit.missingAnchors.slice(0, 20).join(', ')}{audit.missingAnchors.length > 20 ? ' …' : ''}</p>
+          )}
           <ul className="text-xs space-y-1">
-            {audit.issues.map((it: string, i: number) => <li key={i} className="text-slate-600 dark:text-slate-300">· {it}</li>)}
+            {(audit.details?.length ? audit.details : audit.issues.map((message) => ({ level: 'info' as const, message }))).map((it, i) => (
+              <li
+                key={i}
+                className={
+                  it.level === 'red'
+                    ? 'text-rose-600 dark:text-rose-400'
+                    : it.level === 'yellow'
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-slate-600 dark:text-slate-300'
+                }
+              >
+                · {it.message}
+              </li>
+            ))}
           </ul>
         </Card>
       )}

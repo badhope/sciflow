@@ -3,7 +3,7 @@ import { eq, desc, and, gte } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
 import { qualityReports, reviewComments, documents, citations } from '../db/schema';
-import { checkPaperQuality } from '../../../../packages/core/src/quality-audit';
+import { checkPaperQuality } from '../common/quality-audit';
 import { AiService, ReviewResult } from '../ai/ai.service';
 import { parseJson } from '../common/json-guard';
 

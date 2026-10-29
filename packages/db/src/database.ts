@@ -182,6 +182,10 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_project ON knowledge_doc(project_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_doc ON knowledge_chunk(doc_id);
 CREATE INDEX IF NOT EXISTS idx_reflexion_task ON reflexion_log(task_id);
 CREATE INDEX IF NOT EXISTS idx_memory_type ON memory_log(type);
+CREATE INDEX IF NOT EXISTS idx_citation_reference ON citation(reference_id);
+CREATE INDEX IF NOT EXISTS idx_memory_project_created ON memory_log(project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pipeline_status ON pipeline_task(status);
+CREATE INDEX IF NOT EXISTS idx_document_project_updated ON document(project_id, updated_at DESC);
 CREATE TABLE IF NOT EXISTS model_provider (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -577,6 +581,9 @@ ensureColumn('reference', 'fingerprint', "TEXT DEFAULT ''");
 ensureColumn('reference', 'is_duplicate_of', "TEXT DEFAULT ''");
 // 路线图差距 #11：文献笔记
 ensureColumn('reference', 'notes', "TEXT DEFAULT ''");
+// v1.9 查询路径索引（必须在 fingerprint 列补齐之后建：老库里该列由上面的 ensureColumn 添加，
+// 若提前放在建表 DDL 里会因列不存在而整段事务失败）
+sqlite.exec('CREATE INDEX IF NOT EXISTS idx_reference_project_fp ON reference(project_id, fingerprint)');
 // 路线图差距 #22：项目级系统提示 projectPreface
 ensureColumn('project', 'preface', "TEXT DEFAULT ''");
 // 差距 #1：自定义大纲模板（JSON 字符串数组）；旧库补齐默认 '[]'

@@ -1,8 +1,11 @@
+import { lazy, Suspense } from 'react';
 import { BookOpenCheck, Download, GitCompareArrows, Lightbulb, ListChecks, Loader2, Network, Table2 } from 'lucide-react';
 import type { EvidenceResult, ExtractedPaper, PaperComparisonResult, ReferenceGraph, DeepDiveResult, GapResult, Reference } from '../../types';
 import { Badge, Button, Empty, Input, Select, Spinner } from '../../components/ui';
 import { SegBar } from '../../components/charts';
-import { ReferenceNetwork } from './ForceGraph';
+// 引用网络 = sigma.js + graphology + ForceAtlas2（WebGL，约 450KB）。
+// 只在用户切到「引用网络」标签时才下载；否则文献页首屏要多背一个渲染引擎。
+const ReferenceNetwork = lazy(() => import('./ForceGraph').then((m) => ({ default: m.ReferenceNetwork })));
 
 export type Tool = 'summary' | 'extract' | 'evidence' | 'deepdive' | 'gap' | 'compare' | 'graph';
 
@@ -370,10 +373,12 @@ export function LiteratureTools(props: LiteratureToolsProps) {
         ) : !graph || graph.nodes.length === 0 ? (
           <Empty text="暂无文献，先去文献调研页录入 / 导入 BibTeX；网络将按文档共引与去重关系自动布局" />
         ) : (
-          <ReferenceNetwork
-            graph={graph}
-            onViewRef={() => setTool('summary')}
-          />
+          <Suspense fallback={<Spinner label="加载引用网络引擎…" />}>
+            <ReferenceNetwork
+              graph={graph}
+              onViewRef={() => setTool('summary')}
+            />
+          </Suspense>
         )}
       </>
     );

@@ -11,6 +11,7 @@ import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import * as unpdf from 'unpdf';
 import { parseAuthors } from '../../core/src/authors';
 import { projectTo2D, blobToVector, downsampleIndices } from './projection';
+import { mmrSelect, normalizeScores } from './mmr';
 
 const CHUNK_SIZE = 800; // 每块约 800 字（段落聚合，与文档切分逻辑保持一致）
 const CHUNK_OVERLAP = 120; // 15% 重叠：块边界处上下文连续，RAG 检索质量关键参数（不可为 0）
@@ -181,9 +182,9 @@ export class KnowledgeService {
     return { id: docId, name, chunkCount: chunks.length, referenceId: referenceId || null };
   }
 
-  /** 为多段文本生成 embedding 数组（返回 Float32Array 序列化后的 Buffer；失败时对应位置为 null） */
+  /** 为多段文本生成 embedding（批量入口；失败位置为 null → 该块只有全文检索） */
   private async embedChunks(texts: string[]): Promise<(Buffer | null)[]> {
-    return Promise.all(texts.map((t) => this.embedding.embed(t)));
+    return this.embedding.embedBatch(texts);
   }
 
   /** 项目知识库列表：每条嵌入绑定文献的摘要（未绑定时 reference=null） */
@@ -370,10 +371,12 @@ export class KnowledgeService {
     // B-3.2：ANN(语义) + FTS5(词面) 双路并行召回 → RRF 融合（k=60）。
     // 单路失败自动退化为另一路；两路皆空回退 likeSearch 终极兜底。
     const recallK = topK * 2 + 5; // 双路超召回，融合后裁回 topK
-    const [qVec, ftsRows] = await Promise.all([
-      this.embedding.embed(question).catch(() => null),
-      Promise.resolve().then(() => this.ftsSearch(projectId, question, recallK)).catch(() => [] as any[]),
-    ]);
+    // annSearch 依赖 embed 结果，二者必须串行；但与 ftsSearch 可并行（原实现多等了一次 AN N 往返）
+    const embedPromise = this.embedding.embed(question).catch(() => null);
+    const ftsPromise = Promise.resolve()
+      .then(() => this.ftsSearch(projectId, question, recallK))
+      .catch(() => [] as any[]);
+    const [qVec, ftsRows] = await Promise.all([embedPromise, ftsPromise]);
     const annRows = qVec ? await this.annSearch(projectId, qVec, recallK).catch(() => [] as any[]) : [];
     const fused = KnowledgeService.rrfFuse(annRows, ftsRows);
     let rows = fused.length > 0 ? fused : this.likeSearch(projectId, question, topK);
@@ -393,7 +396,26 @@ export class KnowledgeService {
       }
     }
 
+    /**
+     * MMR 去冗余：同一文档的相邻块（800 字切分 + 15% 重叠）在 RRF 里天然霸榜，
+     * 直接取 topK 会让「5 条来源」变成同一段话的 5 个切片，生成端拿不到互补信息。
+     * 这里在融合后做一次多样性重排（零 LLM 成本，默认 λ=0.7 偏相关性）。
+     */
     const topScore = rows[0]?.rrf || 1 / 61;
+    if (rows.length > topK) {
+      const relList = normalizeScores(rows.slice(0, 40).map((r) => Number(r.rrf ?? 1 / 61)));
+      const chosen = mmrSelect(
+        rows.slice(0, 40).map((r, i) => ({
+          id: String(r.chunk_id),
+          relevance: relList[i],
+          text: String(r.content || ''),
+          row: r,
+        })),
+        topK,
+        { lambda: 0.7 },
+      );
+      rows = chosen.map((c) => c.row);
+    }
     return rows
       .slice(0, topK)
       .map((row) => ({

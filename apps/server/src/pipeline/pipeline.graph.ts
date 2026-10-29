@@ -7,7 +7,7 @@ import { pipelineTasks, documents, reflexionLogs, memoryLogs, polishRecords, qua
 import type { Outline, PaperHit, QualityReport, ResearchPlan, ResearchTraceEntry, PipelineTaskRow } from './pipeline-state';
 import { splitTailBlock, stripTailBlocks } from './tail-blocks';
 import { parseAuthors } from '../common/authors';
-import { checkPaperQuality, type ObjectiveQualityReport } from '../../../../packages/core/src/quality-audit';
+import { checkPaperQuality, type ObjectiveQualityReport } from '../common/quality-audit';
 
 /**
  * 主流水线图（LangGraph）：

@@ -17,10 +17,14 @@ import {
 } from '../components/ui';
 import { HBar } from '../components/charts';
 import { useHotkeys } from '../lib/hotkeys';
+import { getWritingEditorHandle } from './writing/editor-handle';
 import { BottomTabs, ShellDrawer } from '../components/AppShell';
-import { WritingEditor, getWritingEditorHandle } from './writing/WritingEditor';
+// CodeMirror 6 与 react-markdown+KaTeX 是两个大依赖；写作页首屏只需要其中一半（编辑态或预览态）。
+// 用 lazy 拆成独立 chunk：编辑模式下不下载预览栈，预览模式下不下载 CodeMirror。
+// 编辑器句柄放在独立的轻量模块（editor-handle.ts），静态导入不引入 CodeMirror。
+const WritingEditor = lazy(() => import('./writing/WritingEditor').then((m) => ({ default: m.WritingEditor })));
+const WritingPreview = lazy(() => import('./writing/WritingPreview').then((m) => ({ default: m.WritingPreview })));
 import { OUTLINE_TEMPLATES } from './writing/outline-templates';
-import { WritingPreview } from './writing/WritingPreview';
 import { WritingCitations } from './writing/WritingCitations';
 import { WritingToolsPanel } from './writing/WritingToolsPanel';
 import { formatRefEntry } from './writing/citeStyles';
@@ -686,11 +690,13 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
 
   // 子组件插槽：预览区
   const previewSlot = (
-    <WritingPreview
-      content={content}
-      editorMode={editorMode}
-      exported={effectiveExported}
-    />
+    <Suspense fallback={<div className="flex-1 p-6 text-xs text-slate-400">预览引擎加载中…</div>}>
+      <WritingPreview
+        content={content}
+        editorMode={editorMode}
+        exported={effectiveExported}
+      />
+    </Suspense>
   );
 
   // 子组件插槽：引用管理
@@ -800,6 +806,7 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
           这样在 1024–1440 各档宽度下编辑器都不会被压缩。 */}
       <div className="writing-layout">
         <div className="writing-main">
+          <Suspense fallback={<div className="flex-1 p-6 text-xs text-slate-400">编辑器加载中…</div>}>
           <WritingEditor
             doc={doc}
             content={content}
@@ -824,6 +831,7 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
             onModeChange={setEditorMode}
             renderPreview={previewSlot}
           />
+          </Suspense>
         </div>
 
         <BottomTabs

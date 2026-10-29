@@ -801,7 +801,14 @@ export interface CitationAudit {
   noDoi: number;
   ghost: number;
   score: number;
+  /** v1.9 新增（可选，兼容旧后端） */
+  missingAnchors?: number[];
+  uncitedCount?: number;
+  duplicateDoi?: string[];
+  /** 面向用户的文案（历史字段） */
   issues: string[];
+  /** 结构化明细（分级着色与定位） */
+  details?: { level: 'red' | 'yellow' | 'info'; code: string; message: string; items?: (string | number)[] }[];
 }
 
 /** B-5.2 网搜 provider 配置（/api/web/config；key 掩码回显，保存时传新值） */

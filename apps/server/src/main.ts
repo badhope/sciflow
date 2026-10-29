@@ -34,7 +34,8 @@ import { Logger } from 'nestjs-pino';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { InputValidationPipe } from './common/input-validation.pipe';
-import { envInt } from '../../../packages/core/src/env';
+import { envInt } from './common/env';
+import { APP_VERSION } from './common/version';
 
 async function bootstrap() {
   // ---------- 启动期安全闸：非回环绑定必须启用鉴权，否则拒绝启动 ----------
@@ -95,7 +96,12 @@ async function bootstrap() {
   // OpenAPI 契约：本地文档端点（/api/docs）+ 供 openapi-typescript 生成前端类型（pnpm openapi:gen）
   const openapiDoc = SwaggerModule.createDocument(
     app,
-    new DocumentBuilder().setTitle('SciFlow API').setDescription('本地优先科研工作台（单用户）').setVersion('0.8.1').build(),
+    new DocumentBuilder()
+      .setTitle('SciFlow API')
+      .setDescription('本地优先科研工作台（单用户）')
+      // 版本走 APP_VERSION 单一来源（历史：此处写死 0.8.1，包版本升到 1.x 后 OpenAPI 仍自报 0.8.1）
+      .setVersion(APP_VERSION)
+      .build(),
   );
   SwaggerModule.setup('api/docs', app, openapiDoc);
   // 全局输入校验（轻量兜底，零新增依赖）：仅约束 @Body() 为 JSON 对象，不剥字段、不误伤现有端点

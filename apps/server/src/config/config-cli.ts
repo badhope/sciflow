@@ -304,7 +304,7 @@ export function registerQualityCommands(program: Command, localApi: Api): void {
       let report: any;
       if (opts.file) {
         const { readFileSync } = await import('node:fs');
-        const { checkPaperQuality } = await import('../../../../packages/core/src/quality-audit');
+        const { checkPaperQuality } = await import('../common/quality-audit');
         const content = readFileSync(opts.file, 'utf-8');
         // 纯正文（列表由前端/导出渲染）文件：正文只有 [n] 锚点时不能据此判「无参考文献」硬伤。
         // 默认按 externalRefs 处理（引用维度按锚点计 8/20 并说明原因）；给了 --citations N 才逐条核对总数。

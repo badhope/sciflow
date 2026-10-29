@@ -151,6 +151,26 @@
 | 9 | **对话入口**：MCP 工具 `extension.list/create/toggle/generate`；`extension.list` 对模型同样过滤 private（外部客户端不掌握私有资产清单） | `mcp.service.ts` · `agent-tool-bridge.ts` allowlist | 实测 MCP 工具数 23 且含 4 个 extension.* |
 | 10 | **CLI 对等**：`sciflow ext list|toggle|import|export|reset`，与 Web/对话同一 REST 服务 | `apps/server/src/config/config-cli.ts registerExtensionCommands` | CLI 实测 list/toggle/import/export |
 
+## §2.23 v1.9 检索链路真实性、模块边界与引用体检契约（2026-10-29）
+
+本轮做的是「把宣称的能力真正接通」，而不是加功能。三条历史假象被修掉：向量检索从未产出过向量、
+模块边界规则从未命中、引用体检只查三类问题。以下契约禁止回退。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **嵌入必须真正可用**：`node-llama-cpp` 3.x 的 embedding 能力在 `model.createEmbeddingContext()` 返回的 `LlamaEmbeddingContext` 上（`LlamaContext` 没有该方法）。禁止在 `LlamaContext` 上调 `getEmbeddingFor`（历史缺陷：恒返回 null → 向量索引永远为空，「混合检索」实际只有 FTS5 单路） | `packages/retrieval/src/embedding.service.ts` | `retrieval-quality.spec.ts` 16 条 + 真实 /v1/embeddings 端点实测（embeddedChunks 从 0 变 1） |
+| 2 | **嵌入双后端**：`EMBEDDING_PROVIDER=auto`（默认）按「有 GGUF → local，否则 AI 已配置 → api」选择；`api` 走当前模型厂商的 `/embeddings`，零额外配置。Anthropic Messages 协议不提供 embeddings，必须返回 null 而不是伪装支持 | `embedding.service.ts` · `packages/ai/src/ai.service.ts embedTexts` · `knowledge.module.ts REMOTE_EMBEDDER` | `resolveEmbeddingBackend` 6 条单测 + health `capabilities.embeddingBackend` 实测为 api |
+| 3 | **维度守卫前置**：vec0 表固定 `FLOAT[384]`，任何后端产出的向量必须等于该维度；不符返回 null（该块降级全文检索），禁止让 insert 抛错回滚整个上传事务 | `embedding-config.ts toVectorBlob` | `toVectorBlob` 3 条（384 通过 / 3 与 768 拒绝 / null） |
+| 4 | **批量嵌入是主路径**：上传必须走 `embedBatch`（API 一次 64 条；本地受限并发 4），禁止逐条 `Promise.all(map(embed))` 打爆上游或抢满 CPU | `knowledge.service.ts embedChunks` | 上传实测（1 次请求 1 个 chunk，日志 1 次调用） |
+| 5 | **检索必须去冗余**：RRF 融合后做 MMR（λ=0.7，候选上限 40）。同一文档相邻块（800 字切块 + 15% 重叠）不得占满 topK | `packages/retrieval/src/mmr.ts` · `knowledge.service.ts search` | `retrieval-quality.spec.ts` 4 条（首条最相关 / 重复块被压掉 / 候选不足不填充 / 向量余弦优先） |
+| 6 | **外部学术 API 必须缓存 + 并行**：`ScholarSearchService.search` 走 10 分钟 TTL 进程内 LRU（200 条），三源 × 各关键词并行；禁止按 query 串行（4×3 = 12 次串行往返） | `research/scholar-search.service.ts` | `SCHOLAR_CACHE_TTL_MS` 可关；日志「学术检索」命中次数 |
+| 7 | **包边界必须可执行**：接口层（apps/server）禁止 `packages/{core,db,ai,retrieval}/src/**` 深路径导入，只允许 `apps/server/src/common/*` 桶或包名。**原 ESLint pattern `**/packages/*/src/*!(index)*` 在 minimatch 下从未命中（规则形同虚设）**，现改为显式列目录 | `eslint.config.mjs` | 反向探针：把深路径导入塞进 apps/server 必须报 error（实测已报） |
+| 8 | **包必须有公共出口**：`packages/{ai,retrieval}/src/index.ts` 是唯一出口（此前 `@sciflow/ai` 与 `@sciflow/retrieval` 连 package.json 都没有） | 各包 `index.ts` + `package.json` | 桶文件是唯一允许深路径的位置（`apps/server/src/common/*.ts` / `ai/*.ts`） |
+| 9 | **引用体检判定必须可复用**：判定下沉为纯函数 `packages/core/src/citation-audit.ts`，服务层只取数。新增 5 类判定：未引用条目 / 锚点断号 / 重复 DOI / 同 DOI 元数据冲突 / 孤儿引用；`issues: string[]` 历史契约保留，另给 `details[]`（level/code/items）供 UI 分级 | `packages/core/src/citation-audit.ts` · `documents.service.ts citationAudit` | `citation-audit.spec.ts` 11 条 + 回归 27.1-27.5 全绿 |
+| 10 | **引用体检禁止 N+1**：一次 `inArray` 批量取回 reference，禁止逐条 `db.select()`（200 条引用 = 200 次查询） | `documents.service.ts` | 代码审阅 + `citation-audit.spec.ts` 纯函数口径 |
+| 11 | **重组件必须按需加载**：`ForceGraph`（sigma+graphology ≈450KB）、`WritingEditor`（CodeMirror ≈610KB）、`WritingPreview`（react-markdown+KaTeX）必须 `lazy()`；编辑器句柄放独立轻量模块 `writing/editor-handle.ts`，否则父页面静态 import 会把 CodeMirror 拉回首屏 | `literature/LiteratureTools.tsx` · `WritingPage.tsx` · `writing/editor-handle.ts` | 构建产物：LiteraturePage 570KB→106KB、WritingPage 682KB→54KB，新增独立 ForceGraph/WritingEditor chunk |
+| 12 | **查询路径必须有索引**：`citation(reference_id)`、`memory_log(project_id, created_at DESC)`、`pipeline_task(status)`、`document(project_id, updated_at DESC)`、`reference(project_id, fingerprint)`。最后一项必须在 `ensureColumn('reference','fingerprint')` 之后建（老库该列靠迁移补齐，提前建会整段失败） | `packages/db/src/database.ts` | 启动日志无 `no such column`（历史回归曾因此 26 个 spec 全红） |
+
 ## §2.22 v1.8 归属校验收口与实例级配置分级（2026-10-28）
 
 企业模式（`AUTH_MODE=jwt`）此前只有 5 个控制器有归属校验（documents / references / experiments / projects / pipeline），

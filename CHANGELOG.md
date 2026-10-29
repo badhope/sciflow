@@ -2,6 +2,57 @@
 
 本项目格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，语义化版本号。以下按 `git log` 自底向上归纳历轮功能与修复，未含真实密钥。
 
+## [1.9.0] - 2026-10-29
+
+这次不是加功能，而是**把宣称的能力真正接通**：审计发现三处「文档说有、代码里没有」的假象——
+向量检索从未产出过向量（调用了 node-llama-cpp 不存在的 API）、模块边界 ESLint 规则从未命中、
+引用体检只查三类问题。三处全部修复并补上护栏，另加检索去冗余与前端按需加载。
+
+### Fixed
+- **向量检索从未真正工作（P0）**：`EmbeddingService` 在 `LlamaContext` 上调 `getEmbeddingFor`，
+  而 node-llama-cpp 3.x 只在 `model.createEmbeddingContext()` 返回的 `LlamaEmbeddingContext` 上提供该方法。
+  结果 `embed()` 恒返回 null，`knowledge_chunks_embedding` 表永远是空的——README 宣称的
+  「sqlite-vec 向量 ANN + FTS5 混合检索」实际只有 FTS5 单路。修复后端到端实测：上传 1 篇资料后
+  `embeddedChunks` 从 0 变 1，同义改写查询能命中。
+- **向量维度无守卫**：模型输出非 384 维时 vec0 insert 抛错，整个上传事务回滚（用户看到 500）。
+  现在入口统一守卫，维度不符该块降级全文检索并给出可操作提示。
+- **模块边界规则形同虚设**：`eslint.config.mjs` 的 pattern `**/packages/*/src/*!(index)*` 在
+  eslint 的 minimatch 实现下**从未命中**——把 `packages/core/src/quality-audit` 深路径导入塞进
+  `apps/server` 仍然 0 报错。改为显式列目录后规则真实生效，并同步把 28 处深路径导入收敛到
+  `apps/server/src/common/*` 桶。
+
+### Added
+- **嵌入双后端**：`EMBEDDING_PROVIDER=auto|local|api`。已配置模型 Key 的用户无需再手动下载 GGUF——
+  直接用同厂商的 `/embeddings`（`ai` SDK `embedMany`），零额外配置即可启用语义检索。
+  本地 GGUF 仍是默认优先（数据不出机器）。
+- **批量嵌入**：上传走 `embedBatch`（API 每批 64 条；本地受限并发 4），替代逐条 `Promise.all`。
+- **MMR 检索去冗余**（`packages/retrieval/src/mmr.ts`）：RRF 融合后按「相关性 − 冗余度」贪心重排，
+  解决「同一篇文档的相邻块占满 topK」——5 条来源其实是同一段话的 5 个切片。
+- **引用体检 5 类新判定**：未引用条目、锚点断号、重复 DOI、同 DOI 元数据冲突、孤儿引用；
+  判定下沉为纯函数 `packages/core/src/citation-audit.ts`，`issues[]` 历史契约保留，
+  另给 `details[]`（level/code/items）供 UI 红/黄/绿分级。
+- **学术检索 TTL 缓存 + 全并行**：`ScholarSearchService.search` 加 10 分钟 LRU（`SCHOLAR_CACHE_TTL_MS` 可关），
+  三源 × 各关键词并行（原按 query 串行，4 关键词 × 3 源 = 12 次往返）。
+- **包公共出口**：`packages/ai`、`packages/retrieval` 补 `index.ts` 与 `package.json`
+  （此前连包描述文件都没有，`@sciflow/ai` 无法被当作包引用）。
+- **查询路径索引 5 条**：`citation(reference_id)` / `memory_log(project_id, created_at DESC)` /
+  `pipeline_task(status)` / `document(project_id, updated_at DESC)` / `reference(project_id, fingerprint)`。
+- **健康探针暴露嵌入真实后端**：`capabilities.embeddingBackend`（local/api/none）+ `embeddingDimension`；
+  设置页自检同步（此前只看 `EMBEDDING_MODEL_PATH` 是否存在，配了远程 Key 也显示「未配置」，与实际相反）。
+
+### Changed
+- **前端按需加载**：`ForceGraph`（sigma+graphology）、`WritingEditor`（CodeMirror）、
+  `WritingPreview`（react-markdown+KaTeX）改为 `lazy()`。编辑器句柄拆到独立轻量模块
+  `pages/writing/editor-handle.ts`，否则父页面静态 import 会把 CodeMirror 拉回首屏。
+  实测：`LiteraturePage` 570KB→106KB、`WritingPage` 682KB→54KB（编辑器与预览各自独立 chunk）。
+- **单测速度**：server vitest 开 `isolate: false`（spec 均为纯函数/服务级用例，DB 已按进程隔离），
+  40 个 spec 总时长 40s→10s。
+- **ESLint 忽略 `.tmp/`**：本机做对标调研时把参考仓库拉进工作区，会让 `eslint .` 直接崩（缺对方插件）。
+
+### Tests
+- server 285→312（新增 `citation-audit.spec.ts` 11 条、`retrieval-quality.spec.ts` 16 条）
+- 全量回归 223/223、配置中心巡检 25/25、web 128/128、lint 0 error
+
 ## [1.8.0] - 2026-10-28
 
 安全收口 + 体验补洞批次：把「归属校验」从 5 个控制器补到全部 13 个（企业模式跨租户越权彻底关闭），

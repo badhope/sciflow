@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, inArray } from 'drizzle-orm';
 import { Cite } from '@citation-js/core';
 import '@citation-js/plugin-bibtex';
 import '@citation-js/plugin-csl';
@@ -7,7 +7,8 @@ import './csl-register'; // 注册官方补缺样式（IEEE/GB-T 7714/Nature/Chi
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
 import { documents, citations, references, polishRecords, qualityReports, reviewComments, experiments, pipelineTasks } from '../db/schema';
-import { checkPaperQuality } from '../../../../packages/core/src/quality-audit';
+import { checkPaperQuality } from '../common/quality-audit';
+import { auditCitations } from '../common/citation-audit';
 import { Document, Packer, Paragraph, HeadingLevel, AlignmentType } from 'docx';
 import { AiService } from '../ai/ai.service';
 import { ReferencesService } from '../references/references.service';
@@ -434,67 +435,44 @@ export class DocumentsService {
 
   /** 导出 Word(.docx) 全文——交稿/投稿刚需（标题 + 大纲 + 正文 + 参考文献） */
   /**
-   * B-4.3 引用体检：正文锚点 × citation 落库记录交叉审计（引用闭环第一版）。
-   * 红牌 = 编号超出落库引用数（幽灵引用）；黄牌 = 已绑定但无 DOI；
-   * score = 100 - 红牌×20 - 空表×60 - 黄牌×5（下限 0）。
+   * B-4.3 引用体检：正文锚点 × citation 落库记录交叉审计。
+   *
+   * v1.9 起判定逻辑下沉到 `packages/core/src/citation-audit.ts`（纯函数，可单测、CLI/前端可复用），
+   * 本方法只负责取数并补齐五项历史缺口：
+   *  - **N+1 消除**：原实现每条 citation 各查一次 reference（200 条引用 = 200 次查询），
+   *    现改为一次 `inArray` 批量取回后交给纯函数比对
+   *  - 新增「未引用条目 / 锚点断号 / 重复 DOI / 同 DOI 元数据冲突」四类判定
+   *  - 尾部块识别复用 `splitBodyForAudit`，与 pipeline tail-blocks 同口径
    */
   citationAudit(documentId: string) {
     const doc = db.select().from(documents).where(eq(documents.id, documentId)).get();
     if (!doc) throw new NotFoundException('文档不存在');
-    const content = doc.content || '';
-    // 尾部块（参考文献/图表）不计锚点——与 pipeline.graph H8 切割口径一致
-    const tailRegex = /\n+#{1,3}\s*(参考文献|引用文献|图表|references)(?=[\s（(:：\-—]|$)[^\n]*/gi;
-    let cut = -1;
-    for (const m of content.matchAll(tailRegex)) {
-      const idx = m.index ?? -1;
-      if (idx >= 0 && (cut === -1 || idx < cut)) cut = idx;
-    }
-    const body = cut >= 0 ? content.slice(0, cut) : content;
-    // 锚点识别：兼容 `[n]`、`[Ref:n]`、`【n】` 与上标形式 `^[n]`（历史缺陷：只认 `[n]`，
-    // 导致正文用 `[Ref:1]` 时 audit 认为 0 锚点、直接给满分「假绿」）。
-    const anchorNums = new Set<number>();
-    for (const m of body.matchAll(/\[\s*(?:Ref\s*[:：]\s*)?(\d{1,3})\s*\]/gi)) {
-      const n = Number(m[1]);
-      if (n > 0) anchorNums.add(n);
-    }
-    for (const m of body.matchAll(/【\s*(\d{1,3})\s*】/g)) {
-      const n = Number(m[1]);
-      if (n > 0) anchorNums.add(n);
-    }
     const rows = db.select().from(citations).where(eq(citations.documentId, documentId)).all();
-    // 可解析引用 = 能 join 到 reference 的行；孤儿 citation（文献已删除）不能算作「已绑定」，
-    // 否则 citationRows 虚高、audit 假绿（历史缺陷）。
-    const orphanRows = rows.filter((r) => !r.referenceId || !db.select({ id: references.id }).from(references).where(eq(references.id, r.referenceId)).get());
-    const resolvable = rows.length - orphanRows.length;
-    const maxAnchor = anchorNums.size > 0 ? Math.max(...anchorNums) : 0;
-    const ghost = maxAnchor > resolvable ? maxAnchor - resolvable : 0;
-    const noDoi = rows.filter((r) => {
-      if (r.verified) return false;
-      const ref = r.referenceId ? db.select().from(references).where(eq(references.id, r.referenceId)).get() : null;
-      return !ref?.doi;
-    }).length;
-    const issues: string[] = [];
-    if (ghost > 0) issues.push(`红牌：${ghost} 个锚点编号超出已落库引用（幽灵引用），请重跑引用渲染或检查文献库`);
-    if (resolvable === 0 && anchorNums.size > 0) issues.push('红牌：正文有锚点但无可用引用——文档未经引用渲染流程或引用的文献已删除');
-    if (orphanRows.length > 0) issues.push(`红牌：${orphanRows.length} 条引用指向已删除文献（孤儿引用），请重新渲染引用`);
-    if (noDoi > 0) issues.push(`黄牌：${noDoi} 条已绑定引用无 DOI，可信度待核`);
-    if (issues.length === 0 && anchorNums.size > 0) issues.push('绿牌：全部锚点已绑定且具备 DOI 可信度');
-    // 无锚点不再直接算「满分」：此前 0 锚点 → issues 为空 + score=100，用户会误以为引用体检通过。
-    // 现在显式给「未检测到引用」提示并封顶 60（不是错误，但也不是通过）。
-    const noAnchors = anchorNums.size === 0;
-    if (noAnchors) issues.push('提示：正文未检测到引用锚点（[n] / [Ref:n] / 【n】），无法评估引用完整性');
-    const base = noAnchors ? 60 : 100;
-    const score = Math.max(0, base - ghost * 20 - (rows.length === 0 && anchorNums.size > 0 ? 60 : 0) - noDoi * 5);
-    return {
-      anchorTotal: anchorNums.size,
-      maxAnchor,
-      citationRows: rows.length,
-      verifiedCount: rows.filter((r) => r.verified).length,
-      noDoi,
-      ghost,
-      score,
-      issues,
-    };
+    const refIds = [...new Set(rows.map((r) => r.referenceId).filter(Boolean))];
+    const refRows = refIds.length
+      ? db
+          .select({ id: references.id, title: references.title, doi: references.doi, year: references.year, authors: references.authors })
+          .from(references)
+          .where(inArray(references.id, refIds))
+          .all()
+      : [];
+    return auditCitations({
+      content: doc.content || '',
+      citations: rows.map((r) => ({
+        id: r.id,
+        referenceId: r.referenceId,
+        location: r.location ?? '',
+        context: r.context ?? '',
+        verified: r.verified ?? 0,
+      })),
+      references: refRows.map((r) => ({
+        id: r.id,
+        title: r.title ?? '',
+        doi: r.doi ?? '',
+        year: r.year ?? null,
+        authors: r.authors ?? '[]',
+      })),
+    });
   }
 
   async exportDocx(id: string) {

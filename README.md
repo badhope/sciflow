@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![version](https://img.shields.io/badge/version-1.8.0-black.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.9.0-black.svg)](CHANGELOG.md)
 
 > **🌐 语言 / Language：[中文](README.md) · [English](README.en.md)**
 
@@ -40,6 +40,7 @@ flowchart LR
 
 ## 🗞 最近更新
 
+- **2026-10-29 · v1.9.0**：**把宣称的能力真正接通**——审计发现三处「文档说有、代码里没有」：① 向量检索从未产出过向量（`EmbeddingService` 调了 node-llama-cpp 不存在的 `LlamaContext.getEmbeddingFor`，正确入口是 `model.createEmbeddingContext()`），所谓「混合检索」实际只有 FTS5 单路；② 模块边界 ESLint 规则 `**/packages/*/src/*!(index)*` 在 minimatch 下从未命中，28 处深路径导入全部裸奔；③ 引用体检只查三类，漏掉「未引用条目 / 锚点断号 / 重复 DOI」。三处全修，并补上**嵌入双后端**（本地 GGUF 或直接用已配置厂商的 `/embeddings`，零额外下载）、**MMR 检索去冗余**（同一文档相邻块不再占满结果）、**引用体检七类判定**（红黄绿分级到具体编号）、**学术检索 TTL 缓存 + 全并行**。前端把 sigma 引用网络（450KB）与 CodeMirror 编辑器（610KB）改为按需加载：文献页 570KB→106KB、写作页 682KB→54KB。
 - **2026-10-28 · v1.8.0**：**企业模式安全收口**——归属校验从 5 个控制器补到 13 个（知识库 / 记忆 / 研究设计 / 质量 / 投稿 / 执行轨迹 / 总览 / 对话此前零校验，任一账号可用他人 projectId 读写私有资料）；实例级配置（模型 Key / baseURL / 权限档 / 钩子 / 扩展资产 / 用量 / 联网 Key）从「登录即可改」收紧为**管理员专属**（`AdminGuard`），并用 JWT 真机 23 项断言验证 admin/member 行为。体验侧：**质量页新增客观检查器卡片**（切换文档即出确定性分数 + 指纹 + 硬伤口径，明写"流水线门禁用的就是这个分"，消除双分数认知冲突）；**记忆中心加 KPI 卡与项目隔离**；**学术库结果支持按相关度/最新/高被引排序 + 年份过滤**，「全部导入」改为只导入筛选后集合。
 - **2026-10-28 · v1.7.0**：**主题多样化**——6 套风格包（科研青绿 / 学术经典 / 暖色纸感 / 现代极简 / 暗夜实验室 / 高对比无障碍）× 独立明暗，设置页可视化选卡、命令面板可切、刷新保持；补三处对标缺口：**学术库发现检索**（文献页直接查 OpenAlex/Crossref/arXiv，不再只能查本地库）、**自动配图真实渲染**（mermaid 图表在写作预览里出图，此前只是一段代码）、**新颖性预检**（流水线第 2 步，先判断题目是否已被人做，重叠度≥70% 写进产物研究说明）。主题层把 59 处硬编码颜色收敛为 token，代码块/编辑器/玻璃顶栏/滚动条随风格变化；顺带修掉设置页滚动监听死代码、默认明暗与首屏脚本不一致导致的 41ms 闪变。
 - **2026-10-27 · v1.6.0**：品牌与界面打磨——品牌标志 3.0（单一连续笔势，取代易退化的同心圆弧）、七种表面层级（panel/inset/metric/accent/warning/danger/plain，终结「61 处卡片长得一样」）、三档字体栈（界面/论文阅读/等宽，全部系统字体零 CDN）、设置页 11 锚点重建、写作工具面板三组归并、厂商预置改为国内优先并标注境外项替代路径；图表层拆分使 recharts 从主包剥离（主包 0 引用，436KB 按需加载）。
@@ -107,12 +108,14 @@ flowchart LR
 - **学术库发现检索**：文献页可切换「本地文献库 / 学术库检索」，直接查 OpenAlex · Crossref · arXiv（免 Key，只返回元数据不入库，命中项标记已在库的条目，批量导入走进指纹去重）。
 - **8 种引用样式**：APA / IEEE / Vancouver / **GB/T 7714** / Nature / Chicago / Springer / ACS。
 - **文内锚点重排**：顺序编码制正文 `[n]` 保持插入序；著者-年制按正文首现自动加 a/b 后缀重排（`CiteReorderButton`）。
+- **引用体检（确定性，零 LLM）**：幽灵锚点 / 孤儿引用 / **未引用条目（凑数）** / **锚点断号** / **重复 DOI** / **同 DOI 元数据冲突** / 无 DOI 七类判定，红黄绿分级给到具体编号；判定逻辑为纯函数（`packages/core/src/citation-audit.ts`），同一文本必然同分。
 - **BibTeX / RIS 导入导出**：文献库元数据去重指纹、`reading_status` 状态机（unread / reading / read / cited）。
 - **PRISMA 筛选 + 编码矩阵**：文献调研页按纳入/排除标准筛选、编码归纳。
 - **力导向引用网络**：sigma.js + graphology + ForceAtlas2（WebGL 渲染）可交互图谱，直观呈现文献间引用关系。
 
 ### 知识库 RAG（NotebookLM 式）
-- 本地 **sqlite-vec 向量 ANN + FTS5 trigram 全文**混合检索（嵌入模型不可用时自动回退全文；中文查询 3-gram OR 展开）；知识库资料与文献双向绑定，命中块带来源作者/年份卡片。
+- 本地 **sqlite-vec 向量 ANN + FTS5 trigram 全文**混合检索，**RRF 融合 + MMR 去冗余**（同一文档相邻块不再占满结果；中文查询 3-gram OR 展开）；知识库资料与文献双向绑定，命中块带来源作者/年份卡片。
+- **嵌入双后端**：本地 GGUF（`bge-small-zh-v1.5`，数据不出机器）或直接用已配置模型厂商的 `/embeddings`（`EMBEDDING_PROVIDER=api`，零额外下载）；两者都不可用时自动降级为全文检索，设置页与 `/api/health` 明示当前后端而不是静默劣化。
 
 ### 全自动流水线
 - **新颖性预检（v1.7）**：文献调研之前先用学术库近 8 年同题工作比对，输出「重叠度 + 相近工作 + 改题建议」；≥70% 时把提醒写入产物「研究说明」。纯客观口径（选题 token 覆盖率，零 LLM 调用、可复现），可在设置页单独关闭。
@@ -190,7 +193,7 @@ flowchart LR
 | 后端 `apps/server` | NestJS 11 · TypeScript（strict）· Drizzle ORM · better-sqlite3（WAL）· Vercel AI SDK（OpenAI 兼容）· LangGraph（编排 / 断点续跑 / 人工确认）· MCP 官方 SDK · zod · helmet + pino · MSW 进程内 mock 网关 |
 | 前端 `apps/web` | React 19 · Vite 6 · TypeScript · Tailwind CSS v4（主题风格包走 CSS 变量覆盖）· TanStack Query / Table · Recharts · sigma.js + graphology · streamdown（流式 Markdown）· CodeMirror 6 · react-markdown + KaTeX · mermaid（按需异步 chunk） |
 | 桌面端 `apps/desktop` | Electron 41（内嵌 Node 24，原生支持 require(ESM)）· 内嵌后端（`ELECTRON_RUN_AS_NODE`）· 本地 SQLite（userData 隔离，打包时自动按 Electron ABI 重编原生模块）· electron-builder 三平台打包 · electron-updater 自动更新（opt-in） |
-| 工程 | pnpm workspace · vitest（server 285 / web 128 / desktop 5）· Playwright 冒烟 · promptfoo 契约评估 · GitHub Actions 三 job（类型/单测/构建 · 全量回归 · E2E+评测）· Python 3 回归脚本 |
+| 工程 | pnpm workspace · vitest（server 312 / web 128 / desktop 5）· Playwright 冒烟 · promptfoo 契约评估 · GitHub Actions 三 job（类型/单测/构建 · 全量回归 · E2E+评测）· Python 3 回归脚本 |
 
 **架构概览**
 

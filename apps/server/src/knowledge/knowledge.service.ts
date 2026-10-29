@@ -1,2 +1,2 @@
 // M3 模块化过渡桶：实现已迁 packages/retrieval
-export * from '../../../../packages/retrieval/src/knowledge.service';
+export * from '../common/knowledge';

@@ -235,6 +235,20 @@ export class ScholarSearchService {
   async search(keywords: string[], perQuery = 8): Promise<ScholarHit[]> {
     const queries = keywords.map((k) => String(k || '').trim()).filter(Boolean).slice(0, 4);
     if (!queries.length) return [];
+    /**
+     * 进程内 TTL 缓存（默认 10 分钟，SCHOLAR_CACHE_TTL_MS 可调，0=关闭）。
+     *
+     * 为什么必须有：学术 API 是外部公共端点，同一主题在「新颖性预检 → 文献调研 →
+     * 多轮回炉起草」里会被反复查询；无缓存时每轮都打 3 个源 × N 个关键词，
+     * 既慢又容易触发 OpenAlex/Crossref 的礼貌限流。
+     * 键 = 排序后的查询词 + 条数（与关键词顺序无关）。
+     */
+    const cacheKey = `${[...queries].sort().join('|')}::${perQuery}`;
+    const ttl = Number(process.env.SCHOLAR_CACHE_TTL_MS ?? 600_000);
+    const now = Date.now();
+    const cached = this.cache.get(cacheKey);
+    if (cached && now - cached.at < ttl) return cached.value;
+
     const termSet = new Set(relevanceTokens(queries.join(' ')));
     // 检索词分组：按每条 query 各自成组（"heterophilic graph" / "node classification" / "residual aggregation"）。
     // 一条相关论文通常能同时命中多组；只命中一组泛化词的多半是跨域论文。
@@ -242,13 +256,19 @@ export class ScholarSearchService {
       .map((q) => new Set(relevanceTokens(q)))
       .filter((g) => g.size > 0);
     const seen = new Map<string, ScholarHit>();
-    for (const q of queries) {
-      const tasks = [
-        searchOpenAlex(q, perQuery).catch((e: unknown) => { this.logger.warn(`OpenAlex 检索失败（${q}）：${String((e as Error)?.message || e)}`); return [] as ScholarHit[]; }),
-        searchCrossref(q, perQuery).catch((e: unknown) => { this.logger.warn(`Crossref 检索失败（${q}）：${String((e as Error)?.message || e)}`); return [] as ScholarHit[]; }),
-        searchArxiv(q, perQuery).catch((e: unknown) => { this.logger.warn(`arXiv 检索失败（${q}）：${String((e as Error)?.message || e)}`); return [] as ScholarHit[]; }),
-      ];
-      for (const hits of await Promise.all(tasks)) {
+    // 三个源 × 每个关键词**并行**（原实现按 query 串行：4 关键词 × 3 源 = 12 次串行往返）
+    const perQueryResults = await Promise.all(
+      queries.map(async (q) => {
+        const tasks = [
+          searchOpenAlex(q, perQuery).catch((e: unknown) => { this.logger.warn(`OpenAlex 检索失败（${q}）：${String((e as Error)?.message || e)}`); return [] as ScholarHit[]; }),
+          searchCrossref(q, perQuery).catch((e: unknown) => { this.logger.warn(`Crossref 检索失败（${q}）：${String((e as Error)?.message || e)}`); return [] as ScholarHit[]; }),
+          searchArxiv(q, perQuery).catch((e: unknown) => { this.logger.warn(`arXiv 检索失败（${q}）：${String((e as Error)?.message || e)}`); return [] as ScholarHit[]; }),
+        ];
+        return Promise.all(tasks);
+      }),
+    );
+    for (const sourceResults of perQueryResults) {
+      for (const hits of sourceResults) {
         for (const h of hits) {
           const key = h.doi ? `doi:${h.doi.toLowerCase()}` : `t:${normTitle(h.title)}`;
           if (!key || seen.has(key)) continue;
@@ -264,11 +284,28 @@ export class ScholarSearchService {
       .filter((x) => x.titleHits >= 1 && x.titleHits + x.absHits >= 2 && x.groups >= Math.min(2, domainGroups.length));
     if (!scored.length) {
       this.logger.warn(`学术检索：${seen.size} 条原始命中全部未过相关性门禁（检索词 ${[...termSet].slice(0, 8).join(',')}）`);
+      this.remember(cacheKey, []);
       return [];
     }
-    return scored
+    const result = scored
       .sort((a, b) => b.groups - a.groups || b.titleHits * 2 + b.absHits - (a.titleHits * 2 + a.absHits) || b.h.citationCount - a.h.citationCount)
       .slice(0, 20)
       .map((x) => x.h);
+    this.remember(cacheKey, result);
+    return result;
+  }
+
+  /** 搜索缓存（进程内 LRU 上限 200 条，避免长跑内存滞留） */
+  private readonly cache = new Map<string, { at: number; value: ScholarHit[] }>();
+
+  private remember(key: string, value: ScholarHit[]): void {
+    const ttl = Number(process.env.SCHOLAR_CACHE_TTL_MS ?? 600_000);
+    if (!(ttl > 0)) return;
+    this.cache.set(key, { at: Date.now(), value });
+    while (this.cache.size > 200) {
+      const oldest = this.cache.keys().next().value;
+      if (oldest === undefined) break;
+      this.cache.delete(oldest);
+    }
   }
 }

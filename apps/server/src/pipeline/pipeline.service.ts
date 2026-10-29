@@ -20,7 +20,7 @@ import { ConfigCenterService } from '../config/config-center.service';
 import { ScholarSearchService } from '../research/scholar-search.service';
 import { buildWebHits, isWebSearchEnabled } from './pipeline-websearch';
 import { normalizeKnScore, noveltyOverlap } from './pipeline-metrics';
-import { envInt } from '../../../../packages/core/src/env';
+import { envInt } from '../common/env';
 
 /** UI 步骤条（单一来源：packages/core/pipeline-steps） */
 const STEPS: { key: string; label: string }[] = PIPELINE_UI_STEPS.map((s) => ({ key: s.key, label: s.label }));
