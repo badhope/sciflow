@@ -2,6 +2,35 @@
 
 本项目格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，语义化版本号。以下按 `git log` 自底向上归纳历轮功能与修复，未含真实密钥。
 
+## [1.9.2] - 2026-10-29
+
+第三轮逐模块「宣称 vs 实现」审计（websearch / experiments / memory / MCP / desktop）修复批次。
+方法：每个模块用真实 HTTP / 真实 Python 沙箱 / 真实 MCP 握手验证，不读代码下结论。
+
+### Fixed
+- **零 Key 联网搜索在国内网络恒为空转（Major）**：实测 `api.duckduckgo.com` 在国内网络
+  连接超时，且其 Instant Answer API 本身只返回「实体摘要」而非网页搜索结果——
+  「什么都不配默认走 DDG 兜底」实际恒为 0 结果，且失败**静默**返回 `[]`（HTTP 201），
+  用户无从区分「没有结果」与「源不可用」。修复：
+  ① 新增 `so360` provider（免 Key、国内可达，实测返回相关结果，解析抽纯函数带 4 条单测）；
+  ② DDG 失败自动降级 so360，全链失败返回带 `notice` 的诊断（不再静默）；
+  ③ 设置页新增「测试当前引擎」按钮与 provider 选项说明。
+- **程序记忆注入不可观测（Minor）**：`proceduralMemory` 会注入起草 prompt，但没有任何
+  痕迹可验证「记忆真的进了 prompt」。端到端实测（写入记忆 → 跑流水线 → 查日志）后补
+  `[记忆] 程序记忆已注入起草 prompt（N 字）` 打点。
+
+### Verified（本轮确认真实可用，无需修改）
+- 实验沙箱：Windows 下真实 spawn Python 3.14 执行脚本，`6*7→42`、死循环正确判 `timeout`
+- 程序记忆：写入 → 起草注入 → 日志可见（3 处打点）
+- MCP 双向：`initialize/tools/list/resources/list/resources/templates/list` 全通，
+  serverInfo 版本 1.9.1，SSRF 正确拒绝回环地址
+- desktop 打包链静态完整（pnpm deploy → extraResources 二级目录规避 node_modules 丢弃）
+
+### Tests
+- server 324（+4：so360 解析）
+- 回归 232 → **235**（27.10a-c 网搜诊断）
+- 全路由探针 96/96；巡检 25/25
+
 ## [1.9.1] - 2026-10-29
 
 第二轮「宣称 vs 实现」审计（全路由真实探针 97 条 + 静态接线扫描）修复批次。

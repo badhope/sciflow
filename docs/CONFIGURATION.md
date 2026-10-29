@@ -148,7 +148,7 @@ docker run -d -p 8888:8080 searxng/searxng
 # PUT /api/web/config: { "provider": "tavily", "tavilyKey": "tvly-xxx" }
 ```
 
-什么都不配时默认走 DuckDuckGo 兜底（免 Key，通用摘要级质量）。
+什么都不配时默认走 DuckDuckGo，**国内网络不可达时自动降级 so360（免 Key、国内可达）**；全链失败会在返回里带 `notice` 说明原因（不再静默空结果）。
 
 **科研问答里要不要联网**？默认关（`websearch_in_chat=on` 开启）。开了之后：知识库无命中时才发起网搜，来源以 `[网搜N]` 标注进上下文、以 🌐 卡片展示给前端。文献事实类问题建议关着——模型引用网页比幻觉引用更隐蔽，而 SciFlow 的立场是引用必须可溯源。
 
@@ -222,7 +222,7 @@ docker compose -f docker-compose.prod.yml up -d   # 生产配置
 | `JUDGMENT_BASE_URL` / `JUDGMENT_API_KEY` / `JUDGMENT_MODEL` / `JUDGMENT_TIMEOUT_MS` | 无 | 意图判别器独立端点（OpenAI 兼容）；不配则沿用主 AI 服务 |
 | `EMBEDDING_MODEL_PATH` | 无 | 自备 GGUF 嵌入模型路径，不配则全文检索 |
 | `SCIFLOW_MODEL_CACHE` | `~/.sciflow/models` | 模型缓存目录 |
-| `WEBSEARCH_PROVIDER` | duckduckgo | searxng / tavily / serper / brave |
+| `WEBSEARCH_PROVIDER` | duckduckgo | so360（国内可达免 Key）/ searxng / tavily / serper / brave；DDG 失败自动降级 so360 |
 | `WEBSEARCH_IN_CHAT` | off | chat 联网兜底开关 |
 | `AUTH_MODE` / `JWT_SECRET` | none / 无 | 认证模式（非回环监听强制 jwt） |
 | `HOST` | 127.0.0.1 | 监听地址（0.0.0.0 触发安全闸） |

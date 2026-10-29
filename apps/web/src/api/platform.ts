@@ -129,7 +129,7 @@ export const platform = {
   webSearchConfig: {
     get: () => request<WebSearchConfig>('/api/web/config'),
     save: (p: Partial<WebSearchConfig>) => request<{ ok: boolean; config?: WebSearchConfig; error?: string }>('/api/web/config', { method: 'PUT', body: JSON.stringify(p) }),
-    search: (q: string) => request<{ results: { title: string; url: string; snippet: string }[] }>('/api/web/search', { method: 'POST', body: JSON.stringify({ q }) }),
+    search: (q: string) => request<{ results: { title: string; url: string; snippet: string }[]; provider?: string; notice?: string | null }>('/api/web/search', { method: 'POST', body: JSON.stringify({ q }) }),
   },
   usage: {
     // 类型与 UsageStats 共用同一份声明，避免两处结构漂移

@@ -1250,6 +1250,17 @@ check("27.9 references/gap 不再被管道误杀（200/201 或业务性 400，�
       st in (200, 201) or (st == 400 and "请求体必须是 JSON 对象" not in str(gres)),
       f"st={st} body={str(gres)[:160]}")
 
+# ---------- 27.10 网搜反静默降级（v1.9.2）：空结果必须带 notice，provider 链可见 ----------
+st, ws = req("POST", "/api/web/search", {"q": "图神经网络 综述"})
+check("27.10a /web/search 返回 provider 与 notice 字段（结构升级向后兼容）",
+      st in (200, 201) and isinstance(ws, dict) and "provider" in ws and "notice" in ws and isinstance(ws.get("results"), list),
+      f"st={st} keys={list((ws or {}).keys())[:8]}")
+st2, ws2 = req("POST", "/api/web/search", {"q": ""})
+check("27.10b 空 q 仍返回 error 提示（历史契约保留）", st2 in (200, 201) and ws2.get("error") == "q required", f"st={st2} body={str(ws2)[:120]}")
+st3, cfgw = req("GET", "/api/web/config")
+check("27.10c provider 清单含 so360（国内可达免 Key 源）且 available 更新",
+      st3 == 200 and "so360" in str(cfgw.get("available", {})), f"st={st3} avail={cfgw.get('available')}")
+
 # ---------- 28. v1.0.1 停止接口 / 联网开关 / 分数口径 ----------
 st, d = req("POST", "/api/pipeline", {"projectId": pid, "topic": "停止接口回归验证"})
 stop_id = d.get("id") if st == 201 else None

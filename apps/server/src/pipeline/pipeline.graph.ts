@@ -294,6 +294,11 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
         const reflexion = reflexionNote(s.taskId);
         const procedural = proceduralMemory(task.projectId);
         const styleHint = procedural ? `\n写作风格参考（来自记忆库）：${procedural}` : '';
+        // 程序记忆注入必须可观测（v1.9.2）：此前「记忆是否真的进了 prompt」无法验证，
+        // 用户写了风格指令却在流水线里毫无痕迹。有记忆时打点一条日志。
+        if (procedural) {
+          deps.logger.log(`[记忆] 程序记忆已注入起草 prompt（${procedural.length} 字，项目 ${task.projectId.slice(0, 8)}）`);
+        }
         const refsPrompt = deps.buildRefsPrompt(task.projectId, task.topic, s.plan?.searchStrategy?.keywords);
         if (retry === 0) snapshotBeforeOverwrite(docId, '流水线起草前自动快照');
         // 「分章起草」开关：关闭时跳过 LLM 起草，直接用现有正文进入评审

@@ -17,12 +17,17 @@ import { AdminGuard } from '../auth/admin.guard';
 export class WebSearchController {
   constructor(private readonly ws: WebSearchService) {}
 
+  /**
+   * 执行搜索（v1.9.2 反静默降级）：结果为空时必须带 notice 说明原因——
+   * 此前所有 provider 失败都静默返回 []（HTTP 201），用户无从区分
+   * 「真的没有结果」与「provider 在当前网络不可达」。
+   */
   @Post('search')
   async search(@Body() body: { q?: string }) {
     const q = body?.q?.trim() || '';
     if (!q) return { error: 'q required', results: [] };
-    const results = await this.ws.search(q);
-    return { results, context: WebSearchService.toContext(results) };
+    const { results, provider, notice } = await this.ws.searchWithDiagnostics(q);
+    return { results, context: WebSearchService.toContext(results), provider, notice };
   }
 
   @Get('config')
