@@ -2,6 +2,38 @@
 
 本项目格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，语义化版本号。以下按 `git log` 自底向上归纳历轮功能与修复，未含真实密钥。
 
+## [1.9.3] - 2026-10-30
+
+第四轮审计抓到本仓库**最深的一个假象**：mock 网关对 AI SDK 的结构化消息全部失配。
+修复它之后，此前三轮「mock 全链路回归」的可信度被重新校准——它们验证的只是管道连通。
+
+### Fixed
+- **mock 网关对 AI SDK 数组消息全部失配（Critical）**：AI SDK 发送的 `content` 是
+  结构化数组（`[{type:'text',text:'…'},…]`），而 `getLastUserContent` 直接 `String(content)`
+  → 得到 `"[object Object]"` → **27 条 mock 路由规则全部失配**，任何 AI 调用都返回兜底问答文本。
+  后果：此前所有 mock 回归里，大纲/起草/评审/润色/翻译拿到的都是同一段通用文本——
+  各步骤的输出契约从未被真实验证过。修复：新增 `extractMessageText`（string /
+  text-part 数组 / 混合数组三形态），12 条单测锁定。
+- **mock 起草不守「空池禁引用」契约**：mock 修复暴露后，空文献池场景起草产物带
+  `[文献1][文献2]` 残留锚点（客观 40 分硬伤）——mock 无论文献池是否为空都硬编码
+  `[Ref:1][Ref:2]`。修复：按 prompt 是否含 `[Ref:N]` 文献清单决定输出锚点，
+  并按章节标题返回**差异化内容**（此前 5 个章节同一段文本触发「重复段落」硬伤）。
+  实测：空池流水线 objective 40→69、残留锚点 0、审计 60 分（无引用，非假绿）。
+- **检索重排静默无效**：`rerankChunks` 没有 mock 规则 → 开启 `retrieval_rerank` 后
+  mock 返回兜底文本 → zod 解析失败 → 被 catch 静默吞掉 →「重排已开启」但排序从未变过。
+  修复：补 mock 规则（按关键词命中打分，确定性可断言）。实测 `rerankScore` 字段首次出现。
+- **润色永远返回空**：mock 的 `extractPolishText` 只认「待处理文本：」，而自定义提示词
+  分支用「待处理正文：」→ 提取失败 → 返回整段 prompt → 触发 ai.service 失败保护
+  （< 原长 30%）→ 润色结果恒为空 + 「输出异常」。实测修复前 `polished: ""`，
+  修复后 304 字正常返回。
+- **翻译接口 500**：`POST /documents/:id/translate` 不传 `text` 时，`polish_record.original`
+  NOT NULL 约束直接炸出未捕获 SqliteError（HTTP 500）。修复：空 text 回落文档正文，
+  两者皆空返回 400 可读提示。
+
+### Tests
+- server **336**（+12：mock-gateway.spec——三形态路由 / 空池禁引用 / 章节差异化 / 重排打分 / 润色双标记）
+- 回归 235/235、巡检 25/25、探针 96/96、web 128/128、lint 0（全绿后提交）
+
 ## [1.9.2] - 2026-10-29
 
 第三轮逐模块「宣称 vs 实现」审计（websearch / experiments / memory / MCP / desktop）修复批次。

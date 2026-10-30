@@ -311,14 +311,24 @@ export class DocumentsService {
 
   /** 学术翻译 */
   async translate(id: string, text: string, targetLang: 'zh' | 'en') {
-    this.get(id);
-    const translated = await this.ai.translate(text, targetLang);
+    const doc = this.get(id);
+    /**
+     * 输入兜底（v1.9.3 修复）：此前直接 `original: text` 落库，未传 text 时
+     * `polish_record.original` 触发 NOT NULL 约束 → **HTTP 500**（未捕获的 SqliteError）。
+     * 前端虽然总会传 text，但 API 契约不能依赖调用方自觉：空文本应给 400 可读提示，
+     * 未传时应回落到文档正文（用户直觉：翻译这篇文档），两者都比 500 合理。
+     */
+    const source = String(text ?? '').trim() || String(doc.content ?? '').trim();
+    if (!source) {
+      throw new BadRequestException('没有可翻译的文本：请提供 text，或先为文档写入正文');
+    }
+    const translated = await this.ai.translate(source, targetLang);
     db.insert(polishRecords)
       .values({
         id: randomUUID(),
         documentId: id,
         type: 'translate',
-        original: text,
+        original: source,
         polished: translated,
         reason: `学术翻译（目标语言：${targetLang === 'zh' ? '中文' : '英文'}）`,
         createdAt: Date.now(),
