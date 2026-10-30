@@ -36,9 +36,15 @@ export interface ObjectiveQualityReport {
     avgSentenceChars: number;
     duplicateParagraphs: number;
     placeholderHits: number;
+    /** v1.9.4：模板腔/套话命中数（「随着…的发展」「综上所述」类零信息量表述） */
+    boilerplateHits: number;
+    /** v1.9.4：最大章节字符占正文的份额（0-1；单章独大 = 结构失衡） */
+    maxSectionShare: number;
   };
   /** 版本指纹：用于确认「同一文本同一分数」 */
   fingerprint: string;
+  /** v1.9.4：本次评分采用的评审标准（多标准可切换） */
+  standard: { key: string; label: string; passScore: number };
 }
 
 const PLACEHOLDER_PATTERNS: { re: RegExp; label: string }[] = [
@@ -178,12 +184,29 @@ function fnv1a(text: string): string {
  * @param content 文档正文（可含尾部「## 参考文献」块；会自动分离统计）
  * @param opts.minChars 最低正文字数要求（默认 3000）
  */
+import {
+  countBoilerplate,
+  parseQualityStandard,
+  type QualityStandard,
+  type QualityStandardKey,
+} from './quality-standards';
+
 export function checkPaperQuality(
   content: string,
-  opts: { minChars?: number; minSections?: number; citationCount?: number; externalRefs?: boolean } = {},
+  opts: { minChars?: number; minSections?: number; citationCount?: number; externalRefs?: boolean; standard?: QualityStandardKey | QualityStandard } = {},
 ): ObjectiveQualityReport {
-  const minChars = opts.minChars ?? 3000;
-  const minSections = opts.minSections ?? 4;
+  /**
+   * 评审标准（v1.9.4）：阈值不再散落在函数体里，而是由「标准档位」统一给出。
+   * - 未传 standard → standard（SCI 通用期刊档）：默认门槛比旧行为收紧
+   *   （旧行为 3000 字/4 章/0 引用要求 → 新默认 4500 字/5 章/15 引用）。
+   * - 显式传 minChars/minSections 仍生效（向后兼容旧调用与单测），并覆盖标准档对应字段。
+   * - 篇幅下限的硬伤边界（500 字）保持不变——那是「空文」判据，不是标准差异。
+   */
+  const std = typeof opts.standard === 'string' || !opts.standard
+    ? parseQualityStandard(opts.standard)
+    : opts.standard;
+  const minChars = opts.minChars ?? std.minChars;
+  const minSections = opts.minSections ?? std.minSections;
   /**
    * 本仓库的引用契约（ARCHITECTURE §2.10 第 7 条）：正文只放 [n] 锚点，
    * 参考文献列表由前端按 CSL 样式从 citation 表渲染、导出时由 exportMarkdown 生成。
@@ -292,18 +315,18 @@ export function checkPaperQuality(
     structureEvidence.push(`章节齐全（${sections.length} 个，${isReviewLike ? '综述/框架类要素' : '含 IMRaD 要素'}）`);
   }
 
-  // 维度 2：篇幅（20 分）
+  // 维度 2：篇幅（20 分）——满分线由标准档给出（fullChars），不再是 minChars*1.5
   const lengthEvidence: string[] = [];
   let lengthScore = 0;
-  if (chars >= minChars * 1.5) lengthScore = 20;
-  else if (chars >= minChars) lengthScore = 17;
-  else if (chars >= minChars * 0.7) lengthScore = 12;
-  else if (chars >= minChars * 0.4) lengthScore = 6;
-  lengthScore = Math.max(0, lengthScore);
-  lengthEvidence.push(`正文 ${chars} 字符（要求 ≥${minChars}；≥${Math.round(minChars * 1.5)} 满分）`);
+  if (chars >= std.fullChars) lengthScore = 20;
+  else if (chars >= minChars) lengthScore = Math.round(12 + 8 * (chars - minChars) / Math.max(1, std.fullChars - minChars));
+  else if (chars >= minChars * 0.7) lengthScore = 9;
+  else if (chars >= minChars * 0.4) lengthScore = 5;
+  lengthScore = Math.max(0, Math.min(20, lengthScore));
+  lengthEvidence.push(`正文 ${chars} 字符（${std.label}：要求 ≥${minChars}，满分 ${std.fullChars}）`);
   if (cjk > 0) lengthEvidence.push(`中文字符 ${cjk}，英文词 ${words}`);
 
-  // 维度 3：引用闭环（20 分）
+  // 维度 3：引用闭环（20 分）——闭环之外加「引用强度」：唯一引用数与每章密度按标准档打折
   const citeEvidence: string[] = [];
   let citeScore = 0;
   if (citationNumbers.length === 0) {
@@ -325,16 +348,31 @@ export function checkPaperQuality(
     } else {
       citeEvidence.push(`引用 ${uniqueCitations.size} 个编号，但未解析到参考文献条目`);
     }
+    /**
+     * 引用强度（v1.9.4）：闭环只保证「引了」不保证「引够」。
+     * 唯一引用数低于标准下限 → 按比例打折；每章密度低于下限 → 再打八折。
+     * 这是「像相对论这种级别才满分」诉求的直接落点：顶刊档 30 篇起步，
+     * 一篇只引 3 篇的稿子无论格式多规范都拿不到引用满分。
+     */
+    const uniqRatio = Math.min(1, uniqueCitations.size / Math.max(1, std.minUniqueCitations));
+    const densityRatio = Math.min(1, density / Math.max(0.1, std.minCitationsPerSection));
+    const strengthFactor = Math.round(uniqRatio * densityRatio * 100) / 100;
+    if (strengthFactor < 1) {
+      citeScore = Math.round(citeScore * strengthFactor);
+      citeEvidence.push(
+        `引用强度不足（${std.label}：唯一引用 ≥${std.minUniqueCitations}、每章 ≥${std.minCitationsPerSection}；实际 ${uniqueCitations.size} / ${density.toFixed(1)}，强度系数 ${strengthFactor.toFixed(2)}）`,
+      );
+    }
     citeEvidence.push(`平均每章 ${density.toFixed(1)} 处引用`);
   }
 
-  // 维度 4：可读性（20 分）——句长与段落长度
+  // 维度 4：可读性（20 分）——句长与段落长度；句长上限由标准档给出
   const readEvidence: string[] = [];
   const avgSentenceChars = Math.round(chars / Math.max(1, sentences));
   let readScore = 20;
-  if (avgSentenceChars > 90) { readScore -= 8; readEvidence.push(`平均句长 ${avgSentenceChars} 字（过长）`); }
-  else if (avgSentenceChars > 60) { readScore -= 4; readEvidence.push(`平均句长 ${avgSentenceChars} 字（偏长）`); }
-  else readEvidence.push(`平均句长 ${avgSentenceChars} 字（合理区间 15-60）`);
+  if (avgSentenceChars > std.maxAvgSentenceChars + 25) { readScore -= 8; readEvidence.push(`平均句长 ${avgSentenceChars} 字（过长，${std.label}要求 ≤${std.maxAvgSentenceChars}）`); }
+  else if (avgSentenceChars > std.maxAvgSentenceChars) { readScore -= 4; readEvidence.push(`平均句长 ${avgSentenceChars} 字（偏长，${std.label}要求 ≤${std.maxAvgSentenceChars}）`); }
+  else readEvidence.push(`平均句长 ${avgSentenceChars} 字（符合 ${std.label} ≤${std.maxAvgSentenceChars}）`);
   const longParagraphs = paragraphs.filter((p) => p.replace(/\s/g, '').length > 900).length;
   if (longParagraphs > 0) { readScore -= Math.min(6, longParagraphs * 2); readEvidence.push(`超长段落 ${longParagraphs} 个（>900 字）`); }
   const shortParaRatio = paragraphs.length ? paragraphs.filter((p) => p.length < 30).length / paragraphs.length : 0;
@@ -385,14 +423,45 @@ export function checkPaperQuality(
     integrityEvidence.push('未发现「无实验却声称实验结论」的名实不符');
   }
 
-  // 六个维度各 20 分 → 归一到 100（诚信维度权重与其它维度相同，避免被稀释）
+  /**
+   * 维度 7（v1.9.4 新增）：信息密度（20 分）——针对「形式规整但内容空洞拿高分」的直接补丁。
+   * 两个子项各 10 分：
+   *  a) 模板腔密度：「随着…的发展」「综上所述」类零信息量表述，每千字超过标准上限按比例扣；
+   *  b) 章节均衡：最大章节占正文份额超过标准上限（单章独大 = 其余章节是凑数）按比例扣。
+   * 这两个信号都是确定性统计，与 LLM 无关，保持「同文同分」的契约。
+   */
+  const densityEvidence: string[] = [];
+  let densityScore = 20;
+  const boilerplateHits = countBoilerplate(body);
+  const boilerplatePerKilo = chars > 0 ? (boilerplateHits / chars) * 1000 : 0;
+  if (boilerplatePerKilo > std.maxBoilerplatePerKilo) {
+    const sub = Math.min(10, Math.round(((boilerplatePerKilo - std.maxBoilerplatePerKilo) / Math.max(1, std.maxBoilerplatePerKilo)) * 10));
+    densityScore -= sub;
+    densityEvidence.push(`模板腔 ${boilerplateHits} 处（${boilerplatePerKilo.toFixed(1)}/千字，${std.label}上限 ${std.maxBoilerplatePerKilo}）——如「随着…的发展」「综上所述」类空转表述`);
+  } else {
+    densityEvidence.push(`模板腔 ${boilerplateHits} 处（${boilerplatePerKilo.toFixed(1)}/千字，符合 ${std.label} ≤${std.maxBoilerplatePerKilo}）`);
+  }
+  const sectionCharsList = sections.map((s) => s.body.replace(/\s/g, '').length);
+  const maxSectionShare = chars > 0 ? Math.max(...sectionCharsList, 0) / chars : 0;
+  if (sections.length >= 2 && maxSectionShare > std.maxSectionShare) {
+    const sub = Math.min(10, Math.round(((maxSectionShare - std.maxSectionShare) / Math.max(0.05, 1 - std.maxSectionShare)) * 10));
+    densityScore -= sub;
+    const biggest = sections.reduce((m, s) => (s.body.length > m.body.length ? s : m), sections[0]);
+    densityEvidence.push(`章节失衡：「${biggest.title}」独占 ${(maxSectionShare * 100).toFixed(0)}% 正文（${std.label}上限 ${(std.maxSectionShare * 100).toFixed(0)}%），其余章节疑似凑数`);
+  } else {
+    densityEvidence.push(`章节均衡（最大章占比 ${(maxSectionShare * 100).toFixed(0)}%，符合 ${std.label} ≤${(std.maxSectionShare * 100).toFixed(0)}%）`);
+  }
+  densityScore = Math.max(0, densityScore);
+
+  // 七个维度各 20 分 → 归一到 100（信息密度与诚信同权重：内容空洞与学术不端同级别扣分）
   const dimensions: QualityDimension[] = [
     { key: 'structure', label: '结构完整性', score: Math.max(0, Math.round(structureScore)), weight: 1, evidence: structureEvidence },
     { key: 'length', label: '篇幅达标', score: lengthScore, weight: 1, evidence: lengthEvidence },
-    { key: 'citation', label: '引用闭环', score: Math.max(0, Math.round(citeScore)), weight: 1, evidence: citeEvidence },
+    { key: 'citation', label: '引用闭环与强度', score: Math.max(0, Math.round(citeScore)), weight: 1, evidence: citeEvidence },
     { key: 'readability', label: '可读性', score: readScore, weight: 1, evidence: readEvidence },
     { key: 'rigor', label: '修辞严谨', score: rigorScore, weight: 1, evidence: rigorEvidence },
     { key: 'integrity', label: '学术诚信', score: integrityScore, weight: 1, evidence: integrityEvidence },
+    { key: 'density', label: '信息密度', score: densityScore, weight: 1, evidence: densityEvidence },
   ];
 
   const weighted = dimensions.reduce((sum, d) => sum + d.score * d.weight, 0);
@@ -411,7 +480,10 @@ export function checkPaperQuality(
       uniqueCitations: uniqueCitations.size,
       referenceEntries: refEntries.length || (dbCitationCount ?? 0),
       avgSentenceChars, duplicateParagraphs, placeholderHits,
+      boilerplateHits,
+      maxSectionShare: Math.round(maxSectionShare * 100) / 100,
     },
-    fingerprint: fnv1a(`${totalScore}|${chars}|${sections.length}|${citationNumbers.length}|${text.length}`),
+    standard: { key: std.key, label: std.label, passScore: std.passScore },
+    fingerprint: fnv1a(`${std.key}|${totalScore}|${chars}|${sections.length}|${citationNumbers.length}|${text.length}`),
   };
 }

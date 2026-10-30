@@ -50,12 +50,17 @@ describe('checkPaperQuality 确定性', () => {
     }
   });
 
-  it('输出包含五个维度与统计口径', () => {
+  it('输出包含七个维度与统计口径（v1.9.4 新增信息密度维）', () => {
     const r = checkPaperQuality(GOOD_PAPER);
-    expect(r.dimensions.map((d) => d.key)).toEqual(['structure', 'length', 'citation', 'readability', 'rigor', 'integrity']);
+    expect(r.dimensions.map((d) => d.key)).toEqual(['structure', 'length', 'citation', 'readability', 'rigor', 'integrity', 'density']);
     expect(r.stats.sections).toBeGreaterThanOrEqual(6);
     expect(r.stats.uniqueCitations).toBe(3);
     expect(r.stats.referenceEntries).toBe(3);
+    expect(r.stats.boilerplateHits).toBeGreaterThanOrEqual(0);
+    expect(r.stats.maxSectionShare).toBeGreaterThan(0);
+    // 标准元数据必须随报告返回（前端展示「按哪个标准评的」）
+    expect(r.standard.key).toBe('standard');
+    expect(r.standard.passScore).toBeGreaterThan(0);
     expect(r.hardFails).toEqual([]);
   });
 
@@ -86,7 +91,10 @@ describe('checkPaperQuality 硬伤与扣分', () => {
     expect(r.hardFails.some((f) => f.includes('没有对应参考文献'))).toBe(false);
     expect(r.stats.referenceEntries).toBe(3);
     const cite = r.dimensions.find((d) => d.key === 'citation')!;
-    expect(cite.score).toBeGreaterThanOrEqual(18);
+    // v1.9.4：闭环满分但引用强度打折（3 篇 < 默认 standard 档 15 篇下限）
+    expect(cite.score).toBeGreaterThan(0);
+    expect(cite.score).toBeLessThan(18);
+    expect(cite.evidence.some((e) => e.includes('引用强度不足'))).toBe(true);
   });
 
   it('悬空引用（[9] 无对应条目）→ 硬伤并点出编号', () => {
@@ -174,9 +182,9 @@ describe('checkPaperQuality 学术诚信（名实相符）', () => {
     expect(r.hardFails.some((f) => f.includes('名实不符'))).toBe(false);
   });
 
-  it('诚信维度计入总分归一（六维等权）', () => {
+  it('诚信维度计入总分归一（七维等权）', () => {
     const r = checkPaperQuality(GOOD_PAPER, { minChars: 200 });
-    expect(r.dimensions).toHaveLength(6);
+    expect(r.dimensions).toHaveLength(7);
     expect(r.dimensions.find((d) => d.key === 'integrity')!.score).toBeGreaterThanOrEqual(10);
     expect(r.totalScore).toBeGreaterThanOrEqual(75);
   });

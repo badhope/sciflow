@@ -1261,6 +1261,24 @@ st3, cfgw = req("GET", "/api/web/config")
 check("27.10c provider 清单含 so360（国内可达免 Key 源）且 available 更新",
       st3 == 200 and "so360" in str(cfgw.get("available", {})), f"st={st3} avail={cfgw.get('available')}")
 
+# ---------- 27.11 质量评审标准（v1.9.4 多档可切换：阈值与及格线随标准缩放） ----------
+st, ps0 = req("GET", "/api/customization/pipeline-settings")
+check("27.11a pipeline-settings 返回质量标准三元组（key/label/passScore）",
+      st == 200 and all(k in ps0 for k in ("qualityStandard", "qualityStandardLabel", "qualityPassScore")),
+      f"st={st} keys={[k for k in (ps0 or {}) if 'quality' in k]}")
+check("27.11b 默认标准=standard 且及格线 80",
+      ps0.get("qualityStandard") == "standard" and ps0.get("qualityPassScore") == 80,
+      f"std={ps0.get('qualityStandard')} pass={ps0.get('qualityPassScore')}")
+st2, ps2 = req("POST", "/api/customization/pipeline-settings", {"qualityStandard": "strict"})
+check("27.11c 切到 strict：label 与及格线同步（85）",
+      st2 in (200, 201) and ps2.get("qualityStandard") == "strict" and ps2.get("qualityPassScore") == 85,
+      f"st={st2} std={ps2.get('qualityStandard')} pass={ps2.get('qualityPassScore')}")
+st3, ps3 = req("POST", "/api/customization/pipeline-settings", {"qualityStandard": "不存在的档"})
+check("27.11d 非法标准 400（fail-closed，不静默回落）", st3 == 400, f"st={st3} body={str(ps3)[:120]}")
+st4, ps4 = req("POST", "/api/customization/pipeline-settings", {"qualityStandard": "standard"})
+check("27.11e 恢复 standard", st4 in (200, 201) and ps4.get("qualityStandard") == "standard",
+      f"st={st4} std={ps4.get('qualityStandard')}")
+
 # ---------- 28. v1.0.1 停止接口 / 联网开关 / 分数口径 ----------
 st, d = req("POST", "/api/pipeline", {"projectId": pid, "topic": "停止接口回归验证"})
 stop_id = d.get("id") if st == 201 else None

@@ -192,7 +192,14 @@ function PipelineEditor() {
    * 三者此前只能改库或环境变量——预算耗尽的报错让用户「到设置中调整」，
    * 但设置里根本没有这一项。这里接入 customization.pipeline-settings 单一入口。
    */
-  const [runParams, setRunParams] = useState<{ tokenBudget: number; retrievalRerank: boolean; webSearch: boolean } | null>(null);
+  const [runParams, setRunParams] = useState<{
+    tokenBudget: number;
+    retrievalRerank: boolean;
+    webSearch: boolean;
+    qualityStandard: string;
+    qualityStandardLabel: string;
+    qualityPassScore: number;
+  } | null>(null);
   const [budgetDraft, setBudgetDraft] = useState('');
   const [savingBudget, setSavingBudget] = useState(false);
   useEffect(() => {
@@ -200,7 +207,14 @@ function PipelineEditor() {
     let cancelled = false;
     api.customization.getPipelineSettings().then((r) => {
       if (cancelled) return;
-      setRunParams({ tokenBudget: r.tokenBudget, retrievalRerank: r.retrievalRerank, webSearch: r.webSearch });
+      setRunParams({
+        tokenBudget: r.tokenBudget,
+        retrievalRerank: r.retrievalRerank,
+        webSearch: r.webSearch,
+        qualityStandard: r.qualityStandard,
+        qualityStandardLabel: r.qualityStandardLabel,
+        qualityPassScore: r.qualityPassScore,
+      });
       setBudgetDraft(String(r.tokenBudget));
     }).catch(() => undefined);
     return () => { cancelled = true; };
@@ -212,7 +226,14 @@ function PipelineEditor() {
     setSavingBudget(true);
     try {
       const r = await api.customization.setPipelineSettings({ tokenBudget: n });
-      setRunParams({ tokenBudget: r.tokenBudget, retrievalRerank: r.retrievalRerank, webSearch: r.webSearch });
+      setRunParams({
+        tokenBudget: r.tokenBudget,
+        retrievalRerank: r.retrievalRerank,
+        webSearch: r.webSearch,
+        qualityStandard: r.qualityStandard,
+        qualityStandardLabel: r.qualityStandardLabel,
+        qualityPassScore: r.qualityPassScore,
+      });
       toast('success', '预算已更新，对之后新建的流水线生效');
     } catch (e: unknown) {
       toast('error', errMsg(e));
@@ -224,7 +245,14 @@ function PipelineEditor() {
   const toggleParam = async (patch: { retrievalRerank?: boolean; webSearch?: boolean }) => {
     try {
       const r = await api.customization.setPipelineSettings(patch);
-      setRunParams({ tokenBudget: r.tokenBudget, retrievalRerank: r.retrievalRerank, webSearch: r.webSearch });
+      setRunParams({
+        tokenBudget: r.tokenBudget,
+        retrievalRerank: r.retrievalRerank,
+        webSearch: r.webSearch,
+        qualityStandard: r.qualityStandard,
+        qualityStandardLabel: r.qualityStandardLabel,
+        qualityPassScore: r.qualityPassScore,
+      });
     } catch (e: unknown) {
       toast('error', errMsg(e));
     }
@@ -324,6 +352,25 @@ function PipelineEditor() {
                   文献步骤 0 命中时并入公开网页线索（只作写作参考、不进文献库；provider 在「联网搜索」配置）
                 </span>
                 <Badge tone={runParams.webSearch ? 'teal' : 'slate'}>{runParams.webSearch ? '开启' : '关闭'}</Badge>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="text-xs text-slate-700 dark:text-slate-200 w-32 shrink-0">质量评审标准</label>
+                <Select
+                  className="w-56"
+                  value={runParams.qualityStandard}
+                  onChange={(v: string) => void toggleParam({ qualityStandard: v } as never)}
+                  options={[
+                    { value: 'draft', label: '草稿迭代（快速产出，及格 70）' },
+                    { value: 'standard', label: 'SCI 通用期刊（及格 80）' },
+                    { value: 'strict', label: '顶刊 IEEE Trans / Nature 子刊（及格 85）' },
+                    { value: 'review', label: '综述 Survey / Review（及格 80）' },
+                    { value: 'conference', label: '会议论文 CCF-B/C（及格 78）' },
+                  ]}
+                />
+                <span className="text-[11px] text-slate-400 flex-1">
+                  决定评分阈值与质量门及格线：当前「{runParams.qualityStandardLabel}」，及格 {runParams.qualityPassScore} 分。篇幅、引用强度、句式、模板腔与章节均衡的合格线随标准缩放——满分 = 该级别可投稿，而不是形式合规。
+                </span>
+                <Badge tone="teal">{runParams.qualityStandardLabel} · {runParams.qualityPassScore} 分及格</Badge>
               </div>
             </div>
           )}

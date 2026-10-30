@@ -97,11 +97,14 @@ export interface PipelineGraphDeps {
   notify(taskId: string, key: string, status: StepStatusWire, output?: string, retryCount?: number, extra?: { variants?: string[] }): Promise<void>;
   /** 步骤开关。 */
   stepEnabled(key: string): boolean;
+  /** 读 app_setting（质量评审标准 quality_standard 等运行参数） */
+  readSetting?(key: string): string;
   logger: { log(m: string): void; warn(m: string): void; error(m: string): void };
 }
 
 const MAX_RETRY = 2;
-const QUALITY_THRESHOLD = 80;
+/** 兜底及格线：仅在标准解析失败时使用（正常路径用所选标准的 passScore） */
+const QUALITY_THRESHOLD_FALLBACK = 80;
 
 /** 质量门步骤文案模板（产品唯一来源；测试从这里取，防止格式漂移） */
 export const QUALITY_GATE_LABEL = (score: number | string): string => `总分 ${score}/100`;
@@ -389,10 +392,15 @@ ${refAppendix}` : ''}`;
           reviewResult = { scores: {}, feedback: `LLM 评审不可用（${msg}）；本轮仅依据客观检查器判定。`, totalScore: 0 };
           await deps.notify(s.taskId, 'quality-gate', 'running', `LLM 评审不可用，改用客观检查（${msg.slice(0, 60)}）`, retry);
         }
-        // 客观检查（确定性规则）：与 LLM 评分互补——LLM 可能漂移，硬指标不会
+        // 客观检查（确定性规则）：与 LLM 评分互补——LLM 可能漂移，硬指标不会。
+        // 评审标准（v1.9.4）：从 app_setting quality_standard 读取（standard/strict/review/
+        // conference/draft），阈值与及格线都随标准变化——「满分 = 顶刊可接收」而不是形式合规。
+        const standardKey = deps.readSetting?.('quality_standard') || 'standard';
+        void 0;
         const citCount = db.select().from(citations).where(eq(citations.documentId, docId)).all().length;
-        const objective: ObjectiveQualityReport = checkPaperQuality(latest?.content ?? '', { citationCount: citCount });
-        deps.logger.log(`[质量门] LLM ${reviewResult.totalScore}/100（机械）客观 ${objective.totalScore}/100 指纹 ${objective.fingerprint}${objective.hardFails.length ? ` 硬伤 ${objective.hardFails.length} 项` : ''}`);
+        const objective: ObjectiveQualityReport = checkPaperQuality(latest?.content ?? '', { citationCount: citCount, standard: standardKey as never });
+        const gateThreshold = objective.standard?.passScore ?? QUALITY_THRESHOLD_FALLBACK;
+        deps.logger.log(`[质量门] 标准=${objective.standard?.label ?? standardKey} 及格线=${gateThreshold} LLM ${reviewResult.totalScore}/100（机械）客观 ${objective.totalScore}/100 指纹 ${objective.fingerprint}${objective.hardFails.length ? ` 硬伤 ${objective.hardFails.length} 项` : ''}`);
         /**
          * 门禁分数 = 客观分（确定性、可复现）。
          *
@@ -421,13 +429,13 @@ ${refAppendix}` : ''}`;
         if (scored > best.score) best = { score: scored, content: latest?.content ?? '', feedback: report.feedback };
         deps.trackBudget(s.taskId, 'reviewPaper'); // H2：评审成本打点
         await deps.notify(s.taskId, 'quality-gate', 'scored', QUALITY_GATE_LABEL(report.totalScore));
-        if (report.totalScore < QUALITY_THRESHOLD && retry < MAX_RETRY) {
+        if (report.totalScore < gateThreshold && retry < MAX_RETRY) {
           retry += 1;
           const reflex = buildReflexionText(reviewResult.scores, report.feedback);
           db.insert(reflexionLogs)
             .values({ id: randomUUID(), taskId: s.taskId, round: retry, note: reflex.note, instructions: JSON.stringify(reflex.instructions), createdAt: Date.now() })
             .run();
-          await deps.notify(s.taskId, 'quality-gate', 'retry', `第 ${retry} 次回炉（评分 ${report.totalScore} < ${QUALITY_THRESHOLD}）`, retry);
+          await deps.notify(s.taskId, 'quality-gate', 'retry', `第 ${retry} 次回炉（评分 ${report.totalScore} < ${gateThreshold}，标准：${objective.standard?.label ?? '默认'}）`, retry);
           continue;
         }
         break;

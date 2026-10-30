@@ -185,8 +185,11 @@ export interface ObjectiveQualityReport {
     avgSentenceChars: number;
     duplicateParagraphs: number;
     placeholderHits: number;
+    boilerplateHits?: number;
+    maxSectionShare?: number;
   };
   fingerprint: string;
+  standard?: { key: string; label: string; passScore: number };
 }
 
 export interface PipelineStep {

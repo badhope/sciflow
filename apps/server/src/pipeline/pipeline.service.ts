@@ -194,6 +194,7 @@ export class PipelineService implements OnModuleInit {
       trackBudget: (taskId, caller) => this.trackBudget(taskId, caller),
       stepEnabled: (key) => this.stepEnabled(key),
       researchDepth: () => this.researchDepth(),
+      readSetting: (key) => this.readSetting(key),
       noveltyCheck: (topic) => this.noveltyCheck(topic),
       logger: this.logger,
     };

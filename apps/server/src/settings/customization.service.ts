@@ -6,6 +6,7 @@ import { appSettings, customIntents, customPrompts, pipelineConfigs } from '../d
 import { parseJson } from '../common/json-guard';
 import { PIPELINE_STEPS } from '../common/pipeline-steps';
 import { isWebSearchEnabled } from '../pipeline/pipeline-websearch';
+import { parseQualityStandard, QUALITY_STANDARD_KEYS } from '../common/quality-standards';
 
 /** 高度自定义：意图库 + 提示词 用户可配置（系统默认仅作兜底） */
 
@@ -117,16 +118,21 @@ export class CustomizationService {
     // 预算缺省口径必须与 PipelineService.trackBudget 一致：键不存在 = 300k；存在时 0 = 不限
     const budgetKey = read('pipeline_token_budget');
     const budgetRaw = budgetKey === '' ? 300_000 : Math.floor(Number(budgetKey));
+    // 质量评审标准（v1.9.4）：standard/strict/review/conference/draft，非法值 fail-closed 回落 standard
+    const std = parseQualityStandard(read('quality_standard'));
     return {
       researchDepth: Number.isFinite(depthRaw) ? Math.max(1, Math.min(3, depthRaw)) : 1,
       // 0 = 不限（与 PipelineService.trackBudget 的口径一致）
       tokenBudget: Number.isFinite(budgetRaw) && budgetRaw >= 0 ? budgetRaw : 300_000,
       retrievalRerank: read('retrieval_rerank') === 'on' || process.env.RETRIEVAL_RERANK === 'on',
       webSearch: isWebSearchEnabled((k) => read(k)),
+      qualityStandard: std.key,
+      qualityStandardLabel: std.label,
+      qualityPassScore: std.passScore,
     };
   }
 
-  setPipelineSettings(patch: { researchDepth?: number; tokenBudget?: number; retrievalRerank?: boolean; webSearch?: boolean }) {
+  setPipelineSettings(patch: { researchDepth?: number; tokenBudget?: number; retrievalRerank?: boolean; webSearch?: boolean; qualityStandard?: string }) {
     const upsert = (key: string, value: string) => {
       const existing = db.select().from(appSettings).where(eq(appSettings.key, key)).get();
       if (existing) db.update(appSettings).set({ value }).where(eq(appSettings.key, key)).run();
@@ -148,6 +154,13 @@ export class CustomizationService {
     }
     if (patch.webSearch !== undefined) {
       upsert('websearch_in_pipeline', patch.webSearch ? 'on' : 'off');
+    }
+    if (patch.qualityStandard !== undefined) {
+      const std = parseQualityStandard(patch.qualityStandard);
+      if (String(patch.qualityStandard).trim().toLowerCase() !== std.key) {
+        throw new BadRequestException(`未知评审标准「${patch.qualityStandard}」，可选：${QUALITY_STANDARD_KEYS.join(' / ')}`);
+      }
+      upsert('quality_standard', std.key);
     }
     return this.getPipelineSettings();
   }

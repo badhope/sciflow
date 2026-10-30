@@ -317,6 +317,11 @@ export function QualityPage({ project }: { project: Project }) {
               指纹 {objective.report.fingerprint} · 同一正文必然同分
             </span>
           )}
+          {objective?.report.standard && (
+            <Badge tone="teal">
+              标准：{objective.report.standard.label} · {objective.report.standard.passScore} 分及格
+            </Badge>
+          )}
           <span className="ml-auto text-[11px] text-slate-400 dark:text-slate-500">流水线质量门用的就是这个分</span>
         </div>
 

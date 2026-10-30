@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
 import { qualityReports, reviewComments, documents, citations } from '../db/schema';
 import { checkPaperQuality } from '../common/quality-audit';
+import { parseQualityStandard, type QualityStandardKey } from '../common/quality-standards';
+import { appSettings } from '../db/schema';
 import { AiService, ReviewResult } from '../ai/ai.service';
 import { parseJson } from '../common/json-guard';
 
@@ -17,6 +19,16 @@ const DIM_CN: Record<string, string> = {
   figures: '图表',
   format: '格式',
 };
+
+/** 读全局评审标准（app_setting quality_standard；非法值 fail-closed 回落 standard） */
+function readQualityStandard(): QualityStandardKey {
+  try {
+    const row = db.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, 'quality_standard')).get();
+    return parseQualityStandard(row?.value).key;
+  } catch {
+    return 'standard';
+  }
+}
 
 @Injectable()
 export class QualityService {
@@ -80,7 +92,7 @@ export class QualityService {
     const rows = db.select().from(documents).where(eq(documents.projectId, projectId)).all();
     const items = rows.map((doc) => {
       const citationCount = (db.select().from(citations).where(eq(citations.documentId, doc.id)).all() || []).length;
-      const report = checkPaperQuality(String(doc.content || ''), { citationCount });
+      const report = checkPaperQuality(String(doc.content || ''), { citationCount, standard: readQualityStandard() });
       const latestLlm = db
         .select()
         .from(qualityReports)
