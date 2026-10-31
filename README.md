@@ -33,7 +33,7 @@ flowchart LR
     G --> H[投稿辅助<br/>选刊 / Cover Letter / 跟踪]
     K[(本地 SQLite<br/>文献 · 知识库 · 记忆 · 成本)] -.-> C
     K -.-> E
-    L[你的模型 Key<br/>任意 OpenAI 兼容端点] -.-> B
+    L[你的模型 Key<br/>三种协议可插拔] -.-> B
     L -.-> E
     L -.-> F
 ```
@@ -68,7 +68,7 @@ flowchart LR
    Vercel AI SDK（三协议模型接入）、LangGraph（编排/checkpointer）、citation-js（CSL 引擎）、better-sqlite3 + sqlite-vec（检索）、MCP 官方 SDK（双向工具协议）。全部依赖在 `ARCHITECTURE.md` §2 有选型记录。
 
 8. **工程可信度可验证。**
-   `pnpm test`（server 344 + web 128 断言）、`python scripts/full_regression.py`（240 项全链路回归）、`node scripts/monitor_config_center.mjs`（25 项巡检）、`node scripts/verify-jwt-access.mjs`（28 项企业模式权限断言）、`python scripts/route_probe.py`（96 条全路由真实探针）——五套验证全部入库可复跑，CI 三 job 同步执行。
+   `pnpm --filter @sciflow/server test`（server 345）+ `pnpm --filter @sciflow/web test`（web 134）、`python scripts/full_regression.py`（238 项全链路回归）、`node scripts/monitor_config_center.mjs`（25 项巡检）、`node scripts/verify-jwt-access.mjs`（28 项企业模式权限断言）、`python scripts/route_probe.py`（96 条全路由真实探针）——验证命令全部入库可复跑，CI 三 job 同步执行。
 
 ## 📸 界面预览
 
@@ -206,10 +206,10 @@ flowchart LR
 
 | 端 | 技术 |
 | --- | --- |
-| 后端 `apps/server` | NestJS 11 · TypeScript（strict）· Drizzle ORM · better-sqlite3（WAL）· Vercel AI SDK（OpenAI 兼容）· LangGraph（编排 / 断点续跑 / 人工确认）· MCP 官方 SDK · zod · helmet + pino · MSW 进程内 mock 网关 |
+| 后端 `apps/server` | NestJS 11 · TypeScript（strict）· Drizzle ORM · better-sqlite3（WAL）· Vercel AI SDK（三协议模型接入）· LangGraph（编排 / 断点续跑 / 人工确认）· MCP 官方 SDK · zod · helmet + pino · MSW 进程内 mock 网关 |
 | 前端 `apps/web` | React 19 · Vite 6 · TypeScript · Tailwind CSS v4（主题风格包走 CSS 变量覆盖）· TanStack Query / Table · Recharts · sigma.js + graphology · streamdown（流式 Markdown）· CodeMirror 6 · react-markdown + KaTeX · mermaid（按需异步 chunk） |
 | 桌面端 `apps/desktop` | Electron 41（内嵌 Node 24，原生支持 require(ESM)）· 内嵌后端（`ELECTRON_RUN_AS_NODE`）· 本地 SQLite（userData 隔离，打包时自动按 Electron ABI 重编原生模块）· electron-builder 三平台打包 · electron-updater 自动更新（opt-in） |
-| 工程 | pnpm workspace · vitest（server 336 / web 128 / desktop 5）· Playwright 冒烟 · promptfoo 契约评估 · GitHub Actions 三 job（类型/单测/构建 · 全量回归 · E2E+评测）· Python 3 回归脚本 |
+| 工程 | pnpm workspace · vitest（server 345 / web 134 / desktop 5）· Playwright 冒烟 · promptfoo 契约评估 · GitHub Actions 三 job（类型/单测/构建 · 全量回归 · E2E+评测）· Python 3 回归脚本 |
 
 **架构概览**
 
@@ -297,11 +297,11 @@ node apps/server/dist/apps/server/src/cli.js run   --topic "图神经网络在�
 
 ## 🔑 AI 配置说明
 
-SciFlow 支持**任意 OpenAI 兼容端点**，只需要填 `base_url` + `model` + `key`：
+SciFlow 支持 **OpenAI 兼容、Anthropic Messages、Google Gemini** 三种协议；填写 `base_url`、模型名和 Key 即可接入：
 
 | 变量 | 说明 | 示例值（占位，非真实 Key） |
 | --- | --- | --- |
-| `AI_BASE_URL` | OpenAI 兼容接口地址 | `https://api.deepseek.com/v1` |
+| `AI_BASE_URL` | 对应协议的接口地址 | `https://api.deepseek.com/v1` |
 | `AI_API_KEY` | 你的 API 密钥 | `sk-your-api-key-here` |
 | `AI_MODEL` | 默认模型 | `deepseek-chat` |
 | `AI_MODEL_FAST` | fast 档（问答/润色/翻译/评审 JSON） | 留空则回落 `AI_MODEL` |
@@ -321,7 +321,7 @@ SciFlow 支持**任意 OpenAI 兼容端点**，只需要填 `base_url` + `model`
 pnpm --filter @sciflow/server typecheck
 pnpm --filter @sciflow/web typecheck
 
-# 单元测试（vitest：server 285 条 + web 128 条 + desktop 5 条）
+# 单元测试（vitest：server 345 条 + web 134 条 + desktop 5 条）
 pnpm --filter @sciflow/server test
 pnpm --filter @sciflow/web test
 
@@ -353,7 +353,7 @@ SCIFLOW_BASE=http://localhost:3000 AI_MOCK=1 \
 
 > 外部工具（如 promptfoo）需要真实 HTTP 端点时：`node apps/server/scripts/mock-openai-http.mjs`——复用同一路由表，监听 `127.0.0.1:5099`。
 
-回归基线（全新库 + mock 网关实测，见 `scripts/full_regression.py`）：**PASS 178 / FAIL 0 / KNOWN 0**（KNOWN 机制保留但当前为空集：历史 11 项存量缺口已全部修复）。mock 网关仅用于测试/演示，不代表真实模型能力。
+回归基线（全新库 + mock 网关实测，见 `scripts/full_regression.py`）：**PASS 238 / FAIL 0 / KNOWN 0**（KNOWN 机制保留但当前为空集）。mock 网关仅用于测试/演示，不代表真实模型能力。
 
 ## 📚 文档索引
 

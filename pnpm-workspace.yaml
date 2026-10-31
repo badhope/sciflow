@@ -65,17 +65,39 @@ overrides:
   # diff：公告 >=6.0.0 <8.0.3（唯一消费者是本项目自身声明的 ^8.0.4）
   'diff@>=6.0.0 <8.0.3': ^8.0.4
   basic-ftp: ^6.2.1
-  # katex：公告 <0.18.2，但 rehype-katex@7 / micromark-extension-math@3 声明 ^0.16.0，
-  # 而 0.16 线最新发布即为 0.16.47（无更高补丁版）→ 该链路的 low 级告警无可用修复版，
-  # 已登记 SECURITY.md「已知残留风险」。项目自身依赖已为 ^0.18.9（满足补丁要求），
-  # 不在此处钉版，以免把 rehype 链路强行拉到不兼容 major。
+  # katex：项目统一钉到 0.18.9；rehype/remark/mermaid 运行验证通过，消除旧 0.16 传递副本告警。
   # simple-git 系列：node-llama-cpp 声明 ^3.36.0，此处强制升到已修复的 4.x
   # （本项目仅用其 embedding 推理，不触及 git 克隆路径；升级后以构建+回归验证）
   simple-git: ^4.0.2
   '@simple-git/argv-parser': ^2.0.1
   # extract-zip：公告给出 >=2.0.2，但 npm 上 2.0.1 已是最新发布版（无可升级目标），
   # electron 自身依赖 ^2.0.1；待上游发版后再钉（当前风险=构建期解压路径，非运行时代码路径）
-  # node-forge / sprintf-js：公告修复版尚未发布，见 SECURITY.md「已知残留风险」
+  # node-forge / sprintf-js：保留上游兼容说明；本轮 node-forge 已锁到 1.4.2，audit 无 high/critical。
+  # body-parser / multer：Nest 与 MCP 共享 Express 链路，强制使用已修复补丁线
+  body-parser: ^2.4.0
+  multer: ^2.5.0
+  # undici：多协议 AI SDK 共用 provider-utils，统一到含 TLS/重定向/编码修复的补丁线
+  undici: ^7.30.1
+  # zod：统一应用与 AI SDK 使用已修复的内存耗尽补丁
+  zod: ^4.6.6
+  # Vite / happy-dom：前端工具链的 Windows 检查与 host-code 风险补丁
+  vite: ^6.4.4
+  happy-dom: ^21.0.4
+  # node-forge：promptfoo 的 jks-js 传递依赖，锁到当前已发布的安全版本
+  node-forge: ^1.4.1
+  # Azure Identity：promptfoo / Azure AI Projects 均接受 4.14.x，消除 MSAL Node <7.1 的高危传递依赖
+  '@azure/identity': ^4.14.1
+  # promptfoo 仍直接声明 7.0.x，强制补到已修复的 MSAL Node 7.1.x
+  '@azure/msal-node': ^7.1.2
+  # fast-uri：AJV 3.x 的同 major 修复版，修复 scheme/host 解析歧义
+  fast-uri: ^3.1.9
+  # glob/minimatch：仅提升受影响的现代 major，保留 Electron 老链路的 v7/v9/v5 兼容分支
+  'glob@>=9.0.0 <14.0.2': ^14.0.2
+  'minimatch@>=10.0.0 <11.0.1': ^11.0.1
+  # minimatch v11 保持 CommonJS/ESM 双入口，统一旧 Electron/OpenAPI 链路的 globparts DoS 修复
+  minimatch: ^11.0.1
+  # KaTeX：同一 0.x 线的安全补丁，测试 rehype/mermaid 后保留统一版本
+  katex: ^0.18.9
 
 # 显式声明「忽略构建脚本」（pnpm 10+ 机制）
 ignoredBuiltDependencies:

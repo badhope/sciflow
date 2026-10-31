@@ -14,6 +14,10 @@ import json, os, re, subprocess, sys, time, urllib.request, urllib.error, tempfi
 
 import socket, random
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 def _free_port() -> int:
@@ -40,7 +44,7 @@ ANSI = re.compile(r"\[[0-9;]*m")
 
 def run(cmd, env=None, cwd=None, timeout=600):
     e = {**os.environ, "NO_COLOR": "1", "FORCE_COLOR": "0", **(env or {})}
-    p = subprocess.run(cmd, shell=True, capture_output=True, text=True, env=e, cwd=cwd or str(ROOT), timeout=timeout)
+    p = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", env=e, cwd=cwd or str(ROOT), timeout=timeout)
     return p.returncode, ANSI.sub("", (p.stdout or "") + (p.stderr or ""))
 
 def req(method, path, body=None, timeout=120):
@@ -116,7 +120,8 @@ record("B3 pino JSON 日志", '"level":30' in logtext and '"msg"' in logtext)
 print("\n[C] 全量回归（全新库 + mock）")
 code, out = run(f"python scripts/full_regression.py", env={"SCIFLOW_BASE": BASE, "AI_MOCK": "1"})
 mm = re.search(r"结果: PASS (\d+) / FAIL (\d+) / KNOWN\(存量缺口\) (\d+)", out)
-record("C1 回归 PASS/FAIL/KNOWN", code == 0 and mm and mm.group(2) == "0", mm.group(0) if mm else out.strip().splitlines()[-1][:80])
+fallback = out.strip().splitlines()[-1][:80] if out.strip() else f"exit={code}, no output"
+record("C1 回归 PASS/FAIL/KNOWN", code == 0 and bool(mm) and mm.group(2) == "0", mm.group(0) if mm else fallback)
 
 # ---------- D. 流水线 e2e ----------
 print("\n[D] 流水线 e2e（LangGraph interrupt/checkpoint/trace）")

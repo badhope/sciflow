@@ -23,7 +23,7 @@ cp apps/server/.env.example apps/server/.env   # 填 AI 三件套
 pnpm build && pnpm start                        # 或 pnpm dev（前后端并行）
 ```
 
-**验证**：`/api/health` 200 → `SCIFLOW_BASE=http://localhost:3000 AI_MOCK=1 python3 scripts/full_regression.py` 应 **PASS 165 / FAIL 0**；`python3 scripts/final_acceptance.py` 应 **21/21**。
+**验证**：`/api/health` 200 → `SCIFLOW_BASE=http://localhost:3000 AI_MOCK=1 python3 scripts/full_regression.py` 应 **PASS 238 / FAIL 0**；`python3 scripts/final_acceptance.py` 应 **23/23**。
 
 ## 3. 当前完成度（截至 v0.6.0）
 

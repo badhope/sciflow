@@ -52,7 +52,7 @@ sciflow 是一个**本地优先、单机部署**的 AI 科研助手：NestJS 11 
 - **引用网络**：citation 表 + 引用池净化 + `[作者 年份]` 与文末 GB/T 7714 参考文献列表自动渲染，成文后引用真实可追溯。
 - **实验沙箱**：选定后端 spawn 本机 `python3`（前端 0 新体积、后端 0 新依赖），临时目录 + 默认 10s 超时杀进程组 + stdout/图截断上限，写作页内嵌可运行代码块、可保存为实验记录档案。
 - **知识库打通**：明确 `knowledge_docs` 增 `referenceId` 可空外键的打通方向——从文献上传全文自动绑定书目，RAG 结果可反查 reference，消除两套数据重复录入。
-- **验证基线**：全量回归 `scripts/full_regression.py` v5 覆盖 66 个路由，**PASS 85 / FAIL 2（均为外部 AI 网关限流类环境项，自动降级跳过）**；typecheck（server/web 双端 `tsc --noEmit`）、vitest（server 单元测试）、build（前后端）全绿；`pnpm audit` 0 漏洞。
+- **验证基线**：全量回归 `scripts/full_regression.py` 覆盖路由与流水线闭环，当前 **PASS 238 / FAIL 0 / KNOWN 0**；typecheck（server/web 双端 `tsc --noEmit`）、vitest、build、最终验收 23/23、企业权限 28/28、配置巡检 25/25、官方 npm registry audit 全部通过。
 
 ---
 
@@ -130,13 +130,13 @@ sciflow 是一个**本地优先、单机部署**的 AI 科研助手：NestJS 11 
 
 | 验证项 | 命令 / 位置 | 当前状态 |
 |---|---|---|
-| 全量回归 | `scripts/full_regression.py`（v5，覆盖全部 66 个路由，含 guardrail 拒参 / RAG 混合检索 / usage 成本统计专项） | **PASS 85 / FAIL 2**（2 项均为外部 AI 网关限流类环境项，脚本自动降级跳过，不影响代码正确性结论） |
+| 全量回归 | `scripts/full_regression.py`（v6，覆盖 66 个路由与流水线闭环，含 guardrail 拒参 / RAG 混合检索 / usage 成本统计专项） | **PASS 238 / FAIL 0 / KNOWN 0** |
 | 类型检查 | server / web 双端 `tsc --noEmit`（CI 强制 ×2） | 全绿 |
-| 单元测试 | server `pnpm --filter server test`（16 条）+ web `pnpm --filter web test`（15 条，含 msw 网络层拦截） | 全绿 |
+| 单元测试 | server `pnpm --filter @sciflow/server test`（345 条）+ web `pnpm --filter @sciflow/web test`（134 条）+ desktop 主进程 build | 全绿 |
 | 构建 | 前后端 `build`（CI ×2） | 全绿 |
 | 依赖安全 | `pnpm audit --registry=https://registry.npmjs.org --prod` | **0 已知漏洞**（生产依赖；安全补丁经 pnpm overrides 钉版，见 pnpm-workspace.yaml） |
 | 体积红线 | 图表/编辑器/图谱分别独立 chunk（懒加载）；首屏不加载图表与图谱包 | 守住，新增功能不引入重型运行时 |
-| 本地 mock AI 网关 | `AI_MOCK=1` 起后端后跑 `full_regression.py`（见 README「本地 mock AI 网关」） | **mock 模式 PASS 165 / FAIL 0 / KNOWN 0**：无 Key 本机即可端到端跑通流水线；外部工具（promptfoo）用 `apps/server/scripts/mock-openai-http.mjs` 暴露 127.0.0.1:5099 |
+| 本地 mock AI 网关 | `AI_MOCK=1` 起后端后跑 `full_regression.py`（见 README「本地 mock AI 网关」） | **mock 模式 PASS 238 / FAIL 0 / KNOWN 0**：无 Key 本机即可端到端跑通流水线；外部工具（promptfoo）用 `apps/server/scripts/mock-openai-http.mjs` 暴露 127.0.0.1:5099 |
 
 > 后续每轮改造完成后，须以同一套基线（typecheck ×2 + vitest + build ×2 + `full_regression.py`）回归全绿作为合并门槛；AI 网关限流类失败仍按环境项处理并显式标注，不得静默吞掉。
 

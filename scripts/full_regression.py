@@ -3,7 +3,7 @@ import os
 """SciFlow 全量回归测试 v6 — 覆盖全部 66 个路由（含 guardrail 拒参 / RAG 混合检索 / usage 成本统计专项）
 
 基线数字（本机全新库 + AI_MOCK=1 实测）：
-  **PASS 184 / FAIL 0 / KNOWN 0**（v1.0.1：P1/P2 平台化替换 + R1-R8 存量缺口修复后的当前契约）。
+  **PASS 238 / FAIL 0 / KNOWN 0**（当前 v1.9.5 契约；KNOWN 机制保留但当前为空集）。
   历史：替换期 KNOWN 11 项存量缺口（对象数组作者/指纹回填/BibTeX/RIS/中文 FTS/APA 排序/
   流水线 qualityReports/筛选回包/25.1 命中语义等）已全部修复，KNOWN_GAPS 机制保留（当前为空集）：
   新失败一律计入 FAIL 且 exit 1，不允许隐藏。

@@ -160,8 +160,8 @@ describe('AddAssetPanel', () => {
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(['---\nname: x\n---\nbody'], 'SKILL.md', { type: 'text/markdown' });
     ext.upload.mockResolvedValue({ added: 1, updated: 0, assets: [], errors: [] });
-    await userEvent.upload(input, file);
-    await waitFor(() => expect(ext.upload).toHaveBeenCalled());
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => expect(ext.upload).toHaveBeenCalledWith(file));
   });
 
   it('导入错误原样展示（字段级定位）', async () => {

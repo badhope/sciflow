@@ -4,14 +4,14 @@
 > **topic validation → deep literature survey (depth 1–3) → outline confirmation (with contrarian variants) → section-wise drafting → 7-dimension quality gate (auto-reflexion under 80) → polishing → citation formatting → submission tracking.**
 >
 > Each stage is owned by a **dedicated agent**; humans only gate at key checkpoints. Every step's **execution trace, token usage and duration Gantt** are fully observable.
-> Models are pluggable (any OpenAI-compatible endpoint, multi-provider switching), capabilities speak **MCP** in both directions (callable by Claude, or connecting external MCP servers),
+> Models are pluggable across OpenAI-compatible, Anthropic Messages, and Google Gemini protocols, with multi-provider switching; capabilities speak **MCP** in both directions (callable by Claude, or connecting external MCP servers),
 > and `sciflow run` produces a manuscript headlessly. Data and keys stay on your machine by default — that is a data-sovereignty fact, not the selling point.
 
 [![CI](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![version](https://img.shields.io/badge/version-1.1.0-black.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.9.5-black.svg)](CHANGELOG.md)
 
 > **🌐 Language / 语言：[English](README.en.md) · [中文](README.md)**
 
@@ -33,7 +33,7 @@ flowchart LR
     G --> H[Submission assist<br/>journal match / cover letter / tracking]
     K[(Local SQLite<br/>literature · KB · memory · cost)] -.-> C
     K -.-> E
-    L[Your model key<br/>any OpenAI-compatible endpoint] -.-> B
+    L[Your model key<br/>three pluggable protocols] -.-> B
     L -.-> E
     L -.-> F
 ```
@@ -82,7 +82,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for the full history.
 - **Section-wise drafting + Agentic RAG**: each section searches the local knowledge base while writing; `[n]` anchors map 1:1 to the reference list.
 - **Academic polishing**: three-part polish (original + polished + rationale), CN↔EN translation, paraphrasing; tail blocks (references / figures) are protected from rewriting.
 - **Version history + diff**: named snapshots, LCS text diff per version.
-- **One-click export**: Markdown / Word (.docx).
+- **One-click export**: Markdown / Word (.docx) / LaTeX / standalone HTML.
 
 ### Citations & literature
 - **8 citation styles**: APA / IEEE / Vancouver / **GB/T 7714** / Nature / Chicago / Springer / ACS, re-rendered in place.
@@ -118,7 +118,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for the full history.
 | Observability | **Agent execution trace / token usage / step-duration Gantt / deep health probe** | Some | — | — | — |
 | Multi-agent orchestration | **Stage-owned agents + human outline checkpoint + checkpoint resume** | Partial | — | Recursive | — |
 | Anti-homogenization | **Contrarian outline variants + recursive research depth** | Multi-perspective QA | — | Recursive depth | — |
-| Model freedom | **Any OpenAI-compatible endpoint + multi-provider switch (fast/strong routing)** | Fixed cloud models | Bundled | BYO key | Bundled |
+| Model freedom | **OpenAI-compatible / Anthropic / Gemini + multi-provider switch (fast/strong routing)** | Fixed cloud models | Bundled | BYO key | Bundled |
 | Open integration | **MCP both directions (callable by Claude, or attach external MCP) + headless CLI** | — | API | CLI | — |
 | Citations | **8 CSL styles live re-render + citation audit + fingerprint dedup** | Footnotes | Extraction table | Citation list | Source chips |
 | Submission | **Journal matching / Cover Letter / review reply / status tracking** | — | — | — | — |
@@ -131,10 +131,10 @@ See [`CHANGELOG.md`](CHANGELOG.md) for the full history.
 
 | Tier | Technologies |
 | --- | --- |
-| Server `apps/server` | NestJS 11 · TypeScript (strict) · Drizzle ORM · better-sqlite3 (WAL) · Vercel AI SDK (OpenAI-compatible) · LangGraph (orchestration / checkpoint / interrupt) · MCP official SDK · zod · helmet + pino · MSW in-process mock gateway |
+| Server `apps/server` | NestJS 11 · TypeScript (strict) · Drizzle ORM · better-sqlite3 (WAL) · Vercel AI SDK (three protocols) · LangGraph (orchestration / checkpoint / interrupt) · MCP official SDK · zod · helmet + pino · MSW in-process mock gateway |
 | Web `apps/web` | React 19 · Vite 6 · TypeScript · Tailwind CSS v4 · TanStack Query/Table · Recharts · sigma.js + graphology · streamdown · CodeMirror 6 · react-markdown + KaTeX |
 | Desktop `apps/desktop` | Electron 41 · embedded server · per-user SQLite · electron-builder · electron-updater (opt-in) |
-| Engineering | pnpm workspace · vitest (server 108 / web 73) · Playwright smoke · promptfoo contract evals · GitHub Actions (3 jobs) · Python regression (178 checks) |
+| Engineering | pnpm workspace · vitest (server 345 / web 134 / desktop 5) · Playwright smoke · promptfoo contract evals · GitHub Actions (3 jobs) · Python regression (238 checks) |
 
 Data chain: `Project → Document (multi-version) → Citation → Reference (traceable)`; `PipelineTask / AgentExecution / ReflexionLog / MemoryLog / LlmCallLog` record pipeline state, agent traces, rewrite rounds, memory and token cost.
 
@@ -184,19 +184,19 @@ Other commands: `health` / `project list` / `pipeline run|status` / `doc export`
 
 ## 🔑 AI configuration
 
-Any OpenAI-compatible endpoint works — fill `AI_BASE_URL` + `AI_API_KEY` + `AI_MODEL` in `apps/server/.env` (DeepSeek / Zhipu / Kimi / Ark / Qwen / Ollama local `http://localhost:11434/v1` …). `AI_MODEL_FAST` / `AI_MODEL_STRONG` route tiers; `AI_RPM_CAP` throttles; `AI_MOCK=1` enables the deterministic in-process mock gateway (no key, no network). Without a key, local features keep working and AI features show explicit configuration hints — **no fake data**.
+SciFlow supports **OpenAI-compatible, Anthropic Messages, and Google Gemini** protocols. Fill `AI_BASE_URL` + `AI_API_KEY` + `AI_MODEL` in `apps/server/.env` (DeepSeek / Zhipu / Kimi / Ark / Qwen / Ollama local `http://localhost:11434/v1` …). `AI_MODEL_FAST` / `AI_MODEL_STRONG` route tiers; `AI_RPM_CAP` throttles; `AI_MOCK=1` enables the deterministic in-process mock gateway (no key, no network). Without a key, local features keep working and AI features show explicit configuration hints — **no fake data**.
 
 ## 🧪 Testing & regression
 
 ```bash
 pnpm --filter @sciflow/server typecheck && pnpm --filter @sciflow/web typecheck
-pnpm --filter @sciflow/server test          # vitest, 108 tests
-pnpm --filter @sciflow/web test             # vitest, 73 tests
+pnpm --filter @sciflow/server test          # vitest, 345 tests
+pnpm --filter @sciflow/web test             # vitest, 134 tests
 pnpm --filter @sciflow/server build && pnpm --filter @sciflow/web build
 pnpm exec playwright test e2e/workspace-smoke.spec.ts
 pnpm exec promptfoo eval -c evals/promptfooconfig.yaml
 
-# Full blackbox regression (fresh DB + mock gateway): PASS 178 / FAIL 0
+# Full blackbox regression (fresh DB + mock gateway): PASS 238 / FAIL 0
 AI_MOCK=1 AI_RPM_CAP=120 DATABASE_PATH=/tmp/sciflow_regression.db PORT=3000 \
   node apps/server/dist/apps/server/src/main.js
 SCIFLOW_BASE=http://localhost:3000 AI_MOCK=1 python3 scripts/full_regression.py

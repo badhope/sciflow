@@ -1,4 +1,4 @@
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 
@@ -59,11 +59,17 @@ const report = {
 async function renderPage() {
   const { QualityPage } = await import('./QualityPage');
   const qc = new QueryClient({ defaultOptions: { queries: { retry: 0 } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <QualityPage project={project} />
-    </QueryClientProvider>,
-  );
+  let result: ReturnType<typeof render>;
+  await act(async () => {
+    result = render(
+      <QueryClientProvider client={qc}>
+        <QualityPage project={project} />
+      </QueryClientProvider>,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  return result!;
 }
 
 describe('质量页：客观检查器卡片', () => {
@@ -138,7 +144,7 @@ describe('质量页：客观检查器卡片', () => {
     await waitFor(() => expect(r.container.textContent).toContain('旧稿'));
     const row = [...r.container.querySelectorAll('button')].find((b) => b.textContent?.includes('旧稿'));
     expect(row).toBeTruthy();
-    row!.click();
+    fireEvent.click(row!);
     await waitFor(() => expect(objectiveAudit).toHaveBeenCalledWith('d-old'));
   });
   it('说明该分就是流水线质量门用的分（消除双分数认知冲突）', { timeout: 20000 }, async () => {
