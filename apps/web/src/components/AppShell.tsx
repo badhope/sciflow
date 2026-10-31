@@ -100,8 +100,26 @@ export function AppShell({ sidebar, toolbar, children, sidebarWidth = 224, toolb
   );
 }
 
-/** 侧栏内的分组标题（可折叠：低频分组默认收起为小节标题，点击展开——渐进披露，侧栏不再一屏 12 项） */
-export function ShellNavGroup({ label, children, defaultCollapsed = false }: { label: string; children: ReactNode; defaultCollapsed?: boolean }) {
+/**
+ * 侧栏内的分组标题（可折叠）。
+ *
+ * v2.0：增加 `hint`（分组副标题，说明该段该做什么）与 `step`（生命周期序号）。
+ * 导航改为按科研阶段组织后，仅靠 4 字分组名不足以表达「这段是干什么的」，
+ * 副标题补上意图；序号把「从上往下走」的流程感显性化。
+ */
+export function ShellNavGroup({
+  label,
+  hint,
+  step,
+  children,
+  defaultCollapsed = false,
+}: {
+  label: string;
+  hint?: string;
+  step?: number;
+  children: ReactNode;
+  defaultCollapsed?: boolean;
+}) {
   const [open, setOpen] = useState(!defaultCollapsed);
   const count = Children.count(children);
   return (
@@ -113,7 +131,15 @@ export function ShellNavGroup({ label, children, defaultCollapsed = false }: { l
         aria-expanded={open}
         title={open ? `收起 ${label}` : `展开 ${label}`}
       >
-        <span>{label}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          {typeof step === 'number' && (
+            <span className="shrink-0 rounded-[3px] bg-slate-200 px-1 text-[9px] font-semibold leading-[13px] text-slate-500 dark:bg-slate-700 dark:text-slate-300" aria-hidden="true">
+              {step}
+            </span>
+          )}
+          <span className="truncate">{label}</span>
+          {hint && open && <span className="truncate text-[10px] font-normal normal-case tracking-normal text-slate-400">· {hint}</span>}
+        </span>
         <span className="flex items-center gap-1 text-[10px] font-normal normal-case tracking-normal text-slate-400" aria-hidden="true">
           {!open && <span className="rounded-full bg-slate-100 px-1.5 text-[10px] leading-4 dark:bg-slate-800">{count}</span>}
           <ChevronDown size={11} className={`transition-transform ${open ? '' : '-rotate-90'}`} />

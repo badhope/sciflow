@@ -108,13 +108,30 @@ describe('checkPaperQuality 多标准', () => {
     };
     let body = '';
     for (const [title, text] of Object.entries(sectionBodies)) {
-      body += `## ${title}\n\n${text.repeat(6)}\n\n`;
+      body += `## ${title}\n\n${text.repeat(16)}\n\n`;
     }
     for (let i = 1; i <= 32; i++) body += `代表性工作见文献[${i}]。`;
     const r = checkPaperQuality(body, { citationCount: 32, externalRefs: true, standard: 'strict' });
     expect(r.standard.key).toBe('strict');
     expect(r.hardFails).toEqual([]);
     expect(r.totalScore).toBeGreaterThanOrEqual(75);
+  });
+
+  it('篇幅未达所选标准 90% → 硬伤封顶 40（v1.9.5：2307 字拿 89 分过 80 门的漏洞）', () => {
+    // 复现：结构/引用/可读性全满，唯独篇幅只有标准下限的一半
+    const NL = String.fromCharCode(10);
+    const sec = (title: string, body: string, times: number) => `## ${title}${NL}${NL}${body.repeat(times)}${NL}${NL}`;
+    let short = '';
+    short += sec('引言', '现代社会的原子化并非单一技术后果，而是分工细化与媒介中介化的共同结果。', 12);
+    short += sec('方法', '本文以自主性—联结性框架刻画个体处境。', 12);
+    short += sec('结果', '网络既扩展弱联结，也制造比较压力。', 12);
+    short += sec('讨论', '原子化不是需要消灭的状态，而是需要治理的条件。', 12);
+    short += sec('结论', '制度与心理两个层面都需要干预。', 10);
+    for (let i = 1; i <= 18; i++) short += `相关讨论见文献[${i}]。`;
+    const r = checkPaperQuality(short, { citationCount: 18, externalRefs: true, standard: 'standard' });
+    expect(r.stats.chars).toBeLessThan(4500 * 0.9);
+    expect(r.hardFails.some((f) => f.includes('篇幅未达'))).toBe(true);
+    expect(r.totalScore).toBeLessThanOrEqual(40);
   });
 
   it('门禁及格线随标准变化（报告必须带 standard 元数据）', () => {

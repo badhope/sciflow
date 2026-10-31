@@ -82,31 +82,47 @@ const VIEW_LABELS: Record<View, string> = {
   settings: '设置',
 };
 
-/** 导航按「核心工作 → 自动化 → 记录与洞察」三段叙事（名称唯一来源 = VIEW_LABELS） */
-const NAV_GROUPS: { label: string; defaultCollapsed?: boolean; items: { key: View; label: string; icon: typeof LayoutDashboard }[] }[] = [
+/**
+ * 导航信息架构（v2.0 重构）——按**科研生命周期**组织，不再按「工具类别」平铺。
+ *
+ * 为什么改（对齐项目定位「从选题到投稿的可审计科研流水线」）：
+ *  · 旧结构把本项目真正的差异化能力（全自动流水线）折进默认收起的「自动化」组，等于把卖点藏起来；
+ *  · 工作台/写作/文献/知识库四个平级入口，用户看不出「先做什么」；
+ *  · 质量评分与投稿辅助被归进「自动化」，而它们其实是稿件的后续阶段。
+ * 新结构收敛为 4 段叙事，每段对应研究的一个真实阶段，段内按阶段顺序排列，
+ * 用户从上往下走即可；工具类页面（实验/记忆）不占主流程位置。
+ */
+const NAV_GROUPS: { label: string; hint: string; defaultCollapsed?: boolean; items: { key: View; label: string; icon: typeof LayoutDashboard }[] }[] = [
   {
-    label: '核心工作',
+    label: '研究立项',
+    hint: '定题与可行性',
     items: [
       { key: 'workspace', label: VIEW_LABELS.workspace, icon: LayoutDashboard },
-      { key: 'writing', label: VIEW_LABELS.writing, icon: BookOpen },
+      { key: 'dashboard', label: VIEW_LABELS.dashboard, icon: LayoutGrid },
+    ],
+  },
+  {
+    label: '证据与资料',
+    hint: '文献、知识库',
+    items: [
       { key: 'literature', label: VIEW_LABELS.literature, icon: Library },
       { key: 'knowledge', label: VIEW_LABELS.knowledge, icon: BookMarked },
     ],
   },
   {
-    label: '自动化',
-    defaultCollapsed: true,
+    label: '写作与质量',
+    hint: '流水线、起草、评分',
     items: [
       { key: 'pipeline', label: VIEW_LABELS.pipeline, icon: Workflow },
+      { key: 'writing', label: VIEW_LABELS.writing, icon: BookOpen },
       { key: 'quality', label: VIEW_LABELS.quality, icon: Gauge },
-      { key: 'submission', label: VIEW_LABELS.submission, icon: Send },
     ],
   },
   {
-    label: '记录与洞察',
-    defaultCollapsed: true,
+    label: '投稿与复盘',
+    hint: '选刊、跟踪、复盘',
     items: [
-      { key: 'dashboard', label: VIEW_LABELS.dashboard, icon: LayoutGrid },
+      { key: 'submission', label: VIEW_LABELS.submission, icon: Send },
       { key: 'experiments', label: VIEW_LABELS.experiments, icon: Beaker },
       { key: 'memory', label: VIEW_LABELS.memory, icon: Brain },
     ],
@@ -574,8 +590,8 @@ function SidebarContent({
 
       {/* 导航 */}
       <nav className="shrink-0" aria-label="功能导航">
-        {NAV_GROUPS.map((g) => (
-          <ShellNavGroup key={g.label} label={g.label} defaultCollapsed={g.defaultCollapsed}>
+        {NAV_GROUPS.map((g, gi) => (
+          <ShellNavGroup key={g.label} label={g.label} hint={g.hint} step={gi + 1} defaultCollapsed={g.defaultCollapsed}>
             {g.items.map((n) => {
               const Icon = n.icon;
               return (
@@ -857,13 +873,18 @@ function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onCl
   );
 }
 
-/** 移动端底部导航（≤900px）：只放最高频 5 个入口，其余走侧栏抽屉 */
+/**
+ * 移动端底部导航（≤900px）：只放最高频 5 个入口，其余走侧栏抽屉。
+ *
+ * v2.0：把「流水线」放进底栏、让出「评分」——流水线是本产品的核心能力入口，
+ * 而评分是阶段性的检查动作（从驾驶舱与写作页都能进）。旧底栏把最强能力藏进了抽屉。
+ */
 function MobileTabBar({ view, onSelect }: { view: View; onSelect: (v: View) => void }) {
   const items: { key: View | 'more'; label: string; icon: typeof LayoutDashboard }[] = [
     { key: 'workspace', label: '工作台', icon: LayoutDashboard },
-    { key: 'writing', label: '写作', icon: BookOpen },
     { key: 'literature', label: '文献', icon: Library },
-    { key: 'quality', label: '评分', icon: Gauge },
+    { key: 'pipeline', label: '流水线', icon: Workflow },
+    { key: 'writing', label: '写作', icon: BookOpen },
     { key: 'more', label: '更多', icon: MenuIcon },
   ];
   return (

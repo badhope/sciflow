@@ -9,6 +9,7 @@ import { formatWordCount } from '../lib/format';
 import { useContext } from 'react';
 import { ToastContext } from '../App';
 import type { View } from '../App';
+import { ProjectCockpit, type QualityGateState } from './dashboard/ProjectCockpit';
 
 export function DashboardPage({ project, onNavigate, openDoc }: {
   project: Project;
@@ -53,6 +54,46 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
   /** 科研全链路总览：后端未就绪/失败时为 null，前端降级为小字提示，不白屏 */
   const overviewQuery = useQuery({ queryKey: ['dash-overview', project.id], queryFn: () => api.dashboard.overview(project.id), retry: 0 });
   const overview: DashboardOverview | null = overviewQuery.data ?? null;
+  /**
+   * 驾驶舱质量门数据（v2.0）：一次取「项目内全部文档最新客观分」与「当前评审标准」。
+   * 两者都是只读接口，失败时降级为未评分状态，不阻塞首屏。
+   */
+  const gateQuery = useQuery({
+    queryKey: ['dash-gate', project.id],
+    queryFn: async () => {
+      const [ov, settings] = await Promise.all([
+        api.quality.projectOverview(project.id).catch(() => null),
+        api.customization.getPipelineSettings().catch(() => null),
+      ]);
+      return { overview: ov, settings };
+    },
+    retry: 0,
+    staleTime: 30_000,
+  });
+  /** 投稿条数：概览接口不含该字段，驾驶舱阶段推断需要 */
+  const submissionsQuery = useQuery({
+    queryKey: ['dash-submissions', project.id],
+    queryFn: () => api.submission.listTracks(project.id).catch(() => [] as never[]),
+    retry: 0,
+    staleTime: 60_000,
+  });
+  const submissionCount = submissionsQuery.data?.length ?? 0;
+  /**
+   * 质量门状态：取「最需要关注的那篇」（客观分最低）作为门禁信号。
+   * 空项目 / 无正文 → score=null，驾驶舱显示「未评分」而不是假绿。
+   */
+  const qualityGate: QualityGateState = (() => {
+    const items = gateQuery.data?.overview?.items ?? [];
+    const scored = items.filter((it) => it.chars > 0);
+    const worst = scored.length ? scored.reduce((a, b) => (a.objectiveScore <= b.objectiveScore ? a : b)) : null;
+    const settings = gateQuery.data?.settings;
+    return {
+      score: worst ? worst.objectiveScore : null,
+      passScore: settings?.qualityPassScore ?? null,
+      standardLabel: settings?.qualityStandardLabel ?? null,
+      hardFailCount: worst?.hardFailCount ?? 0,
+    };
+  })();
   /** 差距#22：项目级系统提示（写作偏好），本地草稿态 */
   const [prefaceDraft, setPrefaceDraft] = useState(project.preface || '');
   const [prefaceEditing, setPrefaceEditing] = useState(false);
@@ -163,6 +204,17 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
           </div>
         </details>
       </section>
+
+      {/* 项目驾驶舱（v2.0）：首屏唯一主区域——当前阶段 / 下一步动作 / 质量门状态 */}
+      <ProjectCockpit
+        project={project}
+        docs={docs}
+        overview={overview}
+        gate={qualityGate}
+        submissionCount={submissionCount}
+        onNavigate={onNavigate}
+        onOpenDoc={openDoc}
+      />
 
       {/* 功能入口：原为 5 张等大卡片（与草稿列表争主次，把主任务挤到首屏之外）。
           改为一行紧凑的「分段导航条」——功能一个不少，视觉权重降到辅助层。 */}

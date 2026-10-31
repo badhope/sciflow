@@ -13,5 +13,12 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test-setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    /**
+     * 显式超时（v2.0 修复）：默认 5000ms 在 19 个测试文件并行 + happy-dom 反复重建环境时不够用。
+     * 实测 ProviderManager 两个用例单独跑 2.3-3.0s（绿），全量并行时 5.01-5.07s（红）
+     * —— 负载相关的假红，不是行为回归。放宽到 15s，真正的行为失败仍会报错。
+     */
+    testTimeout: 15_000,
+    hookTimeout: 15_000,
   },
 });

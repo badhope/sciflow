@@ -51,7 +51,10 @@ describe('checkPaperQuality 确定性', () => {
   });
 
   it('输出包含七个维度与统计口径（v1.9.4 新增信息密度维）', () => {
-    const r = checkPaperQuality(GOOD_PAPER);
+    // 该 fixture 是 ~600 字的草稿体量：用 draft 档评测（v1.9.5 起篇幅不达标即硬伤，
+    // 用 standard 档会让这个「结构/引用维度」用例被篇幅硬伤干扰，测不到它想测的东西）
+    // 显式 minChars 覆盖：该用例测的是维度与统计口径，不是篇幅门禁
+    const r = checkPaperQuality(GOOD_PAPER, { standard: 'draft', minChars: 200 });
     expect(r.dimensions.map((d) => d.key)).toEqual(['structure', 'length', 'citation', 'readability', 'rigor', 'integrity', 'density']);
     expect(r.stats.sections).toBeGreaterThanOrEqual(6);
     expect(r.stats.uniqueCitations).toBe(3);
@@ -59,7 +62,7 @@ describe('checkPaperQuality 确定性', () => {
     expect(r.stats.boilerplateHits).toBeGreaterThanOrEqual(0);
     expect(r.stats.maxSectionShare).toBeGreaterThan(0);
     // 标准元数据必须随报告返回（前端展示「按哪个标准评的」）
-    expect(r.standard.key).toBe('standard');
+    expect(r.standard.key).toBe('draft');
     expect(r.standard.passScore).toBeGreaterThan(0);
     expect(r.hardFails).toEqual([]);
   });
