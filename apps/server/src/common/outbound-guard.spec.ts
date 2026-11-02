@@ -28,6 +28,13 @@ describe('isBlockedAddress', () => {
     }
   });
 
+  it('IPv6 链路本地整段 fe80::/10 拒绝', () => {
+    for (const ip of ['fe80::1', 'fe90::1', 'fea0::1', 'febf::1']) {
+      expect(isBlockedAddress(ip), ip).toBe(true);
+    }
+    expect(isBlockedAddress('fec0::1')).toBe(false);
+  });
+
   it('IPv4-mapped IPv6 按内层 IPv4 判定', () => {
     expect(isBlockedAddress('::ffff:127.0.0.1')).toBe(true);
     expect(isBlockedAddress('::ffff:8.8.8.8')).toBe(false);
@@ -36,8 +43,20 @@ describe('isBlockedAddress', () => {
     expect(isBlockedAddress('::ffff:808:808')).toBe(false);
   });
 
-  it('无法解析的字符串按危险处理（fail-closed）', () => {
-    expect(isBlockedAddress('not-an-ip')).toBe(true);
+  it('域名不是 IP 字面量，不在此层判定（交由 DNS 解析后逐个裁决）', () => {
+    // 回归背景：早期实现把非 IP 输入当危险处理，导致所有真实模型域名出站被误拒。
+    for (const host of ['api.openai.com', 'not-an-ip']) {
+      expect(isBlockedAddress(host), host).toBe(false);
+    }
+  });
+});
+
+describe('checkOutboundUrl 域名路径', () => {
+  it('域名解析到内网地址时拒绝（DNS rebinding 防护）', async () => {
+    // localhost 必然解析到回环，验证域名分支确实逐个校验解析结果
+    const r = await checkOutboundUrl('http://localhost:8080/');
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/内网|保留/);
   });
 });
 

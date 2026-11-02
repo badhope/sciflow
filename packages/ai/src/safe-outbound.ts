@@ -1,7 +1,7 @@
 import { Agent, fetch as undiciFetch } from 'undici';
 import type { RequestInfo, RequestInit } from 'undici';
 import { lookup as dnsLookup } from 'node:dns';
-import { isBlockedAddress, isCloudMetadataAddress } from '../../core/src/ip-policy';
+import { isBlockedAddress, isCloudMetadataAddress, isIpLiteral } from '../../core/src/ip-policy';
 
 /**
  * 连接级出站传输（打包层共用）。
@@ -105,15 +105,14 @@ export async function safeOutboundFetch(
     return globalThis.fetch(input as unknown as string | URL, init as globalThis.RequestInit) as Promise<globalThis.Response>;
   }
   if (isCloudMetadataAddress(host)) throw new Error('出站地址被安全策略拒绝：云元数据地址');
-  if (isBlockedAddress(host) && !allowPrivate) throw new Error(`出站地址被安全策略拒绝：内网/保留地址 ${host}`);
-  if (!isIPLiteral(host)) await resolveAllowed(host, allowPrivate);
+  // 域名不在此处判定：isBlockedAddress 只对 IP 字面量有意义，对域名应放行到连接级 DNS 复核。
+  if (isIpLiteral(host) && isBlockedAddress(host) && !allowPrivate) {
+    throw new Error(`出站地址被安全策略拒绝：内网/保留地址 ${host}`);
+  }
+  if (!isIpLiteral(host)) await resolveAllowed(host, allowPrivate);
   return undiciFetch(input as RequestInfo, {
     ...(init as RequestInit),
     dispatcher: agents.get(allowPrivate) as never,
     redirect: 'manual',
   }) as unknown as Promise<globalThis.Response>;
-}
-
-function isIPLiteral(host: string): boolean {
-  return /^[0-9.]+$/.test(host) || host.includes(':');
 }

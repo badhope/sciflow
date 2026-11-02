@@ -61,4 +61,4 @@
 
 - 回归脚本必须用**全新数据库**：脏库会让指纹去重、字段唯一性等用例误报失败。
 - 修改契约（如引用渲染方式）时，必须同步更新 `scripts/full_regression.py` 里对应断言，
-  并在 `docs/RUNTIME-FINDINGS.md` 记录「为什么改」。不允许只让测试变绿而不说明契约变化。
+  并在 `docs/archive/RUNTIME-FINDINGS.md` 记录「为什么改」。不允许只让测试变绿而不说明契约变化。
