@@ -7,6 +7,17 @@ import {
 import { PIPELINE_STEPS } from '@sciflow/core/pipeline-steps';
 import { api } from '../api/client';
 import { MessageList } from '../components/MessageList';
+import { TaskListPanel } from '../components/TaskListPanel';
+import { ApprovalDialog } from '../components/ApprovalDialog';
+import {
+  MentionPicker,
+  applyMention,
+  extractMentions,
+  filterMentions,
+  parseMentionQuery,
+  type MentionItem,
+} from '../components/MentionPicker';
+import { EvidenceChain, type ChainNode } from '../components/EvidenceChain';
 import { useSplitDrag } from '../lib/split-drag';
 import { useHotkeys } from '../lib/hotkeys';
 import { useAsyncAction } from '../lib/async';
@@ -163,6 +174,9 @@ export function WorkspacePage({
   const taRef = useRef<HTMLTextAreaElement>(null);
   const [slashDismissed, setSlashDismissed] = useState(false);
   const [slashActive, setSlashActive] = useState(0);
+  // @ 上下文提及：把文献/资料/文档直接注入本轮对话
+  const [mention, setMention] = useState<{ query: string; start: number } | null>(null);
+  const [mentionActive, setMentionActive] = useState(0);
 
   // ── 数据层（React Query）──────────────────────────────────
   const docsQuery = useQuery({ queryKey: ['docs', project.id], queryFn: () => api.documents.list(project.id) });
@@ -177,7 +191,18 @@ export function WorkspacePage({
   const [kbByName, setKbByName] = useState<Map<string, KnowledgeDoc>>(new Map());
   const [citeSource, setCiteSource] = useState<ChatSource | null>(null);
   const [citing, setCiting] = useState(false);
-  const docs: Doc[] = docsQuery.data ?? [];
+  const docs: Doc[] = useMemo(() => docsQuery.data ?? [], [docsQuery.data]);
+  // @ 提及数据源：文献与知识库资料（仅在需要时拉取，避免首屏多两个请求）
+  const refsQuery = useQuery({
+    queryKey: ['references', project.id],
+    queryFn: () => api.references.list(project.id),
+    staleTime: 60_000,
+  });
+  const kbDocsQuery = useQuery({
+    queryKey: ['knowledge-docs', project.id],
+    queryFn: () => api.knowledge.list(project.id),
+    staleTime: 60_000,
+  });
 
   useEffect(() => {
     api.settings.get().then((s) => setModels(s.ai.models || [])).catch(() => undefined);
@@ -211,6 +236,25 @@ export function WorkspacePage({
       return t.status === 'running' || t.status === 'awaiting_confirmation' ? 2500 : false;
     },
   });
+  // ── Harness：任务清单与工具审批（模型自主规划 + 危险操作确认）──
+  const tasksQuery = useQuery({
+    queryKey: ['agent-tasks', project.id],
+    queryFn: () => api.agent.tasks(project.id),
+    refetchInterval: 4000,
+  });
+  const approvalsQuery = useQuery({
+    queryKey: ['agent-approvals', project.id],
+    queryFn: () => api.agent.pendingApprovals(project.id),
+    refetchInterval: 3000,
+  });
+  const pendingApproval = approvalsQuery.data?.approvals?.[0] ?? null;
+  const decideApproval = useMutation({
+    mutationFn: ({ id, approved }: { id: string; approved: boolean }) => api.agent.decideApproval(id, approved),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['agent-approvals', project.id] });
+    },
+  });
+
   const task: PipelineTask | undefined = taskQuery.data;
   /**
    * 选中文档的优先级：显式选择 > 流水线产物 > 传入初值 > 列表首个。
@@ -284,10 +328,20 @@ export function WorkspacePage({
   const send = () => {
     const text = input.trim();
     if (!text || streaming) return;
+    // @ 提及：把被引用的对象整理成一行上下文说明，让模型知道用户指的是哪一份材料。
+    // 正文内容由服务端按 docContext/RAG 注入，这里只负责声明范围，避免重复传输长文本。
+    const mentions = extractMentions(text);
+    const withMentions =
+      mentions.length > 0
+        ? `${text}
+
+（本轮请优先依据以下被引用的材料作答：${mentions.join('、')}）`
+        : text;
     setInput('');
     setSlashDismissed(false);
+    setMention(null);
     saveDraft(project.id, activeId, '');
-    chat.send(text, chatOpts());
+    chat.send(withMentions, chatOpts());
   };
 
   // Esc 停止（统一快捷键注册表；生成中才生效，输入框内也响应）
@@ -305,6 +359,13 @@ export function WorkspacePage({
   const onComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // 中文输入法组词中的 Enter 不能当作发送（历史缺陷：拼音未上屏就发出）
     if (e.nativeEvent.isComposing) return;
+    // @ 提及菜单优先：它在视觉上盖住了 slash 菜单
+    if (mention && mentionFiltered.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionActive((a) => Math.min(a + 1, mentionFiltered.length - 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setMentionActive((a) => Math.max(a - 1, 0)); return; }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); pickMention(mentionFiltered[mentionActive] ?? mentionFiltered[0]); return; }
+      if (e.key === 'Escape') { e.preventDefault(); setMention(null); return; }
+    }
     if (slashOpen) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setSlashActive((a) => Math.min(a + 1, Math.max(slashFiltered.length - 1, 0))); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); setSlashActive((a) => Math.max(a - 1, 0)); return; }
@@ -494,12 +555,63 @@ export function WorkspacePage({
   const busy = task && (task.status === 'running' || task.status === 'awaiting_confirmation');
   const hasConversation = messages.some((m) => m.role === 'user');
   const slashFiltered = input.startsWith('/') ? SLASH_COMMANDS.filter((c) => c.name.includes(input.slice(1))).slice(0, 5) : [];
+
+  // @ 提及候选：文献 + 知识库资料 + 当前项目文档
+  const mentionItems: MentionItem[] = useMemo(() => {
+    const items: MentionItem[] = [];
+    for (const r of refsQuery.data ?? []) {
+      items.push({ id: r.id, kind: 'reference', label: r.title, hint: r.year ? `${r.year}` : '文献' });
+    }
+    for (const k of kbDocsQuery.data ?? []) {
+      items.push({ id: k.id, kind: 'knowledge', label: k.name, hint: '资料' });
+    }
+    for (const d of docs) {
+      items.push({ id: d.id, kind: 'document', label: d.title, hint: '文档' });
+    }
+    return items;
+  }, [refsQuery.data, kbDocsQuery.data, docs]);
+  const mentionFiltered = mention ? filterMentions(mentionItems, mention.query) : [];
+
+  // 证据链：从正文实际内容推导，而不是读后端标记——
+  // 这样用户改了正文，链条立刻跟着变，不会显示过期的"闭环"。
+  const chainNodes: ChainNode[] = useMemo(() => {
+    const text = activeDoc?.content ?? '';
+    // 正文锚点：匹配 [n] 形式（排除 [文献N]/[Ref:N] 这类残留标记）
+    const anchors = new Set<string>();
+    const re = /\[(\d{1,3})\]/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) anchors.add(m[1]);
+    const refs = refsQuery.data ?? [];
+    return [
+      { stage: 'question', label: '研究问题', count: activeDoc ? 1 : 0, state: 'ok' },
+      { stage: 'evidence', label: '文献依据', count: refs.length, state: 'ok' },
+      { stage: 'anchor', label: '正文锚点', count: anchors.size, state: 'ok' },
+      { stage: 'citation', label: '引用记录', count: Math.min(anchors.size, refs.length), state: 'ok' },
+      { stage: 'reference', label: '可溯源条目', count: refs.filter((r) => !!r.title).length, state: 'ok' },
+    ];
+  }, [activeDoc, refsQuery.data]);
   // slash 菜单为派生状态（输入 "/" 即出，Esc 仅记忆"本次已关闭"，输入变化即重置）
   const slashOpen = !slashDismissed && input.startsWith('/') && slashFiltered.length > 0;
   const applySlash = (c: (typeof SLASH_COMMANDS)[number]) => {
     setInput(c.template);
     setSlashActive(0);
     requestAnimationFrame(() => taRef.current?.focus());
+  };
+
+  /** 选中 @ 提及项：把查询替换成 `@标签`，光标回到末尾 */
+  const pickMention = (item: MentionItem) => {
+    if (!mention) return;
+    const caret = taRef.current?.selectionStart ?? input.length;
+    const next = applyMention(input, mention.start, caret, item.label);
+    setInput(next.text);
+    setMention(null);
+    requestAnimationFrame(() => {
+      const el = taRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(next.caret, next.caret);
+      }
+    });
   };
 
   return (
@@ -708,6 +820,9 @@ export function WorkspacePage({
                 </div>
               </div>
             )}
+            {/* 任务清单：模型规划的多步工作，进度可核 */}
+            <TaskListPanel tasks={tasksQuery.data?.tasks ?? []} summary={tasksQuery.data?.summary} />
+
             <MessageList
               messages={messages}
               streaming={streaming}
@@ -863,14 +978,31 @@ export function WorkspacePage({
               )}
               <span className="text-[11px] text-slate-400 ml-auto hidden sm:inline">Enter 发送 · Esc 停止 · / 快捷指令</span>
             </div>
-            <div className="flex items-end gap-2">
+            <div className="relative flex items-end gap-2">
+              {mention && mentionFiltered.length > 0 && (
+                <MentionPicker
+                  items={mentionFiltered}
+                  activeIndex={mentionActive}
+                  onActiveChange={setMentionActive}
+                  onPick={pickMention}
+                  onClose={() => setMention(null)}
+                />
+              )}
               <textarea
                 rows={2}
                 ref={taRef}
                 className="flex-1 resize-none rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-900 outline-none focus:border-teal-500"
                 placeholder="问问题 / 让 AI 起草内容（Enter 发送，/ 唤出快捷指令）…"
                 value={input}
-                onChange={(e) => { setInput(e.target.value); setSlashDismissed(false); }}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setInput(v);
+                  setSlashDismissed(false);
+                  // @ 触发：光标前最近的 @ 且处于词首
+                  const parsed = parseMentionQuery(v, e.target.selectionStart ?? v.length);
+                  setMention(parsed);
+                  setMentionActive(0);
+                }}
                 onKeyDown={onComposerKeyDown}
               />
               {streaming ? (
@@ -907,6 +1039,11 @@ export function WorkspacePage({
               </button>
             )}
           </div>
+          {activeDoc && (
+            <div className="shrink-0 border-b border-slate-100 px-2 py-2 dark:border-slate-800">
+              <EvidenceChain nodes={chainNodes} compact />
+            </div>
+          )}
           <div className="flex-1 min-h-0 overflow-hidden">
             {activeDoc ? (
               <WritingPreview content={activeDoc.content || ''} editorMode="preview" exported={[]} />
@@ -1001,6 +1138,13 @@ export function WorkspacePage({
         danger
         onClose={() => setDeletingSession(null)}
         onConfirm={() => { if (deletingSession) deleteSession(deletingSession.id); setDeletingSession(null); }}
+      />
+
+      {/* 工具审批：有副作用的操作先经用户确认 */}
+      <ApprovalDialog
+        request={pendingApproval}
+        busy={decideApproval.isPending}
+        onDecide={(id, approved) => decideApproval.mutate({ id, approved })}
       />
     </div>
   );

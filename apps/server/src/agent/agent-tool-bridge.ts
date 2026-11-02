@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { tool as aiTool, jsonSchema } from 'ai';
 import type { ToolSet } from 'ai';
 import { McpService } from '../mcp/mcp.service';
+import { TaskListService, type TaskInput } from './task-list.service';
+import { ApprovalService } from './approval.service';
 import { AgentTraceService } from './agent-trace.service';
 import { db } from '../db/database';
 import { appSettings, llmCallLogs } from '../db/schema';
@@ -37,6 +39,8 @@ export class AgentToolBridge {
   constructor(
     private readonly mcp: McpService,
     private readonly trace?: AgentTraceService,
+    private readonly taskList?: TaskListService,
+    private readonly approvals?: ApprovalService,
   ) {}
 
   /** 技能→工具前缀映射：设置页停用某技能后，对应工具不再暴露给模型（技能真实生效，非仅展示） */
@@ -111,6 +115,66 @@ export class AgentToolBridge {
           const schemaProps = (t.inputSchema?.properties ?? {}) as Record<string, unknown>;
           const scoped = projectId && 'projectId' in schemaProps ? { ...args, projectId } : args;
           return this.invoke(t.name, scoped, runId);
+        },
+      });
+    }
+    // ── 原生 harness 工具：不依赖 MCP 注册表，直接由模型驱动 ──
+    // 任务清单：让模型把多步工作显式列出来，用户能看到进度而不是黑盒。
+    if (this.taskList) {
+      set.update_todo_list = aiTool({
+        description:
+          '更新当前任务清单。做多步任务时先列清单，每完成一步就更新状态，让用户看到进度。整份清单一次性传入（会替换旧清单）。',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            tasks: {
+              type: 'array',
+              description: '完整清单，按执行顺序排列',
+              items: {
+                type: 'object',
+                properties: {
+                  content: { type: 'string', description: '任务描述，一句话说清要做什么' },
+                  status: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'cancelled'] },
+                  priority: { type: 'string', enum: ['high', 'medium', 'low'] },
+                },
+                required: ['content'],
+              },
+            },
+          },
+          required: ['tasks'],
+        }),
+        execute: async (args: { tasks?: TaskInput[] }) => {
+          const tasks = this.taskList!.replaceAll(args.tasks ?? [], projectId ?? null, runId ?? null);
+          return { ok: true, count: tasks.length, summary: this.taskList!.summary(projectId ?? null, runId ?? null) };
+        },
+      });
+    }
+    // 审批：有副作用的工具先问用户，拒绝时给出可读原因让模型换路径。
+    if (this.approvals) {
+      set.request_approval = aiTool({
+        description:
+          '对会产生副作用或消耗外部资源的操作请求用户批准（如执行代码、修改正文、改全局配置）。批准后继续，拒绝则换一种方式。',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            toolName: { type: 'string', description: '拟执行的工具名' },
+            reason: { type: 'string', description: '为什么需要执行它，用一句话向用户说明' },
+            args: { type: 'object', description: '拟传入的参数' },
+          },
+          required: ['toolName', 'reason'],
+        }),
+        execute: async (args: { toolName: string; reason: string; args?: Record<string, unknown> }) => {
+          if (!this.approvals!.needsApproval(args.toolName)) {
+            return { required: false, message: '该工具无需审批，可直接执行' };
+          }
+          const record = this.approvals!.request({
+            toolName: args.toolName,
+            args: args.args ?? {},
+            reason: args.reason,
+            projectId: projectId ?? null,
+            runId: runId ?? null,
+          });
+          return { required: true, approvalId: record.id, status: record.status, message: '已提交审批，等待用户确认' };
         },
       });
     }
