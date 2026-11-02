@@ -28,6 +28,8 @@
       "drizzle-orm": ["./node_modules/drizzle-orm"],
       "ai": ["./node_modules/ai"],
       "@ai-sdk/openai-compatible": ["./node_modules/@ai-sdk/openai-compatible"],
+      "@ai-sdk/anthropic": ["./node_modules/@ai-sdk/anthropic"],
+      "@ai-sdk/google": ["./node_modules/@ai-sdk/google"],
       "zod": ["./node_modules/zod"],
       "jsonrepair": ["./node_modules/jsonrepair"],
       "p-limit": ["./node_modules/p-limit"],
@@ -37,8 +39,7 @@
       "@langchain/textsplitters": ["./node_modules/@langchain/textsplitters"],
       "unpdf": ["./node_modules/unpdf"],
       "node-llama-cpp": ["./node_modules/node-llama-cpp"],
-      "msw": ["./node_modules/msw/lib/core/index.d.ts"],
-      "msw/node": ["./node_modules/msw/lib/node/index.d.ts"],
+      "undici": ["./node_modules/undici"],
       "msw/http": ["./node_modules/msw/lib/http/index.d.ts"]
     },
     "incremental": true,

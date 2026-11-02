@@ -5,6 +5,7 @@ import type { CitationAudit,
   Doc,
   DocVersionEntry,
   MemoryItem,
+  ObjectiveAuditResponse,
   Outline,
   PipelineTask,
   PolishRecord,
@@ -27,6 +28,8 @@ export const writing = {
     list: (projectId: string) => request<Doc[]>(`/api/documents?projectId=${projectId}`),
     get: (id: string) => request<Doc>(`/api/documents/${id}`),
     citationAudit: (id: string) => request<CitationAudit>(`/api/documents/${id}/citation-audit`),
+    /** 客观质量检查器（确定性规则引擎）：同一正文必然同分同指纹，不受模型漂移影响 */
+    objectiveAudit: (id: string) => request<ObjectiveAuditResponse>(`/api/documents/${id}/objective-audit`),
     create: (projectId: string, title: string) =>
       request<Doc>('/api/documents', { method: 'POST', body: JSON.stringify({ projectId, title }) }),
     update: (id: string, patch: Partial<Doc>) =>
@@ -89,6 +92,8 @@ export const writing = {
     remove: (id: string) => request<{ ok: boolean }>(`/api/pipeline/${id}`, { method: 'DELETE' }),
     /** 停止运行中的任务（POST /api/pipeline/:id/stop；上游挂起时不再只能重启服务） */
     stop: (id: string) => request<PipelineTask>(`/api/pipeline/${id}/stop`, { method: 'POST' }),
+    /** 重跑已结束任务（同主题新任务；失败任务不必删了重输） */
+    rerun: (id: string) => request<PipelineTask>(`/api/pipeline/${id}/rerun`, { method: 'POST' }),
   },
   chat: {
     answer: (message: string, history: { role: string; content: string }[] = [], projectId?: string) =>
@@ -100,7 +105,9 @@ export const writing = {
       ),
   },
   memory: {
-    list: (type?: string, q = '') => request<MemoryItem[]>(`/api/memory?type=${type || ''}&q=${encodeURIComponent(q)}`),
+    /** projectId 必传（企业模式下服务端强制）：记忆是项目级资源，跨项目混列会泄露他人研究摘要 */
+    list: (type?: string, q = '', projectId?: string) =>
+      request<MemoryItem[]>(`/api/memory?type=${type || ''}&q=${encodeURIComponent(q)}${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ''}`),
     add: (type: 'episodic' | 'procedural', content: string, projectId?: string, keywords: string[] = []) =>
       request<MemoryItem>('/api/memory', { method: 'POST', body: JSON.stringify({ type, content, projectId, keywords }) }),
     remove: (id: string) => request<{ ok: boolean }>(`/api/memory/${id}`, { method: 'DELETE' }),

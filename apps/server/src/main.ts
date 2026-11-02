@@ -1,32 +1,7 @@
 import 'dotenv/config';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { config as loadEnv } from 'dotenv';
+import { loadServerEnv } from './common/server-env';
 
-/**
- * 显式加载 apps/server/.env。
- *
- * 编译后 __dirname 是 `dist/apps/server/src`（rootDir 固化为仓库根），
- * 因此既不能写死 `join(__dirname,'..')`，也不能只依赖 cwd。
- * 这里按「__dirname 向上逐级探测 apps/server/.env」+「cwd 兜底」两条路径找，
- * 保证从仓库根、从 apps/server、从 dist 目录启动都能读到同一份配置。
- */
-(function loadServerEnv() {
-  const candidates = [
-    // 1) 相对 cwd 的常见位置
-    resolve(process.cwd(), 'apps', 'server', '.env'),
-    resolve(process.cwd(), '.env'),
-    // 2) 相对自身位置向上探测（dist/apps/server/src → … → 仓库根）
-    ...Array.from({ length: 6 }, (_, i) => resolve(__dirname, ...Array(i > 0 ? i : 0).fill('..'), 'apps', 'server', '.env')),
-    ...Array.from({ length: 6 }, (_, i) => resolve(__dirname, ...Array(i > 0 ? i : 0).fill('..'), '.env')),
-  ];
-  for (const p of candidates) {
-    if (existsSync(p)) {
-      loadEnv({ path: p });
-      return;
-    }
-  }
-})();
+loadServerEnv();
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
@@ -34,7 +9,8 @@ import { Logger } from 'nestjs-pino';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { InputValidationPipe } from './common/input-validation.pipe';
-import { envInt } from '../../../packages/core/src/env';
+import { envInt } from './common/env';
+import { APP_VERSION } from './common/version';
 
 async function bootstrap() {
   // ---------- 启动期安全闸：非回环绑定必须启用鉴权，否则拒绝启动 ----------
@@ -95,7 +71,12 @@ async function bootstrap() {
   // OpenAPI 契约：本地文档端点（/api/docs）+ 供 openapi-typescript 生成前端类型（pnpm openapi:gen）
   const openapiDoc = SwaggerModule.createDocument(
     app,
-    new DocumentBuilder().setTitle('SciFlow API').setDescription('本地优先科研工作台（单用户）').setVersion('0.8.1').build(),
+    new DocumentBuilder()
+      .setTitle('SciFlow API')
+      .setDescription('本地优先科研工作台（单用户）')
+      // 版本走 APP_VERSION 单一来源（历史：此处写死 0.8.1，包版本升到 1.x 后 OpenAPI 仍自报 0.8.1）
+      .setVersion(APP_VERSION)
+      .build(),
   );
   SwaggerModule.setup('api/docs', app, openapiDoc);
   // 全局输入校验（轻量兜底，零新增依赖）：仅约束 @Body() 为 JSON 对象，不剥字段、不误伤现有端点

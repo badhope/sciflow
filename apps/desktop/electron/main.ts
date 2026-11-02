@@ -5,7 +5,7 @@
  * 安全基线：contextIsolation + 无 nodeIntegration + 外链走系统浏览器 + 回环监听
  */
 
-import { app, BrowserWindow, ipcMain, shell, Menu, dialog, protocol, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, Menu, dialog, protocol, nativeTheme, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { startServer, isDev, type ServerHandle } from './server-manager';
@@ -168,7 +168,8 @@ function createWindow(apiBase: string) {
     minWidth: 1024,
     minHeight: 680,
     title: 'SciFlow · 让科研从想法到成文',
-    backgroundColor: '#f4f6fb', // 品牌底色，避免启动白闪
+    // 窗口底色跟随系统明暗：固定浅色会让深色用户启动时闪白一帧
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b1220' : '#f4f6fb',
     autoHideMenuBar: true,
     show: false,
     icon: isDev ? path.join(__dirname, '..', 'build', 'icon.png') : undefined,

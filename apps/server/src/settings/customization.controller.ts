@@ -1,7 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { AdminGuard } from '../auth/admin.guard';
 import { CustomizationService } from './customization.service';
 
 @Controller('customization')
+@UseGuards(AdminGuard)
 export class CustomizationController {
   constructor(private readonly customization: CustomizationService) {}
 

@@ -37,11 +37,64 @@ AI_MODEL=deepseek-chat                     # 你开通的模型名
 pnpm install && pnpm dev        # 或 node apps/server/dist/apps/server/src/cli.js health
 ```
 
+> 也可以完全不用 `.env`：启动后在设置 → 模型路由 → 添加厂商，填 Base URL + Key 会自动检测可用模型并匹配上下文/输出/工具调用能力，点「测试连接」确认后保存并激活即可（v1.2）。
+
 **验收**：浏览器开 `http://localhost:3000/api/docs`，`/api/health` 返回 200 即通。若 `settings/check` 返回 503，九成是 Key 填错或模型名不存在——先别看代码，去厂商控制台核对模型名（DeepSeek 叫 `deepseek-chat`，豆包叫 `doubao-seed-*`，名字对不上一切白搭）。
 
 ### 一条新手最容易踩的坑
 
 `.env` 必须放在 `apps/server/` 下（不是仓库根目录）。从根目录启动时它也会被显式加载，但放错了位置你会对着「配置明明写了却不生效」耗半小时——别问是怎么知道的。
+
+---
+
+## 设置页 / CLI / 对话三入口改配置（v1.3）
+
+模型、角色、约束、钩子、权限都可以不改 `.env` 直接在应用内配置；三条入口写的是同一份数据，改完立即生效：
+
+| 入口 | 怎么用 | 适合 |
+|---|---|---|
+| 设置页 | 浏览器 → 设置 → 模型路由 / 配置中心 | 图形化逐项调整、看注入预览与审计 |
+| CLI | `sciflow config status` / `permission` / `role` / `constraint` / `hook` / `preset` / `export` / `import` / `preview` / `audit` | 脚本化、批量导入导出、无 GUI 环境 |
+| 对话 | 在任意对话里让 AI 调用 `config.*` 工具（如「新增一条约束：所有数值必须带单位」） | 一句话完成多项设置 |
+
+```bash
+# 例：CLI 新增约束 → 下一次对话立刻注入
+sciflow config constraint add "输出必须带单位" --rule "所有数值必须带单位" --level must --scope all
+sciflow config preview --scope chat        # 看到实际注入文本，与模型收到的一致
+sciflow config export --out my-config.json # 备份/分享（不含审计与密钥）
+sciflow config import my-config.json       # 幂等导入，重复导入不会叠加
+```
+
+**权限档**：`strict`（只读）/ `balanced` / `open` / `unrestricted`（默认全面放开）。核心保护项（鉴权、密钥与加密、SSRF、审计日志、数据库路径、监听地址与端口、不可逆数据操作）任何档位都不可改；放宽权限每次最多一级，防止误触一键放开。
+
+**运行时巡检**：`node scripts/monitor_config_center.mjs --base http://127.0.0.1:3000 --log <日志>`，19 项只读检查，退出码非 0 即有异常（CI 的 regression job 已接入）。
+
+---
+
+## 扩展中心：内置 87 条科研资产（v1.4）
+
+克隆下来就自带，默认全部启用，可在「设置 → 扩展中心」里按需关闭：
+
+| 类型 | 数量 | 内容 |
+|---|---|---|
+| MCP 服务器 | 20 | Context7、DeepWiki、arXiv、Paper Search、Zotero、BioMCP、Semantic Scholar、CNKI、Obsidian、NotebookLM、Basic Memory、Deep Research 等（附仓库/许可证/安装方式；Context7 与 DeepWiki 为公开 HTTP 端点可直接连） |
+| 技能 Skills | 31 | Anthropic 官方 Skills、Academic Research Skills（53.9k★）、Codex/Claude 学术三件套、系统综述、Humanizer、Prism、LatteReview、论文校对/写作模板，以及 13 项 SciFlow 私有优势工具（引用体检 / 统计口径审计 / 可复现方案 / 伦理扫描 / 图表规范 / 新颖性扫描 / 基金契合 / 投稿风险 / 审稿答辩 / 精读矩阵 / 实验计划 / 数据可用性 / 提示词加固） |
+| 角色 | 10 | 方法学家、统计顾问、期刊编辑、基金评审、数据管理员、伦理审查员、科研馆员、可复现性专员、图表设计师、审稿回复专家 |
+| 约束 | 10 | 引用可溯源、禁止编造、数值带单位、结构化输出、PRISMA、隐私不外泄、先声明假设、必写局限、AI 使用披露、聊天简洁 |
+| 钩子 | 4 | 结尾自检、风险提示、流水线先提纲、隐私拦截（关键词命中即拦） |
+| 提示词模板 | 12 | 润色（Nature 风格/降重）、翻译、IMRaD 大纲、论点先行起草、七维评审、缺口分析、结构化提取、证据综合、Cover Letter、审稿回复、选刊 |
+
+**四种添加方式**（每个资产面板都有入口）：手填模板、粘贴 SKILL.md / 模板 JSON / MCP JSON、拖拽 `.md/.json/.zip`（自动解析包内 SKILL.md 与 JSON）、一键 AI 生成（按模板出草稿，确认后保存）。第五种：在对话里直接让 AI 调用 `extension.*` 工具。
+
+```bash
+sciflow ext list                      # 查看全部（含私有标记）
+sciflow ext toggle skill-arxiv-mcp    # 启用/停用（-off 停用）
+sciflow ext import ./my-skill.md      # 导入 SKILL.md / JSON
+sciflow ext export --out ext.json     # 导出（不含 SciFlow 私有工具）
+sciflow ext reset                     # 恢复全部内置
+```
+
+私有优势工具（`visibility=private`）只在本机可见，不进入导出包、不出现在对外 MCP 清单。
 
 ---
 
@@ -95,7 +148,7 @@ docker run -d -p 8888:8080 searxng/searxng
 # PUT /api/web/config: { "provider": "tavily", "tavilyKey": "tvly-xxx" }
 ```
 
-什么都不配时默认走 DuckDuckGo 兜底（免 Key，通用摘要级质量）。
+什么都不配时默认走 DuckDuckGo，**国内网络不可达时自动降级 so360（免 Key、国内可达）**；全链失败会在返回里带 `notice` 说明原因（不再静默空结果）。
 
 **科研问答里要不要联网**？默认关（`websearch_in_chat=on` 开启）。开了之后：知识库无命中时才发起网搜，来源以 `[网搜N]` 标注进上下文、以 🌐 卡片展示给前端。文献事实类问题建议关着——模型引用网页比幻觉引用更隐蔽，而 SciFlow 的立场是引用必须可溯源。
 
@@ -106,6 +159,26 @@ curl http://127.0.0.1:3000/api/web/config
 ```
 
 ---
+
+## 企业模式：权限分两层（v1.8）
+
+`AUTH_MODE=jwt` 时按「数据面 / 配置面」两层隔离；本地/桌面模式（默认 `none`）两层都放行，零登录体验不变。
+
+| 层 | 覆盖范围 | 判定 | 拒绝码 |
+|---|---|---|---|
+| 数据面 | 项目 + 全部子资源：文档 / 文献 / 知识库 / 记忆 / 实验 / 研究设计稿 / 审稿意见 / 评分报告 / 执行轨迹 / 投稿 / 流水线任务 | `ProjectAccessService.assertXxx(id, user)`：子资源 → 项目 → owner | **404**（不泄露存在性） |
+| 配置面 | 模型厂商与 Key、baseURL、连接测试、权限档、角色/约束/钩子、扩展资产、成本用量、联网 provider、期刊库增删 | `AdminGuard`（类级 `@UseGuards`） | **403** |
+| 聚合面 | `dashboard/overview`、`memory`、`documents` 列表不带 projectId | controller 显式判断 | **403 / 400** |
+
+为什么配置面必须按角色而不是按项目：改 `baseURL` 就能把**全实例**的请求（含他人稿件）引到自己的服务器；
+改权限档就能放开自身限制。这些不属于任何项目，只能按角色判定。
+
+### 快速自检（部署后跑一遍）
+
+```bash
+pnpm --filter @sciflow/server build
+node scripts/verify-jwt-access.mjs    # 28 项断言，全自动（自拉独立库与端口，跑完即关）
+```
 
 ## 安全姿势：什么时候必须开认证
 
@@ -145,21 +218,73 @@ docker compose -f docker-compose.prod.yml up -d   # 生产配置
 | `AI_MODEL_FAST` / `AI_MODEL_STRONG` | 同 `AI_MODEL` | 双档路由，强烈建议分开 |
 | `AI_RPM_CAP` | 8 | 每分钟 AI 调用上限（令牌桶），防 429 风暴 |
 | `AI_REQUEST_TIMEOUT_MS` | 180000 | **请求级超时**：上游不回包时中止，防流水线永久挂起（0=禁用；流式按空闲时长判定） |
-| `WEBSEARCH_IN_PIPELINE` | off | 流水线文献步骤是否并入联网检索线索（也可用设置页 `websearch_in_pipeline`） |
+| `WEBSEARCH_IN_PIPELINE` | off | 流水线文献步骤是否并入联网检索线索（也可在设置页「流水线步骤与运行参数 → 流水线联网检索」开关，写 `websearch_in_pipeline`） |
 | `JUDGMENT_BASE_URL` / `JUDGMENT_API_KEY` / `JUDGMENT_MODEL` / `JUDGMENT_TIMEOUT_MS` | 无 | 意图判别器独立端点（OpenAI 兼容）；不配则沿用主 AI 服务 |
 | `EMBEDDING_MODEL_PATH` | 无 | 自备 GGUF 嵌入模型路径，不配则全文检索 |
 | `SCIFLOW_MODEL_CACHE` | `~/.sciflow/models` | 模型缓存目录 |
-| `WEBSEARCH_PROVIDER` | duckduckgo | searxng / tavily / serper / brave |
+| `WEBSEARCH_PROVIDER` | duckduckgo | so360（国内可达免 Key）/ searxng / tavily / serper / brave；DDG 失败自动降级 so360 |
 | `WEBSEARCH_IN_CHAT` | off | chat 联网兜底开关 |
 | `AUTH_MODE` / `JWT_SECRET` | none / 无 | 认证模式（非回环监听强制 jwt） |
 | `HOST` | 127.0.0.1 | 监听地址（0.0.0.0 触发安全闸） |
 | `SANDBOX_TIMEOUT_MS` | 10000 | Python 沙箱单次执行超时 |
 | `DATABASE_PATH` | `apps/server/data/sciflow.db` | SQLite 路径 |
+| `SCHOLAR_SEARCH` | on | 学术检索（OpenAlex/Crossref/arXiv）总开关；`off` 后流水线新颖性预检/文献补充与文献页「学术库检索」同时关闭（也可用设置页 `scholar_search`）。`AI_MOCK=1` 时强制关闭 |
 | `AI_MOCK` | 0 | 1 = 进程内 mock 网关（CI / 无网环境） |
 
 环境变量是首层兜底；运行期在设置页改的（厂商切换、搜索 provider）落 `app_setting` 表，**运行期配置优先于环境变量**——调试「改了没生效」时先看设置页。
 
 ---
+
+## 外观与主题（v1.7）
+
+主题分两个正交维度，均在「设置 → 外观与主题」里切换（也可用 ⌘K 命令面板搜「风格」）：
+
+| 维度 | 存储键 | 取值 |
+|---|---|---|
+| 风格（视觉语言） | `sciflow-theme-style` | `sciflow`（默认）/ `academic` / `paper` / `minimal` / `night` / `contrast` |
+| 明暗 | `sciflow-theme` | `light` / `dark` / `system`（默认跟随系统） |
+
+- 风格包只覆盖 CSS 变量（调色板 / 品牌 / 语义 / 圆角 / 阴影 / 密度 / 字体），不改组件类名；新增风格只需在 `apps/web/src/styles/themes.css` 加一段 `:root[data-theme='x']`，并在 `apps/web/src/lib/theme.ts` 的 `THEME_STYLES` 登记元数据。
+- 高对比无障碍包额外关闭玻璃模糊与氛围光、2px 实线边框、3px 焦点框（WCAG AAA 正文 21:1）。
+- 主题选择存在浏览器 localStorage（本机），不写数据库、不上传；刷新由 `index.html` 预置脚本还原，无闪变。
+
+### 学术检索与新颖性预检
+
+```bash
+# 学术库发现检索（只返回元数据，不入库）
+curl -X POST http://127.0.0.1:3100/api/references/discover   -H 'content-type: application/json'   -d '{"query":"heterophilic graph node classification","limit":5}'
+
+# 关闭学术检索（离线/合规场景）
+SCHOLAR_SEARCH=off
+```
+
+流水线「新颖性预检」步骤在文献调研前执行：取近 8 年同题工作，算选题 token 覆盖率（objective，零 LLM），重叠度 ≥70% 时把提醒写进产物「研究说明」。可在设置页关闭该步骤；学术检索关闭时该步骤自动跳过（不影响流水线）。
+
+## 质量检查器（确定性，v1.5）
+
+同一篇稿件必须得到同一分数——这是验收和对比的前提。`packages/core/src/quality-audit.ts` 是纯函数：零随机、零时间、零网络，六维各 20 分归一 100，附 FNV-1a 指纹。
+
+```bash
+# 检查已落库的文档
+node apps/server/dist/cli.js quality check --doc <documentId>
+# 检查本地 Markdown 文件
+node apps/server/dist/cli.js quality check --file ./paper/draft.md
+# HTTP（前端「客观检查器」面板同源）
+curl http://127.0.0.1:3100/api/documents/<id>/objective-audit
+```
+
+| 维度 | 判据 |
+|---|---|
+| 结构完整性 | 二级章节数；综述/框架类要求 引言/讨论/结论，实证类（有结果表或带百分数指标）才要求完整 IMRaD |
+| 篇幅达标 | ≥3000 字符（≥4500 满分） |
+| 引用闭环 | 正文 `[n]` 锚点与参考文献条目/citation 表可对上 |
+| 可读性 | 平均句长（>90 扣分）、超长段落、过短段落占比 |
+| 修辞严谨 | 模糊限定词密度、无证据强断言 ≤3 处 |
+| 学术诚信 | 自述无原始实验却声称「实验结果表明…优于/提升」且无结果表/数值 → 硬伤 |
+
+硬伤（占位符、空文、重复段落、长篇零引用、悬空锚点、名实不符）直接封顶 40；空文 0 分。**质量门以客观分为准**，LLM 7 维分只作为回炉改进建议——同一稿实测 LLM 分在 27–59 之间漂移，不能当合格判据。
+
+流水线里「质量门」步骤可用步骤开关整体停用（停用后不评分直接放行，仅用于调试）；客观检查器本身随时可通过 CLI/API/前端单独运行。
 
 ## CLI headless 全流程（一条命令出论文）
 

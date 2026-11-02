@@ -5,9 +5,13 @@ import { appSettings } from '../../db/src/schema';
 import { eq } from 'drizzle-orm';
 import * as prompts from './prompts';
 import { AiTransportService, ChatMessage, ChatStreamOptions } from './ai-transport.service';
+import { safeOutboundFetch } from './safe-outbound';
 import { startMockGateway } from './mock-gateway';
 import { jsonrepair } from 'jsonrepair';
 import { parseJson } from '../../core/src/json-guard';
+import { embedMany } from 'ai';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
 /**
  * 统一 AI 服务（domain 编排层）
@@ -57,7 +61,8 @@ export class AiService extends AiTransportService {
   /** mock 模式接管：覆盖传输层连接配置（依赖 transport 的 protected 成员，同类继承链内合法） */
   private switchToMockGateway() {
     (this as unknown as { baseUrl: string }).baseUrl = startMockGateway();
-    this.setApiKey('sk-mock-local-placeholder');
+    this.setApiKey('');
+    this.mockConnectionActive = true;
     (this as unknown as { fastModel: string }).fastModel = 'mock-model';
     (this as unknown as { strongModel: string }).strongModel = 'mock-model';
   }
@@ -86,7 +91,7 @@ export class AiService extends AiTransportService {
 
   /** 科研问答（非流式） */
   async chat(question: string, history: ChatMessage[] = [], opts: Pick<ChatStreamOptions, 'modelName'> = {}, customSystemPrompt?: string): Promise<string> {
-    return this.complete([{ role: 'system', content: this.resolveSystem(customSystemPrompt) }, ...history, { role: 'user', content: question }], { modelName: opts.modelName });
+    return this.complete([{ role: 'system', content: this.resolveSystem(customSystemPrompt) }, ...history, { role: 'user', content: question }], { modelName: opts.modelName, context: 'chat' });
   }
 
   /** Agent 化问答：在系统提示中注入项目记忆 + 知识库上下文（RAG） */
@@ -94,7 +99,7 @@ export class AiService extends AiTransportService {
     const sys = context
       ? `${this.resolveSystem(customSystemPrompt)}\n\n【当前项目上下文】\n${context}\n\n请优先结合上下文回答；上下文不足以覆盖时，再用你的专业知识补充，并说明依据。`
       : this.resolveSystem(customSystemPrompt);
-    return this.complete([{ role: 'system', content: sys }, ...history, { role: 'user', content: question }], { modelName: opts.modelName });
+    return this.complete([{ role: 'system', content: sys }, ...history, { role: 'user', content: question }], { modelName: opts.modelName, context: 'chat' });
   }
 
   /** Agent 化问答（流式）：默认请求 include_usage 收尾块，并接线外部 AbortSignal */
@@ -200,36 +205,66 @@ ${references}`
   async polish(text: string, mode: 'polish' | 'reduce' = 'polish'): Promise<{ original: string; polished: string; reason: string }> {
     const parts = text.split(/(?=^## )/m).filter((s) => s.trim().length > 0);
     const target = parts.length > 1 ? parts : [text];
-    const polishedParts: string[] = [];
-    const reasons: string[] = [];
     const polishCustom = this.getCustomPrompt('polish');
-    for (const part of target) {
-      const polishPrompt = polishCustom ? `${polishCustom}
+    // 并行润色：这里绝不能再包一层 this.limit —— complete() 内部已有同一个 p-limit 闸门，
+    // 嵌套排队在外层并发 ≥ 闸门并发数时会永久饿死（实测 AI_RPM_CAP 小值时整条流水线挂死）。
+    this.logger.log(`[润色] 开始：${target.length} 段并行`);
+    const t0 = Date.now();
+    let outcomes = await Promise.race([
+      Promise.all(
+        target.map(async (part, i) => {
+          const polishPrompt = polishCustom ? `${polishCustom}
 
 待处理正文：
 ${part}` : prompts.POLISH(part, mode);
-      const raw = await this.complete([{ role: 'user', content: polishPrompt }], { temperature: 0.4, maxTokens: 8192, context: 'polish' });
-      let parsed: Partial<{ original: string; polished: string; reason: string }> = {};
-      try {
-        parsed = this.jsonOf<{ original: string; polished: string; reason: string }>(raw);
-      } catch {
-        parsed = { polished: raw };
-      }
-      let piece = String(parsed.polished || part || '').trim();
-      // 处理 AI 嵌套输出：polished 字段本身又是 JSON 对象文本
-      if (piece.startsWith('{') && (piece.includes('"original"') || piece.includes('"reason"') || piece.includes('"polished"'))) {
-        try {
-          const nested = this.jsonOf<{ original?: string; polished?: string; reason?: string }>(piece);
-          piece = String(nested.polished || nested.original || piece).trim();
-        } catch { /* 保持原样 */ }
-      }
-      polishedParts.push(piece);
-      if (parsed.reason) reasons.push(String(parsed.reason).trim());
+          // 输出上限按输入长度估算（中文约 1 token/字，润色通常 ≤1.5 倍），夹取 1024-8192
+          const est = Math.min(8192, Math.max(1024, Math.ceil(part.length * 1.5)));
+          try {
+            // 润色是「锦上添花」步骤：单段最多重试 1 次、单次 90s 超时；
+            // 失败保留原文（fail-soft），不能让上游空响应把整条流水线拖成 failed。
+            const raw = await this.complete([{ role: 'user', content: polishPrompt }], {
+              temperature: 0.4, maxTokens: est, context: 'polish', retries: 1, signal: AbortSignal.timeout(90_000),
+            });
+            let parsed: Partial<{ original: string; polished: string; reason: string }> = {};
+            try {
+              parsed = this.jsonOf<{ original: string; polished: string; reason: string }>(raw);
+            } catch {
+              parsed = { polished: raw };
+            }
+            let piece = String(parsed.polished || part || '').trim();
+            // 处理 AI 嵌套输出：polished 字段本身又是 JSON 对象文本
+            if (piece.startsWith('{') && (piece.includes('"original"') || piece.includes('"reason"') || piece.includes('"polished"'))) {
+              try {
+                const nested = this.jsonOf<{ original?: string; polished?: string; reason?: string }>(piece);
+                piece = String(nested.polished || nested.original || piece).trim();
+              } catch { /* 保持原样 */ }
+            }
+            // 润色失败保护：模型返回空/过短 → 保留原文
+            if (!piece || piece.length < part.length * 0.3) {
+              return { i, piece: part, reason: `第 ${i + 1} 段润色输出异常（保留原文）` };
+            }
+            return { i, piece, reason: parsed.reason ? String(parsed.reason).trim() : '' };
+          } catch (e: any) {
+            return { i, piece: part, reason: `第 ${i + 1} 段润色失败（保留原文）：${String(e?.message || e).slice(0, 120)}` };
+          }
+        }),
+      ),
+      // 总看门狗：即使单个 complete 的 abort 失效，也绝不让润色挂死流水线（fail-soft 保留原文）
+      new Promise<null>((resolve) => {
+        const timer = setTimeout(() => resolve(null), 600_000);
+        timer.unref?.();
+      }),
+    ]);
+    if (outcomes === null) {
+      this.logger.warn(`[润色] 总看门狗超时（600s），全部段落保留原文`);
+      outcomes = target.map((part, i) => ({ i, piece: part, reason: `第 ${i + 1} 段润色整体超时（保留原文）` }));
     }
+    outcomes.sort((a, b) => a.i - b.i);
+    this.logger.log(`[润色] 完成：${target.length} 段，耗时 ${Math.round((Date.now() - t0) / 1000)}s`);
     return {
       original: text.trim(),
-      polished: polishedParts.join('\n\n'),
-      reason: reasons.join('；') || '分段润色完成',
+      polished: outcomes.map((o) => o.piece).join(String.fromCharCode(10) + String.fromCharCode(10)),
+      reason: outcomes.map((o) => o.reason).filter(Boolean).join('；') || '分段润色完成',
     };
   }
 
@@ -495,6 +530,43 @@ ${response}`
   }
 
   /** 研究缺口定位（zod 结构化校验） */
+  /**
+   * 远程文本嵌入（OpenAI 兼容 /embeddings；也兼容 Anthropic、Gemini 的嵌入端点）。
+   *
+   * 为什么放在这一层：向量检索此前只有本地 GGUF 一条路（且调用了不存在的 API，
+   * 实际从未产出向量）。绝大多数用户已经配了云端模型 Key，`/embeddings` 是同厂商
+   * 的附带能力，零额外配置即可让「向量 + 全文」混合检索真正跑起来。
+   * 维度契约由调用方（EmbeddingService）守：这里只负责把向量原样返回，不做截断。
+   */
+  async embedTexts(texts: string[], opts: { model?: string } = {}): Promise<number[][] | null> {
+    if (!texts.length) return [];
+    if (this.mockMode) return null; // mock 网关不实现 /embeddings，直接降级全文检索
+    const modelId = opts.model || process.env.EMBEDDING_API_MODEL || this.config.model;
+    if (!modelId) return null;
+    const embeddingModel = this.buildEmbeddingModel(this.protocol, this.baseUrl, this.apiKey, modelId);
+    if (!embeddingModel) return null;
+    const { embeddings } = await embedMany({ model: embeddingModel, values: texts, maxRetries: 1 });
+    return embeddings.map((e) => Array.from(e as unknown as ArrayLike<number>));
+  }
+
+  /** 按协议构造 embedding 模型（与 chat 侧同一套协议判定，避免第二套映射表） */
+  protected buildEmbeddingModel(
+    protocolValue: string,
+    baseUrl: string,
+    apiKey: string,
+    modelId: string,
+  ): Parameters<typeof embedMany>[0]['model'] | null {
+    const base = String(baseUrl || '').replace(/\/+$/, '');
+    if (protocolValue === 'anthropic-messages') {
+      // Anthropic Messages 协议本身不提供 /embeddings（官方 SDK 的 textEmbeddingModel 返回 never）。
+      // 返回 null → 调用方降级全文检索，不做「假装支持」的静默失败。
+      return null;
+    }
+    if (protocolValue === 'google-gemini') {
+      return createGoogleGenerativeAI({ name: 'sciflow', baseURL: base, apiKey, fetch: safeOutboundFetch }).textEmbeddingModel(modelId);
+    }
+    return createOpenAICompatible({ name: 'sciflow', baseURL: base, apiKey, fetch: safeOutboundFetch }).textEmbeddingModel(modelId);
+  }
   /**
    * B-3.3 可选 LLM 重排：对融合检索的候选块按问题相关性打分（0-10）。
    * 开关 app_setting retrieval_rerank（默认 off）——重排多一次 LLM 调用，仅高质量问答场景开启。

@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SciFlow · 本地优先的科研全流程 AI 助手</title>
 <meta property="og:title" content="SciFlow · 本地优先的科研全流程 AI 助手">
-<meta property="og:description" content="本地优先、单机部署的科研 AI 助手：多智能体流水线覆盖文献调研→写作→质量门→投稿全生命周期，SQLite 单文件开箱即跑，零外部依赖。">
+<meta property="og:description" content="本地优先、单机部署的科研 AI 助手：多智能体流水线覆盖文献调研→写作→质量门→投稿全生命周期，SQLite 单文件开箱即跑，无需外部数据库或托管服务。">
 <meta property="og:type" content="website">
-<meta name="description" content="SciFlow 是一个本地优先、单机部署的科研 AI 助手：多智能体流水线完成文献调研→写作→质量门→投稿全生命周期，SQLite 单文件开箱即跑。">
+<meta name="description" content="SciFlow 是一个本地优先、单机部署的科研 AI 助手：多智能体流水线完成文献调研→写作→质量门→投稿全生命周期，SQLite 单文件开箱即跑，无需外部数据库或托管服务。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%271%27%20x2%3D%271%27%20y2%3D%270%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%230f9e94%27%2F%3E%3Cstop%20offset%3D%27.55%27%20stop-color%3D%27%230b8fb4%27%2F%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%230b6fc4%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Cpath%20d%3D%27M%2046.9%2015.1%20A%2023%2023%200%201%200%2015.1%2046.9%27%20fill%3D%27none%27%20stroke%3D%27url%28%23g%29%27%20stroke-width%3D%272.2%27%20stroke-linecap%3D%27round%27%20opacity%3D%27.32%27%2F%3E%3Cpath%20d%3D%27M%2043.2%2021.4%20A%2011%2011%200%201%200%2032%2032%20A%2011%2011%200%201%201%2020.8%2042.6%27%20fill%3D%27none%27%20stroke%3D%27url%28%23g%29%27%20stroke-width%3D%276.5%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%2F%3E%3Ccircle%20cx%3D%2747.4%27%20cy%3D%2713.2%27%20r%3D%273.6%27%20fill%3D%27url%28%23g%29%27%2F%3E%3Ccircle%20cx%3D%2719.4%27%20cy%3D%2744%27%20r%3D%271.9%27%20fill%3D%27url%28%23g%29%27%20opacity%3D%27.75%27%2F%3E%3C%2Fsvg%3E">
 <style>
 /* ============ 主题变量 ============ */
@@ -92,6 +92,13 @@ html[data-theme="dark"] .theme-icon-moon{display:none}
 }
 .badge b{color:var(--brand2)}
 .cta-row{display:flex;gap:14px;justify-content:center;margin-top:38px;flex-wrap:wrap}
+.hero-shot{margin:52px auto 0;max-width:1040px}
+.hero-shot img{width:100%;height:auto;display:block;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.hero-shot figcaption{text-align:center;color:var(--muted);font-size:.86rem;margin-top:12px}
+.shot-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:22px}
+.shot-grid figure{margin:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.shot-grid img{width:100%;height:auto;display:block}
+.shot-grid figcaption{padding:11px 14px;font-size:.88rem;color:var(--muted);border-top:1px solid var(--border)}
 .btn{
   display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:12px;
   font-weight:700;font-size:.96rem;cursor:pointer;border:1px solid transparent;transition:transform .15s,box-shadow .2s;
@@ -237,16 +244,72 @@ footer a:hover{color:var(--brand2)}
   <div class="wrap">
     <span class="eyebrow">Local-First AI Research Workbench · 单用户本地科研智能体工作台</span>
     <h1>把科研全流程<br><span class="grad-text">交给本地多智能体</span></h1>
-    <p class="tag">SciFlow 是本地优先、单机部署的科研全流程 AI 助手：输入一个研究主题，由 LangGraph 编排的多智能体流水线接管，完成文献调研 → 写作 → 质量门 → 投稿辅助的完整生命周期，文献与 Key 全部落本地 SQLite。</p>
+      <p class="tag">SciFlow 是本地优先、单机部署的科研全流程 AI 助手：输入一个研究主题，由 LangGraph 编排的多智能体流水线接管，完成文献调研 → 写作 → 质量门 → 投稿辅助的完整生命周期，文献与 Key 默认保存在本地 SQLite。</p>
     <div class="badges">
       <span class="badge">🗄️ <b>本地优先</b> SQLite 单文件</span>
       <span class="badge">🤖 <b>多智能体</b> 自动流水线</span>
       <span class="badge">📊 <b>Recharts + sigma.js</b> 可视化</span>
-      <span class="badge">🔌 <b>OpenAI 兼容</b> 自配模型 Key</span>
+      <span class="badge">🔌 <b>三协议接入</b> 自配模型 Key</span>
     </div>
     <div class="cta-row">
       <a class="btn btn-primary" href="#quickstart">快速开始</a>
       <a class="btn btn-ghost" href="#docs">查看仓库</a>
+    </div>
+    <figure class="hero-shot">
+      <img src="screenshots/workspace.png" alt="SciFlow 工作台：研究项目、文献预览与 AI 对话" width="1600" height="1000">
+      <figcaption>真实运行的界面：工作台、项目驾驶舱与 AI 对话</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ===== 真实界面 ===== -->
+<section id="screens" style="background:var(--bg-soft)">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 class="sec-title">真实界面<span class="grad-text">截图</span></h2>
+      <p class="sec-sub">全部取自运行中的应用与种子演示数据，非合成图。</p>
+    </div>
+    <div class="shot-grid">
+      <figure>
+        <img src="screenshots/dash.png" alt="项目驾驶舱：阶段进度、下一步与质量门状态" width="1600" height="1000">
+        <figcaption>项目驾驶舱</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/pipeline.png" alt="全自动流水线：步骤状态与耗时" width="1600" height="1000">
+        <figcaption>全自动流水线</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/writing.png" alt="论文写作：大纲、编辑器与预览分栏" width="1600" height="1000">
+        <figcaption>论文写作</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/quality.png" alt="质量评分：七维客观检查器与硬伤提示" width="1600" height="1000">
+        <figcaption>质量评分</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/literature.png" alt="文献调研：检索、筛选与阅读状态" width="1600" height="1000">
+        <figcaption>文献调研</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/knowledge.png" alt="知识库：资料上传、分块与语义地图" width="1600" height="1000">
+        <figcaption>知识库</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/submission.png" alt="投稿辅助：期刊推荐、Cover Letter 与跟踪" width="1600" height="1000">
+        <figcaption>投稿辅助</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/experiments.png" alt="实验记录与隔离沙箱" width="1600" height="1000">
+        <figcaption>实验记录</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/memory.png" alt="记忆中心：情景记忆与程序记忆" width="1600" height="1000">
+        <figcaption>记忆中心</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/settings.png" alt="设置：模型配置、扩展中心与快捷键" width="1600" height="1000">
+        <figcaption>设置</figcaption>
+      </figure>
     </div>
   </div>
 </section>
@@ -332,7 +395,7 @@ footer a:hover{color:var(--brand2)}
   <div class="wrap">
     <div class="sec-head">
       <h2 class="sec-title">极简<span class="grad-text">本地架构</span></h2>
-      <p class="sec-sub">React + Vite 前端经 REST / SSE 对接 NestJS 后端模块群，数据落 SQLite；AI 统一经 OpenAI 兼容网关，可一键切本机 mock。</p>
+      <p class="sec-sub">React + Vite 前端经 REST / SSE 对接 NestJS 后端模块群，数据落 SQLite；AI 支持三种主流协议，并可一键切本机 mock。</p>
     </div>
     <div class="arch">
       <div class="arch-layer">
@@ -362,7 +425,7 @@ footer a:hover{color:var(--brand2)}
         </div>
         <div class="arch-layer" style="max-width:300px">
           <div class="layer-label">AI 网关</div>
-          <div class="arch-row"><span class="pill">mock 网关</span><span class="pill">OpenAI 兼容端点</span></div>
+          <div class="arch-row"><span class="pill">mock 网关</span><span class="pill">三协议模型层</span></div>
         </div>
       </div>
       <p class="arch-note">单用户本地部署 · 后端默认仅监听 127.0.0.1 · 无多租户 / 无第三方云上传</p>
@@ -408,7 +471,7 @@ pnpm --filter @sciflow/web dev
   <div class="wrap">
     <div class="sec-head">
       <h2 class="sec-title">接入<span class="grad-text">你自己的模型</span></h2>
-      <p class="sec-sub">SciFlow 只走 OpenAI 兼容协议，填 base_url + model + key 即可；未配置 Key 时本地功能照常可用，AI 不返回假数据。</p>
+      <p class="sec-sub">SciFlow 支持 OpenAI 兼容、Anthropic Messages、Google Gemini 三种协议，填 base_url + model + key 即可；未配置 Key 时本地功能照常可用，AI 不返回假数据。</p>
     </div>
     <div class="code-grid" style="grid-template-columns:1.2fr 1fr;align-items:start">
       <div class="tbl-wrap">
@@ -416,7 +479,7 @@ pnpm --filter @sciflow/web dev
           <colgroup><col class="c1"><col class="c2"><col class="c3"></colgroup>
           <thead><tr><th>变量</th><th>说明</th><th>示例值（占位）</th></tr></thead>
           <tbody>
-            <tr><td><code>AI_BASE_URL</code></td><td>OpenAI 兼容接口地址</td><td><code>https://api.deepseek.com/v1</code></td></tr>
+            <tr><td><code>AI_BASE_URL</code></td><td>模型协议对应的接口地址</td><td><code>https://api.deepseek.com/v1</code></td></tr>
             <tr><td><code>AI_API_KEY</code></td><td>你的 API 密钥</td><td><code>sk-your-api-key-here</code></td></tr>
             <tr><td><code>AI_MODEL</code></td><td>默认模型</td><td><code>deepseek-chat</code></td></tr>
             <tr><td><code>AI_MODEL_FAST</code></td><td>快档：问答 / 润色 / 翻译</td><td>留空则回落 AI_MODEL</td></tr>

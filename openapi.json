@@ -305,6 +305,20 @@
         ]
       }
     },
+    "/references/discover": {
+      "post": {
+        "operationId": "ReferencesController_discover",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "References"
+        ]
+      }
+    },
     "/references/search": {
       "post": {
         "operationId": "ReferencesController_search",
@@ -766,6 +780,547 @@
         ]
       }
     },
+    "/research/design-review": {
+      "post": {
+        "operationId": "ResearchController_designReview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/comparison": {
+      "post": {
+        "operationId": "ResearchController_compare",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/review": {
+      "post": {
+        "operationId": "ResearchController_review",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/design": {
+      "post": {
+        "operationId": "ResearchController_designExperiment",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      },
+      "get": {
+        "operationId": "ResearchController_listDesigns",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/design/{id}": {
+      "delete": {
+        "operationId": "ResearchController_deleteDesign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/review-comments": {
+      "post": {
+        "operationId": "ResearchController_addReviewComments",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      },
+      "get": {
+        "operationId": "ResearchController_listReviewComments",
+        "parameters": [
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/review-comments/{id}": {
+      "patch": {
+        "operationId": "ResearchController_updateReviewComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      },
+      "delete": {
+        "operationId": "ResearchController_deleteReviewComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/research/response-letter": {
+      "post": {
+        "operationId": "ResearchController_responseLetter",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
+    "/quality": {
+      "post": {
+        "operationId": "QualityController_review",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Quality"
+        ]
+      },
+      "get": {
+        "operationId": "QualityController_history",
+        "parameters": [
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Quality"
+        ]
+      }
+    },
+    "/quality/project-overview": {
+      "get": {
+        "operationId": "QualityController_projectOverview",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Quality"
+        ]
+      }
+    },
+    "/quality/latest": {
+      "get": {
+        "operationId": "QualityController_latest",
+        "parameters": [
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Quality"
+        ]
+      }
+    },
+    "/quality/export-comments": {
+      "post": {
+        "operationId": "QualityController_exportComments",
+        "parameters": [
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Quality"
+        ]
+      }
+    },
+    "/quality/{id}": {
+      "get": {
+        "operationId": "QualityController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Quality"
+        ]
+      }
+    },
+    "/submission/journals": {
+      "post": {
+        "operationId": "SubmissionController_recommend",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      },
+      "get": {
+        "operationId": "SubmissionController_listJournals",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/cover-letter": {
+      "post": {
+        "operationId": "SubmissionController_coverLetter",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/reply-review": {
+      "post": {
+        "operationId": "SubmissionController_replyReview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/journals-lib": {
+      "post": {
+        "operationId": "SubmissionController_addJournal",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/journals-lib/{id}": {
+      "delete": {
+        "operationId": "SubmissionController_removeJournal",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/journals-match": {
+      "post": {
+        "operationId": "SubmissionController_journalsMatch",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/track": {
+      "post": {
+        "operationId": "SubmissionController_createTrack",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      },
+      "get": {
+        "operationId": "SubmissionController_listTracks",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/track/parse-email": {
+      "post": {
+        "operationId": "SubmissionController_parseEmail",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/track/{id}/event": {
+      "post": {
+        "operationId": "SubmissionController_addEvent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
+    "/submission/track/{id}": {
+      "patch": {
+        "operationId": "SubmissionController_updateTrack",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      },
+      "delete": {
+        "operationId": "SubmissionController_removeTrack",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
     "/knowledge/upload": {
       "post": {
         "operationId": "KnowledgeController_upload",
@@ -926,6 +1481,555 @@
         },
         "tags": [
           "Knowledge"
+        ]
+      }
+    },
+    "/config": {
+      "get": {
+        "operationId": "ConfigController_snapshot",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/config/permission": {
+      "get": {
+        "operationId": "ConfigController_getPermission",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      },
+      "post": {
+        "operationId": "ConfigController_setPermission",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/config/roles": {
+      "get": {
+        "operationId": "ConfigController_listRoles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      },
+      "post": {
+        "operationId": "ConfigController_createRole",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/config/roles/{id}": {
+      "post": {
+        "operationId": "ConfigController_updateRole",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      },
+      "delete": {
+        "operationId": "ConfigController_deleteRole",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/config/constraints": {
+      "get": {
+        "operationId": "ConfigController_listConstraints",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      },
+      "post": {
+        "operationId": "ConfigController_createConstraint",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/config/constraints/{id}": {
+      "post": {
+        "operationId": "ConfigController_updateConstraint",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      },
+      "delete": {
+        "operationId": "ConfigController_deleteConstraint",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/config/hooks": {
+      "get": {
+        "operationId": "ConfigController_listHooks",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      },
+      "post": {
+        "operationId": "ConfigController_createHook",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/config/hooks/{id}": {
+      "post": {
+        "operationId": "ConfigController_updateHook",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      },
+      "delete": {
+        "operationId": "ConfigController_deleteHook",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/config/presets": {
+      "get": {
+        "operationId": "ConfigController_listPresets",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/config/presets/{id}/apply": {
+      "post": {
+        "operationId": "ConfigController_applyPreset",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/config/export": {
+      "get": {
+        "operationId": "ConfigController_exportBundle",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/config/import": {
+      "post": {
+        "operationId": "ConfigController_importBundle",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/config/preview": {
+      "get": {
+        "operationId": "ConfigController_preview",
+        "parameters": [
+          {
+            "name": "scope",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/config/audit": {
+      "get": {
+        "operationId": "ConfigController_audit",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Config"
+        ]
+      }
+    },
+    "/extensions": {
+      "get": {
+        "operationId": "ExtensionsController_list",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      },
+      "post": {
+        "operationId": "ExtensionsController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/extensions/templates": {
+      "get": {
+        "operationId": "ExtensionsController_templates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/extensions/{id}/toggle": {
+      "post": {
+        "operationId": "ExtensionsController_toggle",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/extensions/{id}/apply": {
+      "post": {
+        "operationId": "ExtensionsController_apply",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/extensions/{id}": {
+      "delete": {
+        "operationId": "ExtensionsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/extensions/reset-builtin": {
+      "post": {
+        "operationId": "ExtensionsController_resetBuiltin",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/extensions/import": {
+      "post": {
+        "operationId": "ExtensionsController_importRaw",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/extensions/upload": {
+      "post": {
+        "operationId": "ExtensionsController_upload",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/extensions/export": {
+      "get": {
+        "operationId": "ExtensionsController_exportBundle",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/extensions/generate": {
+      "post": {
+        "operationId": "ExtensionsController_generate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extensions"
         ]
       }
     },
@@ -1182,6 +2286,29 @@
       },
       "delete": {
         "operationId": "DocumentsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/documents/{id}/objective-audit": {
+      "get": {
+        "operationId": "DocumentsController_objectiveAudit",
         "parameters": [
           {
             "name": "id",
@@ -1717,6 +2844,52 @@
         ]
       }
     },
+    "/pipeline/{id}/stop": {
+      "post": {
+        "operationId": "PipelineController_stop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Pipeline"
+        ]
+      }
+    },
+    "/pipeline/{id}/rerun": {
+      "post": {
+        "operationId": "PipelineController_rerun",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Pipeline"
+        ]
+      }
+    },
     "/chat": {
       "post": {
         "operationId": "ChatController_answer",
@@ -1930,6 +3103,34 @@
         ]
       }
     },
+    "/settings/providers/discover": {
+      "post": {
+        "operationId": "SettingsController_discoverModels",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/settings/providers/test": {
+      "post": {
+        "operationId": "SettingsController_testProvider",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
     "/settings/providers/{id}/activate": {
       "post": {
         "operationId": "SettingsController_activateProvider",
@@ -2025,6 +3226,32 @@
         ]
       }
     },
+    "/settings/persona": {
+      "get": {
+        "operationId": "SettingsController_getPersona",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      },
+      "post": {
+        "operationId": "SettingsController_savePersona",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
     "/usage/summary": {
       "get": {
         "operationId": "UsageController_summary",
@@ -2036,524 +3263,6 @@
         },
         "tags": [
           "Usage"
-        ]
-      }
-    },
-    "/research/design-review": {
-      "post": {
-        "operationId": "ResearchController_designReview",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/research/comparison": {
-      "post": {
-        "operationId": "ResearchController_compare",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/research/review": {
-      "post": {
-        "operationId": "ResearchController_review",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/research/design": {
-      "post": {
-        "operationId": "ResearchController_designExperiment",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      },
-      "get": {
-        "operationId": "ResearchController_listDesigns",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/research/design/{id}": {
-      "delete": {
-        "operationId": "ResearchController_deleteDesign",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/research/review-comments": {
-      "post": {
-        "operationId": "ResearchController_addReviewComments",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      },
-      "get": {
-        "operationId": "ResearchController_listReviewComments",
-        "parameters": [
-          {
-            "name": "documentId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/research/review-comments/{id}": {
-      "patch": {
-        "operationId": "ResearchController_updateReviewComment",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      },
-      "delete": {
-        "operationId": "ResearchController_deleteReviewComment",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/research/response-letter": {
-      "post": {
-        "operationId": "ResearchController_responseLetter",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/quality": {
-      "post": {
-        "operationId": "QualityController_review",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Quality"
-        ]
-      },
-      "get": {
-        "operationId": "QualityController_history",
-        "parameters": [
-          {
-            "name": "documentId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Quality"
-        ]
-      }
-    },
-    "/quality/latest": {
-      "get": {
-        "operationId": "QualityController_latest",
-        "parameters": [
-          {
-            "name": "documentId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Quality"
-        ]
-      }
-    },
-    "/quality/export-comments": {
-      "post": {
-        "operationId": "QualityController_exportComments",
-        "parameters": [
-          {
-            "name": "documentId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Quality"
-        ]
-      }
-    },
-    "/quality/{id}": {
-      "get": {
-        "operationId": "QualityController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Quality"
-        ]
-      }
-    },
-    "/submission/journals": {
-      "post": {
-        "operationId": "SubmissionController_recommend",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      },
-      "get": {
-        "operationId": "SubmissionController_listJournals",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/cover-letter": {
-      "post": {
-        "operationId": "SubmissionController_coverLetter",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/reply-review": {
-      "post": {
-        "operationId": "SubmissionController_replyReview",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/journals-lib": {
-      "post": {
-        "operationId": "SubmissionController_addJournal",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/journals-lib/{id}": {
-      "delete": {
-        "operationId": "SubmissionController_removeJournal",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/journals-match": {
-      "post": {
-        "operationId": "SubmissionController_journalsMatch",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/track": {
-      "post": {
-        "operationId": "SubmissionController_createTrack",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      },
-      "get": {
-        "operationId": "SubmissionController_listTracks",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/track/parse-email": {
-      "post": {
-        "operationId": "SubmissionController_parseEmail",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/track/{id}/event": {
-      "post": {
-        "operationId": "SubmissionController_addEvent",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      }
-    },
-    "/submission/track/{id}": {
-      "patch": {
-        "operationId": "SubmissionController_updateTrack",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
-        ]
-      },
-      "delete": {
-        "operationId": "SubmissionController_removeTrack",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Submission"
         ]
       }
     },
@@ -2966,16 +3675,7 @@
     "/dashboard/overview": {
       "get": {
         "operationId": "DashboardController_overview",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -2990,7 +3690,7 @@
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "0.8.1",
+    "version": "1.9.0",
     "contact": {}
   },
   "tags": [],

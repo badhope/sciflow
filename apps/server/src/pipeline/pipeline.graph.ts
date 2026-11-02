@@ -3,9 +3,11 @@ import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db, sqlite } from '../db/database';
-import { pipelineTasks, documents, reflexionLogs, memoryLogs, polishRecords, qualityReports } from '../db/schema';
+import { pipelineTasks, documents, reflexionLogs, memoryLogs, polishRecords, qualityReports, citations, references } from '../db/schema';
 import type { Outline, PaperHit, QualityReport, ResearchPlan, ResearchTraceEntry, PipelineTaskRow } from './pipeline-state';
 import { splitTailBlock, stripTailBlocks } from './tail-blocks';
+import { parseAuthors } from '../common/authors';
+import { checkPaperQuality, type ObjectiveQualityReport } from '../common/quality-audit';
 
 /**
  * 主流水线图（LangGraph）：
@@ -31,6 +33,8 @@ export const PipelineAnnotation = Annotation.Root({
   /** 联网检索线索（默认关闭；仅进 summary/展示，不入参考文献库） */
   enrichedWebHits: Annotation<PaperHit[]>({ reducer: (_a, b) => b, default: () => [] }),
   researchNotice: Annotation<string | undefined>({ reducer: (_a, b) => b, default: () => undefined }),
+  /** 新颖性预检结论（v1.7）：重叠度过高时随产物落一段研究说明，提醒作者核实选题 */
+  noveltyNotice: Annotation<string | undefined>({ reducer: (_a, b) => b, default: () => undefined }),
   literatureSummary: Annotation<string>({ reducer: (_a, b) => b, default: () => '' }),
   outline: Annotation<Outline | undefined>({ reducer: (_a, b) => b, default: () => undefined }),
   outlineVariants: Annotation<string[]>({ reducer: (_a, b) => b, default: () => [] }),
@@ -59,6 +63,16 @@ export interface PipelineGraphDeps {
   trackBudget(taskId: string, caller: string): void;
   /** 研究深度（1-3）：literature 节点按轮递归检索；实现方读 app_setting pipeline_research_depth */
   researchDepth(): number;
+  /**
+   * 新颖性预检（v1.7）：用学术库检索同主题近期工作，给出「重叠度 + 相似工作 + 改题建议」。
+   * 只读（不写文献库、不消耗 LLM token），失败由实现方返回 skipped 结果。
+   */
+  noveltyCheck(topic: string): Promise<{
+    skipped?: boolean;
+    overlap: number;
+    similar: { title: string; year: number | null; venue: string; doi: string }[];
+    advice: string;
+  }>;
   /** 分章起草（服务层实现，内部并行；onProgress 用于逐节进度通知）。 */
   runDrafting(
     taskId: string,
@@ -69,10 +83,10 @@ export interface PipelineGraphDeps {
     reflexion: string,
     onProgress?: (done: number, total: number) => void,
   ): Promise<string>;
-  /** 文献库 → prompt 引用串。 */
-  buildRefsPrompt(projectId: string): string;
-  /** 引用锚点渲染（citation-js CSL）：正文 [n] 锚点 + 文末参考文献块。 */
-  renderCitations(projectId: string, docId: string, content: string, meta: { lib: { title: string; score: number }[]; kn: PaperHit[] }): string;
+  /** 文献库 → prompt 引用串。topic/keywords 决定相关性排序，起草与渲染必须传同一组值。 */
+  buildRefsPrompt(projectId: string, topic?: string, keywords?: string[]): string;
+  /** 引用锚点渲染（citation-js CSL）：正文 [n] 锚点 + 文末参考文献块。topic/keywords 必须与起草时一致。 */
+  renderCitations(projectId: string, docId: string, content: string, meta: { lib: { title: string; score: number }[]; kn: PaperHit[] }, topic?: string, keywords?: string[]): string;
   /** 跨库检索增强（文献 + 知识库 + 可选联网检索）。 */
   crossEnrich(
     projectId: string,
@@ -83,11 +97,14 @@ export interface PipelineGraphDeps {
   notify(taskId: string, key: string, status: StepStatusWire, output?: string, retryCount?: number, extra?: { variants?: string[] }): Promise<void>;
   /** 步骤开关。 */
   stepEnabled(key: string): boolean;
+  /** 读 app_setting（质量评审标准 quality_standard 等运行参数） */
+  readSetting?(key: string): string;
   logger: { log(m: string): void; warn(m: string): void; error(m: string): void };
 }
 
 const MAX_RETRY = 2;
-const QUALITY_THRESHOLD = 80;
+/** 兜底及格线：仅在标准解析失败时使用（正常路径用所选标准的 passScore） */
+const QUALITY_THRESHOLD_FALLBACK = 80;
 
 /** 质量门步骤文案模板（产品唯一来源；测试从这里取，防止格式漂移） */
 export const QUALITY_GATE_LABEL = (score: number | string): string => `总分 ${score}/100`;
@@ -100,6 +117,35 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
       const keywords = planned.keywords.length ? planned.keywords : [s.task.topic];
       await deps.notify(s.taskId, 'topic-verify', 'done', `检索词：${keywords.slice(0, 4).join(' / ')}`);
       return { verifiedTopic: s.task.topic, plan: { searchStrategy: { keywords } } };
+    })
+    .addNode('novelty-check', async (s: PipelineGraphState) => {
+      if (!deps.stepEnabled('novelty-check')) {
+        await deps.notify(s.taskId, 'novelty-check', 'running');
+        await deps.notify(s.taskId, 'novelty-check', 'skipped', '用户已禁用新颖性预检');
+        return {};
+      }
+      await deps.notify(s.taskId, 'novelty-check', 'running');
+      let result: Awaited<ReturnType<PipelineGraphDeps['noveltyCheck']>>;
+      try {
+        result = await deps.noveltyCheck(s.task.topic);
+      } catch (e: any) {
+        deps.logger.warn(`新颖性预检失败（已忽略，不阻断流水线）: ${e?.message || e}`);
+        await deps.notify(s.taskId, 'novelty-check', 'done', '预检不可用（学术检索失败，已跳过）');
+        return {};
+      }
+      if (result.skipped) {
+        await deps.notify(s.taskId, 'novelty-check', 'done', '预检不可用（学术检索关闭或离线）');
+        return {};
+      }
+      // 阈值语义：>=70% 高度重叠（同题概率高）；40-70% 有较多相近工作；<40% 相对新颖
+      const level = result.overlap >= 70 ? '高' : result.overlap >= 40 ? '中' : '低';
+      const top = result.similar.slice(0, 3).map((x) => `「${x.title}」${x.year ? `（${x.year}）` : ''}`).join('；');
+      const output = `重叠度 ${result.overlap}%（${level}）${top ? ` · 相近工作：${top}` : ''} · ${result.advice}`;
+      await deps.notify(s.taskId, 'novelty-check', 'done', output);
+      // 高重叠时把提醒带进产物「研究说明」，避免"撞题"结论只存在于流水线日志里
+      return result.overlap >= 70
+        ? { noveltyNotice: `选题新颖性预检：与现有工作重叠度 ${result.overlap}%（高）。${result.advice}${top ? ` 相近工作：${top}` : ''}` }
+        : {};
     })
     .addNode('literature', async (s: PipelineGraphState) => {
       if (!deps.stepEnabled('literature')) {
@@ -251,7 +297,12 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
         const reflexion = reflexionNote(s.taskId);
         const procedural = proceduralMemory(task.projectId);
         const styleHint = procedural ? `\n写作风格参考（来自记忆库）：${procedural}` : '';
-        const refsPrompt = deps.buildRefsPrompt(task.projectId);
+        // 程序记忆注入必须可观测（v1.9.2）：此前「记忆是否真的进了 prompt」无法验证，
+        // 用户写了风格指令却在流水线里毫无痕迹。有记忆时打点一条日志。
+        if (procedural) {
+          deps.logger.log(`[记忆] 程序记忆已注入起草 prompt（${procedural.length} 字，项目 ${task.projectId.slice(0, 8)}）`);
+        }
+        const refsPrompt = deps.buildRefsPrompt(task.projectId, task.topic, s.plan?.searchStrategy?.keywords);
         if (retry === 0) snapshotBeforeOverwrite(docId, '流水线起草前自动快照');
         // 「分章起草」开关：关闭时跳过 LLM 起草，直接用现有正文进入评审
         // （历史 bug：该开关写进 pipeline_config 但 graph 从不读取，UI 显示已关闭却照常起草）
@@ -277,7 +328,7 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
           const m = (prev?.content || '').match(/## 图表[\s\S]*?$/);
           if (m) prevFigures = `\n\n---\n\n${m[0]}`;
         }
-        const rendered = deps.renderCitations(task.projectId, docId, draftContent, researchMeta);
+        const rendered = deps.renderCitations(task.projectId, docId, draftContent, researchMeta, task.topic, s.plan?.searchStrategy?.keywords);
         let finalContent = rendered + prevFigures;
         // 自动配图只在「真的起草出了正文」时才有意义：起草被禁用时正文可能是占位串，
         // 给它配图会产出「空正文 + 图表」这种无意义产物。
@@ -299,8 +350,70 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
           break;
         }
         const latest = db.select().from(documents).where(eq(documents.id, docId)).get();
-        const reviewResult = await deps.ai.reviewPaper(doc.title || task.topic, latest?.content ?? '');
-        report = { totalScore: reviewResult.totalScore, feedback: reviewResult.feedback };
+        /**
+         * 评审输入的参考文献清单必须按 **citation 插入序**（= 正文 [n] 首次出现序）编号，
+         * 而不是文献池顺序。历史 bug：用 buildRefsPrompt（池顺序）拼附录，正文写 [18] 是
+         * 「语言建模表示退化」，附录第 18 条却是听力损伤论文，评审因此判定「引用严重错误」——
+         * 评审看到的是编号错位，不是真的引错。现在直接 join citation + reference 按 createdAt 排。
+         */
+        const reviewRefRows = db
+          .select({ title: references.title, authors: references.authors, year: references.year, venue: references.venue, doi: references.doi, createdAt: citations.createdAt })
+          .from(citations)
+          .innerJoin(references, eq(citations.referenceId, references.id))
+          .where(eq(citations.documentId, docId))
+          .all()
+          .sort((a, b) => a.createdAt - b.createdAt);
+        const refAppendix = reviewRefRows
+          .map((r, i) => {
+            // authors 是 JSON 数组字符串，直接拼会给评审看到 ["A","B"] 这种噪声
+            const authors = parseAuthors(r.authors).slice(0, 3).join(', ') || 'n.d.';
+            return `[${i + 1}] ${r.title}（${authors}，${r.year || 'n.d.'}，${r.venue || ''}${r.doi ? `，DOI:${r.doi}` : ''}）`;
+          })
+          .join('\n');
+        const reviewContent = `${latest?.content ?? ''}${refAppendix ? `
+
+## 参考文献
+
+${refAppendix}` : ''}`;
+        /**
+         * LLM 评审必须 fail-soft。
+         *
+         * 实测事故（u2-flash）：评审走 generateObject + json_schema，模型偶发返回空响应，
+         * completeStructured 的 pRetry 配置是「失败即抛」，于是「评审这一步挂了」直接把整条
+         * 已起草完成的流水线判 failed，白烧 7 节草稿。门禁分数本来就以客观检查器为准
+         * （见下面 effectiveScore），LLM 评审只提供改进建议，因此这里降级为空建议继续走。
+         */
+        let reviewResult: { scores?: Record<string, number>; feedback: string; totalScore: number };
+        try {
+          reviewResult = await deps.ai.reviewPaper(doc.title || task.topic, reviewContent);
+        } catch (e: any) {
+          const msg = String(e?.message || e).slice(0, 160);
+          deps.logger.warn(`[质量门] LLM 评审不可用，仅用客观检查继续：${msg}`);
+          reviewResult = { scores: {}, feedback: `LLM 评审不可用（${msg}）；本轮仅依据客观检查器判定。`, totalScore: 0 };
+          await deps.notify(s.taskId, 'quality-gate', 'running', `LLM 评审不可用，改用客观检查（${msg.slice(0, 60)}）`, retry);
+        }
+        // 客观检查（确定性规则）：与 LLM 评分互补——LLM 可能漂移，硬指标不会。
+        // 评审标准（v1.9.4）：从 app_setting quality_standard 读取（standard/strict/review/
+        // conference/draft），阈值与及格线都随标准变化——「满分 = 顶刊可接收」而不是形式合规。
+        const standardKey = deps.readSetting?.('quality_standard') || 'standard';
+        void 0;
+        const citCount = db.select().from(citations).where(eq(citations.documentId, docId)).all().length;
+        const objective: ObjectiveQualityReport = checkPaperQuality(latest?.content ?? '', { citationCount: citCount, standard: standardKey as never });
+        const gateThreshold = objective.standard?.passScore ?? QUALITY_THRESHOLD_FALLBACK;
+        deps.logger.log(`[质量门] 标准=${objective.standard?.label ?? standardKey} 及格线=${gateThreshold} LLM ${reviewResult.totalScore}/100（机械）客观 ${objective.totalScore}/100 指纹 ${objective.fingerprint}${objective.hardFails.length ? ` 硬伤 ${objective.hardFails.length} 项` : ''}`);
+        /**
+         * 门禁分数 = 客观分（确定性、可复现）。
+         *
+         * 为什么不再与 LLM 分取 min：实测同一篇稿 LLM 在 27/42/35/41 之间随机漂移（提示词与稿件完全一致），
+         * 取 min 会让「内容没变差但 LLM 心情变了」反复触发回炉（烧钱且无意义）。
+         * LLM 的 feedback 仍然保留给回炉提示词做改进建议，但不参与是否合格的判定。
+         */
+        const effectiveScore = objective.totalScore;
+        const objectiveNote = objective.hardFails.length
+          ? `\n\n[客观检查] ${objective.hardFails.join('；')}`
+          : `\n\n[客观检查] ${objective.totalScore}/100（${objective.dimensions.map((d) => `${d.label} ${d.score}`).join(' / ')}）`;
+        report = { totalScore: effectiveScore, feedback: `${reviewResult.feedback}${objectiveNote}` };
+        deps.logger.log(`[质量门] 采用客观分 ${effectiveScore}（LLM 参考 ${reviewResult.totalScore}，指纹 ${objective.fingerprint}）`);
         // 质量报告落库（每轮评分一行；GET /api/quality?documentId 历史可查）
         db.insert(qualityReports)
           .values({
@@ -316,13 +429,13 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
         if (scored > best.score) best = { score: scored, content: latest?.content ?? '', feedback: report.feedback };
         deps.trackBudget(s.taskId, 'reviewPaper'); // H2：评审成本打点
         await deps.notify(s.taskId, 'quality-gate', 'scored', QUALITY_GATE_LABEL(report.totalScore));
-        if (report.totalScore < QUALITY_THRESHOLD && retry < MAX_RETRY) {
+        if (report.totalScore < gateThreshold && retry < MAX_RETRY) {
           retry += 1;
           const reflex = buildReflexionText(reviewResult.scores, report.feedback);
           db.insert(reflexionLogs)
             .values({ id: randomUUID(), taskId: s.taskId, round: retry, note: reflex.note, instructions: JSON.stringify(reflex.instructions), createdAt: Date.now() })
             .run();
-          await deps.notify(s.taskId, 'quality-gate', 'retry', `第 ${retry} 次回炉（评分 ${report.totalScore} < ${QUALITY_THRESHOLD}）`, retry);
+          await deps.notify(s.taskId, 'quality-gate', 'retry', `第 ${retry} 次回炉（评分 ${report.totalScore} < ${gateThreshold}，标准：${objective.standard?.label ?? '默认'}）`, retry);
           continue;
         }
         break;
@@ -369,11 +482,14 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
       await deps.notify(s.taskId, 'complete', 'running');
       const docId = s.documentId!;
       db.update(documents).set({ status: 'final', updatedAt: Date.now() }).where(eq(documents.id, docId)).run();
-      if (s.researchNotice) {
+      const notes = [s.researchNotice, s.noveltyNotice].filter((x): x is string => Boolean(x));
+      if (notes.length) {
         const cur = db.select().from(documents).where(eq(documents.id, docId)).get();
         const body = cur?.content ?? '';
-        if (!body.includes('研究阶段未在本地文献库')) {
-          writeDocumentContent(docId, body + `\n\n---\n\n## 研究说明\n\n> ${s.researchNotice}\n`, '追加研究说明');
+        const missing = notes.filter((n) => !body.includes(n.slice(0, 24)));
+        if (missing.length) {
+          const block = missing.map((n) => `> ${n.replace(/\n/g, '\n> ')}`).join('\n>\n');
+          writeDocumentContent(docId, `${body}\n\n---\n\n## 研究说明\n\n${block}\n`, '追加研究说明');
         }
       }
       try {
@@ -391,7 +507,8 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
       return {};
     })
     .addEdge(START, 'topic-verify')
-    .addEdge('topic-verify', 'literature')
+    .addEdge('topic-verify', 'novelty-check')
+    .addEdge('novelty-check', 'literature')
     .addEdge('literature', 'outline-gen')
     .addEdge('outline-gen', 'outline-gate')
     .addEdge('outline-gate', 'doc-create')

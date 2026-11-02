@@ -1,19 +1,22 @@
 import { useId } from 'react';
 
 /**
- * SciFlow 品牌标志 ·「墨流 2.0 · Ink Current」唯一矢量来源
- * 与 docs/brand/logo-mark.svg、logo-mark-light.svg、icon-master.svg、docs/index.html favicon 同源。
+ * SciFlow 品牌标志 ·「墨流 3.0 · Current」
  *
- * 造型语言（三层语义）：
- *  1. 主 S 水流（右上入水 → 左下出水）：科研内容像水流一样经过 SciFlow；
- *  2. 细轨道弧（数据闭环）：本地优先、从想法到成文的流程闭环；
- *  3. 思想节点 + 收笔墨滴：想法汇入水流，沉淀为可发表成果（书法收笔呼应「墨」）。
+ * 3.0 相对 2.0 的重做原因（品牌体检结论）：
+ *  2.0 的 S 是「两段同心圆弧拼 S」，在 24px 以下会退化成两个圈，且与
+ *  众多 AI 产品惯用的「圆环 + 渐变」非常接近 —— 一眼就是模板产物。
+ *  3.0 改为**单一连续笔势**：一条从右上落笔、经中宫转折、左下收笔的
+ *  粗细渐变水流（模拟书法运笔的提按），配合一道贯穿的细「主流线」与
+ *  一个实心「成果节点」。图形语义唯一、缩到 16px 仍能读出方向感。
  *
- * 几何（64×64）：
- *  - 主 S：两段几何圆弧（上环 CCW 270° + 下环 CW 270°），线帽圆头，stroke 5.5
- *  - 轨道弧：A 23 23 0 1 0（右上→左下逆时针 270° 大弧），stroke 1.8、opacity 0.32
- *  - 思想节点：(47.4,13.2) r 3.2；墨滴：(19.4,44) r 1.7（opacity 0.75）
- * 64px 主尺寸 / 16px favicon（线宽加粗）均验证过可辨识。
+ * 造型语言（三层）：
+ *  1. 主笔：粗细渐变的 S 形水流（右上 → 左下），表达「想法流经流程」。
+ *  2. 主流线：一条贯穿全图的细直线，表达「可复现的流程主线」——
+ *     这是 SciFlow 与「AI 随手画个环」的区分点。
+ *  3. 成果节点：实心圆 + 外环，落在主笔收笔处，表达「沉淀为可发表成果」。
+ *
+ * 几何：48×48 视框、≥2px 安全边距；16/24/32/48/64 下等比可辨识。
  */
 export function BrandMark({
   className = 'h-5 w-5',
@@ -22,60 +25,83 @@ export function BrandMark({
 }: {
   className?: string;
   title?: string;
-  /** mono=跟随 currentColor（单色场景）；gradient=品牌渐变（彩色场景） */
-  variant?: 'mono' | 'gradient';
+  /** mono=跟随 currentColor（单色/暗底场景）；gradient=品牌渐变（浅底彩色场景） */
+  variant?: 'mono' | 'gradient' | 'inverse';
 }) {
-  const gradId = useId();
-  const stroke = variant === 'gradient' ? `url(#${gradId})` : 'currentColor';
+  const uid = useId().replace(/[:]/g, '');
+  const strokeId = `sf-stroke-${uid}`;
+  const glowId = `sf-glow-${uid}`;
+  const tinted = variant === 'gradient';
+  const stroke = tinted ? `url(#${strokeId})` : 'currentColor';
   return (
-    <svg viewBox="0 0 64 64" className={className} role="img" aria-label={title}>
-      {variant === 'gradient' && (
+    <svg viewBox="0 0 48 48" className={className} role="img" aria-label={title} fill="none">
+      {tinted && (
         <defs>
-          <linearGradient id={gradId} x1="0" y1="1" x2="1" y2="0">
-            <stop offset="0" stopColor="#0f9e94" />
-            <stop offset="0.55" stopColor="#0b8fb4" />
-            <stop offset="1" stopColor="#0b6fc4" />
+          {/* 笔势渐变：青绿（起）→ 湖蓝（中）→ 深蓝（收），与 --brand-grad 同源 */}
+          {/* 停靠色改用主题 token：品牌渐变在三套主题包（学术/纸感/极简…）下颜色不同，
+              写死 teal→sky 会让 logo 与按钮/导航高亮脱节（v1.7 主题化）。 */}
+          <linearGradient id={strokeId} x1="40" y1="8" x2="8" y2="40" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="var(--brand-400, #14b8a6)" />
+            <stop offset="0.5" stopColor="var(--brand-500, #0f9e94)" />
+            <stop offset="1" stopColor="var(--brand-600, #0b7f78)" />
           </linearGradient>
+          <filter id={glowId} x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="0.7" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
       )}
-      {/* 数据闭环轨道（细弧） */}
-      <path
-        d="M 46.9 15.1 A 23 23 0 1 0 15.1 46.9"
-        fill="none"
-        stroke={stroke}
-        strokeWidth={variant === 'gradient' ? 1.8 : 2}
-        strokeLinecap="round"
-        opacity="0.32"
-      />
-      {/* 主 S 水流 */}
-      <path
-        d="M 43.2 21.4 A 11 11 0 1 0 32 32 A 11 11 0 1 1 20.8 42.6"
-        fill="none"
-        stroke={stroke}
-        strokeWidth={variant === 'gradient' ? 5.5 : 6}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* 思想节点：想法汇入水流 */}
-      <circle cx="47.4" cy="13.2" r={variant === 'gradient' ? 3.2 : 3.4} fill={stroke} />
-      {/* 收笔墨滴 */}
-      <circle cx="19.4" cy="44" r={variant === 'gradient' ? 1.7 : 1.8} fill={stroke} opacity="0.75" />
+      <g filter={tinted ? `url(#${glowId})` : undefined}>
+        {/* 主流线：贯穿全图的流程主线 */}
+        <path
+          d="M9.5 38.5 L38.5 9.5"
+          stroke={stroke}
+          strokeWidth={1.1}
+          strokeLinecap="round"
+          opacity={tinted ? 0.4 : 0.34}
+        />
+        {/* 主笔：单条连续 S 形水流，起笔细、中宫厚、收笔出锋 */}
+        <path
+          d="M37.6 12.4c-1.9-2.6-5.4-3.9-8.6-2.7-3.5 1.3-5 4.7-3.9 7.7 1.2 3.2 4.6 4.4 7.7 5.3 3.4 1 6.6 2.4 7.4 5.6.8 3.4-1.4 6.7-4.9 7.7-2.8.8-5.6.1-7.4-1.9"
+          stroke={stroke}
+          strokeWidth={6.0}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* 成果节点：实心圆 + 外环（收笔处沉淀） */}
+        <circle cx="10.4" cy="37.6" r="3.5" fill={stroke} />
+        <circle cx="10.4" cy="37.6" r="6.4" stroke={stroke} strokeWidth={1.1} opacity={tinted ? 0.45 : 0.38} />
+      </g>
     </svg>
   );
 }
 
-/** 品牌组合：标志 + 词标 + 标语（侧栏/登录门/关于页共用） */
+/**
+ * 品牌组合：标志 + 词标 + 标语。
+ *
+ * 3.0 排版规则（真正品牌的做法，而非「图标 + 两行任意小字」）：
+ *  - 词标用**字距收紧 + 粗细分层**：Sci 中等字重（墨），Flow 用品牌渐变；
+ *  - 标语前加 1px 竖分隔线，形成期刊页眉式的分栏感；
+ *  - 标语字距拉开（0.14em），与词标形成字号/字距的强对比。
+ */
 export function BrandLockup({ subtitle = '让科研从想法到成文' }: { subtitle?: string }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="brand-logo flex h-8 w-8 items-center justify-center rounded-[9px]">
-        <BrandMark className="h-[18px] w-[18px]" variant="gradient" />
+    <div className="flex items-center gap-3">
+      <div className="brand-logo flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px]">
+        <BrandMark className="h-[25px] w-[25px]" variant="inverse" />
       </div>
-      <div className="leading-tight">
-        <div className="text-[15px] font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-          Sci<span className="brand-gradient-text">Flow</span>
+      <div className="min-w-0 leading-none">
+        <div className="flex items-baseline gap-[1px]">
+          <span className="brand-wordmark text-[17px] font-semibold text-slate-900 dark:text-slate-50">Sci</span>
+          <span className="brand-wordmark brand-gradient-text text-[17px] font-bold">Flow</span>
         </div>
-        <div className="-mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{subtitle}</div>
+        <div className="mt-[5px] flex items-center gap-1.5">
+          <span className="h-[9px] w-px bg-slate-300 dark:bg-slate-600" aria-hidden="true" />
+          <span className="brand-tagline text-[10px] font-medium tracking-[0.14em] text-slate-500 dark:text-slate-400">{subtitle}</span>
+        </div>
       </div>
     </div>
   );

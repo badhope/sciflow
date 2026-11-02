@@ -14,15 +14,39 @@ import { Button } from '../../components/ui';
  * 布局：ForceAtlas2（graphology 官方实现）一次性求值后渲染（WebGL，大图可用）。
  */
 
-// sigma 走 WebGL/canvas，无法解析 CSS var()，因此这里保留字面色值。
-// 取值仍与 index.css 的 --viz-series-* 对齐，改色时两处同步。
-const VENUE_COLORS = ['#0d9488', '#0ea5e9', '#8b5cf6', '#f59e0b', '#ec4899', '#10b981'];
-/** 社区配色（与期刊色分开：社区=结构聚类，期刊=来源） */
-const COMMUNITY_COLORS = ['#0d9488', '#6366f1', '#f59e0b', '#ec4899', '#10b981', '#3b82f6', '#a855f7', '#f43f5e'];
-const venueColor = (venue: string): string => {
+/**
+ * sigma 走 WebGL/canvas，无法直接解析 CSS var()（传进去只会得到黑色），
+ * 但主题风格包必须能接管图谱配色 —— 因此在挂载时用 getComputedStyle 把
+ * `--viz-series-*` 读成真实色值，并在主题切换（<html> class/data-theme 变化）时重建。
+ * 历史上这里写着"两处同步"的字面色值，实际早已与 --viz-series-* 脱节。
+ */
+const VIZ_VARS = ['--viz-series-1', '--viz-series-2', '--viz-series-3', '--viz-series-4', '--viz-series-5', '--viz-series-6'] as const;
+
+function readVizPalette(): string[] {
+  if (typeof document === 'undefined') return ['#0f9e94', '#0b8fb4', '#2563eb', '#7c3aed', '#ea580c', '#64748b'];
+  const cs = getComputedStyle(document.documentElement);
+  const fallback = ['#0f9e94', '#0b8fb4', '#2563eb', '#7c3aed', '#ea580c', '#64748b'];
+  const colors = VIZ_VARS.map((v, i) => cs.getPropertyValue(v).trim() || fallback[i]);
+  return colors;
+}
+
+/** 社区配色 = 图表色板 + 补两个色相（8 类社区）；duplicate/muted 边同样从 token 取 */
+function buildPalettes() {
+  const base = readVizPalette();
+  const root = typeof document !== 'undefined' ? getComputedStyle(document.documentElement) : null;
+  const read = (name: string, fb: string) => root?.getPropertyValue(name).trim() || fb;
+  return {
+    venue: base,
+    community: [...base, read('--purple', '#7c3aed'), read('--amber-500', '#f59e0b')],
+    dupEdge: read('--rose-500', '#f43f5e'),
+    mutedEdge: read('--border', '#cbd5e1'),
+    dimmedNode: read('--muted', '#e2e8f0'),
+  };
+}
+const venueColor = (venue: string, palette: string[]): string => {
   let h = 0;
   for (let i = 0; i < venue.length; i++) h = (h * 31 + venue.charCodeAt(i)) | 0;
-  return VENUE_COLORS[Math.abs(h) % VENUE_COLORS.length];
+  return palette[Math.abs(h) % palette.length];
 };
 
 export function ReferenceNetwork({ graph, onViewRef }: { graph: ReferenceGraph; onViewRef?: (id: string) => void }) {
@@ -32,6 +56,15 @@ export function ReferenceNetwork({ graph, onViewRef }: { graph: ReferenceGraph; 
   const [query, setQuery] = useState('');
   /** 聚焦某个节点时，高亮它的一跳邻域（其余降透明度） */
   const [focusId, setFocusId] = useState<string | null>(null);
+  /** 主题版本号：主题切换时 +1，触发图重建（重读 token 色板） */
+  const [themeEpoch, setThemeEpoch] = useState(0);
+
+  useEffect(() => {
+    if (typeof MutationObserver === 'undefined') return;
+    const obs = new MutationObserver(() => setThemeEpoch((n) => n + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+    return () => obs.disconnect();
+  }, []);
 
   /** 搜索结果：按标题模糊匹配，最多 8 条 */
   const matches = useMemo(() => {
@@ -46,6 +79,7 @@ export function ReferenceNetwork({ graph, onViewRef }: { graph: ReferenceGraph; 
   useEffect(() => {
     const el = containerRef.current;
     if (!el || graph.nodes.length === 0) return;
+    const palette = buildPalettes();
 
     // 1) 构图（graphology）：节点 + 去重合并的边
     const g = new Graph({ multi: false, type: 'directed' });
@@ -54,7 +88,7 @@ export function ReferenceNetwork({ graph, onViewRef }: { graph: ReferenceGraph; 
         g.addNode(n.id, {
           label: `${n.title.slice(0, 48)}${n.title.length > 48 ? '…' : ''}\n${n.venue || '未标注期刊'} · ${n.year ?? 'n.d.'}`,
           size: 4 + Math.min(12, (n.citationCount || 0) / 8),
-          color: venueColor(n.venue || ''),
+          color: venueColor(n.venue || '', palette.venue),
           nodeTitle: n.title,
         });
       }
@@ -63,7 +97,7 @@ export function ReferenceNetwork({ graph, onViewRef }: { graph: ReferenceGraph; 
       if (!g.hasNode(e.a) || !g.hasNode(e.b) || e.a === e.b) continue;
       if (g.hasEdge(e.a, e.b)) continue;
       g.addEdge(e.a, e.b, {
-        color: e.type === 'dup' ? '#f43f5e' : '#cbd5e1',
+        color: e.type === 'dup' ? palette.dupEdge : palette.mutedEdge,
         size: e.type === 'dup' ? 2 : Math.min(3, 0.6 + (e.weight || 1) * 0.4),
         edgeType: e.type || 'co-cite',
       });
@@ -76,7 +110,7 @@ export function ReferenceNetwork({ graph, onViewRef }: { graph: ReferenceGraph; 
     for (const id of g.nodes()) {
       const c = community.get(id) ?? 0;
       g.setNodeAttribute(id, 'community', c);
-      g.setNodeAttribute(id, 'color', COMMUNITY_COLORS[c % COMMUNITY_COLORS.length]);
+      g.setNodeAttribute(id, 'color', palette.community[c % palette.community.length]);
       // 大社区略放大，便于一眼看出主干
       const base = g.getNodeAttribute(id, 'size') as number;
       g.setNodeAttribute(id, 'size', base * (1 + Math.min(0.35, (communitySize.get(c) ?? 1) / 40)));
@@ -105,7 +139,7 @@ export function ReferenceNetwork({ graph, onViewRef }: { graph: ReferenceGraph; 
       // 聚焦时把非邻域节点置灰并隐藏标签，突出当前视野。
       nodeReducer: (node, data) => {
         const dimmed = g.getNodeAttribute(node, 'highlighted') === false;
-        return dimmed ? { ...data, color: '#cbd5e1', label: '' } : data;
+        return dimmed ? { ...data, color: palette.dimmedNode, label: '' } : data;
       },
     });
     sigma.on('clickNode', ({ node }) => onViewRef?.(node));
@@ -121,7 +155,7 @@ export function ReferenceNetwork({ graph, onViewRef }: { graph: ReferenceGraph; 
       sigma.kill();
       g.clear();
     };
-  }, [graph, onViewRef]);
+  }, [graph, onViewRef, themeEpoch]);
 
   /**
    * 聚焦某个节点：高亮它与其一跳邻居，其余降透明度，并把镜头对准它。

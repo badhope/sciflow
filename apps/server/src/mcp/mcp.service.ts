@@ -10,6 +10,8 @@ import { AiService } from '../ai/ai.service';
 import { ReferencesService } from '../references/references.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { APP_VERSION } from '../common/version';
+import { ConfigCenterService } from '../config/config-center.service';
+import { ExtensionsService, assetKey } from '../extensions/extensions.service';
 
 /** MCP 工具定义（符合 Model Context Protocol 2026 的 Tool 结构：name/description/inputSchema） */
 interface McpTool {
@@ -52,6 +54,8 @@ export class McpService {
     private readonly ai: AiService,
     private readonly references: ReferencesService,
     private readonly knowledge: KnowledgeService,
+    private readonly config: ConfigCenterService,
+    private readonly extensions: ExtensionsService,
   ) {
     this.tools = [
       {
@@ -204,6 +208,176 @@ export class McpService {
         },
         handler: async (args) =>
           this.ai.evidenceSynthesis(String(args.question), String(args.papers || '')),
+      },
+      {
+        name: 'config.snapshot',
+        description: '读取配置中心全量状态：角色/约束/钩子/权限档/预设/审计（对话里先读再改）',
+        inputSchema: { type: 'object', properties: {} },
+        handler: async () => this.config.snapshot(),
+      },
+      {
+        name: 'config.set_permission',
+        description: '切换配置权限档：strict（只读）/ balanced（角色约束钩子提示词技能）/ open（除核心保护项外全部）/ unrestricted（全面放开，默认）。核心保护项任何档位都不可改',
+        inputSchema: {
+          type: 'object',
+          properties: { mode: { type: 'string', enum: ['strict', 'balanced', 'open', 'unrestricted'] } },
+          required: ['mode'],
+        },
+        handler: async (args) => this.config.setPermissionMode(String(args.mode), 'chat'),
+      },
+      {
+        name: 'config.upsert_role',
+        description: '新增或更新角色（系统提示词）。传 roleId 为更新，不传为新增；isDefault=true 表示设为默认角色（对话立即使用）',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            roleId: { type: 'string' },
+            name: { type: 'string' },
+            systemPrompt: { type: 'string' },
+            isDefault: { type: 'boolean' },
+          },
+          required: ['name'],
+        },
+        handler: async (args) => {
+          if (args.roleId) return this.config.updateRole(String(args.roleId), { name: String(args.name), systemPrompt: args.systemPrompt === undefined ? undefined : String(args.systemPrompt), isDefault: args.isDefault === true }, 'chat');
+          return this.config.createRole({ name: String(args.name), systemPrompt: args.systemPrompt === undefined ? undefined : String(args.systemPrompt), isDefault: args.isDefault === true }, 'chat');
+        },
+      },
+      {
+        name: 'config.upsert_constraint',
+        description: '新增或更新一条约束（注入所有 chat/流水线 LLM 调用的 system 层）。level=must|must_not|should，scope=all|chat|pipeline',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            constraintId: { type: 'string' },
+            title: { type: 'string' },
+            rule: { type: 'string' },
+            level: { type: 'string', enum: ['must', 'must_not', 'should'] },
+            scope: { type: 'string', enum: ['all', 'chat', 'pipeline'] },
+            enabled: { type: 'boolean' },
+          },
+          required: ['title', 'rule'],
+        },
+        handler: async (args) => {
+          const body = {
+            title: String(args.title),
+            rule: String(args.rule),
+            level: args.level === undefined ? undefined : String(args.level),
+            scope: args.scope === undefined ? undefined : String(args.scope),
+            enabled: args.enabled === undefined ? undefined : (args.enabled ? 1 : 0),
+          };
+          if (args.constraintId) return this.config.updateConstraint(String(args.constraintId), body, 'chat');
+          return this.config.createConstraint(body, 'chat');
+        },
+      },
+      {
+        name: 'config.delete_constraint',
+        description: '删除一条约束（按 constraintId）',
+        inputSchema: { type: 'object', properties: { constraintId: { type: 'string' } }, required: ['constraintId'] },
+        handler: async (args) => this.config.deleteConstraint(String(args.constraintId), 'chat'),
+      },
+      {
+        name: 'config.upsert_hook',
+        description: '新增或更新钩子。event=chat:before|chat:after|pipeline:before|pipeline:after；type=prompt_inject（注入系统提示，config={text}）|block（拦截，config={when:"keyword",keywords:[],reason}）|webhook（config={url}，经 SSRF 守卫）',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            hookId: { type: 'string' },
+            name: { type: 'string' },
+            event: { type: 'string', enum: ['chat:before', 'chat:after', 'pipeline:before', 'pipeline:after'] },
+            type: { type: 'string', enum: ['prompt_inject', 'block', 'webhook'] },
+            config: { type: 'object' },
+            enabled: { type: 'boolean' },
+          },
+          required: ['name', 'event', 'type'],
+        },
+        handler: async (args) => {
+          const body = { name: String(args.name), event: String(args.event), type: String(args.type), config: args.config, enabled: args.enabled === undefined ? undefined : (args.enabled ? 1 : 0) };
+          if (args.hookId) return this.config.updateHook(String(args.hookId), body, 'chat');
+          return this.config.createHook(body, 'chat');
+        },
+      },
+      {
+        name: 'config.apply_preset',
+        description: '一键应用内置预设：academic-rigor（学术严谨）/ fast-output（高效产出）/ reviewer-strict（审稿人视角）/ data-careful（数据处理）',
+        inputSchema: { type: 'object', properties: { presetId: { type: 'string' } }, required: ['presetId'] },
+        handler: async (args) => this.config.applyPreset(String(args.presetId), 'chat'),
+      },
+      {
+        name: 'config.preview',
+        description: '预览当前配置在 chat 或 pipeline 中实际注入的约束文本与默认角色（用于确认生效）',
+        inputSchema: { type: 'object', properties: { scope: { type: 'string', enum: ['chat', 'pipeline'] } }, required: ['scope'] },
+        handler: async (args) => this.config.preview(args.scope === 'pipeline' ? 'pipeline' : 'chat'),
+      },
+      {
+        name: 'extension.list',
+        description: '列出扩展中心资产（skill/mcp/role/constraint/hook/prompt），可按 kind 过滤；含内置社区开源与本机私有优势工具',
+        inputSchema: {
+          type: 'object',
+          properties: { kind: { type: 'string', enum: ['skill', 'mcp', 'role', 'constraint', 'hook', 'prompt'] } },
+        },
+        handler: async (args) => {
+          // 外部 MCP 客户端不得看到 SciFlow 私有优势工具（visibility=private）
+          const rows = this.extensions
+            .list(args.kind === undefined ? undefined : String(args.kind))
+            .filter((r) => r.visibility !== 'private');
+          return rows.map((r) => ({ key: r.key, kind: r.kind, name: r.name, description: r.description, source: r.source, enabled: r.enabled, repo: r.repo, license: r.license }));
+        },
+      },
+      {
+        name: 'extension.create',
+        description: '新增一条扩展资产（对话里直接添加 skill/mcp/role/constraint/hook/prompt）。manifest 按类型给结构化定义：skill={mode:"prompt",instructions}；mcp={transport:"http",url}；role={systemPrompt}；constraint={title,rule,level,scope}；hook={event,type,config}；prompt={toolKey,prompt}',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            kind: { type: 'string', enum: ['skill', 'mcp', 'role', 'constraint', 'hook', 'prompt'] },
+            name: { type: 'string' },
+            description: { type: 'string' },
+            manifest: { type: 'object' },
+            tags: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['kind', 'name', 'manifest'],
+        },
+        handler: async (args) => {
+          const row = this.extensions.upsert({
+            kind: String(args.kind) as never,
+            key: assetKey(String(args.kind), String(args.name)),
+            name: String(args.name),
+            description: String(args.description || ''),
+            manifest: (args.manifest as Record<string, unknown>) || {},
+            tags: Array.isArray(args.tags) ? (args.tags as unknown[]).map(String) : [],
+          }, { source: 'user', actor: 'chat' });
+          return { ok: true, id: row.id, key: row.key, kind: row.kind, enabled: row.enabled };
+        },
+      },
+      {
+        name: 'extension.toggle',
+        description: '启用/停用一条扩展资产（按 key 或 id）；停用会同步撤回对应子系统配置',
+        inputSchema: {
+          type: 'object',
+          properties: { key: { type: 'string' }, enabled: { type: 'boolean' } },
+          required: ['key', 'enabled'],
+        },
+        handler: async (args) => {
+          const all = this.extensions.list();
+          const row = all.find((r) => r.key === String(args.key) || r.id === String(args.key));
+          if (!row) return { error: `未找到扩展：${String(args.key)}` };
+          const next = this.extensions.toggle(row.id, args.enabled !== false);
+          return { ok: true, key: next.key, enabled: next.enabled };
+        },
+      },
+      {
+        name: 'extension.generate',
+        description: '一键生成一条扩展资产草稿（按 kind + 一句话需求，用已配置模型按官方模板生成；返回 draft，确认后再用 extension.create 落库）',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            kind: { type: 'string', enum: ['skill', 'mcp', 'role', 'constraint', 'hook', 'prompt'] },
+            brief: { type: 'string' },
+          },
+          required: ['kind', 'brief'],
+        },
+        handler: async (args) => this.extensions.generate(String(args.kind), String(args.brief)),
       },
       {
         name: 'chat.answer',

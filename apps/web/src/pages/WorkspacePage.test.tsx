@@ -52,13 +52,19 @@ import { WorkspacePage } from './WorkspacePage';
 
 const project: Project = { id: 'p-1', name: '测试项目', description: '', status: 'active', createdAt: 0, updatedAt: 0 } as Project;
 
-function renderPage() {
+async function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <WorkspacePage project={project} initialDocId={null} onOpenFullEditor={() => undefined} />
-    </QueryClientProvider>,
-  );
+  let result: ReturnType<typeof render>;
+  await act(async () => {
+    result = render(
+      <QueryClientProvider client={qc}>
+        <WorkspacePage project={project} initialDocId={null} onOpenFullEditor={() => undefined} />
+      </QueryClientProvider>,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  return result!;
 }
 
 describe('WorkspacePage（对话+预览工作台）', () => {
@@ -69,24 +75,24 @@ describe('WorkspacePage（对话+预览工作台）', () => {
   });
 
   it('拉取文档列表并自动选中第一篇（标题出现在选择器与预览头）', async () => {
-    renderPage();
+    await renderPage();
     await waitFor(() => expect(screen.getAllByText('验收样稿').length).toBeGreaterThanOrEqual(2));
   });
 
   it('右侧预览渲染文档正文（Markdown → prose）', async () => {
-    renderPage();
+    await renderPage();
     await waitFor(() => expect(screen.getByText(/图神经网络的正文内容/)).toBeTruthy());
   });
 
   it('空线程显示引导文案；输入为空时发送按钮禁用', async () => {
-    renderPage();
+    await renderPage();
     expect(screen.getByText('开始与 SciFlow 对话')).toBeTruthy();
     const sendBtn = screen.getByRole('button', { name: /发送/ });
     expect(sendBtn).toBeDisabled();
   });
 
   it('顶部提供运行流水线与完整编辑器入口', async () => {
-    renderPage();
+    await renderPage();
     expect(screen.getByRole('button', { name: /运行流水线/ })).toBeTruthy();
     await waitFor(() => expect(screen.getByRole('button', { name: /完整编辑器/ })).toBeTruthy());
   });
@@ -94,7 +100,7 @@ describe('WorkspacePage（对话+预览工作台）', () => {
   /* ── 以下为真正的行为测试（此前缺失） ───────────────────────── */
 
   it('发送消息：调用 streamChat 并传入当前项目', async () => {
-    renderPage();
+    await renderPage();
     await waitFor(() => expect(screen.getAllByText('验收样稿').length).toBeGreaterThanOrEqual(2));
 
     const ta = screen.getByPlaceholderText(/问问题/);
@@ -109,7 +115,7 @@ describe('WorkspacePage（对话+预览工作台）', () => {
   });
 
   it('流式分片按「累积值」语义渲染：最终文本等于最后一次累积（D1 回归）', async () => {
-    renderPage();
+    await renderPage();
     await waitFor(() => expect(screen.getAllByText('验收样稿').length).toBeGreaterThanOrEqual(2));
 
     const ta = screen.getByPlaceholderText(/问问题/);
@@ -137,7 +143,7 @@ describe('WorkspacePage（对话+预览工作台）', () => {
   });
 
   it('推理分片同样按累积值渲染（不得重复拼接）', async () => {
-    renderPage();
+    await renderPage();
     await waitFor(() => expect(screen.getAllByText('验收样稿').length).toBeGreaterThanOrEqual(2));
 
     const ta = screen.getByPlaceholderText(/问问题/);
@@ -160,7 +166,7 @@ describe('WorkspacePage（对话+预览工作台）', () => {
   });
 
   it('onError：把错误显示在对话流里，不静默吞掉', async () => {
-    renderPage();
+    await renderPage();
     await waitFor(() => expect(screen.getAllByText('验收样稿').length).toBeGreaterThanOrEqual(2));
 
     const ta = screen.getByPlaceholderText(/问问题/);

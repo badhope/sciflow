@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./styles/themes.css";
 @plugin "@tailwindcss/typography";
 /* streamdown（流式 Markdown 渲染）的 utility 类扫描 */
 @source "../node_modules/streamdown/dist/*.js";
@@ -41,7 +42,7 @@
   --secondary: #eef2f7;
   --secondary-foreground: #334155;
   --muted: #eef2f7;
-  --muted-foreground: #64748b;
+  --muted-foreground: #5d6d85;
   --accent: #e6f4f2;
   --accent-foreground: #0f766e;
   --destructive: #e11d48;
@@ -90,8 +91,34 @@
 
   --sh-card: 0 1px 2px rgba(23, 32, 44, 0.05), 0 8px 24px -14px rgba(23, 32, 44, 0.12);
   --sh-overlay: 0 24px 60px -24px rgba(9, 15, 28, 0.35), 0 2px 8px rgba(9, 15, 28, 0.08);
+  --sh-card-hover: 0 10px 28px rgba(23, 32, 44, 0.12);
 
   --dur-1: 120ms; --dur-2: 200ms;
+
+  /* ---- 主题风格层默认值（v1.7）：被 :root[data-theme] 风格包覆盖 ---- */
+  --font-heading: var(--font-ui);
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-blur: blur(12px) saturate(1.4);
+  --bubble-user-ink: #ffffff;
+  --code-bg: #0f172a;
+  --code-fg: #e2e8f0;
+  --code-border: rgba(148, 163, 184, 0.18);
+  --link: var(--brand-600);
+  --selection-bg: color-mix(in srgb, var(--brand-500) 22%, transparent);
+  --scrollbar-thumb: #c3cede;
+  --scrollbar-thumb-hover: #9fb0c9;
+  --skeleton-a: rgba(148, 163, 184, 0.12);
+  --skeleton-b: rgba(148, 163, 184, 0.22);
+  --ambient-1: rgba(13, 148, 136, 0.06);
+  --ambient-2: rgba(8, 145, 178, 0.04);
+  --focus-ring-color: rgba(13, 148, 136, 0.40);
+  --focus-ring-w: 2px;
+  --sidebar-tint: var(--card);
+
+  /* ---- 字体族（三档语义，全部系统字体、零 CDN）---- */
+  --font-ui: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Inter, "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --font-read: "Iowan Old Style", Charter, Georgia, "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC", "SimSun", serif;
+  --font-mono: "SF Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   /* 阶段条 / 进度统一刻度（品牌渐变作为"进度语言"，不是装饰） */
   --stage-done: var(--brand-600);
@@ -156,17 +183,41 @@
   --viz-series-4: #a78bfa;
   --viz-series-5: #fb923c;
   --viz-series-6: #94a3b8;
+
+  --glass-bg: rgba(9, 15, 29, 0.72);
+  --selection-bg: color-mix(in srgb, var(--brand-500) 26%, transparent);
+  --scrollbar-thumb: #334155;
+  --scrollbar-thumb-hover: #475569;
+  --skeleton-a: rgba(148, 163, 184, 0.10);
+  --skeleton-b: rgba(148, 163, 184, 0.20);
+  --ambient-1: rgba(13, 148, 136, 0.09);
+  --ambient-2: rgba(8, 145, 178, 0.06);
+  --focus-ring-color: rgba(20, 184, 166, 0.45);
+  --sh-card-hover: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 
 html, body, #root {
   height: 100%;
 }
 
+/* ---------------------------------------------------------------------------
+   字体栈（品牌层）：不再用「无衬线兜底堆」，而是分三档语义。
+   约束：全部为**本机/系统字体**，不引 CDN（Google Fonts 在国内不可达，
+   会阻塞首屏渲染并造成 FOIT）；也不新增二进制字体文件，保持安装包体积。
+
+   1) 界面字体 --font-ui：拉丁优先几何无衬线，中文回落到各家平台最优黑体。
+      Latin 前置 SF Pro / Segoe UI Variable / Inter（若系统已装）——
+      这三者在字形重心与字距上接近，切换平台不会出现"跳字"。
+   2) 阅读字体 --font-read：论文正文/预览用，中文优先宋体（学术印刷体），
+      拉丁回落到 Charter/Georgia 系；这是"学术产品"与"AI 工具"最直接的区分。
+   3) 等宽 --font-mono：代码、DOI、引用编号。
+--------------------------------------------------------------------------- */
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-family: var(--font-ui);
   background: var(--bg-app);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 .dark body {
   background: var(--bg-app);
@@ -182,27 +233,25 @@ body {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(900px 460px at 82% -12%, rgba(13, 148, 136, 0.06), transparent 62%),
-    radial-gradient(680px 320px at -6% -4%, rgba(8, 145, 178, 0.04), transparent 58%);
+    radial-gradient(900px 460px at 82% -12%, var(--ambient-1), transparent 62%),
+    radial-gradient(680px 320px at -6% -4%, var(--ambient-2), transparent 58%);
 }
 .dark #root::before {
   background:
-    radial-gradient(1000px 480px at 86% -12%, rgba(13, 148, 136, 0.09), transparent 62%),
-    radial-gradient(760px 340px at -6% -4%, rgba(8, 145, 178, 0.06), transparent 58%);
+    radial-gradient(1000px 480px at 86% -12%, var(--ambient-1), transparent 62%),
+    radial-gradient(760px 340px at -6% -4%, var(--ambient-2), transparent 58%);
 }
 
 /* 文本选区：品牌色一以贯之 */
 ::selection {
-  background: color-mix(in srgb, var(--brand-500) 22%, transparent);
+  background: var(--selection-bg);
 }
 
 /* 细滚动条 */
 *::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-thumb { background: #c3cede; border-radius: 4px; }
-*::-webkit-scrollbar-thumb:hover { background: #9fb0c9; }
+*::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 *::-webkit-scrollbar-track { background: transparent; }
-.dark *::-webkit-scrollbar-thumb { background: #334155; }
-.dark *::-webkit-scrollbar-thumb:hover { background: #475569; }
 
 /* ---- 品牌动效 token ---- */
 @keyframes pulse-dot {
@@ -248,7 +297,152 @@ body {
 }
 .card-lift:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 28px rgba(23, 32, 44, 0.12);
+  box-shadow: var(--sh-card-hover);
+}
+
+/* ---- Surface 体系（对应 ui.tsx 的 SurfaceTone）----------------------------
+   目标：让「主面板 / 内嵌 / 指标 / 强调 / 警示 / 危险 / 无表面」在视觉上可分。
+   规则：越靠近内容的容器阴影越弱；强调与风险用左侧色条而非通体高饱和。 */
+.surface { border: 1px solid transparent; }
+
+/* 主面板：唯一允许带「发丝边框 + 极浅阴影」的层级 */
+.surface-panel {
+  background: var(--card);
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+  box-shadow: var(--sh-card);
+}
+
+/* ---- 页面抬头（Hero）：项目总览 / 各页首屏的主次锚点 --------------------
+   形态：左侧品牌竖向色条 + 大标题 + 一行元信息；右侧主操作。
+   不用整块卡片，避免与下方内容区抢层级。 */
+.page-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(120deg,
+      color-mix(in srgb, var(--brand-500) 7%, var(--card)) 0%,
+      var(--card) 46%,
+      color-mix(in srgb, var(--blue) 4%, var(--card)) 100%);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.page-hero::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-image: var(--brand-grad);
+  background-color: var(--brand-500);
+}
+.page-hero__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-6) var(--sp-4);
+}
+.page-hero__eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--brand-700);
+  margin-bottom: 6px;
+}
+.page-hero__title {
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+.page-hero__desc {
+  margin-top: 6px;
+  max-width: 62ch;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+.page-hero__actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+/* 偏好设置：折叠态只占一行，展开后在浅底区呈现表单 */
+.page-hero__prefs { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.page-hero__prefs > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 10px var(--sp-6);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: background var(--dur-1) var(--ease);
+}
+.page-hero__prefs > summary::-webkit-details-marker { display: none; }
+.page-hero__prefs > summary:hover { background: color-mix(in srgb, var(--muted) 40%, transparent); }
+.page-hero__prefs-label { font-size: 12px; font-weight: 600; color: var(--secondary-foreground); }
+.page-hero__prefs-hint { font-size: 11px; color: var(--muted-foreground); }
+.page-hero__prefs-chevron { margin-left: auto; color: var(--muted-foreground); transition: transform var(--dur-base) var(--ease); }
+.page-hero__prefs[open] .page-hero__prefs-chevron { transform: rotate(180deg); }
+.page-hero__prefs-body {
+  padding: 0 var(--sp-6) var(--sp-4);
+  animation: details-reveal var(--dur-base) var(--ease);
+}
+@keyframes details-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-hero__prefs-body { animation: none; }
+  .page-hero__prefs-chevron { transition: none; }
+}
+
+/* 内嵌区：无阴影、弱底 —— 放在 panel 内部时不再形成「卡套卡」 */
+.surface-inset {
+  background: color-mix(in srgb, var(--muted) 62%, transparent);
+  border-color: color-mix(in srgb, var(--border) 60%, transparent);
+  box-shadow: none;
+}
+.dark .surface-inset {
+  background: color-mix(in srgb, var(--muted) 55%, var(--card));
+  border-color: color-mix(in srgb, var(--border) 100%, transparent);
+}
+
+/* 指标卡：允许密集并排，去掉边框与阴影，只留极浅品牌底 */
+.surface-metric {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--brand-500) 4%, var(--card)) 0%,
+    var(--card) 62%);
+  border-color: color-mix(in srgb, var(--border) 55%, transparent);
+  box-shadow: none;
+}
+
+/* 强调卡：品牌渐变描边 + 浅品牌底（不用 border-image——
+   它不支持圆角，会导致卡片边缘出现直角）。 */
+.surface-accent {
+  position: relative;
+  background-color: var(--card);
+  background-image: var(--brand-grad-soft);
+  border: 1px solid color-mix(in srgb, var(--brand-500) 30%, var(--border));
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--brand-600) 8%, transparent);
+}
+
+/* 警示卡：琥珀左条 + 极浅底（失败/需人工介入） */
+.surface-warning {
+  background: color-mix(in srgb, var(--amber-500) 7%, var(--card));
+  border-color: color-mix(in srgb, var(--amber-500) 32%, var(--border));
+  border-left-width: 3px;
+  box-shadow: none;
+}
+
+/* 危险区：玫红边 + 极浅底（删除/重置） */
+.surface-danger {
+  background: color-mix(in srgb, var(--rose-500) 6%, var(--card));
+  border-color: color-mix(in srgb, var(--rose-500) 30%, var(--border));
+  box-shadow: none;
 }
 
 /* ---- Micro-interactions ---- */
@@ -272,8 +466,8 @@ body {
 }
 .input-focus-ring:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.30);
-  border-color: #0d9488;
+  box-shadow: 0 0 0 var(--focus-ring-w) var(--focus-ring-color);
+  border-color: var(--ring);
 }
 
 /* Global focus-visible ring for all interactive elements */
@@ -285,7 +479,7 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.40);
+  box-shadow: 0 0 0 var(--focus-ring-w) var(--focus-ring-color);
 }
 
 /* 骨架屏 shimmer */
@@ -294,7 +488,7 @@ select:focus-visible {
   100% { background-position: 400px 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, rgba(148, 163, 184, 0.12) 25%, rgba(148, 163, 184, 0.22) 37%, rgba(148, 163, 184, 0.12) 63%);
+  background: linear-gradient(90deg, var(--skeleton-a) 25%, var(--skeleton-b) 37%, var(--skeleton-a) 63%);
   background-size: 400px 100%;
   animation: shimmer 1.4s infinite linear;
   border-radius: 6px;
@@ -304,8 +498,7 @@ select:focus-visible {
 .page-container { width: 100%; max-width: var(--page-max); margin-inline: auto; }
 
 /* 用户气泡：teal-600 白字仅 3.7:1，改用品牌 600 深一档（4.86:1） */
-.bubble-user { background: var(--brand-600); color: #fff; }
-.dark .bubble-user { background: #0f766e; }
+.bubble-user { background: var(--brand-600); color: var(--bubble-user-ink); }
 
 /* 品牌渐变文字/图标辅助 */
 .brand-gradient-text {
@@ -341,15 +534,17 @@ select:focus-visible {
 /* Logo 徽标：渐变底 + 极浅描边（釉面高光已移除，几何标志本身足够） */
 .brand-logo {
   background-image: var(--brand-grad);
-  color: var(--on-brand);
+  /* 徽标内图形恒为白色：--on-brand 在暗色主题下是深墨色（给渐变按钮文字用），
+     沿用到徽标上会出现「浅青渐变底 + 深色笔画」糊成一团（实测截图整块变白）。 */
+  color: #ffffff;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 1px 2px rgba(9, 42, 77, 0.20);
 }
 
 /* 侧边栏品牌区（墨流 2.0）：左上品牌光晕 + 底部渐变分隔线 */
 .shell-brand-zone {
   position: relative;
-  background: radial-gradient(140% 110% at 0% 0%, rgba(13, 148, 136, 0.07), transparent 58%),
-    radial-gradient(90% 60% at 100% 100%, rgba(8, 145, 178, 0.04), transparent 55%);
+  background: radial-gradient(140% 110% at 0% 0%, var(--ambient-1), transparent 58%),
+    radial-gradient(90% 60% at 100% 100%, var(--ambient-2), transparent 55%);
 }
 .shell-brand-zone::after {
   content: "";
@@ -358,11 +553,11 @@ select:focus-visible {
   right: 12px;
   bottom: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(13, 148, 136, 0.28), rgba(2, 132, 199, 0.28), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-500) 28%, transparent), color-mix(in srgb, var(--brand-600) 28%, transparent), transparent);
 }
 .dark .shell-brand-zone {
-  background: radial-gradient(140% 110% at 0% 0%, rgba(13, 148, 136, 0.10), transparent 58%),
-    radial-gradient(90% 60% at 100% 100%, rgba(8, 145, 178, 0.06), transparent 55%);
+  background: radial-gradient(140% 110% at 0% 0%, var(--ambient-1), transparent 58%),
+    radial-gradient(90% 60% at 100% 100%, var(--ambient-2), transparent 55%);
 }
 
 /* 登录门氛围：居中卡片后的两团品牌光晕（比全局光晕更聚焦） */
@@ -371,15 +566,15 @@ select:focus-visible {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(720px 420px at 50% -8%, rgba(13, 148, 136, 0.16), transparent 62%),
-    radial-gradient(520px 300px at 12% 108%, rgba(8, 145, 178, 0.10), transparent 60%),
-    radial-gradient(460px 260px at 90% 96%, rgba(11, 111, 196, 0.08), transparent 58%);
+    radial-gradient(720px 420px at 50% -8%, color-mix(in srgb, var(--brand-500) 16%, transparent), transparent 62%),
+    radial-gradient(520px 300px at 12% 108%, color-mix(in srgb, var(--brand-600) 10%, transparent), transparent 60%),
+    radial-gradient(460px 260px at 90% 96%, color-mix(in srgb, var(--brand-500) 8%, transparent), transparent 58%);
 }
 .dark .auth-glow {
   background:
-    radial-gradient(720px 420px at 50% -8%, rgba(13, 148, 136, 0.22), transparent 62%),
-    radial-gradient(520px 300px at 12% 108%, rgba(8, 145, 178, 0.14), transparent 60%),
-    radial-gradient(460px 260px at 90% 96%, rgba(11, 111, 196, 0.12), transparent 58%);
+    radial-gradient(720px 420px at 50% -8%, color-mix(in srgb, var(--brand-500) 20%, transparent), transparent 62%),
+    radial-gradient(520px 300px at 12% 108%, color-mix(in srgb, var(--brand-600) 13%, transparent), transparent 60%),
+    radial-gradient(460px 260px at 90% 96%, color-mix(in srgb, var(--brand-500) 11%, transparent), transparent 58%);
 }
 
 /* 卡片顶部品牌高光线（登录门等品牌卡用） */
@@ -400,32 +595,27 @@ select:focus-visible {
 
 /* 顶部 header 玻璃质感 */
 .glass-header {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(12px) saturate(1.4);
-  -webkit-backdrop-filter: blur(12px) saturate(1.4);
-}
-.dark .glass-header {
-  background: rgba(9, 15, 29, 0.72);
-  backdrop-filter: blur(12px) saturate(1.2);
-  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
 }
 
 /* 卡片品牌边框辉光（可交互卡 hover 时） */
 .card-glow {
-  border-color: rgba(13, 148, 136, 0.35);
-  box-shadow: var(--card-shadow), 0 0 0 1px rgba(13, 148, 136, 0.06);
+  border-color: color-mix(in srgb, var(--brand-500) 35%, transparent);
+  box-shadow: var(--card-shadow), 0 0 0 1px color-mix(in srgb, var(--brand-500) 6%, transparent);
 }
 
 /* 品牌分割细线（模块之间用渐变色线分隔，线性感） */
 .brand-divider {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(13, 148, 136, 0.35), rgba(2, 132, 199, 0.35), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-500) 35%, transparent), color-mix(in srgb, var(--brand-600) 35%, transparent), transparent);
 }
 
 /* 品牌状态呼吸点（流水线 running 用） */
 @keyframes brand-breathe {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.35); }
-  50% { box-shadow: 0 0 0 4px rgba(13, 148, 136, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-500) 35%, transparent); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-500) 0%, transparent); }
 }
 .brand-breathe { animation: brand-breathe 1.8s ease-in-out infinite; }
 
@@ -487,7 +677,7 @@ kbd {
   position: fixed;
   inset: 0;
   z-index: 55;
-  background: rgba(9, 15, 28, 0.45);
+  background: color-mix(in srgb, #090f1c 45%, transparent);
   backdrop-filter: blur(2px);
   animation: fade-in var(--dur-fast) var(--ease);
 }
@@ -551,19 +741,28 @@ kbd {
 /* ═══════════════════════════════════════════════════════════════════
    图表层样式
    ═══════════════════════════════════════════════════════════════════ */
+/* 指标卡：数据密集区允许 4-6 个并排，因此去掉边框与阴影（与 panel 区分），
+   改用「左侧 2px 品牌色标 + 只留极浅底」；数值用等宽数字保证多卡对齐。 */
 .metric-card {
-  display: flex; flex-direction: column; gap: 6px;
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 16px 15px;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  box-shadow: var(--card-shadow);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--brand-500) 55%, transparent);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--brand-500) 3.5%, var(--card)) 0%,
+    var(--card) 58%);
+  box-shadow: none;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 .metric-card:hover {
-  border-color: rgba(13, 148, 136, 0.20);
-  box-shadow: var(--card-shadow), 0 0 0 1px rgba(13, 148, 136, 0.04);
+  border-color: color-mix(in srgb, var(--brand-500) 32%, var(--border));
+  border-left-color: var(--brand-500);
 }
+/* 空态占位（value=0）时弱化，避免一屏全是 0 还在抢注意力 */
+.metric-card:has(.metric-card__value:only-child) { opacity: 0.9; }
 .metric-card__label {
   display: flex; align-items: center; gap: 6px;
   font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
@@ -576,6 +775,105 @@ kbd {
 }
 .metric-card__value { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; color: var(--foreground); }
 .metric-card__delta, .metric-card__hint { font-size: 11px; color: var(--muted-foreground); }
+
+/* ---- 功能入口紧凑导航条（替代 5 张等大卡片）---- */
+.page-container .page-quicknav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.page-container .page-quicknav__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  justify-content: center;
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--secondary-foreground);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.page-container .page-quicknav__item:hover {
+  background: var(--card);
+  color: var(--brand-700);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+.page-container .page-quicknav__item svg { color: color-mix(in srgb, var(--brand-600) 70%, var(--muted-foreground)); }
+
+/* 全链路待办小卡：嵌在 inset 面板内，因此不能再套一层白底（卡套卡）。 */
+.mini-stat {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: var(--card);
+  text-align: left;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.dark .mini-stat {
+  /* inset 面板本身已经是「比卡片稍亮」的弱底，小卡再半透明会糊成一片（实测暗色下几乎不可见） */
+  background: color-mix(in srgb, var(--card) 55%, var(--muted));
+  border-color: color-mix(in srgb, var(--border) 120%, transparent);
+}
+.mini-stat.is-clickable:hover {
+  border-color: color-mix(in srgb, var(--brand-500) 40%, var(--border));
+  background: var(--card);
+}
+.mini-stat[disabled] { cursor: default; }
+
+/* 空态容器：虚线边 + 极浅底（区别于正常内容卡；避免「空态也像有数据」的误读） */
+.empty-surface {
+  border: 1px dashed color-mix(in srgb, var(--border) 110%, transparent);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--muted) 26%, transparent);
+}
+
+/* ---- 写作工具面板分组（WritingToolsPanel）---- */
+.writing-tools { display: flex; flex-direction: column; gap: var(--sp-5); }
+.writing-tools__group-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  margin-bottom: var(--sp-2);
+  padding-left: 2px;
+}
+.writing-tools__grid {
+  display: grid;
+  gap: var(--sp-3);
+  grid-template-columns: 1fr;
+  /* 关键：各 section 高度不同时 grid 默认拉伸，会留出大片空白（实测「写作辅助」下方一整屏空白） */
+  align-items: start;
+}
+.writing-tools__grid > section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+}
+@container (min-width: 640px) {
+  .writing-tools__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (min-width: 1000px) {
+  .writing-tools__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* 容器查询：工具面板宽度由 Tab 决定，不能按视口断点判断列数 */
+.writing-tools { container-type: inline-size; }
+@media (max-width: 640px) {
+  .page-container .page-quicknav { display: grid; grid-template-columns: repeat(2, 1fr); }
+}
 
 .chart-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -784,7 +1082,28 @@ kbd {
    对话 Markdown 排版（Streamdown 输出）
    目标：代码块/表格/公式/列表在气泡内也有稳定节奏，和写作预览一致
    ============================================================ */
-.markdown-body { font-size: 14px; line-height: 1.75; word-break: break-word; }
+/* 阅读态排版（论文正文/预览）：用 --font-read 做「学术印刷体」，
+   与界面字体明确分层——这是阅读产品与工具产品的核心区别之一。
+   仅正文与预览使用；标题仍 inherit 界面字体，保证与导航/按钮同族。 */
+.markdown-body {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.75;
+  word-break: break-word;
+}
+.reading-surface .markdown-body,
+.markdown-reading {
+  font-family: var(--font-read);
+  font-size: 15px;
+  line-height: 1.9;
+  letter-spacing: 0.002em;
+}
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  font-family: var(--font-ui);
+}
 .markdown-body > *:first-child { margin-top: 0; }
 .markdown-body > *:last-child { margin-bottom: 0; }
 .markdown-body p { margin: 0.5em 0; }
@@ -806,8 +1125,7 @@ kbd {
   border-left: 3px solid var(--brand-400);
   color: var(--muted-foreground);
 }
-.markdown-body a { color: var(--brand-600); text-decoration: underline; text-underline-offset: 2px; }
-.dark .markdown-body a { color: #5eead4; }
+.markdown-body a { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
 .markdown-body code {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 0.88em;
@@ -821,9 +1139,9 @@ kbd {
   padding: 0.85em 1em;
   border-radius: 10px;
   overflow-x: auto;
-  background: #0f172a;
-  color: #e2e8f0;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: var(--code-bg);
+  color: var(--code-fg);
+  border: 1px solid var(--code-border);
   font-size: 12.5px;
   line-height: 1.6;
 }
@@ -834,6 +1152,9 @@ kbd {
 .markdown-body th { background: color-mix(in srgb, var(--brand-500) 7%, transparent); font-weight: 600; }
 .markdown-body hr { border: 0; border-top: 1px solid var(--border); margin: 1.1em 0; }
 .markdown-body .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.2em 0; }
+
+/* Mermaid 图表：SVG 默认按内容宽度渲染（窄图很小），统一撑到容器宽度并限高避免长图失控 */
+.mermaid-figure > svg { width: 100%; max-width: 860px; height: auto; }
 
 /* Streamdown 默认留白偏大（space-y-4 / text-xl 标题），在对话气泡内收紧到阅读节奏 */
 .markdown-body > div { row-gap: 0.45rem; }
@@ -847,13 +1168,13 @@ kbd {
 
 /* CodeMirror 暗色配色对齐应用 navy 主题（默认 one-dark 是中性灰，和卡片/侧栏不协调） */
 .dark .cm-editor { background: var(--card) !important; color: var(--foreground); }
-.dark .cm-editor .cm-gutters { background: color-mix(in srgb, var(--card) 88%, #000) !important; color: #64748b; border-right: 1px solid var(--border) !important; }
-.dark .cm-editor .cm-activeLine { background: rgba(20, 184, 166, 0.06) !important; }
-.dark .cm-editor .cm-activeLineGutter { background: rgba(20, 184, 166, 0.10) !important; }
-.dark .cm-editor .cm-content { caret-color: #5eead4; }
+.dark .cm-editor .cm-gutters { background: color-mix(in srgb, var(--card) 88%, #000) !important; color: var(--muted-foreground); border-right: 1px solid var(--border) !important; }
+.dark .cm-editor .cm-activeLine { background: color-mix(in srgb, var(--brand-500) 8%, transparent) !important; }
+.dark .cm-editor .cm-activeLineGutter { background: color-mix(in srgb, var(--brand-500) 12%, transparent) !important; }
+.dark .cm-editor .cm-content { caret-color: var(--brand-700); }
 .dark .cm-editor .cm-selectionBackground,
-.dark .cm-editor.cm-focused .cm-selectionBackground { background: rgba(45, 212, 191, 0.22) !important; }
-.dark .cm-editor .cm-cursor { border-left-color: #5eead4; }
+.dark .cm-editor.cm-focused .cm-selectionBackground { background: color-mix(in srgb, var(--brand-500) 26%, transparent) !important; }
+.dark .cm-editor .cm-cursor { border-left-color: var(--brand-700); }
 
 /* ═══════════════════════════════════════════════════════════════════
    项目阶段条（Flow-first 叙事）
@@ -912,7 +1233,7 @@ kbd {
   padding: 0 4px;
   border-radius: 999px;
   background: var(--amber-500);
-  color: #1f1300;
+  color: var(--on-brand);
   font-size: 10px;
   font-weight: 600;
   display: inline-flex; align-items: center; justify-content: center;
@@ -1056,7 +1377,16 @@ kbd {
 .settings-nav__item:hover { background: var(--muted); color: var(--foreground); }
 .settings-nav__item--active {
   background: var(--brand-grad);
-  color: #fff;
+  color: var(--on-brand);
   font-weight: 600;
 }
-.settings-nav__item--active:hover { background: var(--brand-grad); color: #fff; }
+.settings-nav__item--active:hover { background: var(--brand-grad); color: var(--on-brand); }
+
+/* 长列表绘制优化：视口外的资料/文献/任务行不参与布局与绘制。
+   用 content-visibility 而非虚拟滚动——零 JS、零依赖，且不破坏搜索/锚点。 */
+.list-heavy > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+}
+/* 滚动条常驻，避免筛选/分页切换时整页左右跳动 */
+html { scrollbar-gutter: stable; }

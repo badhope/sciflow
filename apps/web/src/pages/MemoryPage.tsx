@@ -1,16 +1,16 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Brain, History, Lightbulb, Plus, Search, Trash2 } from 'lucide-react';
+import { Brain, History, Lightbulb, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
-import type { MemoryItem } from '../types';
+import type { MemoryItem, Project } from '../types';
 import { Badge, Button, Card, ConfirmDialog, Empty, ErrorBox, Input, Spinner, Textarea, errMsg } from '../components/ui';
-import { ChartEmpty, Donut, LineChart } from '../components/charts';
+import { ChartEmpty, Donut, LineChart, MetricCard } from '../components/charts';
 
 /** 记忆中心（Phase 2：Agentic Memory）
  * - 情景记忆 episodic：流水线完成时自动沉淀（主题/结构/评分），供后续任务参考
  * - 程序记忆 procedural：写作风格指令，起草时自动注入（可自行维护）
  */
-export function MemoryPage() {
+export function MemoryPage({ project }: { project: Project }) {
   const [type, setType] = useState<'episodic' | 'procedural' | ''>('');
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
@@ -22,10 +22,10 @@ export function MemoryPage() {
 
   // 记忆列表 + 概览（React Query；筛选变化即换 queryKey）
   const qc = useQueryClient();
-  const itemsQuery = useQuery({ queryKey: ['memory', type, q], queryFn: () => api.memory.list(type, q) });
-  const overviewQuery = useQuery({ queryKey: ['memory-all'], queryFn: () => api.memory.list('', ''), retry: 0 });
+  const itemsQuery = useQuery({ queryKey: ['memory', project.id, type, q], queryFn: () => api.memory.list(type, q, project.id) });
+  const overviewQuery = useQuery({ queryKey: ['memory-all', project.id], queryFn: () => api.memory.list('', '', project.id), retry: 0 });
   const items: MemoryItem[] = itemsQuery.data ?? [];
-  const allItems: MemoryItem[] = overviewQuery.data ?? [];
+  const allItems: MemoryItem[] = useMemo(() => overviewQuery.data ?? [], [overviewQuery.data]);
   const loading = itemsQuery.isLoading;
   const listError = itemsQuery.error ? errMsg(itemsQuery.error) : '';
   const refresh = () => {
@@ -40,7 +40,7 @@ export function MemoryPage() {
       await api.memory.add(
         'procedural',
         newContent.trim(),
-        undefined,
+        project.id,
         newKeywords.split(/[,，]/).map((k) => k.trim()).filter(Boolean),
       );
       setNewContent('');
@@ -71,6 +71,18 @@ export function MemoryPage() {
   };
 
   const typeTone = (t: string) => (t === 'procedural' ? 'teal' : 'blue') as 'teal' | 'blue';
+
+  /**
+   * 近 7 天新增（KPI 卡用）。
+   * 时间基准取「最新一条记忆的 createdAt」而不是 Date.now()：渲染期调用 Date.now()
+   * 属于不纯调用（react-hooks/purity 已拦），且以数据最新时间为基准在快照/回放场景更稳定。
+   */
+  const weekNew = useMemo(() => {
+    if (!allItems.length) return 0;
+    const newest = Math.max(...allItems.map((m) => m.createdAt));
+    const since = newest - 7 * 24 * 3600 * 1000;
+    return allItems.filter((m) => m.createdAt >= since).length;
+  }, [allItems]);
 
   /* ---- 概览派生（基于全量 allItems，不随筛选变化） ---- */
   const epiCount = allItems.filter((m) => m.type === 'episodic').length;
@@ -130,6 +142,14 @@ export function MemoryPage() {
           </Button>
         </div>
       </Card>
+
+      {/* KPI 卡：四个一眼可读的量化指标（此前这些数字只能从图表里读） */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <MetricCard label="记忆总量" value={String(allItems.length)} hint="当前项目累计沉淀" accent="brand" />
+        <MetricCard label="情景记忆" value={String(epiCount)} hint="流水线完成后自动生成" accent="sky" />
+        <MetricCard label="程序记忆" value={String(procCount)} hint="写作风格指令，起草时注入" accent="brand" />
+        <MetricCard label="近 7 天新增" value={String(weekNew)} hint="最近一周沉淀条数" accent={weekNew > 0 ? 'emerald' : 'brand'} />
+      </div>
 
       {/* 记忆概览：类型占比 + 增长趋势 + 高频关键词 */}
       {allItems.length > 0 && (
@@ -214,7 +234,23 @@ export function MemoryPage() {
           <Spinner label="加载记忆…" />
         </div>
       ) : items.length === 0 ? (
-        <Empty illustration="chat" text="还没有记忆" hint="运行一次全自动流水线会自动沉淀情景记忆；也可以新增写作指令" />
+        <>
+          <Empty illustration="chat" text="还没有记忆" hint="运行一次全自动流水线会自动沉淀情景记忆；也可以新增写作指令" />
+          {/* 空态补一张「记忆从哪来」说明卡，避免用户以为功能坏了 */}
+          <Card tone="inset" className="p-4 mt-3">
+            <div className="flex items-start gap-2.5">
+              <Sparkles size={15} className="mt-0.5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+              <div className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                <div className="font-medium text-slate-700 dark:text-slate-200 mb-1">两类记忆从哪来</div>
+                <ul className="space-y-1">
+                  <li>· <span className="font-medium">情景记忆</span>：流水线跑到「完成」时自动写入（主题 / 大纲结构 / 质量分），下一次同类选题会参考。</li>
+                  <li>· <span className="font-medium">程序记忆</span>：手写的写作风格指令（如「方法节必须写数据来源」），起草每一章都会注入。</li>
+                  <li>· 记忆按<span className="font-medium">项目</span>隔离：切换左侧项目后这里只显示该项目的记忆。</li>
+                </ul>
+              </div>
+            </div>
+          </Card>
+        </>
       ) : (
         <div className="space-y-2">
           {items.map((m) => (

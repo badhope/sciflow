@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { BookOpen, Crosshair, Loader2, Plus } from 'lucide-react';
 import type { CitationRow, Reference } from '../../types';
 import { Badge, Button, Modal, Select } from '../../components/ui';
@@ -217,13 +217,37 @@ function CitationPickerModal({
   onClose: () => void;
   onInsertAnchor: (referenceId: string) => void;
 }) {
+  /**
+   * 文献库可能有上百条（本项目实测 85 条，其中相当一部分是与当前主题无关的历史文献）。
+   * 原实现直接把 refs 原序铺满，用户要插一条引用得在列表里翻半天。
+   * 这里：搜索框 + 「已引用 / 未引用」分组 + 已引用优先，最常用操作一眼可达。
+   */
+  const [q, setQ] = useState('');
+  const kw = q.trim().toLowerCase();
+  const filtered = kw
+    ? refs.filter((r) => `${r.title} ${r.authors || ''} ${r.venue || ''} ${r.year || ''}`.toLowerCase().includes(kw))
+    : refs;
+  const sorted = [...filtered].sort((a, b) => {
+    const ca = citations.some((c) => c.referenceId === a.id) ? 0 : 1;
+    const cb = citations.some((c) => c.referenceId === b.id) ? 0 : 1;
+    return ca - cb || (b.year || 0) - (a.year || 0);
+  });
   return (
     <Modal open={open} title="从文献库添加引用" onClose={onClose} width="max-w-lg">
       {refs.length === 0 ? (
         <div className="text-xs text-slate-400 dark:text-slate-500">文献库为空，请先到「文献调研」检索导入。</div>
       ) : (
+        <>
+          <input
+            className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-teal-400 dark:border-slate-700 dark:bg-slate-900"
+            placeholder={`搜索文献（共 ${refs.length} 条，可按标题/作者/期刊/年份）`}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            aria-label="搜索文献"
+          />
+          {sorted.length === 0 && <div className="py-4 text-center text-xs text-slate-400">没有匹配「{q}」的文献</div>}
         <div className="max-h-80 overflow-y-auto space-y-1.5 pr-0.5">
-          {refs.map((r) => {
+          {sorted.map((r) => {
             const citedIdx = citations.findIndex((c) => c.referenceId === r.id);
             const cited = citedIdx >= 0;
             return (
@@ -249,6 +273,7 @@ function CitationPickerModal({
             );
           })}
         </div>
+        </>
       )}
     </Modal>
   );

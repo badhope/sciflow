@@ -100,10 +100,10 @@ pnpm --filter @sciflow/web build     # 产物在 apps/web/dist，纯静态文件
 | `DATABASE_PATH` | SQLite 数据库文件路径 | `apps/server/data/sciflow.db` | `db/database.ts` |
 | `AI_BASE_URL` | OpenAI 兼容端点（国内厂商任选） | `https://ark.cn-beijing.volces.com/api/v3` | `ai/ai.service.ts` |
 | `AI_API_KEY` | 你的 API 密钥 | 空（未配置 → AI 功能禁用并提示，不返回假数据） | `ai/ai.service.ts` |
-| `AI_MODEL` | 默认模型 | `agnes-3.0-flash` | `ai/ai.service.ts` |
+| `AI_MODEL` | 默认模型 | 空（Compose 可另行指定默认值） | `packages/ai/src/ai-transport.service.ts` |
 | `AI_MODEL_FAST` | fast 档（问答 / 润色 / 翻译 / 评审 JSON） | 空 → 回落 `AI_MODEL` | `ai/ai.service.ts` |
 | `AI_MODEL_STRONG` | strong 档（规划 / 长文起草） | 空 → 回落 fast 档 | `ai/ai.service.ts` |
-| `AI_RPM_CAP` | 每分钟 AI 调用上限（令牌桶，防 429） | **代码内 `5`**（`.env.example` / compose 写 `8`） | `ai/ai.service.ts` |
+| `AI_RPM_CAP` | 用于推导 AI 并发上限的 RPM 参数 | `60`（并发上限按 RPM ÷ 6 计算；Compose 默认 `8`） | `packages/ai/src/ai-transport.service.ts` |
 | `AI_MOCK` | 设为 `1` 启用进程内 mock 网关（MSW 拦截，不占端口） | 关闭 | `ai/ai.service.ts`、`ai/mock-gateway.ts` |
 | `MOCK_HTTP_PORT` | mock HTTP 包装脚本端口（仅回环，供 promptfoo 等外部工具） | `5099` | `apps/server/scripts/mock-openai-http.mjs` |
 | `CORS_ORIGIN` | 允许的前端来源，逗号分隔；`*` 全放行 | `http://localhost:5173,http://127.0.0.1:5173` | `main.ts` |

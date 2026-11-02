@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { Button, Badge, Empty, Spinner, Input, Select } from './ui';
+import { Button, Badge, Card, Empty, Spinner, Input, Select } from './ui';
 
 describe('Button', () => {
   it('renders children and fires onClick', async () => {
@@ -76,5 +76,31 @@ describe('Input / Select', () => {
     );
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'ieee' } });
     expect(onChange).toHaveBeenCalledWith('ieee');
+  });
+});
+
+describe('Card 表面语义（SurfaceTone）', () => {
+  it('默认 panel：唯一带阴影的主面板层级', () => {
+    const { container } = render(<Card>内容</Card>);
+    expect(container.firstElementChild!.className).toContain('surface-panel');
+  });
+
+  it('inset：内嵌区不带阴影（避免卡套卡）', () => {
+    const { container } = render(<Card tone="inset">内嵌</Card>);
+    expect(container.firstElementChild!.className).toContain('surface-inset');
+    expect(container.firstElementChild!.className).not.toContain('surface-panel');
+  });
+
+  it('metric / accent / warning / danger 各自独立类名', () => {
+    for (const tone of ['metric', 'accent', 'warning', 'danger'] as const) {
+      const { container } = render(<Card tone={tone}>x</Card>);
+      expect(container.firstElementChild!.className).toContain(`surface-${tone}`);
+    }
+  });
+
+  it('plain：纯容器不渲染表面类', () => {
+    const { container } = render(<Card tone="plain">x</Card>);
+    const cls = container.firstElementChild!.className;
+    expect(cls).not.toMatch(/surface-(panel|inset|metric|accent|warning|danger)/);
   });
 });

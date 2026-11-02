@@ -45,6 +45,10 @@ jobs:
         run: pnpm --filter @sciflow/server build
       - name: Build (web)
         run: pnpm --filter @sciflow/web build
+      - name: Verify enterprise access boundary (28 assertions)
+        # 单测里 AUTH_MODE 默认 none，权限边界永远不会被覆盖；这里用真实 HTTP 跑一遍两层边界
+        run: node scripts/verify-jwt-access.mjs
+        timeout-minutes: 5
 
   regression:
     name: Full mock regression
@@ -84,6 +88,10 @@ jobs:
           # 必须与启动实例的 DATABASE_PATH 一致：否则脚本内 2 个依赖真实库的 check 会降级为 info
           SCIFLOW_DB_PATH: /tmp/sciflow_ci.db
         run: python3 scripts/full_regression.py
+      - name: Config center monitor (19 checks)
+        env:
+          SCIFLOW_BASE: http://127.0.0.1:3000
+        run: node scripts/monitor_config_center.mjs --base http://127.0.0.1:3000 --log /tmp/server.log
       - name: Dump server log on failure
         if: failure()
         run: tail -100 /tmp/server.log

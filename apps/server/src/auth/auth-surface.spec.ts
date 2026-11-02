@@ -52,8 +52,54 @@ describe('鉴权面契约：@Public() 白名单', () => {
   it('agent-trace 与 websearch 的每个端点都受类级守卫保护（不再有 Public 标注）', () => {
     for (const name of ['agent/agent-trace.controller.ts', 'websearch/websearch.controller.ts']) {
       const text = readFileSync(path.join(SRC, name), 'utf-8');
-      expect(text).toContain('@UseGuards(JwtAuthGuard)');
+      expect(text).toMatch(/@UseGuards\(JwtAuthGuard/);
       expect(text).not.toContain('@Public()');
+    }
+  });
+
+  /**
+   * v1.8 契约：实例级配置控制器必须挂 AdminGuard。
+   *
+   * 这些端点改的是「整台实例」的东西（模型 Key / baseURL / 权限档 / 注入钩子 /
+   * 扩展资产 / 用量 / 联网 provider Key / 全局期刊库）。企业模式下若只要求登录，
+   * 任一 member 改 baseURL 即可把全实例请求（含他人稿件）引到自己的服务器。
+   * 本地模式 AdminGuard 直接放行，零登录体验不变。
+   */
+  it('实例级配置控制器必须挂 AdminGuard（企业模式仅管理员）', () => {
+    const must: { file: string; why: string }[] = [
+      { file: 'settings/settings.controller.ts', why: '模型厂商/Key/baseURL/连接测试' },
+      { file: 'config/config.controller.ts', why: '权限档/角色/约束/钩子/预设/审计' },
+      { file: 'extensions/extensions.controller.ts', why: '内置资产启停（影响注入面）' },
+      { file: 'settings/customization.controller.ts', why: '意图/步骤开关/质量权重/提示词' },
+      { file: 'settings/usage.controller.ts', why: '全实例成本聚合（含他人消耗）' },
+      { file: 'websearch/websearch.controller.ts', why: '联网 provider Key' },
+    ];
+    const violations: string[] = [];
+    for (const { file, why } of must) {
+      const text = readFileSync(path.join(SRC, file), 'utf-8');
+      if (!text.includes('AdminGuard')) violations.push(`${file}（${why}）`);
+    }
+    expect(violations, `以下实例级配置控制器未挂 AdminGuard：${violations.join('; ')}`).toEqual([]);
+  });
+
+  it('AdminGuard 在本地模式放行、企业模式仅 admin（语义锁定）', async () => {
+    const { AdminGuard } = await import('./admin.guard');
+    const guard = new AdminGuard();
+    const ctx = (user?: { role?: string }) =>
+      ({
+        switchToHttp: () => ({ getRequest: () => ({ user }) }),
+      }) as never;
+    const old = process.env.AUTH_MODE;
+    try {
+      process.env.AUTH_MODE = 'none';
+      expect(guard.canActivate(ctx(undefined))).toBe(true);
+      process.env.AUTH_MODE = 'jwt';
+      expect(guard.canActivate(ctx({ role: 'admin' }))).toBe(true);
+      expect(() => guard.canActivate(ctx({ role: 'member' }))).toThrow(/仅管理员/);
+      expect(() => guard.canActivate(ctx(undefined))).toThrow(/仅管理员/);
+    } finally {
+      if (old === undefined) delete process.env.AUTH_MODE;
+      else process.env.AUTH_MODE = old;
     }
   });
 });

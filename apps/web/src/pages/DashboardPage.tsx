@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Beaker, FileText, FlaskConical, Gauge, Plus, Workflow, ArrowRight, Activity, Clock3 } from 'lucide-react';
+import { BookOpen, Beaker, FileText, FlaskConical, Gauge, Plus, Workflow, Activity, ChevronDown, Clock3 } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardOverview, Project } from '../types';
 import { Button, Card, EmptyState, Skeleton, Badge, jsonText, SectionHeader, SectionTitle, Textarea, errMsg } from '../components/ui';
@@ -9,6 +9,7 @@ import { formatWordCount } from '../lib/format';
 import { useContext } from 'react';
 import { ToastContext } from '../App';
 import type { View } from '../App';
+import { ProjectCockpit, type QualityGateState } from './dashboard/ProjectCockpit';
 
 export function DashboardPage({ project, onNavigate, openDoc }: {
   project: Project;
@@ -53,6 +54,46 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
   /** 科研全链路总览：后端未就绪/失败时为 null，前端降级为小字提示，不白屏 */
   const overviewQuery = useQuery({ queryKey: ['dash-overview', project.id], queryFn: () => api.dashboard.overview(project.id), retry: 0 });
   const overview: DashboardOverview | null = overviewQuery.data ?? null;
+  /**
+   * 驾驶舱质量门数据（v2.0）：一次取「项目内全部文档最新客观分」与「当前评审标准」。
+   * 两者都是只读接口，失败时降级为未评分状态，不阻塞首屏。
+   */
+  const gateQuery = useQuery({
+    queryKey: ['dash-gate', project.id],
+    queryFn: async () => {
+      const [ov, settings] = await Promise.all([
+        api.quality.projectOverview(project.id).catch(() => null),
+        api.customization.getPipelineSettings().catch(() => null),
+      ]);
+      return { overview: ov, settings };
+    },
+    retry: 0,
+    staleTime: 30_000,
+  });
+  /** 投稿条数：概览接口不含该字段，驾驶舱阶段推断需要 */
+  const submissionsQuery = useQuery({
+    queryKey: ['dash-submissions', project.id],
+    queryFn: () => api.submission.listTracks(project.id).catch(() => [] as never[]),
+    retry: 0,
+    staleTime: 60_000,
+  });
+  const submissionCount = submissionsQuery.data?.length ?? 0;
+  /**
+   * 质量门状态：取「最需要关注的那篇」（客观分最低）作为门禁信号。
+   * 空项目 / 无正文 → score=null，驾驶舱显示「未评分」而不是假绿。
+   */
+  const qualityGate: QualityGateState = (() => {
+    const items = gateQuery.data?.overview?.items ?? [];
+    const scored = items.filter((it) => it.chars > 0);
+    const worst = scored.length ? scored.reduce((a, b) => (a.objectiveScore <= b.objectiveScore ? a : b)) : null;
+    const settings = gateQuery.data?.settings;
+    return {
+      score: worst ? worst.objectiveScore : null,
+      passScore: settings?.qualityPassScore ?? null,
+      standardLabel: settings?.qualityStandardLabel ?? null,
+      hardFailCount: worst?.hardFailCount ?? 0,
+    };
+  })();
   /** 差距#22：项目级系统提示（写作偏好），本地草稿态 */
   const [prefaceDraft, setPrefaceDraft] = useState(project.preface || '');
   const [prefaceEditing, setPrefaceEditing] = useState(false);
@@ -101,58 +142,101 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
 
   return (
     <div className="page-container">
-      {/* 项目总览（大厂式：白底 + 数据统计，去渐变去重色） */}
-      <Card className="p-4 sm:p-6 mb-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+      {/*
+        项目抬头（Hero）：原实现是一张塞满东西的大白卡（项目名 + 描述 + 写作偏好设置），
+        与下方 4 个指标、全链路、图表、执行追踪完全同权重 —— 首屏没有主次。
+        改为两层：上层品牌化抬头（名称 / 元信息 / 两个主操作），下层偏好设置降级为
+        <details> 内嵌区（低频配置不该占首屏最贵的位置）。
+      */}
+      <section className="page-hero mb-6">
+        <div className="page-hero__main">
           <div className="min-w-0">
-            <div className="text-lg font-semibold text-slate-900 dark:text-slate-100 tracking-tight">{project.name}</div>
-            <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">{project.description || '让科研从想法到成文，一站式完成文献、写作与投稿'}</div>
+            <div className="page-hero__eyebrow">研究项目</div>
+            <h2 className="page-hero__title">{project.name}</h2>
+            <p className="page-hero__desc">
+              {project.description || '让科研从想法到成文 — 文献、写作、评审与投稿在同一处闭环'}
+            </p>
+          </div>
+          <div className="page-hero__actions">
+            <Button onClick={() => onNavigate('pipeline')} title="用主题一键生成初稿">
+              <Workflow size={14} /> 运行流水线
+            </Button>
+            <Button variant="outline" onClick={() => onNavigate('writing')}>
+              <BookOpen size={14} /> 继续写作
+            </Button>
           </div>
         </div>
-        {/* 差距#22：项目级写作偏好（系统提示，每轮写作自动注入） */}
-        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">项目写作偏好（每轮写作自动注入，留空则不注入）</span>
-            {!prefaceEditing && (
-              <Button variant="ghost" className="text-xs h-7 px-2" onClick={() => setPrefaceEditing(true)}>
-                {prefaceDraft.trim() ? '编辑' : '设置偏好'}
-              </Button>
-            )}
-          </div>
-          {prefaceEditing ? (
-            <div className="space-y-2">
-              <Textarea
-                rows={3}
-                className="text-sm"
-                placeholder="例：本项目要求——引言用漏斗式结构；方法节写明数据来源与超参数；参考文献优先引用近三年中文核心。"
-                value={prefaceDraft}
-                onChange={(e) => setPrefaceDraft(e.target.value)}
-              />
-              <div className="flex gap-2 justify-end">
-                <Button variant="ghost" className="text-xs h-7 px-2" onClick={() => { setPrefaceEditing(false); setPrefaceDraft(project.preface || ''); }}>取消</Button>
-                <Button className="text-xs h-7 px-2" onClick={savePreface} disabled={prefaceSaving}>
-                  {prefaceSaving ? '保存中…' : '保存偏好'}
+        <details className="page-hero__prefs">
+          <summary>
+            <span className="page-hero__prefs-label">项目写作偏好</span>
+            <span className="page-hero__prefs-hint">
+              {prefaceDraft.trim() ? '已设置 · 每轮写作自动注入' : '未设置 · 可定义固定写作要求'}
+            </span>
+            <ChevronDown size={13} className="page-hero__prefs-chevron" aria-hidden="true" />
+          </summary>
+          <div className="page-hero__prefs-body">
+            {prefaceEditing ? (
+              <div className="space-y-2">
+                <Textarea
+                  rows={3}
+                  className="text-sm"
+                  placeholder="例：本项目要求——引言用漏斗式结构；方法节写明数据来源与超参数；参考文献优先引用近三年中文核心。"
+                  value={prefaceDraft}
+                  onChange={(e) => setPrefaceDraft(e.target.value)}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => { setPrefaceEditing(false); setPrefaceDraft(project.preface || ''); }}>取消</Button>
+                  <Button className="h-7 px-2 text-xs" onClick={savePreface} disabled={prefaceSaving}>
+                    {prefaceSaving ? '保存中…' : '保存偏好'}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start justify-between gap-3">
+                <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                  {prefaceDraft.trim() || <span className="text-slate-400 dark:text-slate-500">尚未设置。这是一段固定写作要求，后续每次 AI 写作/润色都会自动带上，等价于轻量「项目记忆」。</span>}
+                </div>
+                <Button variant="ghost" className="h-7 shrink-0 px-2 text-xs" onClick={() => setPrefaceEditing(true)}>
+                  {prefaceDraft.trim() ? '编辑' : '设置'}
                 </Button>
               </div>
-            </div>
-          ) : (
-            <div className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-              {prefaceDraft.trim() || <span className="text-slate-400 dark:text-slate-500">尚未设置。这是一段固定写作要求，后续每次 AI 写作/润色都会自动带上，等价于轻量「项目记忆」。</span>}
-            </div>
-          )}
-        </div>
-      </Card>
+            )}
+          </div>
+        </details>
+      </section>
+
+      {/* 项目驾驶舱（v2.0）：首屏唯一主区域——当前阶段 / 下一步动作 / 质量门状态 */}
+      <ProjectCockpit
+        project={project}
+        docs={docs}
+        overview={overview}
+        gate={qualityGate}
+        submissionCount={submissionCount}
+        onNavigate={onNavigate}
+        onOpenDoc={openDoc}
+      />
+
+      {/* 功能入口：原为 5 张等大卡片（与草稿列表争主次，把主任务挤到首屏之外）。
+          改为一行紧凑的「分段导航条」——功能一个不少，视觉权重降到辅助层。 */}
+      <nav className="page-quicknav mb-6" aria-label="功能入口">
+        {entries.map((item) => (
+          <button key={item.label} className="page-quicknav__item" onClick={() => onNavigate(item.view)}>
+            <item.icon size={14} aria-hidden="true" />
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
 
       {/* 项目数据概览：MetricCard 网格 + 草稿状态分布 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard label="论文草稿" value={docs.length} icon={<FileText size={14} />} hint={docs.length ? `${docs.length} 篇进行中` : '尚未创建草稿'} tone="brand" />
         <MetricCard label="参考文献" value={refs.length} icon={<BookOpen size={14} />} hint={refs.length ? '已入库文献' : '文献库为空'} tone="slate" />
         <MetricCard label="知识库资料" value={knowledgeCount} icon={<BookOpen size={14} />} hint="RAG 可问答资料数" tone="slate" />
         <MetricCard label="流水线任务" value={pipelineCount} icon={<Workflow size={14} />} hint="历史全自动任务数" tone="slate" />
       </div>
 
-      {/* 科研全链路总览：待办计数 + 卡点跳转（后端未就绪时 catch 为 null，降级小字提示） */}
-      <Card className="p-4 mb-6">
+      {/* 科研全链路：与上方指标同属「项目体征」，用 inset 表面弱化，避免两块白卡并列抢层级 */}
+      <Card tone="inset" className="mb-6">
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">科研全链路</div>
           <span className="text-[11px] text-slate-400 dark:text-slate-500">待办与卡点一览</span>
@@ -207,8 +291,8 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
         )}
       </Card>
 
-      {docs.length > 0 && (
-        <Card className="p-4 mb-6">
+      {docs.length > 0 && ( /* 草稿状态：与草稿列表同主题，inset 弱化 */
+        <Card tone="inset" className="mb-6">
           <SectionHeader title="草稿状态分布" description="按文档状态统计，点击卡片进入写作页" />
           <div className="mt-3 flex flex-wrap items-center gap-6">
             <Donut
@@ -244,8 +328,8 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
         </Card>
       )}
 
-      {/* Agent 执行追踪：执行历史 + Token 用量走势（后端 /api/agent/* 观测入口） */}
-      <Card className="p-4 mb-6">
+      {/* Agent 执行追踪：观测性信息，用 inset 弱化，不与「草稿」等生产内容同权重 */}
+      <Card tone="inset" className="mb-6">
         <SectionHeader
           title={
             <span className="flex items-center gap-1.5">
@@ -308,25 +392,6 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
         )}
       </Card>
 
-      {/* 功能入口（大厂式网格：图标底 + 名称 + 描述 + 箭头） */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-7">
-        {entries.map((item) => (
-          <button
-            key={item.label}
-            onClick={() => onNavigate(item.view)}
-            className="group card-lift text-left rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 hover:border-teal-300 dark:hover:border-teal-700"
-          >
-            <div className="flex items-start justify-between">
-              <span className="w-9 h-9 rounded-lg bg-slate-50 dark:bg-slate-900/50 flex items-center justify-center text-slate-500 dark:text-slate-400 group-hover:bg-gradient-to-br group-hover:from-teal-500 group-hover:to-sky-600 group-hover:text-white transition-all duration-200 group-hover:scale-110">
-                <item.icon size={17} />
-              </span>
-              <ArrowRight size={14} className="text-slate-200 group-hover:text-teal-500 transition-all duration-200 group-hover:translate-x-0.5" />
-            </div>
-            <div className="font-medium text-sm text-slate-900 dark:text-slate-100 mt-2.5">{item.label}</div>
-            <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{item.desc}</div>
-          </button>
-        ))}
-      </div>
 
       <SectionTitle
         extra={
@@ -418,7 +483,7 @@ function MiniStat({ label, value, tone, onClick }: { label: string; value: numbe
     <button
       onClick={onClick}
       disabled={!onClick}
-      className={`rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 text-left ${onClick ? 'hover:border-teal-300 dark:hover:border-teal-700 cursor-pointer' : 'cursor-default'}`}
+      className={`mini-stat ${onClick ? 'is-clickable' : ''}`}
     >
       <div className={`text-xl font-semibold leading-none ${toneCls}`}>{value}</div>
       <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">{label}</div>

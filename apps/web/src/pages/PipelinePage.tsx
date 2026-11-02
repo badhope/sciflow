@@ -78,6 +78,7 @@ function StepTimeline({ steps }: { steps: PipelineStep[] }) {
 /** 多 Agent 协作映射：每个流水线步骤由哪个 Agent 角色负责（对标 Deep Research / Agent Laboratory 分工） */
 const AGENT_MAP: Record<string, { role: string; tone: 'blue' | 'green' | 'teal' | 'amber' | 'slate' }> = {
   'topic-verify': { role: 'Planner', tone: 'slate' },
+  'novelty-check': { role: 'Scout', tone: 'teal' },
   literature: { role: 'Researcher', tone: 'blue' },
   outline: { role: 'Planner', tone: 'slate' },
   drafting: { role: 'Writer', tone: 'green' },
@@ -504,6 +505,22 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
     }
   };
 
+  /** 重跑已结束任务：保留原主题起一条新流水线（失败任务不必删了重输） */
+  const [rerunning, setRerunning] = useState(false);
+  const rerunTask = async (task: PipelineTask) => {
+    setRerunning(true);
+    try {
+      const t = await api.pipeline.rerun(task.id);
+      await refresh();
+      setActiveId(t.id);
+      toast('success', `已按原主题重跑，新任务 ${t.id.slice(0, 8)}…`);
+    } catch (e: unknown) {
+      toast('error', '重跑失败：' + errMsg(e));
+    } finally {
+      setRerunning(false);
+    }
+  };
+
   const statusText: Record<string, { text: string; tone: 'blue' | 'amber' | 'green' | 'red' }> = {    running: { text: '执行中', tone: 'blue' },
     awaiting_confirmation: { text: '等待大纲确认', tone: 'amber' },
     completed: { text: '已完成', tone: 'green' },
@@ -621,7 +638,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
       ) : (
         <div className="grid lg:grid-cols-3 gap-4 [&>*]:min-w-0">
           {/* 任务列表 */}
-          <Card className="p-3 lg:col-span-1">
+          <Card tone="inset" className="p-3 lg:col-span-1">
             <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">任务记录</div>
             <div className="space-y-1.5">
               {tasks.map((t) => {
@@ -631,7 +648,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
                     key={t.id}
                     className={`rounded-lg px-3 py-2 cursor-pointer border transition-all duration-150 ${
                       activeId === t.id
-                        ? 'border-teal-300 dark:border-teal-700 bg-teal-50/80 dark:bg-teal-900/25 border-l-[3px] border-l-teal-500 shadow-[0_2px_12px_-4px_rgba(13,148,136,0.35)]'
+                        ? 'border-teal-300 dark:border-teal-700 bg-teal-50/80 dark:bg-teal-900/25 border-l-[3px] border-l-teal-500 shadow-[0_2px_12px_-4px_var(--focus-ring-color)]'
                         : 'border-slate-100 dark:border-slate-800 hover:border-teal-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
                     }`}
                     onClick={() => setActiveId(t.id)}
@@ -712,22 +729,25 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
                     {active.status === 'interrupted' ? (
                       <>
                         <span className="font-medium text-amber-600 dark:text-amber-400">中断说明：</span>
-                        服务重启时，已进入写作阶段（有产物文档）的任务会按断点自动续跑；中断于前半段（尚无产物文档）的任务不提供单任务重跑——
-                        可删除本任务后在上方重新启动一条新流水线。
+                        服务重启时，已进入写作阶段（有产物文档）的任务会按断点自动续跑；中断于前半段的任务可直接重跑（沿用原主题起新任务）。
                       </>
                     ) : (
                       <>
                         <span className="font-medium text-rose-600 dark:text-rose-400">失败说明：</span>
-                        质量门自动回炉仍失败时不提供单任务重跑；请查看上方错误信息，调整主题或文献后删除本任务并重新启动。
-                        若刚重启服务，稍后刷新本页——进行中的任务会自动恢复。
+                        上方为真实失败原因。可先按提示处理（检查模型连通性/降低并发/补充文献），再一键重跑——沿用原主题，无需重新输入。
                       </>
                     )}
+                    <div className="mt-2">
+                      <Button variant="outline" className="text-xs px-2 py-1" onClick={() => void rerunTask(active)} loading={rerunning}>
+                        重跑本任务（沿用主题）
+                      </Button>
+                    </div>
                   </div>
                 )}
 
                 {/* 研究计划（Phase 1a：Planner）+ ReAct 轨迹（Phase 1b） */}
                 {activePlan && (
-                  <Card className="p-3 mb-3 bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
+                  <Card tone="inset" className="mb-3 p-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
                         <Brain size={13} className="text-teal-500" /> Planner 研究计划
@@ -760,7 +780,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
                 )}
 
                 {activeTrace.length > 0 && (
-                  <Card className="p-3 mb-3 bg-blue-50/50 border-blue-200">
+                  <Card tone="inset" className="mb-3 p-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="flex items-center gap-1.5 text-xs font-semibold text-blue-700">
                         <Zap size={13} className="text-blue-500" /> ReAct 自主检索轨迹（think → act → observe）
@@ -823,7 +843,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
 
                 {/* 大纲确认区 */}
                 {active.status === 'awaiting_confirmation' && (
-                  <Card className="p-3 bg-amber-50 border-amber-200">
+                  <Card tone="warning" className="p-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-amber-800">大纲已生成，请确认后继续起草（人工确认）</span>
                       <Button variant="success" className="text-xs" onClick={openConfirm}>

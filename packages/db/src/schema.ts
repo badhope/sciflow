@@ -168,6 +168,16 @@ export const modelProviders = sqliteTable('model_provider', {
   baseUrl: text('base_url').notNull(),
   apiKey: text('api_key').default(''),
   model: text('model').notNull(),
+  /** 协议：openai-compatible / anthropic-messages / google-gemini */
+  protocol: text('protocol').default('openai-compatible'),
+  /** 上下文窗口（token，0=未知） */
+  contextWindow: integer('context_window').default(0),
+  /** 单次最大输出（token，0=未知） */
+  maxOutput: integer('max_output').default(0),
+  /** 是否支持工具调用（1/0） */
+  toolCalling: integer('tool_calling').default(1),
+  /** 检测到的模型目录 JSON（id/contextWindow/maxOutput/toolCalling），供下拉回显 */
+  models: text('models').default('[]'),
   isActive: integer('is_active').default(0),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
@@ -218,6 +228,63 @@ export const customPrompts = sqliteTable('custom_prompt', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+
+/** 配置中心·角色库（默认角色用于对话 system prompt；空提示词=使用内置默认角色） */
+export const configRoles = sqliteTable('config_role', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  systemPrompt: text('system_prompt').default(''),
+  isDefault: integer('is_default').default(0),
+  enabled: integer('enabled').default(1),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+/** 配置中心·约束工程（每条约束注入所有或指定范围的 LLM 调用 system prompt） */
+export const configConstraints = sqliteTable('config_constraint', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  rule: text('rule').notNull(),
+  level: text('level').default('must'), // must | must_not | should
+  scope: text('scope').default('all'), // all | chat | pipeline
+  enabled: integer('enabled').default(1),
+  sortOrder: integer('sort_order').default(0),
+  source: text('source').default('user'), // user | preset | seed
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+/** 配置中心·钩子（生命周期事件：prompt_inject / block / webhook，真实执行并留痕） */
+export const configHooks = sqliteTable('config_hook', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  event: text('event').notNull(), // chat:before | chat:after | pipeline:before | pipeline:after
+  type: text('type').notNull(), // prompt_inject | block | webhook
+  config: text('config').default('{}'),
+  enabled: integer('enabled').default(1),
+  priority: integer('priority').default(100),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+/** 配置中心·审计（所有配置变更与钩子执行，含被拒原因） */
+export const configAudit = sqliteTable('config_audit', {
+  id: text('id').primaryKey(),
+  actor: text('actor').default('ui'),
+  category: text('category').default(''),
+  action: text('action').notNull(),
+  target: text('target').default(''),
+  detail: text('detail').default(''),
+  allowed: integer('allowed').default(1),
+  reason: text('reason').default(''),
+  createdAt: integer('created_at').notNull(),
+});
+
+export type ConfigRole = typeof configRoles.$inferSelect;
+export type ConfigConstraint = typeof configConstraints.$inferSelect;
+export type ConfigHook = typeof configHooks.$inferSelect;
+export type ConfigAuditEntry = typeof configAudit.$inferSelect;
+
 export const llmCallLogs = sqliteTable('llm_call_log', {
   id: text('id').primaryKey(),
   caller: text('caller').default('general'), // 调用方标识（pipeline/chat/orchestrator 等）
@@ -234,6 +301,35 @@ export const llmCallLogs = sqliteTable('llm_call_log', {
 });
 
 export type LlmCallLog = typeof llmCallLogs.$inferSelect;
+
+
+/** 扩展中心·统一资产（skill / mcp / role / constraint / hook / prompt / pipeline） */
+export const extensionAssets = sqliteTable('extension_asset', {
+  id: text('id').primaryKey(),
+  /** 稳定标识（内置用固定 key，用户资产用 uuid） */
+  key: text('key').notNull(),
+  kind: text('kind').notNull(),
+  name: text('name').notNull(),
+  description: text('description').default(''),
+  /** 来源：builtin-public（社区开源）/ builtin-private（SciFlow 内置优势，不对外）/ user */
+  source: text('source').default('user'),
+  repo: text('repo').default(''),
+  license: text('license').default(''),
+  install: text('install').default(''),
+  tags: text('tags').default('[]'),
+  /** 能力清单 JSON（各 kind 的结构化定义，投影到真实子系统时使用） */
+  manifest: text('manifest').default('{}'),
+  enabled: integer('enabled').default(1),
+  /**
+   * 可见性：public（可导出/对外展示）/ private（仅本机可用，不进导出包、不对外）
+   * 内置优势工具一律 private；社区开源与用户资产默认 public。
+   */
+  visibility: text('visibility').default('public'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type ExtensionAsset = typeof extensionAssets.$inferSelect;
 
 /** 系统综述·筛选队列（题录筛选：纳入/排除/待定） */
 export const screeningQueue = sqliteTable('screening_queue', {

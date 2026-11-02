@@ -3,6 +3,7 @@ import { api } from '../../api/client';
 import type {
   AppSettings, SelfCheck, ModelProvider, McpServerInfo, McpToolInfo,
   CustomIntent, CustomPromptTool, PipelineStepConfig, QualityWeightItem,
+  DiscoveredModel, ModelProtocol,
 } from '../../types';
 import { errMsg } from '../../components/ui';
 import type { ToastKind } from '../../components/ui';
@@ -100,7 +101,11 @@ export interface SettingsContextValue {
   state: SettingsState;
   load: () => Promise<void>;
   runCheck: () => Promise<void>;
-  saveProvider: (form: { name: string; baseUrl: string; apiKey: string; model: string }) => Promise<void>;
+  saveProvider: (form: {
+    id?: string; name: string; baseUrl: string; apiKey: string; model: string;
+    protocol?: ModelProtocol; contextWindow?: number; maxOutput?: number; toolCalling?: number;
+    models?: DiscoveredModel[];
+  }) => Promise<void>;
   activateProvider: (id: string) => Promise<void>;
   removeProvider: (id: string) => Promise<void>;
   addMcpServer: (form: { name: string; url: string }) => Promise<void>;
@@ -184,17 +189,20 @@ export function SettingsProvider({ children, toast }: { children: ReactNode; toa
     }
   }, []);
 
-  const saveProvider = useCallback(async (form: { name: string; baseUrl: string; apiKey: string; model: string }) => {
+  const saveProvider = useCallback(async (form: {
+    id?: string; name: string; baseUrl: string; apiKey: string; model: string;
+    protocol?: ModelProtocol; contextWindow?: number; maxOutput?: number; toolCalling?: number;
+    models?: DiscoveredModel[];
+  }) => {
     try {
       await api.settings.saveProvider(form);
-      dispatch({ type: 'RESET_INTENT_FORM' });
-      dispatch({ type: 'SET_INTENT_FORM', form: { key: '', label: '', route: '/literature', keywords: '' } });
       await refreshAll();
       const s = await api.settings.get();
       dispatch({ type: 'SET_SETTINGS', settings: s });
-      toast('success', '厂商已添加');
+      toast('success', form.id ? '厂商已更新' : '厂商已添加');
     } catch (e: unknown) {
       dispatch({ type: 'SET_ERROR', message: errMsg(e) });
+      throw e;
     }
   }, [refreshAll, toast]);
 

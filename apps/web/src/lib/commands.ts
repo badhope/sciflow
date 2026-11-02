@@ -1,4 +1,5 @@
 import type { View } from '../App';
+import { THEME_STYLES, type ThemeStyle } from './theme';
 
 /**
  * ⌘K 命令面板注册表（F-3.1 单一事实源）
@@ -12,6 +13,7 @@ export interface CommandDeps {
   onNavigate: (v: View) => void;
   onNewProject: () => void;
   setThemeMode: (m: 'light' | 'dark' | 'system') => void;
+  setThemeStyle?: (s: ThemeStyle) => void;
   /** 导航分组与标签（App.tsx 的 NAV_GROUPS/VIEW_LABELS 传入，避免循环依赖） */
   navGroups: { label: string; items: { key: View; label: string }[] }[];
 }
@@ -37,6 +39,16 @@ export function buildCommands(deps: CommandDeps): CommandItem[] {
     { id: 'theme-light', label: '外观：浅色', keywords: ['theme light', '亮色'], group: '外观', run: () => deps.setThemeMode('light') },
     { id: 'theme-dark', label: '外观：深色', keywords: ['theme dark', '暗色', '夜间'], group: '外观', run: () => deps.setThemeMode('dark') },
     { id: 'theme-system', label: '外观：跟随系统', keywords: ['theme system', '自动'], group: '外观', run: () => deps.setThemeMode('system') },
+    // 风格包命令：每组关键词都带「主题/风格/皮肤」中文别名，命令面板搜「学术」或「暗夜」都能命中
+    ...(deps.setThemeStyle
+      ? THEME_STYLES.map((t) => ({
+          id: `theme-style-${t.id}`,
+          label: `风格：${t.name}`,
+          keywords: ['theme style', '主题', '风格', '皮肤', t.name, t.id, t.bestFor],
+          group: '外观风格',
+          run: () => deps.setThemeStyle!(t.id),
+        }))
+      : []),
   ];
 }
 

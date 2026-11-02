@@ -55,8 +55,13 @@ async function main() {
   await go('#/knowledge', 2200);
   await go('#/experiments', 2600);
   await go('#/dashboard', 2400);
+  // v1.7：App 会把明暗写进 localStorage，单靠 emulateMedia 已不足以切深色（详见 capture-screenshots.mjs）
+  await page.evaluate(() => localStorage.setItem('sciflow-theme', 'dark'));
   await page.emulateMedia({ colorScheme: 'dark' });
   await go('#/settings', 2400);
+  if (!(await page.evaluate(() => document.documentElement.classList.contains('dark')))) {
+    throw new Error('演示视频的深色片段未生效');
+  }
 
   await context.close();
   await browser.close();

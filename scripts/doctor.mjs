@@ -116,13 +116,21 @@ async function main() {
     add('ai', 'AI 端点', 'ok', baseUrl);
   }
 
-  // 嵌入模型 / 向量检索
+  // 嵌入模型 / 向量检索（v1.9：双后端，远程 /embeddings 也算「已配置」）
   const embedPath = process.env.EMBEDDING_MODEL_PATH || env.values.EMBEDDING_MODEL_PATH || '';
+  const embedProvider = (process.env.EMBEDDING_PROVIDER || env.values.EMBEDDING_PROVIDER || 'auto').toLowerCase();
+  const aiKey = process.env.AI_API_KEY || env.values.AI_API_KEY || '';
   if (embedPath) {
-    if (fs.existsSync(embedPath)) add('embed', '嵌入模型', 'ok', embedPath);
-    else add('embed', '嵌入模型', 'error', `文件不存在：${embedPath}`, '修正 EMBEDDING_MODEL_PATH，或留空以使用全文检索（功能不受阻塞，语义检索降级）');
+    if (fs.existsSync(embedPath)) add('embed', '嵌入模型', 'ok', `本地 GGUF：${embedPath}`);
+    else add('embed', '嵌入模型', 'error', `文件不存在：${embedPath}`, '修正 EMBEDDING_MODEL_PATH，或改用 EMBEDDING_PROVIDER=api 走厂商 /embeddings');
+  } else if (embedProvider === 'api' && aiKey) {
+    add('embed', '嵌入模型', 'ok', '远程 /embeddings（沿用 AI_BASE_URL 与 AI_API_KEY）');
+  } else if (embedProvider === 'api' && !aiKey) {
+    add('embed', '嵌入模型', 'warn', 'EMBEDDING_PROVIDER=api 但未配置 AI_API_KEY', '补齐 AI_API_KEY，或改用本地 GGUF / 留空走全文检索');
+  } else if (aiKey) {
+    add('embed', '嵌入模型', 'ok', 'auto：无本地 GGUF 时自动走厂商 /embeddings（已检测到 AI_API_KEY）');
   } else {
-    add('embed', '嵌入模型', 'warn', '未配置（自动使用全文检索）', '需要语义检索时下载 bge-small-zh-v1.5 GGUF 并设置 EMBEDDING_MODEL_PATH；不需要可忽略');
+    add('embed', '嵌入模型', 'warn', '未配置（自动使用全文检索）', '需要语义检索时：下载 bge-small-zh-v1.5 GGUF 并设 EMBEDDING_MODEL_PATH，或配置 AI_API_KEY + EMBEDDING_PROVIDER=api');
   }
 
   // sqlite-vec 原生扩展

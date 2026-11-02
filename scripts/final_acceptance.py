@@ -14,6 +14,10 @@ import json, os, re, subprocess, sys, time, urllib.request, urllib.error, tempfi
 
 import socket, random
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 def _free_port() -> int:
@@ -40,7 +44,7 @@ ANSI = re.compile(r"\[[0-9;]*m")
 
 def run(cmd, env=None, cwd=None, timeout=600):
     e = {**os.environ, "NO_COLOR": "1", "FORCE_COLOR": "0", **(env or {})}
-    p = subprocess.run(cmd, shell=True, capture_output=True, text=True, env=e, cwd=cwd or str(ROOT), timeout=timeout)
+    p = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", env=e, cwd=cwd or str(ROOT), timeout=timeout)
     return p.returncode, ANSI.sub("", (p.stdout or "") + (p.stderr or ""))
 
 def req(method, path, body=None, timeout=120):
@@ -66,7 +70,8 @@ print("=" * 64)
 # ---------- A. 本地门禁 ----------
 print("\n[A] 本地门禁")
 code, out = run("node node_modules/eslint/bin/eslint.js .")
-record("A1 eslint 0 errors", code == 0 and "(0 errors" in out, out.strip().splitlines()[-1] if out else "")
+# eslint 10 在 0 problem 时静默退出（无输出），因此以退出码为准；有输出时仍要求不含 error 汇总
+record("A1 eslint 0 errors", code == 0 and " error " not in f" {out} ", out.strip().splitlines()[-1] if out else "0 problems (silent)")
 code, out = run("pnpm --filter @sciflow/server typecheck"); record("A2 server typecheck", code == 0 and "error TS" not in out)
 code, out = run("pnpm --filter @sciflow/web typecheck"); record("A3 web typecheck", code == 0 and "error TS" not in out)
 code, out = run("pnpm --filter @sciflow/server test")
@@ -115,7 +120,8 @@ record("B3 pino JSON 日志", '"level":30' in logtext and '"msg"' in logtext)
 print("\n[C] 全量回归（全新库 + mock）")
 code, out = run(f"python scripts/full_regression.py", env={"SCIFLOW_BASE": BASE, "AI_MOCK": "1"})
 mm = re.search(r"结果: PASS (\d+) / FAIL (\d+) / KNOWN\(存量缺口\) (\d+)", out)
-record("C1 回归 PASS/FAIL/KNOWN", code == 0 and mm and mm.group(2) == "0", mm.group(0) if mm else out.strip().splitlines()[-1][:80])
+fallback = out.strip().splitlines()[-1][:80] if out.strip() else f"exit={code}, no output"
+record("C1 回归 PASS/FAIL/KNOWN", code == 0 and bool(mm) and mm.group(2) == "0", mm.group(0) if mm else fallback)
 
 # ---------- D. 流水线 e2e ----------
 print("\n[D] 流水线 e2e（LangGraph interrupt/checkpoint/trace）")
@@ -166,7 +172,10 @@ await c.close();
 code, out = run("node verify-mcp.tmp.mjs", env={"ACC_BASE": BASE}, cwd=str(ROOT / "apps" / "server"))
 verify_path.unlink(missing_ok=True)
 last = out.strip().splitlines()[-1][:60] if out.strip() else "(no output)"
-record("E1 MCP 握手+调用(HTTP)", code == 0 and "OK 11 true" in out, last)
+# 工具总数随能力扩展增长（v1.3 起含 8 个 config.* 工具）：断言握手成功 + 工具数 ≥11 + 内容数组
+import re as _re
+m_e1 = _re.search(r"OK (\d+) true", out)
+record("E1 MCP 握手+调用(HTTP)", code == 0 and bool(m_e1) and int(m_e1.group(1)) >= 11, last)
 
 # ---------- F. CLI ----------
 print("\n[F] CLI（commander）")
@@ -176,6 +185,11 @@ code, out = run("node apps/server/dist/apps/server/src/cli.js project list", env
 record("F2 project list", code == 0)
 code, out = run("node apps/server/dist/apps/server/src/cli.js pipeline status", env={"DATABASE_PATH": DB})
 record("F3 缺参报错", code != 0 and "required option" in out)
+# 配置中心 CLI（与 Web/对话同一服务）：status / preview 必须可用且输出真实内容
+code, out = run("node apps/server/dist/apps/server/src/cli.js config status", env={"DATABASE_PATH": DB, "SCIFLOW_BASE": BASE})
+record("F4 CLI config status", code == 0 and "权限档" in out and "核心保护项" in out, out.strip().splitlines()[0] if out.strip() else "")
+code, out = run("node apps/server/dist/apps/server/src/cli.js config preview --scope chat", env={"DATABASE_PATH": DB, "SCIFLOW_BASE": BASE})
+record("F5 CLI config preview", code == 0 and "【全局约束" in out, out.strip().splitlines()[0] if out.strip() else "")
 
 # ---------- cleanup ----------
 def _cleanup():
