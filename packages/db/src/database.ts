@@ -545,6 +545,36 @@ sqlite.exec(`CREATE TABLE IF NOT EXISTS chat_session (
 CREATE INDEX IF NOT EXISTS idx_chat_session_project ON chat_session(project_id, created_at DESC);
 `);
 
+
+sqlite.exec(`CREATE TABLE IF NOT EXISTS agent_task (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  run_id TEXT,
+  "group" TEXT DEFAULT 'default',
+  content TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',
+  priority TEXT DEFAULT 'medium',
+  seq INTEGER DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_agent_task_project ON agent_task(project_id, seq);
+CREATE INDEX IF NOT EXISTS idx_agent_task_run ON agent_task(run_id);
+
+CREATE TABLE IF NOT EXISTS tool_approval (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  run_id TEXT,
+  tool_name TEXT NOT NULL,
+  args TEXT DEFAULT '{}',
+  reason TEXT DEFAULT '',
+  status TEXT DEFAULT 'pending',
+  created_at INTEGER NOT NULL,
+  decided_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_tool_approval_status ON tool_approval(status, created_at DESC);
+`);
+
 /** 轻量迁移：为旧库补齐新列（CREATE TABLE IF NOT EXISTS 不会修改已有表） */
 function ensureColumn(table: string, column: string, ddl: string) {
   const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];

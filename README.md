@@ -66,6 +66,10 @@ All screenshots are captured from the running application against a seeded demo 
 
 **Headless operation.** `sciflow run --topic "…" --auto --out ./paper/` produces a manuscript without opening a window.
 
+**Agent harness.** The same infrastructure a coding agent needs, applied to research work. A task list the model maintains so long jobs stay auditable instead of opaque. Context compaction that folds earlier turns into a structured digest before the window overflows. `@` mentions that pull a specific paper, document or dataset into the current turn. Tool approval that pauses side-effecting actions (running code, rewriting the manuscript, changing global config) until you confirm — with a readable reason, not a bare tool name.
+
+**Evidence chain.** The writing view shows the argument's provenance as a chain — research question, literature evidence, in-text anchors, citation records, traceable entries — and marks exactly where it breaks. A manuscript with 22 references but zero anchors is reported as two broken links rather than a green check.
+
 ## Quick start
 
 Requires Node ≥ 20 (CI uses 22) and pnpm 11.7.0.

@@ -6,6 +6,50 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Agent harness.** Four capabilities borrowed from coding-agent infrastructure
+  and applied to research work, each with behaviour tests:
+  - *Task list* (`update_todo_list`) — the model maintains an explicit plan so a
+    long job is auditable. Replaces the whole list at once, preserving ids of
+    unchanged items so the UI animates instead of flickering.
+  - *Context compaction* — folds earlier turns into an extraction-based digest
+    once history passes a character budget. Extraction rather than free
+    summarisation, because a model-written abstract drops numbers and
+    conclusions. Keeps at most half the turns verbatim, so a short history can
+    still be compacted instead of degenerating into truncating the last message.
+  - *`@` mentions* — type `@` in the composer to pull a specific reference,
+    knowledge document or manuscript into the turn. Only triggers at word
+    starts, so email addresses do not fire it; the tag is expanded at submit
+    time so the textarea stays editable.
+  - *Tool approval* — side-effecting tools (`experiment.*`, `document.*`,
+    `project.*`, `config.*`) can pause for confirmation with a readable reason.
+    Read-only tools never prompt, because confirmation fatigue turns approval
+    into a rubber stamp.
+- **Evidence chain view.** Shows question → evidence → anchors → citations →
+  traceable entries, derived from the actual manuscript text and reference pool,
+  and names the broken links.
+- **Visual layer v2** (`styles/enhancements.css`): four-step depth scale with an
+  edge highlight, interactive-card hover that only fires on real affordances,
+  staggered list entry, live-status pulse that stops when work stops, tabular
+  numerals so metrics do not jitter, and progressive disclosure. All animation
+  respects `prefers-reduced-motion`; a `prefers-contrast: more` block keeps
+  borders visible.
+- `GET/POST/DELETE /api/agent/tasks` and `GET/POST /api/agent/approvals`.
+
+### Fixed
+
+- **Harness endpoints were mounted at `/api/api/agent/*`.** The controller
+  declared `api/agent` while the app already applies a global `api` prefix, so
+  every new endpoint 404'd. Caught by reading the route table in the boot log
+  rather than by the type checker.
+- **Compaction did nothing on short-but-large histories.** With fewer turns than
+  the keep-count it could not find a boundary and fell back to truncating the
+  final message only, leaving the earlier bulk in place.
+- **Two React violations** surfaced by lint: `setState` synchronously inside an
+  effect in the task panel, and a non-memoised array feeding a `useMemo`
+  dependency list in the workspace.
+
 ### Fixed
 
 - **All real model endpoints were rejected by the outbound guard.** The address
