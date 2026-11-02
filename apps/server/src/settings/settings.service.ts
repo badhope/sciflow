@@ -1,10 +1,12 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { AiService } from '../ai/ai.service';
+import { normalizeApiKey } from '../ai/ai-transport.service';
 import { DB_PATH, sqlite, vecLoaded } from '../db/database';
 import { encryptSecret, decryptSecret } from '../common/secret-crypto';
 import { allowPrivateOutbound, checkOutboundUrl } from '../common/outbound-guard';
 import { fetchModelCatalog, normalizeProtocol, type DiscoveredModel } from '../common/model-catalog';
+import { safeOutboundFetch } from '../common/safe-outbound';
 import { EmbeddingService } from '../knowledge/embedding.service';
 
 export interface AppSettings {
@@ -188,13 +190,13 @@ export class SettingsService {
       )
       .all() as Array<Record<string, unknown>>;
     return rows.map((r) => {
-      const masked = maskApiKey(decryptSecret(String((r as Record<string, unknown>)['apiKey'] ?? '')));
+      const masked = maskApiKey(normalizeApiKey(decryptSecret(String((r as Record<string, unknown>)['apiKey'] ?? ''))));
       return { ...r, ['apiKey']: masked, models: parseModelsJson(r['models']) };
     });
   }
 
   /** 保存厂商（新增/更新）：协议 + 能力列 + 检测到的模型目录 */
-  saveProvider(body: {
+  async saveProvider(body: {
     id?: string;
     name: string;
     baseUrl: string;
@@ -209,34 +211,34 @@ export class SettingsService {
     if (!body?.name?.trim() || !body?.baseUrl?.trim() || !body?.model?.trim()) {
       throw new BadRequestException('厂商名称、Base URL、模型名不能为空');
     }
-    if (!/^https?:\/\//.test(body.baseUrl.trim())) throw new BadRequestException('Base URL 需以 http:// 或 https:// 开头');
+    const baseUrl = body.baseUrl.trim();
+    if (!/^https?:\/\//i.test(baseUrl)) throw new BadRequestException('Base URL 需以 http:// 或 https:// 开头');
+    const guard = await this.guardOutbound(baseUrl, allowPrivateOutbound());
+    if (!guard.ok) throw new BadRequestException(`地址被安全策略拒绝：${guard.reason}`);
     const now = Date.now();
     const protocol = normalizeProtocol(body.protocol);
     const caps = normalizeCapabilities(body.contextWindow, body.maxOutput);
     const toolCalling = body.toolCalling === false || Number(body.toolCalling) === 0 ? 0 : 1;
     const modelsJson = JSON.stringify(sanitizeModels(body.models));
     if (body.id) {
-      // 更新：若提交的 apiKey 为空或是掩码回显（含 *），保留 DB 原密文 key 不覆盖；
-      // 只有用户输入了新的明文 key 才加密写回。防止掩码字符串被误存为真实 key。
       const existing = sqlite
         .prepare('SELECT api_key, is_active FROM model_provider WHERE id = ?')
         .get(body.id) as Record<string, string | number | undefined> | undefined;
       if (!existing) throw new NotFoundException('厂商不存在');
       const submitted = body.apiKey?.trim() ?? '';
-      const finalKey = submitted && !isMaskedKey(submitted)
-        ? encryptSecret(submitted)
-        : String(existing['api_key'] ?? '');
+      const finalKey = !submitted || isMaskedKey(submitted)
+        ? String(existing['api_key'] ?? '')
+        : encryptSecret(normalizeApiKey(submitted));
       sqlite
         .prepare('UPDATE model_provider SET name=?, base_url=?, ' + 'api_key' + '=?, model=?, protocol=?, context_window=?, max_output=?, tool_calling=?, models=?, updated_at=? WHERE id=?')
-        .run(body.name.trim(), body.baseUrl.trim().replace(/\/$/, ''), finalKey, body.model.trim(), protocol, caps.contextWindow, caps.maxOutput, toolCalling, modelsJson, now, body.id);
-      // 编辑的是激活中的厂商 → 立即刷新运行中连接参数（否则页面显示新模型、实际还在打旧端点）
+        .run(body.name.trim(), baseUrl.replace(/\/$/, ''), finalKey, body.model.trim(), protocol, caps.contextWindow, caps.maxOutput, toolCalling, modelsJson, now, body.id);
       if (Number(existing['is_active']) === 1) this.ai.switchProvider(body.id);
       return { ok: true, id: body.id };
     }
     const id = randomUUID();
     sqlite
       .prepare('INSERT INTO model_provider (id, name, base_url, ' + 'api_key' + ', model, protocol, context_window, max_output, tool_calling, models, is_active, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?)')
-      .run(id, body.name.trim(), body.baseUrl.trim().replace(/\/$/, ''), encryptSecret(body.apiKey?.trim() || ''), body.model.trim(), protocol, caps.contextWindow, caps.maxOutput, toolCalling, modelsJson, now, now);
+      .run(id, body.name.trim(), baseUrl.replace(/\/$/, ''), encryptSecret(normalizeApiKey(body.apiKey)), body.model.trim(), protocol, caps.contextWindow, caps.maxOutput, toolCalling, modelsJson, now, now);
     return { ok: true, id };
   }
 
@@ -256,10 +258,10 @@ export class SettingsService {
     if (!/^https?:\/\//.test(baseUrl)) return { ok: false, models: [], error: 'Base URL 需以 http:// 或 https:// 开头' };
     const key = this.resolveFormKey(body.id, body.apiKey);
     // SSRF 守卫：内网/回环/云元数据地址默认拒绝（本地 Ollama 场景由调用方显式声明 privateOk，仍需 ALLOW_PRIVATE_OUTBOUND=1）
-    const allowPrivate = body.privateOk === true || allowPrivateOutbound();
+    const allowPrivate = allowPrivateOutbound();
     const guard = await this.guardOutbound(baseUrl, allowPrivate);
     if (!guard.ok) return { ok: false, models: [], error: `地址被安全策略拒绝：${guard.reason}` };
-    const r = await fetchModelCatalog({ baseUrl, apiKey: key, protocol: body.protocol });
+    const r = await fetchModelCatalog({ baseUrl, apiKey: key, protocol: body.protocol, fetchImpl: this.outboundFetch() });
     return { ok: r.ok, models: r.models, error: r.error, endpoint: r.endpoint };
   }
 
@@ -278,7 +280,7 @@ export class SettingsService {
     if (!baseUrl) return { ok: false, reply: '请先填写 Base URL', model, latencyMs: 0 };
     if (!model) return { ok: false, reply: '请先选择或填写模型名', model, latencyMs: 0 };
     if (!/^https?:\/\//.test(baseUrl)) return { ok: false, reply: 'Base URL 需以 http:// 或 https:// 开头', model, latencyMs: 0 };
-    const guard = await this.guardOutbound(baseUrl, body.privateOk === true || allowPrivateOutbound());
+    const guard = await this.guardOutbound(baseUrl, allowPrivateOutbound());
     if (!guard.ok) return { ok: false, reply: `地址被安全策略拒绝：${guard.reason}`, model, latencyMs: 0 };
     return this.ai.testProviderConfig({
       baseUrl,
@@ -289,18 +291,23 @@ export class SettingsService {
     });
   }
 
+  /** 模型目录请求使用的受控 fetch（单测可覆盖；生产必须走连接级守卫） */
+  protected outboundFetch(): typeof fetch {
+    return safeOutboundFetch as unknown as typeof fetch;
+  }
+
   /** 出站地址守卫（独立方法便于单测注入：DNS 解析不适合在每个用例里真跑） */
   protected async guardOutbound(url: string, allowPrivate: boolean) {
     return checkOutboundUrl(url, { allowPrivate });
   }
 
-  /** 表单 Key 解析：明文直接用；空/掩码时按 id 回查库内真实 Key（绝不把掩码当 Key 发上游） */
+  /** 表单 Key 解析：明文直接用；空/掩码时按 id 回查库内真实 Key（绝不把掩码或模板 Key 发上游） */
   private resolveFormKey(id: string | undefined, submitted: string | undefined): string {
     const key = String(submitted ?? '').trim();
-    if (key && !isMaskedKey(key)) return key;
+    if (key && !isMaskedKey(key)) return normalizeApiKey(key);
     if (!id) return '';
     const row = sqlite.prepare('SELECT api_key FROM model_provider WHERE id = ?').get(id) as Record<string, string | undefined> | undefined;
-    return row?.['api_key'] ? decryptSecret(String(row['api_key'])) : '';
+    return row?.['api_key'] ? normalizeApiKey(decryptSecret(String(row['api_key']))) : '';
   }
 
   removeProvider(id: string) {
@@ -313,9 +320,12 @@ export class SettingsService {
   }
 
   /** 切换激活厂商（立即影响所有 AI 调用） */
-  activateProvider(id: string) {
-    const row = sqlite.prepare('SELECT * FROM model_provider WHERE id = ?').get(id);
+  async activateProvider(id: string) {
+    const row = sqlite.prepare('SELECT * FROM model_provider WHERE id = ?').get(id) as { base_url?: string } | undefined;
     if (!row) throw new NotFoundException('厂商不存在');
+    const baseUrl = String(row.base_url || '').trim();
+    const guard = await this.guardOutbound(baseUrl, allowPrivateOutbound());
+    if (!guard.ok) throw new BadRequestException(`地址被安全策略拒绝：${guard.reason}`);
     this.ai.switchProvider(id);
     return { ok: true, active: id };
   }

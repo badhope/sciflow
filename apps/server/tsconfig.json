@@ -39,6 +39,7 @@
       "@langchain/textsplitters": ["./node_modules/@langchain/textsplitters"],
       "unpdf": ["./node_modules/unpdf"],
       "node-llama-cpp": ["./node_modules/node-llama-cpp"],
+      "undici": ["./node_modules/undici"],
       "msw/http": ["./node_modules/msw/lib/http/index.d.ts"]
     },
     "incremental": true,

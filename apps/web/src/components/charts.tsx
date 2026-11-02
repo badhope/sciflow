@@ -1,3 +1,4 @@
+import type { YAxisTickContentProps } from 'recharts';
 import {
   Area,
   Bar,
@@ -97,7 +98,10 @@ export function Donut({ data, segments, size = 160, thickness = 24, centerLabel,
           </Pie>
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
-            formatter={(v: number) => [`${v} (${total > 0 ? ((v / total) * 100).toFixed(1) : '0'}%)`, '数值']}
+            formatter={(v) => {
+              const value = Number(v ?? 0);
+              return [`${value} (${total > 0 ? ((value / total) * 100).toFixed(1) : '0'}%)`, '数值'];
+            }}
           />
         </PieChart>
       </ResponsiveContainer>
@@ -171,7 +175,7 @@ export function HBar({ data, items, barThickness = 16, max, formatValue, sub, hi
           <YAxis
             type="category"
             dataKey="name"
-            tick={(props: { x?: number; y?: number; payload?: { value?: string } }) => {
+            tick={(props: YAxisTickContentProps) => {
               const raw = String(props.payload?.value ?? '');
               const text = raw.length > 14 ? `${raw.slice(0, 13)}…` : raw;
               return (
@@ -188,10 +192,14 @@ export function HBar({ data, items, barThickness = 16, max, formatValue, sub, hi
           <Tooltip
             cursor={{ fill: 'var(--accent)', fillOpacity: 0.5 }}
             contentStyle={TOOLTIP_STYLE}
-            formatter={(v: number) => [formatValue ? formatValue(v) : v, '数值']}
-            labelFormatter={(n: string) => {
-              const pt = chartData.find((d) => d.name === n);
-              return pt && sub ? sub(pt) : n;
+            formatter={(v) => {
+              const value = Number(v ?? 0);
+              return [formatValue ? formatValue(value) : value, '数值'];
+            }}
+            labelFormatter={(n) => {
+              const label = String(n ?? '');
+              const pt = chartData.find((d) => d.name === label);
+              return pt && sub ? sub(pt) : label;
             }}
           />
           <Bar dataKey="value" barSize={barThickness} radius={[0, 4, 4, 0]} isAnimationActive={false}>
@@ -245,8 +253,10 @@ export function LineChart({ data, points, series, height = 240, grid = true, sho
         <ReLineChart
           data={chartData}
           margin={{ top: 8, right: 16, bottom: 4, left: 4 }}
-          onClick={(e: { activeTooltipIndex?: number }) => {
-            if (onPointClick && e?.activeTooltipIndex != null) onPointClick(e.activeTooltipIndex);
+          onClick={(e) => {
+            const raw = e?.activeTooltipIndex;
+            const index = raw == null || raw === '' ? NaN : Number(raw);
+            if (onPointClick && Number.isInteger(index) && index >= 0 && index < chartData.length) onPointClick(index);
           }}
         >
           {grid && <CartesianGrid stroke={GRID_STROKE} vertical={false} />}

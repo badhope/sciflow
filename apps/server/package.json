@@ -51,6 +51,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "sqlite-vec": "^0.1.7-alpha.2",
+    "undici": "^7.30.1",
     "unpdf": "^1.8.1",
     "zod": "^4.6.6"
   },

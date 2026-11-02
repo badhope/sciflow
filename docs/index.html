@@ -92,6 +92,13 @@ html[data-theme="dark"] .theme-icon-moon{display:none}
 }
 .badge b{color:var(--brand2)}
 .cta-row{display:flex;gap:14px;justify-content:center;margin-top:38px;flex-wrap:wrap}
+.hero-shot{margin:52px auto 0;max-width:1040px}
+.hero-shot img{width:100%;height:auto;display:block;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.hero-shot figcaption{text-align:center;color:var(--muted);font-size:.86rem;margin-top:12px}
+.shot-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:22px}
+.shot-grid figure{margin:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.shot-grid img{width:100%;height:auto;display:block}
+.shot-grid figcaption{padding:11px 14px;font-size:.88rem;color:var(--muted);border-top:1px solid var(--border)}
 .btn{
   display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:12px;
   font-weight:700;font-size:.96rem;cursor:pointer;border:1px solid transparent;transition:transform .15s,box-shadow .2s;
@@ -247,6 +254,62 @@ footer a:hover{color:var(--brand2)}
     <div class="cta-row">
       <a class="btn btn-primary" href="#quickstart">快速开始</a>
       <a class="btn btn-ghost" href="#docs">查看仓库</a>
+    </div>
+    <figure class="hero-shot">
+      <img src="screenshots/workspace.png" alt="SciFlow 工作台：研究项目、文献预览与 AI 对话" width="1600" height="1000">
+      <figcaption>真实运行的界面：工作台、项目驾驶舱与 AI 对话</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ===== 真实界面 ===== -->
+<section id="screens" style="background:var(--bg-soft)">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 class="sec-title">真实界面<span class="grad-text">截图</span></h2>
+      <p class="sec-sub">全部取自运行中的应用与种子演示数据，非合成图。</p>
+    </div>
+    <div class="shot-grid">
+      <figure>
+        <img src="screenshots/dash.png" alt="项目驾驶舱：阶段进度、下一步与质量门状态" width="1600" height="1000">
+        <figcaption>项目驾驶舱</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/pipeline.png" alt="全自动流水线：步骤状态与耗时" width="1600" height="1000">
+        <figcaption>全自动流水线</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/writing.png" alt="论文写作：大纲、编辑器与预览分栏" width="1600" height="1000">
+        <figcaption>论文写作</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/quality.png" alt="质量评分：七维客观检查器与硬伤提示" width="1600" height="1000">
+        <figcaption>质量评分</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/literature.png" alt="文献调研：检索、筛选与阅读状态" width="1600" height="1000">
+        <figcaption>文献调研</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/knowledge.png" alt="知识库：资料上传、分块与语义地图" width="1600" height="1000">
+        <figcaption>知识库</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/submission.png" alt="投稿辅助：期刊推荐、Cover Letter 与跟踪" width="1600" height="1000">
+        <figcaption>投稿辅助</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/experiments.png" alt="实验记录与隔离沙箱" width="1600" height="1000">
+        <figcaption>实验记录</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/memory.png" alt="记忆中心：情景记忆与程序记忆" width="1600" height="1000">
+        <figcaption>记忆中心</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/settings.png" alt="设置：模型配置、扩展中心与快捷键" width="1600" height="1000">
+        <figcaption>设置</figcaption>
+      </figure>
     </div>
   </div>
 </section>

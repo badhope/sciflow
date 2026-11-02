@@ -1,32 +1,7 @@
 import 'dotenv/config';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { config as loadEnv } from 'dotenv';
+import { loadServerEnv } from './common/server-env';
 
-/**
- * 显式加载 apps/server/.env。
- *
- * 编译后 __dirname 是 `dist/apps/server/src`（rootDir 固化为仓库根），
- * 因此既不能写死 `join(__dirname,'..')`，也不能只依赖 cwd。
- * 这里按「__dirname 向上逐级探测 apps/server/.env」+「cwd 兜底」两条路径找，
- * 保证从仓库根、从 apps/server、从 dist 目录启动都能读到同一份配置。
- */
-(function loadServerEnv() {
-  const candidates = [
-    // 1) 相对 cwd 的常见位置
-    resolve(process.cwd(), 'apps', 'server', '.env'),
-    resolve(process.cwd(), '.env'),
-    // 2) 相对自身位置向上探测（dist/apps/server/src → … → 仓库根）
-    ...Array.from({ length: 6 }, (_, i) => resolve(__dirname, ...Array(i > 0 ? i : 0).fill('..'), 'apps', 'server', '.env')),
-    ...Array.from({ length: 6 }, (_, i) => resolve(__dirname, ...Array(i > 0 ? i : 0).fill('..'), '.env')),
-  ];
-  for (const p of candidates) {
-    if (existsSync(p)) {
-      loadEnv({ path: p });
-      return;
-    }
-  }
-})();
+loadServerEnv();
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';

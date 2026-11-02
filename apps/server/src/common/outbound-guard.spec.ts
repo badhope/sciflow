@@ -28,13 +28,35 @@ describe('isBlockedAddress', () => {
     }
   });
 
+  it('IPv6 链路本地整段 fe80::/10 拒绝', () => {
+    for (const ip of ['fe80::1', 'fe90::1', 'fea0::1', 'febf::1']) {
+      expect(isBlockedAddress(ip), ip).toBe(true);
+    }
+    expect(isBlockedAddress('fec0::1')).toBe(false);
+  });
+
   it('IPv4-mapped IPv6 按内层 IPv4 判定', () => {
     expect(isBlockedAddress('::ffff:127.0.0.1')).toBe(true);
     expect(isBlockedAddress('::ffff:8.8.8.8')).toBe(false);
+    expect(isBlockedAddress('::ffff:7f00:1')).toBe(true);
+    expect(isBlockedAddress('::ffff:a9fe:a9fe')).toBe(true);
+    expect(isBlockedAddress('::ffff:808:808')).toBe(false);
   });
 
-  it('无法解析的字符串按危险处理（fail-closed）', () => {
-    expect(isBlockedAddress('not-an-ip')).toBe(true);
+  it('域名不是 IP 字面量，不在此层判定（交由 DNS 解析后逐个裁决）', () => {
+    // 回归背景：早期实现把非 IP 输入当危险处理，导致所有真实模型域名出站被误拒。
+    for (const host of ['api.openai.com', 'not-an-ip']) {
+      expect(isBlockedAddress(host), host).toBe(false);
+    }
+  });
+});
+
+describe('checkOutboundUrl 域名路径', () => {
+  it('域名解析到内网地址时拒绝（DNS rebinding 防护）', async () => {
+    // localhost 必然解析到回环，验证域名分支确实逐个校验解析结果
+    const r = await checkOutboundUrl('http://localhost:8080/');
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/内网|保留/);
   });
 });
 
@@ -51,7 +73,7 @@ describe('checkOutboundUrl', () => {
   });
 
   it('拒绝字面量内网地址（含云元数据）', async () => {
-    for (const url of ['http://127.0.0.1:3000/api/health', 'http://169.254.169.254/latest/meta-data/', 'http://192.168.1.1/', 'http://[::1]:8080/']) {
+    for (const url of ['http://127.0.0.1:3000/api/health', 'http://169.254.169.254/latest/meta-data/', 'http://192.168.1.1/', 'http://[::1]:8080/', 'http://[::ffff:127.0.0.1]/', 'http://[::ffff:7f00:1]/']) {
       const r = await checkOutboundUrl(url);
       expect(r.ok, url).toBe(false);
       expect(r.reason, url).toMatch(/内网|保留/);
@@ -61,6 +83,12 @@ describe('checkOutboundUrl', () => {
   it('allowPrivate=true 时放行本地自建 SearXNG（显式开关）', async () => {
     const r = await checkOutboundUrl('http://127.0.0.1:8080/search', { allowPrivate: true });
     expect(r.ok).toBe(true);
+  });
+
+  it('即使允许私网也拒绝云元数据地址', async () => {
+    for (const url of ['http://169.254.169.254/latest/meta-data/', 'http://[fd00:ec2::254]/']) {
+      expect((await checkOutboundUrl(url, { allowPrivate: true })).ok).toBe(false);
+    }
   });
 
   it('公网地址放行', async () => {
