@@ -28,27 +28,27 @@
 
 以下截图均取自真实运行的界面与种子演示数据。
 
-![工作台](docs/screenshots/workspace.png)
+<img src="docs/screenshots/workspace.png" alt="SciFlow 工作台：项目、文档预览与 AI 对话" width="100%">
 
 | 项目驾驶舱 | 全自动流水线 |
 | --- | --- |
-| ![项目总览](docs/screenshots/dash.png) | ![流水线](docs/screenshots/pipeline.png) |
+| <img src="docs/screenshots/dash.png" alt="项目驾驶舱" width="100%"> | <img src="docs/screenshots/pipeline.png" alt="全自动流水线" width="100%"> |
 
-| 论文写作 · 大纲、编辑与预览 | 质量评分 · 七维打分 |
+| 论文写作：大纲、编辑与预览 | 质量评分：七维打分 |
 | --- | --- |
-| ![写作](docs/screenshots/writing.png) | ![质量](docs/screenshots/quality.png) |
+| <img src="docs/screenshots/writing.png" alt="论文写作" width="100%"> | <img src="docs/screenshots/quality.png" alt="质量评分" width="100%"> |
 
-| 文献调研 | 知识库 · 基于资料的问答 |
+| 文献调研 | 知识库：基于资料的问答 |
 | --- | --- |
-| ![文献](docs/screenshots/literature.png) | ![知识库](docs/screenshots/knowledge.png) |
+| <img src="docs/screenshots/literature.png" alt="文献调研" width="100%"> | <img src="docs/screenshots/knowledge.png" alt="知识库" width="100%"> |
 
-| 投稿辅助 · 选刊、Cover Letter、跟踪 | 实验记录与沙箱 |
+| 投稿辅助：选刊、Cover Letter、跟踪 | 实验记录与沙箱 |
 | --- | --- |
-| ![投稿](docs/screenshots/submission.png) | ![实验](docs/screenshots/experiments.png) |
+| <img src="docs/screenshots/submission.png" alt="投稿辅助" width="100%"> | <img src="docs/screenshots/experiments.png" alt="实验记录" width="100%"> |
 
-| 记忆中心 | 设置 · 模型、扩展、快捷键 |
+| 记忆中心 | 设置：模型、扩展、快捷键 |
 | --- | --- |
-| ![记忆](docs/screenshots/memory.png) | ![设置](docs/screenshots/settings.png) |
+| <img src="docs/screenshots/memory.png" alt="记忆中心" width="100%"> | <img src="docs/screenshots/settings.png" alt="设置" width="100%"> |
 
 ## 核心能力
 

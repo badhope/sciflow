@@ -28,27 +28,27 @@ Most writing tools stop at "generate text". SciFlow runs the whole research loop
 
 All screenshots are captured from the running application against a seeded demo database.
 
-![Workspace](docs/screenshots/workspace.png)
+<img src="docs/screenshots/workspace.png" alt="SciFlow workspace: project, document preview and AI conversation" width="100%">
 
 | Project cockpit | Fully automatic pipeline |
 | --- | --- |
-| ![Dashboard](docs/screenshots/dash.png) | ![Pipeline](docs/screenshots/pipeline.png) |
+| <img src="docs/screenshots/dash.png" alt="Project cockpit" width="100%"> | <img src="docs/screenshots/pipeline.png" alt="Automatic pipeline" width="100%"> |
 
-| Writing · outline, editor and preview | Quality · seven-dimension scoring |
+| Writing: outline, editor and preview | Quality: seven-dimension scoring |
 | --- | --- |
-| ![Writing](docs/screenshots/writing.png) | ![Quality](docs/screenshots/quality.png) |
+| <img src="docs/screenshots/writing.png" alt="Writing page" width="100%"> | <img src="docs/screenshots/quality.png" alt="Quality page" width="100%"> |
 
-| Literature screening | Knowledge base · grounded Q&A |
+| Literature screening | Knowledge base: grounded Q&A |
 | --- | --- |
-| ![Literature](docs/screenshots/literature.png) | ![Knowledge](docs/screenshots/knowledge.png) |
+| <img src="docs/screenshots/literature.png" alt="Literature page" width="100%"> | <img src="docs/screenshots/knowledge.png" alt="Knowledge base" width="100%"> |
 
-| Submission · journals, cover letter, tracking | Experiment log and sandbox |
+| Submission: journals, cover letter, tracking | Experiment log and sandbox |
 | --- | --- |
-| ![Submission](docs/screenshots/submission.png) | ![Experiments](docs/screenshots/experiments.png) |
+| <img src="docs/screenshots/submission.png" alt="Submission page" width="100%"> | <img src="docs/screenshots/experiments.png" alt="Experiments page" width="100%"> |
 
-| Memory center | Settings · models, extensions, hotkeys |
+| Memory center | Settings: models, extensions, hotkeys |
 | --- | --- |
-| ![Memory](docs/screenshots/memory.png) | ![Settings](docs/screenshots/settings.png) |
+| <img src="docs/screenshots/memory.png" alt="Memory center" width="100%"> | <img src="docs/screenshots/settings.png" alt="Settings page" width="100%"> |
 
 ## Core capabilities
 
