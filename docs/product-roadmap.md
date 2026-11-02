@@ -1,6 +1,6 @@
 # Product roadmap
 
-Last reviewed: 2026-11-02 · Current release: **1.9.5**
+Last reviewed: 2026-11-03 · Current release: **1.9.5**
 
 This document states what exists today, what is deliberately out of scope, and
 what is planned next. It is the single source of truth for product scope; the
@@ -70,6 +70,11 @@ decision not to build it.
 | Integration | Headless CLI | Shipped | `sciflow run` produces a manuscript without the UI |
 | Integration | Desktop application | Partial | Packaging works; a Windows installer build requires a C++ toolchain |
 | Operations | Deep health probe | Shipped | `GET /api/health/deep` reports subsystem status |
+| Agent | Task list | Shipped | Model-maintained plan with progress summary; survives restart |
+| Agent | Context compaction | Shipped | Extraction-based digest once history passes the budget |
+| Agent | `@` context mentions | Shipped | Pull a reference, document or dataset into the current turn |
+| Agent | Tool approval | Shipped | Side-effecting tools pause with a readable reason |
+| Quality | Evidence chain view | Shipped | Question to traceable entry, with broken links named |
 
 ## Deliberate non-goals
 

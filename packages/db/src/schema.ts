@@ -584,3 +584,45 @@ export const chatSessions = sqliteTable('chat_session', {
 });
 
 export type ChatSession = typeof chatSessions.$inferSelect;
+
+/** Agent 任务清单（harness 能力：模型可把多步工作拆成可勾选清单，前端实时显示进度）
+ *  对标 OpenCode / Codex 的 todo 工具：模型自主增删改，用户可读可核。 */
+export const agentTasks = sqliteTable('agent_task', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id'),
+  /** 关联的执行 run（agent_execution.id），空表示独立清单 */
+  runId: text('run_id'),
+  /** 清单分组标题（同一 run 内按 group 展示） */
+  group: text('group').default('default'),
+  content: text('content').notNull(),
+  /** pending | in_progress | completed | cancelled */
+  status: text('status').default('pending'),
+  /** high | medium | low */
+  priority: text('priority').default('medium'),
+  /** 排序序号（越小越靠前） */
+  seq: integer('seq').default(0),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type AgentTask = typeof agentTasks.$inferSelect;
+
+/** 工具调用审批请求（harness 能力：危险或高成本操作先挂起等用户批准）
+ *  对标 Claude Code / Codex 的权限确认：approvalMode=ask 时写一条 pending 记录，
+ *  前端弹窗批准/拒绝后回写状态，模型侧收到拒绝则改用其他路径。 */
+export const toolApprovals = sqliteTable('tool_approval', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id'),
+  runId: text('run_id'),
+  toolName: text('tool_name').notNull(),
+  args: text('args').default('{}'),
+  /** 为什么需要批准（面向用户的中文说明） */
+  reason: text('reason').default(''),
+  /** pending | approved | rejected | expired */
+  status: text('status').default('pending'),
+  createdAt: integer('created_at').notNull(),
+  decidedAt: integer('decided_at'),
+});
+
+export type ToolApproval = typeof toolApprovals.$inferSelect;
+
