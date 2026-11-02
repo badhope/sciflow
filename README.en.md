@@ -134,7 +134,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for the full history.
 | Server `apps/server` | NestJS 11 · TypeScript (strict) · Drizzle ORM · better-sqlite3 (WAL) · Vercel AI SDK (three protocols) · LangGraph (orchestration / checkpoint / interrupt) · MCP official SDK · zod · helmet + pino · MSW in-process mock gateway |
 | Web `apps/web` | React 19 · Vite 6 · TypeScript · Tailwind CSS v4 · TanStack Query/Table · Recharts · sigma.js + graphology · streamdown · CodeMirror 6 · react-markdown + KaTeX |
 | Desktop `apps/desktop` | Electron 41 · embedded server · per-user SQLite · electron-builder · electron-updater (opt-in) |
-| Engineering | pnpm workspace · vitest (server 345 / web 134 / desktop 5) · Playwright smoke · promptfoo contract evals · GitHub Actions (3 jobs) · Python regression (238 checks) |
+| Engineering | pnpm workspace · vitest (server 366 / web 134 / desktop 5) · Playwright smoke · promptfoo contract evals · GitHub Actions (3 jobs) · Python regression (238 checks) |
 
 Data chain: `Project → Document (multi-version) → Citation → Reference (traceable)`; `PipelineTask / AgentExecution / ReflexionLog / MemoryLog / LlmCallLog` record pipeline state, agent traces, rewrite rounds, memory and token cost.
 

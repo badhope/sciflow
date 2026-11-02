@@ -75,7 +75,7 @@ export class HealthController {
       checks: {
         db: { ok: dbOk, latencyMs: dbLatencyMs },
         vector: { ok: vecOk, extensionLoaded: vecLoaded, embeddedChunks: vecRows },
-        ai: { configured: ai.configured, model: ai.model, strongModel: ai.strongModel, baseUrl: ai.baseUrl },
+        ai: { configured: ai.configured, mock: ai.mock, model: ai.model, strongModel: ai.strongModel, baseUrl: ai.baseUrl },
       },
     };
   }

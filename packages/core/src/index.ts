@@ -5,3 +5,4 @@ export * from './pipeline-steps';
 export * from './env';
 export * from './quality-audit';
 export * from './citation-audit';
+export * from './ip-policy';

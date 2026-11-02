@@ -18,8 +18,8 @@
 import 'dotenv/config';
 import { join } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { config as loadEnv } from 'dotenv';
-loadEnv({ path: join(__dirname, '..', '.env') });
+import { loadServerEnv } from './common/server-env';
+loadServerEnv();
 
 import { Command } from 'commander';
 import { NestFactory } from '@nestjs/core';

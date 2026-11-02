@@ -57,7 +57,7 @@
 | --- | --- | --- |
 | 后端 | NestJS 11 · TypeScript（strict）· Drizzle ORM · better-sqlite3（WAL）· zod · Vercel AI SDK · LangGraph · MCP 官方 SDK | AI 支持 OpenAI 兼容 / Anthropic Messages / Google Gemini；编排只在 `pipeline/pipeline.graph.ts` |
 | 前端 | React 19 · Vite 6 · Tailwind CSS v4 · TanStack Query/Table · Recharts · sigma.js + graphology · CodeMirror 6 · react-markdown + KaTeX | 图表一律走 `components/charts.tsx` 或既有图谱组件 |
-| 工程 | pnpm workspace · vitest（server 345 / web 134 / desktop 5）· Playwright · promptfoo · GitHub Actions（Node 22）· Python 3 回归脚本（238 项） | CI 三 job：类型/单测/构建 · 全量回归 · E2E+评测 |
+| 工程 | pnpm workspace · vitest（server 366 / web 134 / desktop 5）· Playwright · promptfoo · GitHub Actions（Node 22）· Python 3 回归脚本（238 项） | CI 三 job：类型/单测/构建 · 全量回归 · E2E+评测 |
 | 数据 | SQLite 单文件（WAL、外键开、busy_timeout 5000ms） | 启动时 schema 自检自动建表/补列，幂等 |
 
 ## 3. 如何新增一个后端模块（5 步）

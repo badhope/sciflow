@@ -5,6 +5,7 @@ import { appSettings } from '../../db/src/schema';
 import { eq } from 'drizzle-orm';
 import * as prompts from './prompts';
 import { AiTransportService, ChatMessage, ChatStreamOptions } from './ai-transport.service';
+import { safeOutboundFetch } from './safe-outbound';
 import { startMockGateway } from './mock-gateway';
 import { jsonrepair } from 'jsonrepair';
 import { parseJson } from '../../core/src/json-guard';
@@ -60,7 +61,8 @@ export class AiService extends AiTransportService {
   /** mock 模式接管：覆盖传输层连接配置（依赖 transport 的 protected 成员，同类继承链内合法） */
   private switchToMockGateway() {
     (this as unknown as { baseUrl: string }).baseUrl = startMockGateway();
-    this.setApiKey('sk-mock-local-placeholder');
+    this.setApiKey('');
+    this.mockConnectionActive = true;
     (this as unknown as { fastModel: string }).fastModel = 'mock-model';
     (this as unknown as { strongModel: string }).strongModel = 'mock-model';
   }
@@ -561,9 +563,9 @@ ${response}`
       return null;
     }
     if (protocolValue === 'google-gemini') {
-      return createGoogleGenerativeAI({ name: 'sciflow', baseURL: base, apiKey }).textEmbeddingModel(modelId);
+      return createGoogleGenerativeAI({ name: 'sciflow', baseURL: base, apiKey, fetch: safeOutboundFetch }).textEmbeddingModel(modelId);
     }
-    return createOpenAICompatible({ name: 'sciflow', baseURL: base, apiKey }).textEmbeddingModel(modelId);
+    return createOpenAICompatible({ name: 'sciflow', baseURL: base, apiKey, fetch: safeOutboundFetch }).textEmbeddingModel(modelId);
   }
   /**
    * B-3.3 可选 LLM 重排：对融合检索的候选块按问题相关性打分（0-10）。

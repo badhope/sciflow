@@ -2,18 +2,19 @@
 
 ## 项目定位与威胁模型
 
-SciFlow 定位为**单用户、本地/私有部署**的科研助手：SQLite 单文件、不建账号体系、不做多租户。它的主要威胁模型是「LLM 生成的代码 / 输入把本进程搞挂」，而不是「公网上的恶意多租户」。因此我们把安全预算花在：默认不暴露网络、沙箱资源上限、不存密钥、输入校验。
+SciFlow 默认面向单用户本地部署，也提供可选的 JWT 账号模式。默认服务仅监听回环地址；实验执行使用超时和独立工作目录，但不构成针对恶意代码的安全沙箱。对外或多用户部署仍需网关、TLS、权限审查和隔离环境。
 
 ## 安全设计要点
 
 - **默认只监听回环地址**：后端 `main.ts` 默认 `HOST=127.0.0.1`，不对局域网暴露零鉴权 API；确需对外暴露时必须显式 `HOST=0.0.0.0`，并置于反向代理/内网之后。
 - **CORS 最小放行**：默认仅 `http://localhost:5173`，多来源用逗号分隔，`*` 需显式配置。
-- **密钥不落盘、不入仓**：API Key 仅从环境变量 / 本地 `apps/server/.env` 读取；`.env` 已在 `.gitignore`，CI 会校验 `.env` 从未被跟踪；前端展示 Key 时做掩码处理。
+- **密钥不入仓**：API Key 可由环境变量或本地 `apps/server/.env` 提供，也可在设置页配置并加密存入本地 SQLite；前端只显示掩码。请保护数据库、密钥文件和 `.env`，不要将它们提交或公开。
 - **实验沙箱隔离**：实验执行通过隔离 `spawn` 运行 Python，带 `SANDBOX_TIMEOUT_MS` 超时与独立工作目录；超时/失败时降级引导，不拖垮主进程。
 - **SQL 安全**：全部 SQL 经 Drizzle ORM 参数化，禁止字符串拼接。
 - **输入校验**：全局 `InputValidationPipe` 约束 JSON Body；MCP 工具参数按 JSON Schema 动态校验（缺参即拒），第三方工具返回统一加 untrusted-content 提示与指令隔离（对标 OWASP MCP Top 10）。
 - **健壮性兜底**：全局 `unhandledRejection` / `uncaughtException` 兜底 + SQLite `busy_timeout` + SIGTERM/SIGINT 优雅关闭（WAL checkpoint 后退出）。
 - **mock 网关只听回环**：`AI_MOCK=1` 的测试网关仅绑定 `127.0.0.1`，零外网访问，仅供本机测试/演示。
+- **出站连接级防护**：模型对话、模型目录与嵌入请求统一走受控传输（`packages/ai/src/safe-outbound.ts`）。地址在建立 socket 时按 DNS 实际解析结果校验，内网/回环/保留地址默认拒绝，云元数据地址无条件拒绝，重定向不跟随；`ALLOW_PRIVATE_OUTBOUND=1` 可显式放行本地模型服务，但不能放行元数据地址。
 
 ## 依赖安全与已知残留风险
 

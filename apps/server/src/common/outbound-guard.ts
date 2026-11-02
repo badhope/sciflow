@@ -52,7 +52,13 @@ export function isBlockedAddress(ip: string): boolean {
     return BLOCKED_V4.some(([base, bits]) => inCidrV4(addr, base, bits));
   }
   if (net.isIPv6(addr)) {
-    const lower = addr.toLowerCase();
+    const lower = new URL(`http://[${addr}]/`).hostname.slice(1, -1).toLowerCase();
+    const mapped = lower.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+    if (mapped) {
+      const high = parseInt(mapped[1], 16);
+      const low = parseInt(mapped[2], 16);
+      return isBlockedAddress(`${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`);
+    }
     if (lower === '::' || lower === '::1') return true;
     if (lower.startsWith('fe80')) return true; // 链路本地
     if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // 唯一本地
@@ -98,8 +104,18 @@ export async function checkOutboundUrl(
   }
 
   const host = parsed.hostname.replace(/^\[|\]$/g, '');
+  const isMetadata = (address: string) => {
+    const normalized = address.toLowerCase();
+    if (net.isIPv4(normalized)) return inCidrV4(normalized, '169.254.0.0', 16);
+    if (net.isIPv6(normalized)) {
+      const canonical = new URL(`http://[${normalized}]/`).hostname.slice(1, -1);
+      return canonical === 'fd00:ec2::254' || /^::ffff:a9fe:[0-9a-f]{1,4}$/.test(canonical);
+    }
+    return false;
+  };
   // 1) 字面量 IP 直接判定
   if (net.isIP(host)) {
+    if (isMetadata(host)) return { ok: false, reason: '禁止访问内网云元数据地址' };
     if (isBlockedAddress(host) && !opts.allowPrivate) {
       return { ok: false, reason: `禁止访问内网/保留地址：${host}` };
     }
@@ -114,6 +130,7 @@ export async function checkOutboundUrl(
     return { ok: false, reason: `域名无法解析：${host}` };
   }
   if (!records.length) return { ok: false, reason: `域名无解析结果：${host}` };
+  if (records.some((r) => isMetadata(r.address))) return { ok: false, reason: '禁止访问内网云元数据地址' };
   const blocked = records.find((r) => isBlockedAddress(r.address));
   if (blocked && !opts.allowPrivate) {
     return { ok: false, reason: `域名 ${host} 解析到内网/保留地址 ${blocked.address}，已拒绝` };

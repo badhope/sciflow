@@ -31,6 +31,9 @@ describe('isBlockedAddress', () => {
   it('IPv4-mapped IPv6 按内层 IPv4 判定', () => {
     expect(isBlockedAddress('::ffff:127.0.0.1')).toBe(true);
     expect(isBlockedAddress('::ffff:8.8.8.8')).toBe(false);
+    expect(isBlockedAddress('::ffff:7f00:1')).toBe(true);
+    expect(isBlockedAddress('::ffff:a9fe:a9fe')).toBe(true);
+    expect(isBlockedAddress('::ffff:808:808')).toBe(false);
   });
 
   it('无法解析的字符串按危险处理（fail-closed）', () => {
@@ -51,7 +54,7 @@ describe('checkOutboundUrl', () => {
   });
 
   it('拒绝字面量内网地址（含云元数据）', async () => {
-    for (const url of ['http://127.0.0.1:3000/api/health', 'http://169.254.169.254/latest/meta-data/', 'http://192.168.1.1/', 'http://[::1]:8080/']) {
+    for (const url of ['http://127.0.0.1:3000/api/health', 'http://169.254.169.254/latest/meta-data/', 'http://192.168.1.1/', 'http://[::1]:8080/', 'http://[::ffff:127.0.0.1]/', 'http://[::ffff:7f00:1]/']) {
       const r = await checkOutboundUrl(url);
       expect(r.ok, url).toBe(false);
       expect(r.reason, url).toMatch(/内网|保留/);
@@ -61,6 +64,12 @@ describe('checkOutboundUrl', () => {
   it('allowPrivate=true 时放行本地自建 SearXNG（显式开关）', async () => {
     const r = await checkOutboundUrl('http://127.0.0.1:8080/search', { allowPrivate: true });
     expect(r.ok).toBe(true);
+  });
+
+  it('即使允许私网也拒绝云元数据地址', async () => {
+    for (const url of ['http://169.254.169.254/latest/meta-data/', 'http://[fd00:ec2::254]/']) {
+      expect((await checkOutboundUrl(url, { allowPrivate: true })).ok).toBe(false);
+    }
   });
 
   it('公网地址放行', async () => {

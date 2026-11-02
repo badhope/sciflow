@@ -35,7 +35,7 @@ curl -s http://127.0.0.1:3000/api/health
 
 - `status=degraded`：数据库 `SELECT 1` 失败 → 检查磁盘/权限。
 - `capabilities.vectorSearch=false`：sqlite-vec 未加载 → 检索降级为全文，功能可用但语义检索失效。
-- `capabilities.embeddingModel=false`：未配置 `EMBEDDING_MODEL_PATH` → 同上。
+- `capabilities.embeddingModel=false`：没有可用的本地或远程嵌入后端 → 同上；查看 `capabilities.embeddingBackend` 区分 `local`、`api` 与 `none`。
 
 环境全量自检：
 

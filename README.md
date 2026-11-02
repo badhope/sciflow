@@ -68,7 +68,7 @@ flowchart LR
    Vercel AI SDK（三协议模型接入）、LangGraph（编排/checkpointer）、citation-js（CSL 引擎）、better-sqlite3 + sqlite-vec（检索）、MCP 官方 SDK（双向工具协议）。全部依赖在 `ARCHITECTURE.md` §2 有选型记录。
 
 8. **工程可信度可验证。**
-   `pnpm --filter @sciflow/server test`（server 345）+ `pnpm --filter @sciflow/web test`（web 134）、`python scripts/full_regression.py`（238 项全链路回归）、`node scripts/monitor_config_center.mjs`（25 项巡检）、`node scripts/verify-jwt-access.mjs`（28 项企业模式权限断言）、`python scripts/route_probe.py`（96 条全路由真实探针）——验证命令全部入库可复跑，CI 三 job 同步执行。
+   `pnpm --filter @sciflow/server test`（server 366）+ `pnpm --filter @sciflow/web test`（web 134）、`python scripts/full_regression.py`（238 项全链路回归）、`node scripts/monitor_config_center.mjs`（25 项巡检）、`node scripts/verify-jwt-access.mjs`（28 项企业模式权限断言）、`python scripts/route_probe.py`（96 条全路由真实探针）——验证命令全部入库可复跑，CI 三 job 同步执行。
 
 ## 📸 界面预览
 
@@ -209,7 +209,7 @@ flowchart LR
 | 后端 `apps/server` | NestJS 11 · TypeScript（strict）· Drizzle ORM · better-sqlite3（WAL）· Vercel AI SDK（三协议模型接入）· LangGraph（编排 / 断点续跑 / 人工确认）· MCP 官方 SDK · zod · helmet + pino · MSW 进程内 mock 网关 |
 | 前端 `apps/web` | React 19 · Vite 6 · TypeScript · Tailwind CSS v4（主题风格包走 CSS 变量覆盖）· TanStack Query / Table · Recharts · sigma.js + graphology · streamdown（流式 Markdown）· CodeMirror 6 · react-markdown + KaTeX · mermaid（按需异步 chunk） |
 | 桌面端 `apps/desktop` | Electron 41（内嵌 Node 24，原生支持 require(ESM)）· 内嵌后端（`ELECTRON_RUN_AS_NODE`）· 本地 SQLite（userData 隔离，打包时自动按 Electron ABI 重编原生模块）· electron-builder 三平台打包 · electron-updater 自动更新（opt-in） |
-| 工程 | pnpm workspace · vitest（server 345 / web 134 / desktop 5）· Playwright 冒烟 · promptfoo 契约评估 · GitHub Actions 三 job（类型/单测/构建 · 全量回归 · E2E+评测）· Python 3 回归脚本 |
+| 工程 | pnpm workspace · vitest（server 366 / web 134 / desktop 5）· Playwright 冒烟 · promptfoo 契约评估 · GitHub Actions 三 job（类型/单测/构建 · 全量回归 · E2E+评测）· Python 3 回归脚本 |
 
 **架构概览**
 
@@ -321,7 +321,7 @@ SciFlow 支持 **OpenAI 兼容、Anthropic Messages、Google Gemini** 三种协�
 pnpm --filter @sciflow/server typecheck
 pnpm --filter @sciflow/web typecheck
 
-# 单元测试（vitest：server 345 条 + web 134 条 + desktop 5 条）
+# 单元测试（vitest：server 366 条 + web 134 条 + desktop 5 条）
 pnpm --filter @sciflow/server test
 pnpm --filter @sciflow/web test
 

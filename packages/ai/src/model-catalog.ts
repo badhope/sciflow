@@ -151,6 +151,8 @@ export async function fetchModelCatalog(opts: {
   protocol?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** 受控出站 fetch（连接级地址校验）；未提供时回落到全局 fetch（仅测试用） */
+  fetchImpl?: typeof fetch;
 }): Promise<ModelCatalogResult> {
   const protocol = normalizeProtocol(opts.protocol);
   const { url, headers } = catalogRequest(protocol, String(opts.baseUrl || ''), String(opts.apiKey || ''));
@@ -158,8 +160,10 @@ export async function fetchModelCatalog(opts: {
   const signals: AbortSignal[] = [AbortSignal.timeout(timeoutMs)];
   if (opts.signal) signals.push(opts.signal);
   try {
-    const res = await fetch(url, {
+    const doFetch = opts.fetchImpl ?? fetch;
+    const res = await doFetch(url, {
       headers,
+      redirect: 'manual',
       signal: signals.length > 1 && typeof AbortSignal.any === 'function' ? AbortSignal.any(signals) : signals[0],
     });
     const text = await res.text();

@@ -6,6 +6,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { fetchModelCatalog, normalizeProtocol, type ModelProtocol } from './model-catalog';
+import { safeOutboundFetch } from './safe-outbound';
 import { loadPromptAugmentation } from './prompt-augmentation';
 import { generateText, generateObject, streamText, stepCountIs, jsonSchema as aiJsonSchema, type ModelMessage, type LanguageModelUsage } from 'ai';
 import type { LanguageModel, ToolSet } from 'ai';
@@ -15,6 +16,14 @@ import { db } from '../../db/src/database';
 import { llmCallLogs, customPrompts } from '../../db/src/schema';
 import { eq } from 'drizzle-orm';
 import { envInt } from '../../core/src/env';
+
+const TEMPLATE_API_KEYS = new Set(['sk-your-api-key-here', 'sk-你的key', '${ai_api_key}', '<api_key>']);
+
+export function normalizeApiKey(raw: unknown): string {
+  const value = String(raw ?? '').trim();
+  if (!value || TEMPLATE_API_KEYS.has(value.toLowerCase())) return '';
+  return value;
+}
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -86,7 +95,8 @@ export class AiTransportService {
 
   protected baseUrl = (process.env.AI_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3').replace(/\/$/, '');
   /** 当前生效密钥：优先 env，被激活厂商覆盖（v0.3.0 起库内为密文，读取时解密）。私有字段 + getter 暴露。 */
-  private _secretKey = process.env.AI_API_KEY || '';
+  private _secretKey = normalizeApiKey(process.env.AI_API_KEY || '');
+  protected mockConnectionActive = false;
   /** fast 档：轻量快速模型（默认） */
   protected fastModel = process.env.AI_MODEL_FAST || process.env.AI_MODEL || '';
   /** strong 档：强模型（高难任务；未配置则回落 fast） */
@@ -115,7 +125,7 @@ export class AiTransportService {
 
   /** 覆盖当前生效密钥（解密后写入） */
   protected setApiKey(v: string): void {
-    this._secretKey = v;
+    this._secretKey = normalizeApiKey(v);
   }
 
   /** 切换激活厂商（设置页调用，立即生效） */
@@ -124,8 +134,10 @@ export class AiTransportService {
       | { base_url?: string; ['api_key']?: string; model?: string }
       | undefined;
     if (!row) throw new HttpException('模型厂商不存在', HttpStatus.NOT_FOUND);
+    this.mockConnectionActive = false;
+    this.setApiKey('');
     this.baseUrl = String(row.base_url).replace(/\/$/, '');
-    if (row['api_key']) this.setApiKey(decryptSecret(String(row['api_key'])));
+    this.setApiKey(row['api_key'] ? normalizeApiKey(decryptSecret(String(row['api_key']))) : '');
     this.fastModel = String(row.model);
     this.strongModel = String(row.model);
     this.applyProviderCapabilities(row as Record<string, unknown>);
@@ -135,8 +147,9 @@ export class AiTransportService {
 
   /** 回退到环境变量配置（删除激活中的厂商时调用，避免内存残留失效厂商） */
   resetToEnv() {
+    this.mockConnectionActive = false;
     this.baseUrl = (process.env.AI_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3').replace(/\/$/, '');
-    this.setApiKey(process.env.AI_API_KEY || '');
+    this.setApiKey(normalizeApiKey(process.env.AI_API_KEY || ''));
     this.fastModel = process.env.AI_MODEL_FAST || process.env.AI_MODEL || '';
     this.strongModel = process.env.AI_MODEL_STRONG || this.fastModel;
     this.protocol = normalizeProtocol(process.env.AI_PROTOCOL);
@@ -145,17 +158,24 @@ export class AiTransportService {
     this.toolCalling = true;
   }
 
-  /** 是否已配置 AI：仅当确有可用密钥时为 true（不再对未配置状态谎报可用） */
   get configured(): boolean {
-    return !!this.apiKey;
+    try {
+      const url = new URL(this.baseUrl);
+      return (url.protocol === 'http:' || url.protocol === 'https:')
+        && !url.username && !url.password
+        && !!this.fastModel.trim()
+        && (this.mockConnectionActive || !!this.apiKey);
+    } catch {
+      return false;
+    }
   }
 
   get config(): {
-    baseUrl: string; model: string; fastModel: string; strongModel: string; configured: boolean;
+    baseUrl: string; model: string; fastModel: string; strongModel: string; configured: boolean; mock: boolean;
     protocol: ModelProtocol; contextWindow: number; maxOutput: number; toolCalling: boolean;
   } {
     return {
-      baseUrl: this.baseUrl, model: this.fastModel, fastModel: this.fastModel, strongModel: this.strongModel, configured: this.configured,
+      baseUrl: this.baseUrl, model: this.fastModel, fastModel: this.fastModel, strongModel: this.strongModel, configured: this.configured, mock: this.mockConnectionActive,
       protocol: this.protocol, contextWindow: this.contextWindow, maxOutput: this.maxOutput, toolCalling: this.toolCalling,
     };
   }
@@ -208,7 +228,7 @@ export class AiTransportService {
   }
 
   protected assertConfigured(): void {
-    if (!this.apiKey) {
+    if (!this.configured) {
       throw new HttpException(
         'AI 服务未配置：请在 apps/server/.env 中设置 AI_API_KEY（支持 OpenAI、DeepSeek、通义等 OpenAI 兼容接口）',
         HttpStatus.SERVICE_UNAVAILABLE,
@@ -359,11 +379,11 @@ ${augmentation}` };
     const protocol = normalizeProtocol(protocolValue);
     const base = String(baseUrl || '').replace(/\/+$/, '');
     if (protocol === 'anthropic-messages') {
-      const provider = createAnthropic({ name: 'sciflow', baseURL: base, apiKey });
+      const provider = createAnthropic({ name: 'sciflow', baseURL: base, apiKey, fetch: safeOutboundFetch });
       return provider(modelId);
     }
     if (protocol === 'google-gemini') {
-      const provider = createGoogleGenerativeAI({ name: 'sciflow', baseURL: base, apiKey });
+      const provider = createGoogleGenerativeAI({ name: 'sciflow', baseURL: base, apiKey, fetch: safeOutboundFetch });
       return provider(modelId);
     }
     const provider = createOpenAICompatible({
@@ -372,6 +392,7 @@ ${augmentation}` };
       apiKey,
       headers: { Authorization: `Bearer ${apiKey}` },
       supportsStructuredOutputs: true,
+      fetch: safeOutboundFetch,
       // 流式 usage：OpenAI 兼容端点默认不返回 usage 块，开启 includeUsage 后
       // AI SDK 会带 stream_options.include_usage，token 成本/上下文占比才不是全 0
       includeUsage: true,
@@ -706,7 +727,7 @@ ${augmentation}` };
   /** 查询可用模型列表（协议感知；与设置页「检测模型」共用 model-catalog 单一实现） */
   async listModels(): Promise<string[]> {
     this.assertConfigured();
-    const r = await fetchModelCatalog({ baseUrl: this.baseUrl, apiKey: this._secretKey, protocol: this.protocol, timeoutMs: 15_000 });
+    const r = await fetchModelCatalog({ baseUrl: this.baseUrl, apiKey: this._secretKey, protocol: this.protocol, timeoutMs: 15_000, fetchImpl: safeOutboundFetch as unknown as typeof fetch });
     if (!r.ok) return [];
     return r.models.map((m) => m.id).slice(0, 50);
   }
@@ -769,19 +790,25 @@ ${augmentation}` };
 
   /** 从 model_provider 表读取激活厂商并覆盖连接配置（LiteLLM 式多厂商切换） */
   protected applyActiveProvider(): void {
+    this.mockConnectionActive = false;
+    this.setApiKey('');
     try {
       const row = sqlite
         .prepare('SELECT * FROM model_provider WHERE is_active = 1 LIMIT 1')
         .get() as { base_url?: string; ['api_key']?: string; model?: string } | undefined;
-      if (row?.base_url && row?.model) {
-        this.baseUrl = String(row.base_url).replace(/\/$/, '');
-        if (row['api_key']) this.setApiKey(decryptSecret(String(row['api_key'])));
-        this.fastModel = String(row.model);
-        this.strongModel = String(row.model);
-        this.applyProviderCapabilities(row as Record<string, unknown>);
+      if (row) {
+        if (row.base_url && row.model) {
+          this.baseUrl = String(row.base_url).replace(/\/$/, '');
+          this.setApiKey(row['api_key'] ? normalizeApiKey(decryptSecret(String(row['api_key']))) : '');
+          this.fastModel = String(row.model);
+          this.strongModel = String(row.model);
+          this.applyProviderCapabilities(row as Record<string, unknown>);
+        }
+      } else {
+        this.setApiKey(normalizeApiKey(process.env.AI_API_KEY || ''));
       }
     } catch {
-      /* 表不存在时回退环境变量 */
+      this.setApiKey(normalizeApiKey(process.env.AI_API_KEY || ''));
     }
   }
 }

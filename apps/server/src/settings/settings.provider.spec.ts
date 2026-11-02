@@ -33,10 +33,19 @@ function cleanup() {
   sqlite.prepare(`DELETE FROM model_provider WHERE name LIKE 'spec-%'`).run();
 }
 
-/** 单测不真跑 DNS：出站守卫放行（SSRF 拒绝路径单独用真实实现覆盖） */
+/** 单测不真跑 DNS：出站守卫放行；模型目录请求注入可控 fetch（不触网） */
 class SpecSettingsService extends SettingsService {
   protected async guardOutbound() {
     return { ok: true, addresses: ['93.184.216.34'] };
+  }
+  protected outboundFetch(): typeof fetch {
+    return globalThis.fetch;
+  }
+}
+
+class RejectingSettingsService extends SettingsService {
+  protected async guardOutbound() {
+    return { ok: false, reason: '测试拒绝' };
   }
 }
 
@@ -44,10 +53,10 @@ describe('厂商设置：协议与能力落库', () => {
   beforeEach(cleanup);
   afterEach(cleanup);
 
-  it('保存并回显协议/上下文/最大输出/工具调用；key 只回显掩码', () => {
+  it('保存并回显协议/上下文/最大输出/工具调用；key 只回显掩码', async () => {
     const { ai } = fakeAi();
     const svc = new SpecSettingsService(ai);
-    const r = svc.saveProvider({
+    const r = await svc.saveProvider({
       name: 'spec-unisound',
       baseUrl: 'https://maas-api.example.com/v1/',
       apiKey: 'real-secret-key-1234',
@@ -74,10 +83,10 @@ describe('厂商设置：协议与能力落库', () => {
     expect(row.models).toHaveLength(1);
   });
 
-  it('最大输出不得超过上下文窗口；非法数值回落默认并夹取区间', () => {
+  it('最大输出不得超过上下文窗口；非法数值回落默认并夹取区间', async () => {
     const { ai } = fakeAi();
     const svc = new SpecSettingsService(ai);
-    svc.saveProvider({
+    await svc.saveProvider({
       name: 'spec-clamp',
       baseUrl: 'https://api.example.com/v1',
       model: 'm',
@@ -89,36 +98,60 @@ describe('厂商设置：协议与能力落库', () => {
     expect(row.contextWindow).toBe(1000);
     expect(row.maxOutput).toBe(1000);
 
-    svc.saveProvider({ name: 'spec-clamp-2', baseUrl: 'https://api.example.com/v1', model: 'm', protocol: 'bogus', contextWindow: -5, maxOutput: Number.NaN });
+    await svc.saveProvider({ name: 'spec-clamp-2', baseUrl: 'https://api.example.com/v1', model: 'm', protocol: 'bogus', contextWindow: -5, maxOutput: Number.NaN });
     const [row2] = svc.listProviders().filter((p) => p.name === 'spec-clamp-2');
     expect(row2.protocol).toBe('openai-compatible');
     expect(row2.contextWindow).toBe(0);
     expect(row2.maxOutput).toBe(0);
   });
 
-  it('更新激活中的厂商后立即刷新运行中连接（switchProvider 再次调用）', () => {
+  it('更新激活中的厂商后立即刷新运行中连接（switchProvider 再次调用）', async () => {
     const { ai, raw, calls } = fakeAi();
     const svc = new SpecSettingsService(ai);
-    const { id } = svc.saveProvider({ name: 'spec-active', baseUrl: 'https://api.example.com/v1', apiKey: 'k-123456', model: 'm1', protocol: 'openai-compatible' });
-    svc.activateProvider(id);
+    const { id } = await svc.saveProvider({ name: 'spec-active', baseUrl: 'https://api.example.com/v1', apiKey: 'k-123456', model: 'm1', protocol: 'openai-compatible' });
+    await svc.activateProvider(id);
     sqlite.prepare('UPDATE model_provider SET is_active = 1 WHERE id = ?').run(id);
     expect(calls.switched).toEqual([id]);
 
-    svc.saveProvider({ id, name: 'spec-active', baseUrl: 'https://api.example.com/v2', model: 'm2', protocol: 'anthropic-messages', apiKey: '' });
+    await svc.saveProvider({ id, name: 'spec-active', baseUrl: 'https://api.example.com/v2', model: 'm2', protocol: 'anthropic-messages', apiKey: '' });
     expect(raw.switchProvider).toHaveBeenCalledTimes(2);
     expect(calls.switched).toEqual([id, id]);
   });
 
-  it('编辑时提交掩码 key 不覆盖库内真实 key', () => {
+  it('编辑时提交掩码 key 不覆盖库内真实 key', async () => {
     const { ai } = fakeAi();
     const svc = new SpecSettingsService(ai);
-    const { id } = svc.saveProvider({ name: 'spec-mask', baseUrl: 'https://api.example.com/v1', apiKey: 'keep-me-9876', model: 'm' });
+    const { id } = await svc.saveProvider({ name: 'spec-mask', baseUrl: 'https://api.example.com/v1', apiKey: 'keep-me-9876', model: 'm' });
     const masked = svc.listProviders().find((p) => p.id === id)!.apiKey;
-    svc.saveProvider({ id, name: 'spec-mask', baseUrl: 'https://api.example.com/v1', apiKey: masked, model: 'm2' });
+    await svc.saveProvider({ id, name: 'spec-mask', baseUrl: 'https://api.example.com/v1', apiKey: masked, model: 'm2' });
     const row = sqlite.prepare('SELECT * FROM model_provider WHERE id = ?').get(id) as Record<string, unknown>;
     expect(String(row.model)).toBe('m2');
     const stored = svc.listProviders().find((p) => p.id === id)!;
     expect(stored.apiKey.endsWith('9876')).toBe(true);
+  });
+
+  it('更新省略或留空 key 保留旧密钥，显式模板 key 不作为有效密钥', async () => {
+    const { ai } = fakeAi();
+    const svc = new SpecSettingsService(ai);
+    const { id } = await svc.saveProvider({ name: 'spec-keep-key', baseUrl: 'https://api.example.com/v1', apiKey: 'fixture-key-1234', model: 'm' });
+    const original = svc.listProviders().find((p) => p.id === id)!.apiKey;
+    await svc.saveProvider({ id, name: 'spec-keep-key', baseUrl: 'https://api.example.com/v1', model: 'm2' });
+    expect(svc.listProviders().find((p) => p.id === id)!.apiKey).toBe(original);
+    await svc.saveProvider({ id, name: 'spec-keep-key', baseUrl: 'https://api.example.com/v1', apiKey: '', model: 'm3' });
+    expect(svc.listProviders().find((p) => p.id === id)!.apiKey).toBe(original);
+    await svc.saveProvider({ id, name: 'spec-keep-key', baseUrl: 'https://api.example.com/v1', apiKey: 'sk-your-api-key-here', model: 'm' });
+    expect(svc.listProviders().find((p) => p.id === id)!.apiKey).toBe('');
+  });
+
+  it('保存和激活 provider 都经过 SSRF 守卫', async () => {
+    const { ai } = fakeAi();
+    const svc = new RejectingSettingsService(ai);
+    await expect(svc.saveProvider({ name: 'spec-guarded', baseUrl: 'https://api.example.com/v1', model: 'm' })).rejects.toThrow(/地址被安全策略拒绝/);
+
+    const allowed = new SpecSettingsService(ai);
+    const { id } = await allowed.saveProvider({ name: 'spec-guarded', baseUrl: 'https://api.example.com/v1', model: 'm' });
+    const rejecting = new RejectingSettingsService(ai);
+    await expect(rejecting.activateProvider(id)).rejects.toThrow(/地址被安全策略拒绝/);
   });
 });
 
@@ -149,7 +182,7 @@ describe('厂商设置：检测模型与连接测试（未保存表单值）', (
   it('检测模型：编辑态提交掩码 Key 时复用库内真实 Key', async () => {
     const { ai } = fakeAi();
     const svc = new SpecSettingsService(ai);
-    const { id } = svc.saveProvider({ name: 'spec-key', baseUrl: 'https://api.example.com/v1', apiKey: 'stored-key-abcd', model: 'm' });
+    const { id } = await svc.saveProvider({ name: 'spec-key', baseUrl: 'https://api.example.com/v1', apiKey: 'stored-key-abcd', model: 'm' });
     const masked = svc.listProviders().find((p) => p.id === id)!.apiKey;
     const original = globalThis.fetch;
     let auth = '';
@@ -163,6 +196,21 @@ describe('厂商设置：检测模型与连接测试（未保存表单值）', (
       expect(auth).toBe('Bearer stored-key-abcd');
     } finally {
       globalThis.fetch = original;
+    }
+  });
+
+  it('privateOk 不绕过管理员私网出站策略', async () => {
+    const { ai, raw } = fakeAi();
+    const svc = new SettingsService(ai);
+    const old = process.env.ALLOW_PRIVATE_OUTBOUND;
+    delete process.env.ALLOW_PRIVATE_OUTBOUND;
+    try {
+      const result = await svc.testProvider({ baseUrl: 'http://127.0.0.1:11434/v1', model: 'm', privateOk: true });
+      expect(result.ok).toBe(false);
+      expect(raw.testProviderConfig).not.toHaveBeenCalled();
+    } finally {
+      if (old === undefined) delete process.env.ALLOW_PRIVATE_OUTBOUND;
+      else process.env.ALLOW_PRIVATE_OUTBOUND = old;
     }
   });
 
