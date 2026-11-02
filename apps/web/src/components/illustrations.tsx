@@ -4,9 +4,9 @@ import { useId, type SVGProps } from 'react';
 function BrandGradient({ id }: { id: string }) {
   return (
     <linearGradient id={id} x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stopColor="#0d9488" />
-      <stop offset="55%" stopColor="#0891b2" />
-      <stop offset="100%" stopColor="#0284c7" />
+      <stop offset="0%" stopColor="var(--brand-400, #14b8a6)" />
+      <stop offset="55%" stopColor="var(--brand-500, #0f9e94)" />
+      <stop offset="100%" stopColor="var(--brand-600, #0b7f78)" />
     </linearGradient>
   );
 }

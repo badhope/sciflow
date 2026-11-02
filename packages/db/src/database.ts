@@ -182,12 +182,21 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_project ON knowledge_doc(project_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_doc ON knowledge_chunk(doc_id);
 CREATE INDEX IF NOT EXISTS idx_reflexion_task ON reflexion_log(task_id);
 CREATE INDEX IF NOT EXISTS idx_memory_type ON memory_log(type);
+CREATE INDEX IF NOT EXISTS idx_citation_reference ON citation(reference_id);
+CREATE INDEX IF NOT EXISTS idx_memory_project_created ON memory_log(project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pipeline_status ON pipeline_task(status);
+CREATE INDEX IF NOT EXISTS idx_document_project_updated ON document(project_id, updated_at DESC);
 CREATE TABLE IF NOT EXISTS model_provider (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   base_url TEXT NOT NULL,
   api_key TEXT DEFAULT '',
   model TEXT NOT NULL,
+  protocol TEXT DEFAULT 'openai-compatible',
+  context_window INTEGER DEFAULT 0,
+  max_output INTEGER DEFAULT 0,
+  tool_calling INTEGER DEFAULT 1,
+  models TEXT DEFAULT '[]',
   is_active INTEGER DEFAULT 0,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
@@ -199,6 +208,76 @@ CREATE TABLE IF NOT EXISTS mcp_server (
   enabled INTEGER DEFAULT 1,
   created_at INTEGER NOT NULL
 );
+
+
+-- 配置中心（v1.3）：角色库 / 约束工程 / 钩子 / 审计
+CREATE TABLE IF NOT EXISTS config_role (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  system_prompt TEXT DEFAULT '',
+  is_default INTEGER DEFAULT 0,
+  enabled INTEGER DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS config_constraint (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  rule TEXT NOT NULL,
+  level TEXT DEFAULT 'must',
+  scope TEXT DEFAULT 'all',
+  enabled INTEGER DEFAULT 1,
+  sort_order INTEGER DEFAULT 0,
+  source TEXT DEFAULT 'user',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS config_hook (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  event TEXT NOT NULL,
+  type TEXT NOT NULL,
+  config TEXT DEFAULT '{}',
+  enabled INTEGER DEFAULT 1,
+  priority INTEGER DEFAULT 100,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS config_audit (
+  id TEXT PRIMARY KEY,
+  actor TEXT DEFAULT 'ui',
+  category TEXT DEFAULT '',
+  action TEXT NOT NULL,
+  target TEXT DEFAULT '',
+  detail TEXT DEFAULT '',
+  allowed INTEGER DEFAULT 1,
+  reason TEXT DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_config_audit_created ON config_audit(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_config_constraint_scope ON config_constraint(scope, enabled);
+
+
+-- 扩展中心（v1.4）：统一资产表
+CREATE TABLE IF NOT EXISTS extension_asset (
+  id TEXT PRIMARY KEY,
+  key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  source TEXT DEFAULT 'user',
+  repo TEXT DEFAULT '',
+  license TEXT DEFAULT '',
+  install TEXT DEFAULT '',
+  tags TEXT DEFAULT '[]',
+  manifest TEXT DEFAULT '{}',
+  enabled INTEGER DEFAULT 1,
+  visibility TEXT DEFAULT 'public',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_extension_asset_key ON extension_asset(key);
+CREATE INDEX IF NOT EXISTS idx_extension_asset_kind ON extension_asset(kind, enabled);
 
 CREATE TABLE IF NOT EXISTS custom_intent (
   id TEXT PRIMARY KEY,
@@ -502,6 +581,9 @@ ensureColumn('reference', 'fingerprint', "TEXT DEFAULT ''");
 ensureColumn('reference', 'is_duplicate_of', "TEXT DEFAULT ''");
 // 路线图差距 #11：文献笔记
 ensureColumn('reference', 'notes', "TEXT DEFAULT ''");
+// v1.9 查询路径索引（必须在 fingerprint 列补齐之后建：老库里该列由上面的 ensureColumn 添加，
+// 若提前放在建表 DDL 里会因列不存在而整段事务失败）
+sqlite.exec('CREATE INDEX IF NOT EXISTS idx_reference_project_fp ON reference(project_id, fingerprint)');
 // 路线图差距 #22：项目级系统提示 projectPreface
 ensureColumn('project', 'preface', "TEXT DEFAULT ''");
 // 差距 #1：自定义大纲模板（JSON 字符串数组）；旧库补齐默认 '[]'
@@ -511,6 +593,30 @@ ensureColumn('llm_call_log', 'kind', "TEXT DEFAULT 'llm'");
 // 企业模式（AUTH_MODE=jwt）：项目归属，用于按用户隔离数据（防 IDOR）
 ensureColumn('project', 'owner_id', "TEXT DEFAULT ''");
 sqlite.exec('CREATE INDEX IF NOT EXISTS idx_project_owner ON project(owner_id)');
+// 模型厂商 v1.2：协议 / 能力自动匹配（上下文窗口、最大输出、工具调用）/ 检测到的模型目录
+ensureColumn('model_provider', 'protocol', "TEXT DEFAULT 'openai-compatible'");
+ensureColumn('model_provider', 'context_window', 'INTEGER DEFAULT 0');
+ensureColumn('model_provider', 'max_output', 'INTEGER DEFAULT 0');
+ensureColumn('model_provider', 'tool_calling', 'INTEGER DEFAULT 1');
+ensureColumn('model_provider', 'models', "TEXT DEFAULT '[]'");
+// 配置中心 v1.3：钩子唯一性（同名同事件同类型只允许一条，防重复注入）+ 审计只追加（触发器兜底）
+try {
+  sqlite.exec('CREATE UNIQUE INDEX IF NOT EXISTS ux_config_hook_name_event_type ON config_hook(name, event, type)');
+} catch (e: any) {
+  console.warn(`[DB] config_hook 唯一索引创建失败（可能存在历史重复，需先清理）: ${e?.message || e}`);
+}
+sqlite.exec(`
+CREATE TRIGGER IF NOT EXISTS trg_config_audit_no_update
+BEFORE UPDATE ON config_audit
+BEGIN
+  SELECT RAISE(ABORT, 'config_audit 只追加：禁止 UPDATE');
+END;
+CREATE TRIGGER IF NOT EXISTS trg_config_audit_no_delete
+BEFORE DELETE ON config_audit
+BEGIN
+  SELECT RAISE(ABORT, 'config_audit 只追加：禁止 DELETE');
+END;
+`);
 
 // ---------- 迁移：knowledge_chunk_fts 从 unicode61 升级到 trigram ----------
 // 原因：unicode61 不切分 CJK（整段中文是一个 token），中文短语检索永远命中不到；

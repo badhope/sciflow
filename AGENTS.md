@@ -46,9 +46,19 @@
 11. **列表型 UI 不得直接渲染原始 JSON**：流水线步骤明细用 `PipelineDag.summarizeStepOutput`。
     历史事故：大纲 JSON 把 DAG 行高撑成多行并在窄列横向溢出。
    部分网关流式不支持标准 tool_calls，传输层会回退到非流式工具循环（`AI_TOOLS_NONSTREAM=off` 可关闭）。
+12. **配置中心单一写入口（v1.3 契约）**：角色/约束/钩子/权限/审计只经 `apps/server/src/config/config-center.service.ts`；
+    Web 设置页、`sciflow config` CLI、对话工具 `config.*` 三条入口共用，禁止各自直写 `app_setting` 或 `config_*` 表。
+    约束与 prompt_inject 钩子的唯一注入点是 `packages/ai/src/prompt-augmentation.ts`（AI 层四个 LLM 入口统一调用）；
+    权限档升档每次最多一级、核心保护项（鉴权/密钥/SSRF/审计/数据库/端口/不可逆）任何档位不可改；
+    `config_audit` 有只追加触发器，禁止 UPDATE/DELETE。细则见 `ARCHITECTURE.md` §2.17。
+13. **扩展中心单一写入口（v1.4 契约）**：六类资产（skill/mcp/role/constraint/hook/prompt）只经
+    `apps/server/src/extensions/extensions.service.ts` 写入；内置目录在 `extension-catalog.ts`，随仓库发布且默认启用。
+    启用/停用必须同步投影到对应子系统（`project*`），禁止只改 `extension_asset` 不投影；
+    `visibility=private` 的 SciFlow 私有优势工具不得进入导出包与外部 MCP `extension.list`；
+    提示词模板默认不覆盖系统默认，必须显式「应用」。细则见 `ARCHITECTURE.md` §2.18。
 
 ## 验证纪律
 
 - 回归脚本必须用**全新数据库**：脏库会让指纹去重、字段唯一性等用例误报失败。
 - 修改契约（如引用渲染方式）时，必须同步更新 `scripts/full_regression.py` 里对应断言，
-  并在 `docs/RUNTIME-FINDINGS.md` 记录「为什么改」。不允许只让测试变绿而不说明契约变化。
+  并在 `docs/archive/RUNTIME-FINDINGS.md` 记录「为什么改」。不允许只让测试变绿而不说明契约变化。

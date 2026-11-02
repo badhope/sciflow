@@ -16,10 +16,12 @@ import type {
   PaperComparisonResult,
   PipelineStepConfig,
   QualityReport,
+  ProjectQualityOverview,
   QualityWeightItem,
   Reference,
   ReferenceGraph,
   ReferenceInput,
+  DiscoveredReference,
   ExperimentDesignRecord,
   ResearchDesignResult,
   ReviewComment,
@@ -33,6 +35,12 @@ export const research = {
   references: {
     search: (query: string, limit = 8, projectId?: string) =>
       request<Reference[]>(`/api/references/search`, { method: 'POST', body: JSON.stringify({ query, limit, projectId }) }),
+    /** 学术发现检索（OpenAlex/Crossref/arXiv，只返回元数据不入库） */
+    discover: (query: string, limit = 10) =>
+      request<{ enabled: boolean; hits: DiscoveredReference[]; notice: string }>(`/api/references/discover`, {
+        method: 'POST',
+        body: JSON.stringify({ query, limit }),
+      }),
     list: (projectId: string) => request<Reference[]>(`/api/references?projectId=${projectId}`),
     create: (projectId: string, hit: ReferenceInput) =>
       request<Reference>('/api/references', { method: 'POST', body: JSON.stringify({ projectId, hit }) }),
@@ -138,6 +146,9 @@ export const research = {
     /** 最新一次质量评分（无记录时后端返回 null；接口未就绪时前端 catch 降级为空态） */
     latest: (documentId: string) =>
       request<QualityReport | null>(`/api/quality/latest?documentId=${encodeURIComponent(documentId)}`),
+    /** 项目内全部文档的最新分总览（客观分对当前正文计算，零模型成本） */
+    projectOverview: (projectId: string) =>
+      request<ProjectQualityOverview>(`/api/quality/project-overview?projectId=${encodeURIComponent(projectId)}`),
     /** 差距#7：把最新 quality_report.feedback 结构化为 review_comment（幂等，返回 created/existing） */
     exportComments: (documentId: string) =>
       request<{ created: number; existing: number }>(`/api/quality/export-comments?documentId=${encodeURIComponent(documentId)}`, { method: 'POST' }),
@@ -166,8 +177,34 @@ export const research = {
       request<QualityWeightItem[]>('/api/customization/quality-weights', { method: 'POST', body: JSON.stringify({ weights }) }),
     getJudgmentMode: () => request<{ mode: string }>('/api/customization/judgment-mode'),
     setJudgmentMode: (mode: string) => request<{ mode: string }>('/api/customization/judgment-mode', { method: 'POST', body: JSON.stringify({ mode }) }),
-    getPipelineSettings: () => request<{ researchDepth: number }>('/api/customization/pipeline-settings'),
-    setPipelineSettings: (patch: { researchDepth?: number }) =>
-      request<{ researchDepth: number }>('/api/customization/pipeline-settings', { method: 'POST', body: JSON.stringify(patch) }),
+    getPipelineSettings: () =>
+      request<{
+        researchDepth: number;
+        tokenBudget: number;
+        retrievalRerank: boolean;
+        webSearch: boolean;
+        qualityStandard: 'draft' | 'standard' | 'strict' | 'review' | 'conference';
+        qualityStandardLabel: string;
+        qualityPassScore: number;
+      }>('/api/customization/pipeline-settings'),
+    setPipelineSettings: (patch: {
+      researchDepth?: number;
+      tokenBudget?: number;
+      retrievalRerank?: boolean;
+      webSearch?: boolean;
+      qualityStandard?: string;
+    }) =>
+      request<{
+        researchDepth: number;
+        tokenBudget: number;
+        retrievalRerank: boolean;
+        webSearch: boolean;
+        qualityStandard: string;
+        qualityStandardLabel: string;
+        qualityPassScore: number;
+      }>(
+        '/api/customization/pipeline-settings',
+        { method: 'POST', body: JSON.stringify(patch) },
+      ),
   },
 };

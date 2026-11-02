@@ -1,0 +1,21 @@
+name: Feature request
+description: Propose a capability or an improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What research task is harder than it should be today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: How would you expect it to work? Mention existing tools or libraries that solve it well.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else did you try or evaluate?

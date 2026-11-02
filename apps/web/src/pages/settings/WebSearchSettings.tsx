@@ -17,6 +17,9 @@ export function WebSearchSettings() {
   const [serperNew, setSerperNew] = useState('');
   const [braveNew, setBraveNew] = useState('');
   const [searxngDraft, setSearxngDraft] = useState('');
+  /** 引擎连通性自检（v1.9.2）：DDG 在国内网络不可达，0 结果此前是静默的，用户无从排查 */
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     api.webSearchConfig.get().then((c) => {
@@ -24,6 +27,25 @@ export function WebSearchSettings() {
       setSearxngDraft(c.searxngUrl || '');
     }).catch((e) => setMsg(errMsg(e)));
   }, []);
+
+  const testEngine = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const r = await api.webSearchConfig.search('graph neural network');
+      if (r.results.length > 0) {
+        setTestResult({ ok: true, text: `连通正常（${r.provider || '当前引擎'}），返回 ${r.results.length} 条结果` });
+      } else if (r.notice) {
+        setTestResult({ ok: false, text: r.notice });
+      } else {
+        setTestResult({ ok: false, text: '搜索源可达但 0 结果，请更换关键词或 provider' });
+      }
+    } catch (e) {
+      setTestResult({ ok: false, text: errMsg(e) });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const save = async (patch: Partial<WebSearchConfig>) => {
     setBusy(true);
@@ -59,7 +81,8 @@ export function WebSearchSettings() {
             value={cfg.provider}
             onChange={(v: string) => save({ provider: v as WebSearchConfig['provider'] })}
             options={[
-              { value: 'duckduckgo', label: 'DuckDuckGo（零配置兜底）' },
+              { value: 'so360', label: '360 搜索（零配置，国内可达）' },
+              { value: 'duckduckgo', label: 'DuckDuckGo（境外网络）' },
               { value: 'searxng', label: `SearXNG 自部署${cfg.available?.searxng ? ' ✓已配置' : ''}` },
               { value: 'tavily', label: `Tavily${cfg.available?.tavily ? ' ✓' : ''}` },
               { value: 'serper', label: `Serper（Google SERP）${cfg.available?.serper ? ' ✓' : ''}` },
@@ -108,8 +131,22 @@ export function WebSearchSettings() {
         >
           {cfg.chatFallback ? '关闭 chat 联网兜底' : '开启 chat 联网兜底'}
         </Button>
-        <span className="text-xs text-slate-400">开启后：知识库无命中的问题会按当前 Provider 搜公开网页作为背景资料（来源卡片标注 🌐）</span>
+        <Button variant="outline" disabled={testing} onClick={() => void testEngine()}>
+          {testing ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : null} 测试当前引擎
+        </Button>
+        <span className="text-xs text-slate-400 flex-1 min-w-[12rem]">
+          开启后：知识库无命中的问题会按当前 Provider 搜公开网页作为背景资料（来源卡片标注 🌐）
+        </span>
       </div>
+
+      {testResult && (
+        <div
+          className={`text-xs mt-2 leading-relaxed rounded-md border px-3 py-2 ${testResult.ok ? 'border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300' : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300'}`}
+          role="status"
+        >
+          {testResult.ok ? '✓ ' : '⚠ '}{testResult.text}
+        </div>
+      )}
 
       {msg && (
         <div className={`text-xs mt-2 ${msg.startsWith('保存失败') ? 'text-rose-600' : 'text-teal-600'}`} role="status">

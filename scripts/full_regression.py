@@ -3,7 +3,7 @@ import os
 """SciFlow 全量回归测试 v6 — 覆盖全部 66 个路由（含 guardrail 拒参 / RAG 混合检索 / usage 成本统计专项）
 
 基线数字（本机全新库 + AI_MOCK=1 实测）：
-  **PASS 184 / FAIL 0 / KNOWN 0**（v1.0.1：P1/P2 平台化替换 + R1-R8 存量缺口修复后的当前契约）。
+  **PASS 238 / FAIL 0 / KNOWN 0**（当前 v1.9.5 契约；KNOWN 机制保留但当前为空集）。
   历史：替换期 KNOWN 11 项存量缺口（对象数组作者/指纹回填/BibTeX/RIS/中文 FTS/APA 排序/
   流水线 qualityReports/筛选回包/25.1 命中语义等）已全部修复，KNOWN_GAPS 机制保留（当前为空集）：
   新失败一律计入 FAIL 且 exit 1，不允许隐藏。
@@ -217,6 +217,106 @@ if tools:
 st, d = req("GET", "/api/mcp/external")
 check("MCP 外部服务器列表", st == 200 and isinstance(d, list), f"{st}")
 
+# ---------- 4.5 配置中心（角色/约束/钩子/权限/审计） ----------
+st, cfg = req("GET", "/api/config")
+check("配置中心快照 GET /api/config", st == 200 and cfg.get("permission") and isinstance(cfg.get("roles"), list), f"{st}")
+base_mode = (cfg.get("permission") or {}).get("mode") if isinstance(cfg, dict) else None
+check("权限档合法（strict/balanced/open/unrestricted）", base_mode in ("strict", "balanced", "open", "unrestricted"), f"{base_mode}")
+if isinstance(cfg, dict):
+    check("核心保护项 ≥7", len((cfg.get("permission") or {}).get("coreProtected") or []) >= 7, f"{len((cfg.get('permission') or {}).get('coreProtected') or [])}")
+    check("默认角色唯一", len([r for r in (cfg.get("roles") or []) if r.get("isDefault") == 1]) == 1)
+
+# 恢复全面放开后再写（回归可能跑在 strict 档的库上；升档需逐级）
+for _m in ("balanced", "open", "unrestricted"):
+    req("POST", "/api/config/permission", {"mode": _m})
+tag = f"regression-{int(time.time())}"
+st, cons = req("POST", "/api/config/constraints", {"title": tag, "rule": "回归校验约束", "level": "must", "scope": "all"})
+check("约束创建 POST", st in (200, 201) and any(c.get("title") == tag for c in cons or []), f"{st}")
+cons_id = next((c["id"] for c in cons or [] if c.get("title") == tag), None)
+st, pv = req("GET", "/api/config/preview?scope=chat")
+check("约束进入 chat 注入预览", st == 200 and tag in (pv.get("text") or ""), f"{st}")
+if cons_id:
+    st, cons = req("POST", f"/api/config/constraints/{cons_id}", {"enabled": 0})
+    check("约束停用生效", st in (200, 201) and not any(c.get("id") == cons_id and c.get("enabled") == 1 for c in cons or []), f"{st}")
+    st, pv = req("GET", "/api/config/preview?scope=chat")
+    check("停用后不再注入", tag not in (pv.get("text") or ""), f"{st}")
+    st, _ = req("DELETE", f"/api/config/constraints/{cons_id}")
+    check("约束删除 DELETE", st == 200, f"{st}")
+
+st, hooks = req("POST", "/api/config/hooks", {"name": f"{tag}-hook", "event": "chat:before", "type": "prompt_inject", "config": {"text": "回归钩子注入文本"}})
+check("钩子创建 POST", st in (200, 201), f"{st}")
+st, pv = req("GET", "/api/config/preview?scope=chat")
+check("钩子进入注入预览", st == 200 and "回归钩子注入文本" in (pv.get("text") or ""), f"{st}")
+hook_id = next((h["id"] for h in hooks or [] if h.get("name") == f"{tag}-hook"), None)
+if hook_id:
+    st, _ = req("DELETE", f"/api/config/hooks/{hook_id}")
+    check("钩子删除 DELETE", st == 200, f"{st}")
+
+# block 钩子：命中拦截、未命中放行
+st, hooks = req("POST", "/api/config/hooks", {"name": f"{tag}-block", "event": "chat:before", "type": "block", "config": {"when": "keyword", "keywords": ["回归拦截词"], "reason": "回归拦截生效"}})
+block_id = next((h["id"] for h in hooks or [] if h.get("name") == f"{tag}-block"), None)
+st, d2 = req("POST", "/api/chat/stream", {"message": "回归拦截词 测试", "history": []})
+check("block 钩子拦截对话", st in (200, 201) and "回归拦截生效" in str(d2), f"{st} {str(d2)[:80]}")
+if block_id:
+    req("DELETE", f"/api/config/hooks/{block_id}")
+
+# 权限矩阵：strict 拒绝写且留拒绝审计
+req("POST", "/api/config/permission", {"mode": "strict"})
+st, d2 = req("POST", "/api/config/constraints", {"title": f"{tag}-denied", "rule": "x"})
+check("strict 档拒绝配置写入", st in (400, 403), f"{st}")
+st, audit = req("GET", "/api/config/audit?limit=20")
+check("拒绝操作写入审计", st == 200 and any(a.get("allowed") == 0 for a in audit or []), f"{st}")
+# 升档每次最多一级（v1.3 权限门禁）：strict → balanced → open → unrestricted 逐级解锁
+for _m in ("balanced", "open", "unrestricted"):
+    st, _d = req("POST", "/api/config/permission", {"mode": _m})
+    check(f"权限逐级解锁 {_m}", st in (200, 201), f"{st}")
+
+# 预设应用（幂等：重复应用不叠加 preset 约束）
+st, snap2 = req("POST", "/api/config/presets/academic-rigor/apply")
+check("预设应用 POST", st in (200, 201) and isinstance(snap2.get("constraints"), list), f"{st}")
+preset_count_1 = len([c for c in (snap2.get("constraints") or []) if c.get("source") == "preset"])
+st, snap3 = req("POST", "/api/config/presets/academic-rigor/apply")
+preset_count_2 = len([c for c in (snap3.get("constraints") or []) if c.get("source") == "preset"])
+check("预设重复应用不叠加", st in (200, 201) and preset_count_1 == preset_count_2, f"{preset_count_1}->{preset_count_2}")
+st, audit2 = req("GET", "/api/config/audit?limit=50")
+check("配置中心审计可读", st == 200 and isinstance(audit2, list) and len(audit2) >= 1, f"{st} {len(audit2) if isinstance(audit2, list) else '?'}")
+
+# ---------- 4.6 扩展中心（内置资产/投影/四入口/私有不外泄） ----------
+st, ext = req("GET", "/api/extensions")
+check("扩展中心快照 GET /api/extensions", st == 200 and isinstance(ext.get("assets"), list) and len(ext.get("assets") or []) >= 50, f"{st} {len(ext.get('assets') or []) if isinstance(ext, dict) else '?'}")
+if isinstance(ext, dict):
+    kinds = {k.get("value"): k for k in (ext.get("kinds") or [])}
+    check("六类资产齐全", all(k in kinds for k in ("skill", "mcp", "role", "constraint", "hook", "prompt")), f"{sorted(kinds.keys())}")
+    check("内置资产默认全启用", all(a.get("enabled") == 1 for a in (ext.get("assets") or []) if str(a.get("source","")).startswith("builtin")), "builtin enabled")
+    check("含私有优势工具", any(a.get("visibility") == "private" for a in (ext.get("assets") or [])), "private present")
+    check("模板清单齐全", len(ext.get("templates") or []) >= 6, f"{len(ext.get('templates') or [])}")
+
+st, exp = req("GET", "/api/extensions/export")
+check("扩展导出不含私有工具", st == 200 and all(a.get("visibility") != "private" for a in (exp.get("assets") or [])), f"{st}")
+
+# 手填新增（约束）→ 立即投影到 config_constraint 并可注入
+st, created = req("POST", "/api/extensions", {"kind": "constraint", "name": "回归扩展约束", "description": "d", "manifest": {"title": "回归扩展约束", "rule": "所有数值必须带单位", "level": "must", "scope": "all"}})
+check("扩展手填新增 POST", st in (200, 201) and created.get("id"), f"{st}")
+ext_id = created.get("id") if isinstance(created, dict) else None
+st, pv = req("GET", "/api/config/preview?scope=chat")
+check("扩展约束已注入 chat", st == 200 and "回归扩展约束" in (pv.get("text") or ""), f"{st}")
+if ext_id:
+    st, toggled = req("POST", f"/api/extensions/{ext_id}/toggle", {"enabled": False})
+    check("扩展停用 toggle", st in (200, 201) and toggled.get("enabled") == 0, f"{st}")
+    st, pv = req("GET", "/api/config/preview?scope=chat")
+    check("停用后不再注入", "回归扩展约束" not in (pv.get("text") or ""), f"{st}")
+    st, _ = req("DELETE", f"/api/extensions/{ext_id}")
+    check("扩展删除 DELETE", st == 200, f"{st}")
+
+# 粘贴导入 SKILL.md
+skill_md = "---\nname: regression-skill\ndescription: 回归导入技能\n---\n\n# 步骤\n1. 测试\n"
+
+st, imp = req("POST", "/api/extensions/import", {"filename": "SKILL.md", "content": skill_md})
+check("SKILL.md 导入", st in (200, 201) and (imp.get("added", 0) + imp.get("updated", 0)) >= 1, f"{st} {str(imp)[:80]}")
+# 错误格式必须返回可读错误（400）
+st, bad = req("POST", "/api/extensions/import", {"filename": "x.json", "content": '{"kind":"bad","name":"x"}'})
+check("非法格式明确报错", st in (200, 201) and len(bad.get("errors") or []) >= 1 or st == 400, f"{st}")
+
 # ---------- 5. 流水线（断点续跑相关） ----------
 if MOCK:
     # mock 模式：先种 2 条带元数据的领域文献，让 Research→Writer→renderCitations 链路真正产生引用回填
@@ -260,15 +360,21 @@ if runid:
             doc_id = final.get("documentId")
             check("流水线 e2e·documentId 回写", bool(doc_id), f"doc={doc_id}")
             step_map = {s["key"]: s for s in final.get("steps", [])}
-            check("流水线 e2e·质量门落库总分≥80", step_map.get("quality-gate", {}).get("output", "").startswith("总分 8"),
-                  str(step_map.get("quality-gate", {}).get("output")))
+            # v1.5 契约：门禁分数以确定性客观检查器为准，不再断言「≥80」——
+            # mock 网关会重复输出段落，触发真实「重复段落」硬伤（40 分封顶），那是正确行为。
+            # 这里断言的是**一致性**：流水线落库分数必须等于同一文书的客观检查分数。
+            qg_out = step_map.get("quality-gate", {}).get("output", "")
+            sa, audit = req("GET", f"/api/documents/{doc_id}/objective-audit")
+            audit_score = ((audit or {}).get("report") or {}).get("totalScore") if sa == 200 else None
+            check("流水线 e2e·质量门分=客观检查分", bool(qg_out.startswith("总分 ")) and audit_score is not None and qg_out == f"总分 {audit_score}/100",
+                  f"gate={qg_out!r} audit={audit_score}")
             tv_step = step_map.get("topic-verify", {})
             check("流水线 e2e·F-2.7 步骤起止时间戳", isinstance(tv_step.get("startedAt"), int) and isinstance(tv_step.get("endedAt"), int),
                   f"startedAt={tv_step.get('startedAt')} endedAt={tv_step.get('endedAt')}")
             # qualityReports / citations(format=pipeline) 产物断言
             sq, qd = req("GET", f"/api/quality?documentId={doc_id}")
-            check("流水线 e2e·qualityReports 落库", sq == 200 and isinstance(qd, list) and len(qd) >= 1 and qd[0].get("totalScore", 0) >= 80,
-                  f"st={sq} n={len(qd) if isinstance(qd, list) else '?'}")
+            check("流水线 e2e·qualityReports 落库且分=客观分", sq == 200 and isinstance(qd, list) and len(qd) >= 1 and qd[0].get("totalScore") == audit_score,
+                  f"st={sq} n={len(qd) if isinstance(qd, list) else '?'} score={(qd[0].get('totalScore') if isinstance(qd, list) and qd else None)} audit={audit_score}")
             sc, cd = req("GET", f"/api/documents/{doc_id}/citations")
             n_pipe = sum(1 for c in cd if c.get("format") == "pipeline") if isinstance(cd, list) else 0
             check("流水线 e2e·citations 回填 format=pipeline", sc == 200 and n_pipe >= 1, f"st={sc} n={n_pipe}")
@@ -302,7 +408,18 @@ if qid:
 st, d2 = req("GET", "/api/quality")
 check("质量评分列表 GET", st == 200 and isinstance(d2, list), f"{st}")
 
-# ---------- 8. 文献调研（本地文献库检索，已移除国外在线源） ----------
+# ---------- 8. 文献调研（本地文献库检索 + 学术库发现检索） ----------
+# v1.7：学术库发现检索（AI_MOCK=1 时必须优雅降级为 enabled=false，不触网）
+st, d = req("POST", "/api/references/discover", {"query": "graph neural network", "limit": 3})
+check("学术库发现检索（mock 下优雅降级）",
+      st == 201 or st == 200,
+      f"st={st}")
+if st in (200, 201) and isinstance(d, dict):
+    check("发现检索返回结构化契约（enabled/hits/notice）",
+          isinstance(d.get("enabled"), bool) and isinstance(d.get("hits"), list) and isinstance(d.get("notice"), str),
+          f"keys={sorted(d.keys())}")
+    check("AI_MOCK 下不访问外网（enabled=false）", d.get("enabled") is False, f"enabled={d.get('enabled')}")
+
 st, d = req("POST", "/api/references/search", {"query": "graph neural network node classification", "limit": 5})
 hits = d.get("hits") if isinstance(d, dict) else (d if isinstance(d, list) else [])
 check("文献检索 search（本地文献库）", st in (200, 201) and isinstance(hits, list), f"st={st} hits={len(hits) if isinstance(hits, list) else 0}")
@@ -1094,6 +1211,73 @@ if p26id:
               st6 == 200 and db_.get("anchorTotal") == 0 and db_.get("score", 100) <= 60
               and any("未检测到引用" in str(i) for i in (db_.get("issues") or [])),
               f"body={str(db_)[:160]}")
+
+        # 27.6 残留未渲染标记（v1.9.1）：[文献N] 是 citation-renderer 的越界降级产物，
+        # 此前 audit 只认 [n]/[Ref:n]/【n】——「引用全断」被误报成「没有引用」（60 分假绿）
+        req("PATCH", f"/api/documents/{d4id}", {"content": "## 引言\n已有研究表明[文献1]，另有[文献2]与[Ref:3]。"})
+        st7, dc = req("GET", f"/api/documents/{d4id}/citation-audit")
+        check("27.6 残留标记 [文献N]/[Ref:N] 识别为红牌（residualAnchors=3 且 score 重罚）",
+              st7 == 200 and dc.get("residualAnchors") == 3 and dc.get("score", 100) <= 20
+              and any("未渲染的引用标记" in str(i) for i in (dc.get("issues") or [])),
+              f"body={str(dc)[:200]}")
+        # 27.7 客观质量检查器同样拦截残留标记（硬伤封顶 40）
+        st8, dobj = req("GET", f"/api/documents/{d4id}/objective-audit")
+        obj = (dobj or {}).get("report", {})
+        check("27.7 客观检查器：残留标记计入占位硬伤（totalScore 封顶 40）",
+              st8 == 200 and obj.get("hardFails") and any("未渲染引用标记" in str(h) for h in obj.get("hardFails", []))
+              and obj.get("totalScore", 100) <= 40,
+              f"body={str(dobj)[:200]}")
+
+# ---------- 27.8 流水线运行参数（v1.9.1 补接线：预算/重排/联网此前只能改库） ----------
+st, ps = req("GET", "/api/customization/pipeline-settings")
+check("27.8a pipeline-settings 返回运行参数四元组", st == 200 and all(k in ps for k in ("researchDepth", "tokenBudget", "retrievalRerank", "webSearch")),
+      f"st={st} body={str(ps)[:160]}")
+check("27.8b 预算缺省口径与流水线一致（300k）", ps.get("tokenBudget") == 300_000, f"tokenBudget={ps.get('tokenBudget')}")
+st2, ps2 = req("POST", "/api/customization/pipeline-settings", {"tokenBudget": 123456, "retrievalRerank": True, "webSearch": True})
+check("27.8c 四项可写且回读一致", st2 in (200, 201) and ps2.get("tokenBudget") == 123456 and ps2.get("retrievalRerank") is True and ps2.get("webSearch") is True,
+      f"st={st2} body={str(ps2)[:160]}")
+st3, ps3 = req("POST", "/api/customization/pipeline-settings", {"tokenBudget": -5})
+check("27.8d 非法预算 400（不落库）", st3 == 400 and ps2.get("tokenBudget") == 123456, f"st={st3} body={str(ps3)[:120]}")
+st4, ps4 = req("POST", "/api/customization/pipeline-settings", {"researchDepth": 9})
+check("27.8e 非法深度 400", st4 == 400, f"st={st4} body={str(ps4)[:120]}")
+st5, ps5 = req("POST", "/api/customization/pipeline-settings", {"tokenBudget": 300_000, "retrievalRerank": False, "webSearch": False})
+check("27.8f 恢复默认（预算 300k / 两开关 off）", st5 in (200, 201) and ps5.get("tokenBudget") == 300_000 and ps5.get("retrievalRerank") is False and ps5.get("webSearch") is False,
+      f"body={str(ps5)[:160]}")
+
+# 27.9 研究缺口路由（v1.9.1 修复：@Body('field') 被全局管道误判，该路由此前全量 400）
+st, gres = req("POST", "/api/references/gap", {"projectId": p26id, "topic": "图神经网络"})
+check("27.9 references/gap 不再被管道误杀（200/201 或业务性 400，而非「请求体必须是 JSON 对象」）",
+      st in (200, 201) or (st == 400 and "请求体必须是 JSON 对象" not in str(gres)),
+      f"st={st} body={str(gres)[:160]}")
+
+# ---------- 27.10 网搜反静默降级（v1.9.2）：空结果必须带 notice，provider 链可见 ----------
+st, ws = req("POST", "/api/web/search", {"q": "图神经网络 综述"})
+check("27.10a /web/search 返回 provider 与 notice 字段（结构升级向后兼容）",
+      st in (200, 201) and isinstance(ws, dict) and "provider" in ws and "notice" in ws and isinstance(ws.get("results"), list),
+      f"st={st} keys={list((ws or {}).keys())[:8]}")
+st2, ws2 = req("POST", "/api/web/search", {"q": ""})
+check("27.10b 空 q 仍返回 error 提示（历史契约保留）", st2 in (200, 201) and ws2.get("error") == "q required", f"st={st2} body={str(ws2)[:120]}")
+st3, cfgw = req("GET", "/api/web/config")
+check("27.10c provider 清单含 so360（国内可达免 Key 源）且 available 更新",
+      st3 == 200 and "so360" in str(cfgw.get("available", {})), f"st={st3} avail={cfgw.get('available')}")
+
+# ---------- 27.11 质量评审标准（v1.9.4 多档可切换：阈值与及格线随标准缩放） ----------
+st, ps0 = req("GET", "/api/customization/pipeline-settings")
+check("27.11a pipeline-settings 返回质量标准三元组（key/label/passScore）",
+      st == 200 and all(k in ps0 for k in ("qualityStandard", "qualityStandardLabel", "qualityPassScore")),
+      f"st={st} keys={[k for k in (ps0 or {}) if 'quality' in k]}")
+check("27.11b 默认标准=standard 且及格线 80",
+      ps0.get("qualityStandard") == "standard" and ps0.get("qualityPassScore") == 80,
+      f"std={ps0.get('qualityStandard')} pass={ps0.get('qualityPassScore')}")
+st2, ps2 = req("POST", "/api/customization/pipeline-settings", {"qualityStandard": "strict"})
+check("27.11c 切到 strict：label 与及格线同步（85）",
+      st2 in (200, 201) and ps2.get("qualityStandard") == "strict" and ps2.get("qualityPassScore") == 85,
+      f"st={st2} std={ps2.get('qualityStandard')} pass={ps2.get('qualityPassScore')}")
+st3, ps3 = req("POST", "/api/customization/pipeline-settings", {"qualityStandard": "不存在的档"})
+check("27.11d 非法标准 400（fail-closed，不静默回落）", st3 == 400, f"st={st3} body={str(ps3)[:120]}")
+st4, ps4 = req("POST", "/api/customization/pipeline-settings", {"qualityStandard": "standard"})
+check("27.11e 恢复 standard", st4 in (200, 201) and ps4.get("qualityStandard") == "standard",
+      f"st={st4} std={ps4.get('qualityStandard')}")
 
 # ---------- 28. v1.0.1 停止接口 / 联网开关 / 分数口径 ----------
 st, d = req("POST", "/api/pipeline", {"projectId": pid, "topic": "停止接口回归验证"})

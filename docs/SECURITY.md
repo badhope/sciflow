@@ -84,7 +84,7 @@
 
 | 项 | 等级 | 状态 | 理由 |
 |---|---|---|---|
-| 依赖 CVE 扫描 | [未确认] | 未执行 | `pnpm audit` 使用的 npmmirror 镜像不提供 advisories 端点（`ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS`）；需换官方 registry 或接入 SCA 工具 |
+| 依赖 CVE 扫描 | ✅ | 已执行 | 2026-11-01 使用官方 npm registry：生产依赖与全量依赖均无 high/critical，`pnpm audit --registry=https://registry.npmjs.org --audit-level high` 返回 `No known vulnerabilities found`；剩余低/中危也已通过定点 overrides 清除 |
 | 无 TLS 终结 | Medium | 设计如此 | 由反代负责；单机回环部署不需要 |
 | 无审计日志（谁改了什么） | Medium | 未实现 | 单用户场景价值低；企业模式建议补 `audit_log` 表 |
 | `project.owner_id` 历史数据为空 | Low | 已定义行为 | 企业模式下不可见，需管理员显式迁移；不做「先到先得」认领 |

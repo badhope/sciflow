@@ -92,14 +92,16 @@ export function useChatSession(opts: {
   }, [opts.onMessagesChange]);
 
   // 卸载即中止流：mountedRef 只能抑制 setState，SSE 连接要显式 abort（否则切页后请求继续读到服务端结束）
-  useEffect(
-    () => () => {
+  // StrictMode 开发模式会「挂载→清理→再挂载」：清理置 false 后必须在重新挂载时复位 true，
+  // 否则 onDone/onError 全被吞掉，界面永远停在「正在生成…」（本次浏览器实测复现）。
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
       mountedRef.current = false;
       abortRef.current?.();
       abortRef.current = null;
-    },
-    [],
-  );
+    };
+  }, []);
 
   // 持久化（跳过纯流式瞬态）
   useEffect(() => {

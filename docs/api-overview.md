@@ -1,6 +1,6 @@
 # SciFlow 后端 API 概览
 
-> 本文基于 `apps/server/src` 当前代码（HEAD `49bdff0`）整理，所有路由、方法、请求体均与实际 controller 一一对应。
+> 本文概述 `apps/server/src` 的主要接口；完整路由和最新契约以运行时 OpenAPI 文档及控制器实现为准。
 > 后端为 NestJS 单体应用，统一挂在 `/api` 前缀下；默认仅监听 `127.0.0.1:3000`。
 
 ## 1. 通用约定
@@ -271,9 +271,10 @@ NotebookLM 式本地知识库：上传资料 → 分块 → BM25+向量混合检
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/health` | `{ status, time, ai: { configured, model } }` |
+| GET | `/api/health` | 返回状态、数据库、认证模式、AI 配置和检索能力；不发起真实模型请求 |
+| GET | `/api/health/deep` | 返回数据库、向量与 AI 配置探针；`checks.ai.mock` 区分 mock 模式 |
 
-> `ai/` 目录不含 controller，是被各模块注入的统一 LLM 服务（OpenAI 兼容协议 + 令牌桶限流 + mock 网关）。
+> `ai/` 目录不含 controller，是被各模块注入的统一 LLM 服务；真实模型连通性由设置页测试接口验证。
 
 ## 3. 调用示例（curl）
 

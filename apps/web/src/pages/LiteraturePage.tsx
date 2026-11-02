@@ -1,6 +1,6 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Project, Reference, EvidenceResult, ExtractedPaper, DeepDiveResult, GapResult, PaperComparisonResult, ReferenceGraph, ExtractionField, ExtractionTableResult, ScreeningItem } from '../types';
+import type { Project, Reference, DiscoveredReference, EvidenceResult, ExtractedPaper, DeepDiveResult, GapResult, PaperComparisonResult, ReferenceGraph, ExtractionField, ExtractionTableResult, ScreeningItem } from '../types';
 import { Card, errMsg } from '../components/ui';
 import { api } from '../api/client';
 import { ToastContext } from '../App';
@@ -11,7 +11,7 @@ export function LiteraturePage({ project }: { project: Project }) {
   const toast = useContext(ToastContext);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
-  const [hits, setHits] = useState<Reference[]>([]);
+  const [hits, setHits] = useState<(Reference | DiscoveredReference)[]>([]);
   const [refs, setRefs] = useState<Reference[]>([]);
   const [imported, setImported] = useState<Set<string>>(new Set());
   const [tool, setTool] = useState<Tool>('summary');

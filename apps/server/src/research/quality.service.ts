@@ -2,7 +2,10 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { eq, desc, and, gte } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
-import { qualityReports, reviewComments, documents } from '../db/schema';
+import { qualityReports, reviewComments, documents, citations } from '../db/schema';
+import { checkPaperQuality } from '../common/quality-audit';
+import { parseQualityStandard, type QualityStandardKey } from '../common/quality-standards';
+import { appSettings } from '../db/schema';
 import { AiService, ReviewResult } from '../ai/ai.service';
 import { parseJson } from '../common/json-guard';
 
@@ -16,6 +19,16 @@ const DIM_CN: Record<string, string> = {
   figures: '图表',
   format: '格式',
 };
+
+/** 读全局评审标准（app_setting quality_standard；非法值 fail-closed 回落 standard） */
+function readQualityStandard(): QualityStandardKey {
+  try {
+    const row = db.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, 'quality_standard')).get();
+    return parseQualityStandard(row?.value).key;
+  } catch {
+    return 'standard';
+  }
+}
 
 @Injectable()
 export class QualityService {
@@ -43,6 +56,10 @@ export class QualityService {
   }
 
   /** 某文档的历史评分（可对比） */
+  /** 全量评分历史（仅本地单用户模式；企业模式由 controller 拒绝） */
+  historyAll() {
+    return db.select().from(qualityReports).orderBy(desc(qualityReports.createdAt));
+  }
   history(documentId: string) {
     return db.select().from(qualityReports).where(eq(qualityReports.documentId, documentId)).orderBy(desc(qualityReports.createdAt));
   }
@@ -58,6 +75,54 @@ export class QualityService {
       .get();
     if (!row) return null;
     return { ...row, scores: parseJson<Record<string, number>>(row.scores, {}) };
+  }
+
+  /**
+   * 项目内全部文档的「最新分」总览（v1.8）。
+   *
+   * 为什么需要：质量页此前只能一篇一篇选文档看分，而真实痛点是「哪几篇还没达标」。
+   * 这里一次算出所有文档的**客观分**（确定性、零模型成本）与最新 LLM 分，
+   * 按客观分升序返回（最差优先），让用户在总览层直接看到需要回炉的稿件。
+   *
+   * 口径说明：客观分对「当前正文」计算（改稿后立即反映），LLM 分取库里最新一条历史记录
+   * （那是当时稿件的评分，可能与当前正文不一致）—— 两者都带出来但不混算。
+   */
+  projectOverview(projectId: string) {
+    if (!projectId?.trim()) throw new BadRequestException('projectId 必填');
+    const rows = db.select().from(documents).where(eq(documents.projectId, projectId)).all();
+    const items = rows.map((doc) => {
+      const citationCount = (db.select().from(citations).where(eq(citations.documentId, doc.id)).all() || []).length;
+      const report = checkPaperQuality(String(doc.content || ''), { citationCount, standard: readQualityStandard() });
+      const latestLlm = db
+        .select()
+        .from(qualityReports)
+        .where(eq(qualityReports.documentId, doc.id))
+        .orderBy(desc(qualityReports.createdAt))
+        .get();
+      return {
+        documentId: doc.id,
+        title: doc.title,
+        status: doc.status || 'draft',
+        updatedAt: doc.updatedAt,
+        chars: report.stats.chars,
+        objectiveScore: report.totalScore,
+        fingerprint: report.fingerprint,
+        hardFailCount: report.hardFails.length,
+        hardFails: report.hardFails.slice(0, 3),
+        llmScore: latestLlm?.totalScore ?? null,
+        llmScoredAt: latestLlm?.createdAt ?? null,
+        passed: report.totalScore >= 80,
+      };
+    });
+    items.sort((a, b) => a.objectiveScore - b.objectiveScore || b.updatedAt - a.updatedAt);
+    return {
+      projectId,
+      total: items.length,
+      passed: items.filter((i) => i.passed).length,
+      failed: items.filter((i) => !i.passed).length,
+      unscored: items.filter((i) => i.chars === 0).length,
+      items,
+    };
   }
 
   get(id: string) {

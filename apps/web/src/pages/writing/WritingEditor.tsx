@@ -5,6 +5,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import type { Doc } from '../../types';
 import { Badge, Card } from '../../components/ui';
 import { SplitPane } from '../../components/SplitPane';
+import { registerWritingEditorHandle } from './editor-handle';
 
 /**
  * WritingEditor — 中间编辑/预览主区。
@@ -18,19 +19,7 @@ import { SplitPane } from '../../components/SplitPane';
  *    `{ getCursor, setCursor }` 做引用锚点/实验结论的跨组件光标定位。
  */
 
-export interface WritingEditorHandle {
-  /** 当前光标（选区起点）；编辑器未挂载返回 null */
-  getCursor(): number | null;
-  /** 聚焦并把光标放到指定位置 */
-  setCursor(pos: number): void;
-}
-
-let handle: WritingEditorHandle | null = null;
-
-/** 供 WritingPage 等父级组件获取编辑器句柄（挂载后可用，卸载即失效） */
-export function getWritingEditorHandle(): WritingEditorHandle | null {
-  return handle;
-}
+export type { WritingEditorHandle } from './editor-handle';
 
 export function WritingEditor({
   doc,
@@ -70,7 +59,7 @@ export function WritingEditor({
   }, []);
 
   useEffect(() => {
-    handle = {
+    registerWritingEditorHandle({
       getCursor: () => {
         const view = cmRef.current?.view;
         if (!view) return null;
@@ -82,9 +71,9 @@ export function WritingEditor({
         view.focus();
         view.dispatch({ selection: { anchor: pos } });
       },
-    };
+    });
     return () => {
-      handle = null;
+      registerWritingEditorHandle(null);
     };
   }, []);
 

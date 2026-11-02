@@ -189,7 +189,7 @@ function StudyReviewCard({ docs }: { docs: KnowledgeDoc[] }) {
   const leaves = useMemo(() => (doc ? buildLeaves(doc.name, detail) : []), [doc, detail]);
 
   return (
-    <Card className="p-4 sm:p-5 mb-4">
+    <Card tone="accent" className="p-4 sm:p-5 mb-4">
       <SectionTitle>
         <span className="flex items-center gap-2">
           <Brain size={16} className="text-teal-600" /> 学习复盘
@@ -437,7 +437,7 @@ export function KnowledgePage({ project }: { project: Project }) {
       <ErrorBox message={error} />
 
       {/* 上传区 */}
-      <Card className="p-4 sm:p-5 mb-4">
+      <Card tone="inset" className="p-4 sm:p-5 mb-4">
         <SectionTitle>
           <span className="flex items-center gap-2">
             <Upload size={16} className="text-teal-600" /> 上传研究资料
@@ -535,7 +535,7 @@ export function KnowledgePage({ project }: { project: Project }) {
           {docs.length === 0 ? (
             <EmptyState illustration="knowledge" title="知识库还没有资料" hint="上传 PDF / Markdown / 文本后即可基于资料提问" />
           ) : (
-            <div className="space-y-2">
+            <div className="list-heavy space-y-2">
               {docs.map((d) => (
                 <div key={d.id} className="flex items-center gap-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 px-3 py-2.5">
                   <BookMarked size={15} className="text-teal-500 shrink-0" />
@@ -620,7 +620,7 @@ export function KnowledgePage({ project }: { project: Project }) {
       <StudyReviewCard docs={docs} />
 
       {/* RAG 问答 */}
-      <Card className="p-4 sm:p-5">
+      <Card tone="inset" className="p-4 sm:p-5">
         <SectionTitle>
           <span className="flex items-center gap-2">
             <MessageSquare size={16} className="text-teal-600 dark:text-teal-300" /> 基于资料问答

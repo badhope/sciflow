@@ -1,0 +1,59 @@
+name: Bug report
+description: Something does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please do not paste API keys or tokens — redact them.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Include the exact error text and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start the server with ...
+        2. Open ...
+        3. Click ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: From package.json or the Settings page.
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Runtime mode
+      options:
+        - Web app (pnpm dev)
+        - Built server (node dist)
+        - Desktop app
+        - Docker
+    validations:
+      required: true
+  - type: dropdown
+    id: ai-mode
+    attributes:
+      label: AI mode
+      options:
+        - Mock gateway (AI_MOCK=1)
+        - Real model endpoint
+        - Not configured
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Server log lines or browser console output, with secrets redacted.
+      render: shell

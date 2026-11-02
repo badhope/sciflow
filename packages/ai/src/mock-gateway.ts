@@ -62,16 +62,30 @@ function j(obj: unknown): string {
 }
 
 /** 从 POLISH prompt 中抽出「待处理文本」原文 */
+/**
+ * 从润色 prompt 中抽出待处理正文。
+ *
+ * 历史缺陷（v1.9.3 修复）：只认「待处理文本：」，而 `POLISH` 模板用的是
+ * 「待处理文本：」（模板）与「待处理正文：」（自定义提示词分支）两种措辞。
+ * 措辞不一致时本函数返回整段 prompt，mock 又把整段 prompt 当「润色结果」返回，
+ * 随后触发 ai.service 的失败保护（< 原长 30%）→ **润色永远返回空正文 + 「输出异常」**。
+ * 现在两种标记都识别，并兜底到最后一个冒号后的内容。
+ */
 function extractPolishText(prompt: string): string {
-  const start = prompt.indexOf('待处理文本：');
-  if (start < 0) return prompt;
-  let body = prompt.slice(start + '待处理文本：'.length);
-  const endMarkers = ['\n\n请只输出一个合法', '\n\n要求：'];
-  for (const m of endMarkers) {
-    const idx = body.indexOf(m);
-    if (idx >= 0) body = body.slice(0, idx);
+  const markers = ['待处理文本：', '待处理正文：'];
+  for (const marker of markers) {
+    const start = prompt.indexOf(marker);
+    if (start < 0) continue;
+    let body = prompt.slice(start + marker.length);
+    const endMarkers = ['\n\n请只输出一个合法', '\n\n要求：', '\n\n请只输出'];
+    for (const m of endMarkers) {
+      const idx = body.indexOf(m);
+      if (idx >= 0) body = body.slice(0, idx);
+    }
+    const trimmed = body.trim();
+    if (trimmed) return trimmed;
   }
-  return body.trim();
+  return prompt.trim();
 }
 
 /** 从「提炼研究题目」prompt 中抽出主题原文 */
@@ -97,6 +111,34 @@ const ROUTE_TABLE: RouteRule[] = [
   { matches: (p) => p.includes('反共识') && p.includes('"primary"'), respond: () => j({ primary: MOCK_OUTLINE, variants: [{ title: '主流范式的系统性缺陷：对消息传递统一框架的质疑', sections: [{ title: '引言：被掩盖的失败案例', subsections: ['主流叙事如何形成'] }, { title: '消息传递的表达力上界', subsections: ['理论反例'] }, { title: '反例与边界条件', subsections: ['异质图失效场景'] }, { title: '重构研究议程', subsections: ['超越消息传递'] }] }, { title: '以负结果为中心的图神经网络研究断代史', sections: [{ title: '引言：负结果的认识论价值', subsections: [] }, { title: '第一次浪潮及其退潮', subsections: ['谱方法为何沉寂'] }, { title: '断代框架', subsections: ['按学派论战重组'] }, { title: '对未来的启示', subsections: [] }] }] }) },
   // 1.6) F3 实验设计助手
   { matches: (p) => p.includes('实验设计') && p.includes('"sampleHint"'), respond: () => j({ objective: '验证时序感知聚合相对均匀采样能显著提升动态图节点分类性能', variables: { independent: ['邻居采样是否引入时序衰减因子（有/无）'], dependent: ['节点分类 Macro-F1'], controlled: ['训练轮数=200', '隐藏维度=64', '数据集划分固定种子'] }, groups: [{ name: '实验组', role: 'treatment', description: '时序感知采样聚合' }, { name: '对照基线', role: 'control', description: '标准 GraphSAGE 均匀采样' }], sampleHint: '每配置 5 个随机种子，报均值±标准差；配对 t 检验 α=0.05，power≥0.8', procedure: ['固定数据集与划分', '训练实验组与对照组', '汇总指标并做显著性检验'], analysisPlan: ['主指标 Macro-F1 对比表', '消融：去掉时序衰减因子'], risks: ['动态图数据集规模有限，方差可能偏大'] }) },
+  // 1.8) 扩展中心一键 AI 生成（资产生成器）：此前无路由，走默认兜底返回普通文本，
+  // 导致 extension.generate 在 mock 模式（CI/验收）必然 JSON 解析失败——该功能从未被端到端冒烟过。
+  // 注意：匹配特征必须取自 **user message**（ getLastUserContent 只看最后一条 user），
+  // 「资产生成器」在 system 消息里，用它匹配永远不命中。
+  {
+    matches: (p) => p.includes('资产类型：') && p.includes('输出 JSON 示例结构'),
+    respond: (p) => {
+      const kind = /资产类型：(\w+)/.exec(p)?.[1] || 'skill';
+      const brief = /用户需求：([\s\S]*?)\n\n输出 JSON/.exec(p)?.[1]?.trim() || '探针技能';
+      if (kind === 'skill') {
+        return j({
+          kind: 'skill',
+          name: '探针技能（mock）',
+          description: brief.slice(0, 100),
+          manifest: { mode: 'prompt', instructions: '按以下步骤执行：\n1. 明确输入与预期输出\n2. 分三步完成：定位→比对→归纳\n3. 输出结构化结论，不确定处显式标注\n拒答边界：资料不足时说明缺口，不编造。' },
+        });
+      }
+      if (kind === 'role') {
+        return j({
+          kind: 'role',
+          name: '探针角色（mock）',
+          description: brief.slice(0, 100),
+          manifest: { systemPrompt: '你是严谨的科研方法学顾问：先澄清问题，再给可执行建议，并标注不确定性。' },
+        });
+      }
+      return j({ kind, name: `探针${kind}（mock）`, description: brief.slice(0, 100), manifest: {} });
+    },
+  },
   // 2) 论文大纲
   { matches: (p) => p.includes('设计论文大纲') && p.includes('"sections"'), respond: () => j(MOCK_OUTLINE) },
   // 3) ReAct 思考步 —— 一律 done
@@ -104,7 +146,82 @@ const ROUTE_TABLE: RouteRule[] = [
   // 4) Reflexion 反思
   { matches: (p) => p.includes('上一轮论文质量评审给出的问题如下'), respond: () => j({ note: '补充近三年文献并规范引用', instructions: ['在相关工作节补充近三年代表性文献', '方法节补充数据集与超参数说明', '统一图表标注格式'] }) },
   // 5) 章节起草
-  { matches: (p) => p.includes('学术论文写作者') && p.includes('起草论文的一个章节'), respond: () => ['近年来，图神经网络（Graph Neural Networks, GNN）在处理图结构数据方面取得了显著进展[Ref:1]。与传统深度学习模型只能处理规整张量不同，GNN 能够直接对节点与边构成的拓扑结构进行表示学习[Ref:2]。', '主流方法遵循消息传递范式：每个节点在每一轮中聚合其邻居的特征表示，经非线性变换后更新自身状态[Ref:1]。GCN 采用归一化邻域求和，GraphSAGE 通过采样与拼接提升可扩展性，GAT 则引入注意力机制自适应地衡量邻居重要性[Ref:2]。', '在节点分类任务上，上述模型均取得了优于传统方法的性能表现，但在大规模图与异质图场景下仍存在计算开销大、泛化性不足等挑战[Ref:1]。'].join('\n\n') },
+  /**
+   * 分章起草（v1.9.3 修复）：mock 必须遵守与真实模型相同的「无文献池禁用引用」契约。
+   * 此前 mock 无论文献池是否为空都硬编码 [Ref:1]/[Ref:2]，在空池场景被渲染器降级为
+   * [文献1]/[文献2] → 引用体检残留红牌（score=0）、客观检查器计硬伤。
+   * 这不是 mock 的「合理简化」——它让「空池无引用」这条契约在 CI 里从未被真实走过。
+   * 现在按 prompt 里是否给出文献清单（`[Ref:N] 标题`）决定是否带锚点。
+   */
+  {
+    matches: (p) => p.includes('学术论文写作者') && p.includes('起草论文的一个章节'),
+    respond: (p) => {
+      const hasRefs = /\[Ref:\d+\]/.test(p);
+      const cite = (n: number) => (hasRefs ? `[Ref:${n}]` : '');
+      // 章节标题：prompt 中「章节：xxx」那一行。
+      // 必须按章节返回不同内容——否则 5 个章节产出同一段文本，
+      // 客观质量检查器会判「重复段落（同段出现 ≥3 次）」硬伤（实测发生过）。
+      const section = /章节：(.+)/.exec(p)?.[1]?.trim() || '';
+      const bodies: { re: RegExp; paras: string[] }[] = [
+        {
+          re: /引言|绪论|背景/,
+          paras: [
+            `图结构数据广泛存在于分子结构、社交网络与知识图谱等场景，其非欧几里得特性使传统卷积算子难以直接适用${cite(1)}。图神经网络以节点间的消息传递为核心机制，为这类数据提供了端到端表示学习框架。`,
+            `已有研究沿谱域方法与空域聚合两条主线展开，前者以拉普拉斯谱分解为理论基础，后者直接在邻域上定义聚合算子${cite(2)}。近期工作进一步引入注意力与几何先验，显著扩展了模型表达能力。`,
+            `本文的组织如下：第二节回顾相关工作，第三节介绍方法框架，第四节讨论实验结果，第五节总结全文并展望未来方向。`,
+          ],
+        },
+        {
+          re: /相关|综述|现状/,
+          paras: [
+            `早期图卷积方法由谱图理论导出，通过切比雪夫多项式近似降低计算复杂度${cite(1)}。这类方法的滤波器依赖全局图结构，难以泛化到不同规模的图。`,
+            `空域方法转而定义局部聚合规则，GraphSAGE 通过邻居采样把计算复杂度降到线性，GAT 则以注意力权重区分邻居贡献${cite(2)}。两类方法在节点分类基准上均取得稳定提升。`,
+            `值得注意的是，现有综述多聚焦静态同质图，对动态图、异质图与超图的系统性梳理仍显不足，这构成本文试图填补的空白。`,
+          ],
+        },
+        {
+          re: /方法|模型|框架|设计/,
+          paras: [
+            `本文采用消息传递统一框架刻画图神经网络：每一层按「消息生成—邻域聚合—状态更新」三步计算节点表示${cite(1)}。该框架可覆盖 GCN、GraphSAGE、GAT 等主流变体，并允许在聚合算子与更新函数上做替换。`,
+            `聚合算子的选择直接影响表达力：求和聚合保留度数信息，均值聚合对尺度更稳健，注意力聚合则需额外的参数开销。实践中应根据图的稀疏程度与任务类型权衡。`,
+            `为缓解深层网络的过平滑问题，本文引入残差连接与层间归一化，并在每层后接随机丢弃以防止过拟合。`,
+          ],
+        },
+        {
+          re: /结果|实验|评估|分析/,
+          paras: [
+            `本节不报告新的原始实验，而是归纳已发表研究报告的实证结果。在 Cora、Citeseer、Pubmed 三个引文网络上，主流图卷积方法的节点分类准确率普遍高于多层感知机基线${cite(1)}。`,
+            `消融研究表明，聚合算子与归一化策略的贡献最为显著，而注意力机制的增益在稠密图上更明显、在稀疏图上则可能被噪声抵消${cite(2)}。`,
+            `需要指出，各研究报告的数据划分与超参数搜索范围并不一致，跨论文的数值直接比较存在可比性风险，这也是该领域复现性争议的主要来源。`,
+          ],
+        },
+        {
+          re: /讨论|局限|挑战/,
+          paras: [
+            `尽管消息传递框架取得广泛成功，其在表达力上存在理论上界：一阶消息传递无法区分某些非同构子结构${cite(1)}。高阶结构编码与子图方法被视为突破该上界的主要路径。`,
+            `工程层面，大图上的邻居采样与分布式训练仍是主要瓶颈；学术层面，异质图与动态图的时序建模尚缺乏统一评测协议${cite(2)}。`,
+            `此外，图神经网络的鲁棒性研究仍处于早期，针对对抗性边扰动的防御机制尚未形成共识方案。`,
+          ],
+        },
+        {
+          re: /结论|总结|展望/,
+          paras: [
+            `本文以消息传递为主线梳理了图神经网络的方法谱系，对比了谱域与空域两类技术路线，并讨论了其在节点分类等任务上的实证表现${cite(1)}。`,
+            `未来工作可从三个方向推进：其一是突破一阶消息传递的表达力上界，其二是建立面向动态图与异质图的统一评测基准，其三是探索更可解释的聚合机制${cite(2)}。`,
+            `总体而言，图神经网络仍处于快速发展阶段，方法创新与工程落地之间存在明显的时间差，这为后续研究提供了充足空间。`,
+          ],
+        },
+      ];
+      const hit = bodies.find((b) => b.re.test(section));
+      if (hit) return hit.paras.join('\n\n');
+      // 未识别章节：按标题派生不同开头，避免全篇重复
+      return [
+        `围绕「${section || '本章主题'}」，本节从问题定义、现有方案与开放问题三个层面展开论述${cite(1)}。`,
+        `就现有方案而言，主流做法在精度与效率之间做出不同取舍，尚无在所有场景下占优的统一方案${cite(2)}。`,
+        `综合来看，该方向仍存在若干尚未解决的关键问题，值得进一步研究。`,
+      ].join('\n\n');
+    },
+  },
   // 6) 7 维评审
   { matches: (p) => p.includes('同行评审专家') && p.includes('"scores"'), respond: () => j({ scores: { literature: 88, logic: 86, citation: 90, language: 89, novelty: 84, figures: 85, format: 87 }, feedback: '整体结构完整、论证链清晰；建议补充近三年文献的对比分析；图表标注可进一步统一规范。' }) },
   // 7) 润色
@@ -141,6 +258,28 @@ const ROUTE_TABLE: RouteRule[] = [
   { matches: (p) => p.includes('阅读下面这封编辑部来稿邮件') && p.includes('suggestedStatus'), respond: () => j({ suggestedStatus: 'minor_revision', confidence: 0.9, reason: '邮件明确小修后录用', date: '2026-10-31' }) },
   // 23) 主题提炼
   { matches: (p) => p.includes('把以下研究主题提炼为一句可执行的研究题目'), respond: (p) => extractTopic(p) },
+  /**
+   * 24) 检索重排（v1.9.3 新增）：此前完全没有 mock 规则 → 开启 retrieval_rerank 后
+   * mock 返回兜底问答文本 → rerankChunks 的 zod 解析失败 → 被 catch 静默吞掉 →
+   * 「重排已开启」但排序从未变化。这类「配置了但静默不生效」必须在 mock 层就暴露。
+   * 打分口径：包含问题关键词的候选给高分，其余给低分（确定性、可复现）。
+   */
+  {
+    matches: (p) => p.includes('为每块的相关性打 0-10 分') && p.includes('"scores"'),
+    respond: (p) => {
+      const q = /问题：(.+)/.exec(p)?.[1]?.trim() || '';
+      const ids = [...p.matchAll(/id=([^\s]+)/g)].map((m) => m[1]);
+      const tokens = q.toLowerCase().split(/[\s，。、？！,?!]+/).filter((t) => t.length >= 2);
+      const scores = ids.map((id, i) => {
+        const block = new RegExp(`id=${id}\\s*\\n([\\s\\S]{0,200})`).exec(p)?.[1] || '';
+        const hay = block.toLowerCase();
+        const hit = tokens.filter((t) => hay.includes(t)).length;
+        // 有命中 → 8-10 分；无命中 → 1-3 分（保证排序发生变化，可被断言观测到）
+        return { id, score: hit > 0 ? Math.min(10, 8 + hit) : 1 + (i % 3) };
+      });
+      return j({ scores });
+    },
+  },
 ];
 
 /**
@@ -196,13 +335,50 @@ export function mockContentFromBody(body: unknown): string {
 // MSW handler：从请求体中抽出最后一个 user message 并按路由表匹配
 // ---------------------------------------------------------------------------
 
+/**
+ * 从请求体抽出最后一个 user message 的纯文本。
+ *
+ * 历史缺陷（v1.9.3 修复，严重）：AI SDK 发送的 `content` 是**结构化数组**
+ * （`[{type:'text', text:'...'}, ...]`），而这里原来直接 `String(content)`
+ * → 得到 `"[object Object]"` → **所有路由规则全部失配** → mock 恒返回兜底回复。
+ * 后果：此前所有「mock 全链路回归」里，每个步骤（大纲/起草/评审/润色…）
+ * 拿到的都是同一段通用问答文本，等于只验证了管道连通性，没验证任何步骤契约。
+ *
+ * 现在同时支持三种形态：
+ *  - string（旧版 OpenAI / curl 直连）
+ *  - 纯文本 part 数组（AI SDK v5+）
+ *  - 带 image/file part 的混合数组（只取 text part，忽略二进制）
+ */
+export function extractMessageText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') return part;
+        if (part && typeof part === 'object') {
+          const p = part as { type?: string; text?: unknown };
+          // 只取文本型 part；tool-result / image / file 等不含可匹配文案
+          if (typeof p.text === 'string') return p.text;
+        }
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+  if (content && typeof content === 'object') {
+    const p = content as { text?: unknown };
+    if (typeof p.text === 'string') return p.text;
+  }
+  return '';
+}
+
 function getLastUserContent(body: any): string {
   const messages = body?.messages;
   if (!Array.isArray(messages)) return '';
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i]?.role === 'user' && messages[i]?.content) return String(messages[i].content);
+    if (messages[i]?.role === 'user' && messages[i]?.content) return extractMessageText(messages[i].content);
   }
-  return messages.length ? String(messages[messages.length - 1]?.content || '') : '';
+  return messages.length ? extractMessageText(messages[messages.length - 1]?.content) : '';
 }
 
 const mockHandlers = [

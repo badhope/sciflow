@@ -9,7 +9,7 @@ import { api } from './api/client';
 import { isNetworkError } from './api/core';
 import type { KnowledgeSearchHit, Project, Reference } from './types';
 import { errMsg } from './components/ui';
-import { applyTheme, readStoredTheme, resolveTheme, systemPrefersDark, THEME_OPTIONS, type ThemeMode } from './lib/theme';
+import { applyTheme, readStoredStyle, readStoredTheme, resolveTheme, systemPrefersDark, THEME_OPTIONS, type ThemeMode, type ThemeStyle } from './lib/theme';
 import { AuthGate } from './components/AuthGate';
 import { AppShell, ShellNavGroup, ShellNavItem, useAppShell } from './components/AppShell';
 import { BrandLockup } from './components/BrandMark';
@@ -82,31 +82,47 @@ const VIEW_LABELS: Record<View, string> = {
   settings: '设置',
 };
 
-/** 导航按「核心工作 → 自动化 → 记录与洞察」三段叙事（名称唯一来源 = VIEW_LABELS） */
-const NAV_GROUPS: { label: string; defaultCollapsed?: boolean; items: { key: View; label: string; icon: typeof LayoutDashboard }[] }[] = [
+/**
+ * 导航信息架构（v2.0 重构）——按**科研生命周期**组织，不再按「工具类别」平铺。
+ *
+ * 为什么改（对齐项目定位「从选题到投稿的可审计科研流水线」）：
+ *  · 旧结构把本项目真正的差异化能力（全自动流水线）折进默认收起的「自动化」组，等于把卖点藏起来；
+ *  · 工作台/写作/文献/知识库四个平级入口，用户看不出「先做什么」；
+ *  · 质量评分与投稿辅助被归进「自动化」，而它们其实是稿件的后续阶段。
+ * 新结构收敛为 4 段叙事，每段对应研究的一个真实阶段，段内按阶段顺序排列，
+ * 用户从上往下走即可；工具类页面（实验/记忆）不占主流程位置。
+ */
+const NAV_GROUPS: { label: string; hint: string; defaultCollapsed?: boolean; items: { key: View; label: string; icon: typeof LayoutDashboard }[] }[] = [
   {
-    label: '核心工作',
+    label: '研究立项',
+    hint: '定题与可行性',
     items: [
       { key: 'workspace', label: VIEW_LABELS.workspace, icon: LayoutDashboard },
-      { key: 'writing', label: VIEW_LABELS.writing, icon: BookOpen },
+      { key: 'dashboard', label: VIEW_LABELS.dashboard, icon: LayoutGrid },
+    ],
+  },
+  {
+    label: '证据与资料',
+    hint: '文献、知识库',
+    items: [
       { key: 'literature', label: VIEW_LABELS.literature, icon: Library },
       { key: 'knowledge', label: VIEW_LABELS.knowledge, icon: BookMarked },
     ],
   },
   {
-    label: '自动化',
-    defaultCollapsed: true,
+    label: '写作与质量',
+    hint: '流水线、起草、评分',
     items: [
       { key: 'pipeline', label: VIEW_LABELS.pipeline, icon: Workflow },
+      { key: 'writing', label: VIEW_LABELS.writing, icon: BookOpen },
       { key: 'quality', label: VIEW_LABELS.quality, icon: Gauge },
-      { key: 'submission', label: VIEW_LABELS.submission, icon: Send },
     ],
   },
   {
-    label: '记录与洞察',
-    defaultCollapsed: true,
+    label: '投稿与复盘',
+    hint: '选刊、跟踪、复盘',
     items: [
-      { key: 'dashboard', label: VIEW_LABELS.dashboard, icon: LayoutGrid },
+      { key: 'submission', label: VIEW_LABELS.submission, icon: Send },
       { key: 'experiments', label: VIEW_LABELS.experiments, icon: Beaker },
       { key: 'memory', label: VIEW_LABELS.memory, icon: Brain },
     ],
@@ -149,7 +165,7 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
   literature: ({ project }) => (project ? <PageErrorBoundary pageName="文献调研"><SuspensePage name="文献调研"><LiteraturePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
   experiments: ({ project }) => (project ? <PageErrorBoundary pageName="实验记录"><SuspensePage name="实验记录"><ExperimentsPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
   knowledge: ({ project }) => (project ? <PageErrorBoundary pageName="知识库"><SuspensePage name="知识库"><KnowledgePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
-  memory: ({ project }) => (project ? <PageErrorBoundary pageName="记忆中心"><SuspensePage name="记忆中心"><MemoryPage key={project.id} /></SuspensePage></PageErrorBoundary> : null),
+  memory: ({ project }) => (project ? <PageErrorBoundary pageName="记忆中心"><SuspensePage name="记忆中心"><MemoryPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
   pipeline: ({ project, openDoc }) =>
     project ? <PageErrorBoundary pageName="全自动流水线"><SuspensePage name="全自动流水线"><PipelinePage key={project.id} project={project} onOpenDoc={openDoc} /></SuspensePage></PageErrorBoundary> : null,
   quality: ({ project }) =>
@@ -163,10 +179,19 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
   submission: ({ project }) => (project ? <PageErrorBoundary pageName="投稿辅助"><SuspensePage name="投稿辅助"><SubmissionPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
 };
 
-export const ThemeContext = createContext<{ theme: 'light' | 'dark'; mode: ThemeMode; setMode: (m: ThemeMode) => void; toggle: () => void }>({
+export const ThemeContext = createContext<{
+  theme: 'light' | 'dark';
+  mode: ThemeMode;
+  style: ThemeStyle;
+  setMode: (m: ThemeMode) => void;
+  setStyle: (s: ThemeStyle) => void;
+  toggle: () => void;
+}>({
   theme: 'light',
   mode: 'system',
+  style: 'sciflow',
   setMode: () => undefined,
+  setStyle: () => undefined,
   toggle: () => undefined,
 });
 
@@ -177,7 +202,24 @@ function AppInner() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [pickedProjectId, setCurrentProjectId] = useState<string | null>(null);
+  /**
+   * 当前项目持久化：此前只存 React state，刷新/切页后回落到列表第一个项目，
+   * 用户在自己项目里刷新会被"传送到"另一个项目（实测踩到）。存 localStorage 按工作区恢复。
+   */
+  const [pickedProjectId, setCurrentProjectId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('sciflow.currentProjectId');
+    } catch {
+      return null;
+    }
+  });
+  const selectProject = useCallback((id: string | null) => {
+    setCurrentProjectId(id);
+    try {
+      if (id) localStorage.setItem('sciflow.currentProjectId', id);
+      else localStorage.removeItem('sciflow.currentProjectId');
+    } catch { /* 隐私模式忽略 */ }
+  }, []);
   const qc = useQueryClient();
   const [showNewProject, setShowNewProject] = useState(false);
   const [newName, setNewName] = useState('');
@@ -187,6 +229,9 @@ function AppInner() {
   const [projectQuery, setProjectQuery] = useState('');
   const [commandOpen, setCommandOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => readStoredTheme());
+  /** 视觉风格（与明暗正交）：6 套主题包，持久化在 sciflow-theme-style */
+  const [themeStyle, setThemeStyleState] = useState<ThemeStyle>(() => readStoredStyle());
+  const setThemeStyle = useCallback((next: ThemeStyle) => setThemeStyleState(next), []);
   /** 系统偏好单独存 state，主题在渲染期派生（避免 effect 里 setState 造成级联渲染） */
   const [systemDark, setSystemDark] = useState<boolean>(() => systemPrefersDark());
   const theme: 'light' | 'dark' = themeMode === 'system' ? (systemDark ? 'dark' : 'light') : themeMode;
@@ -211,13 +256,17 @@ function AppInner() {
   );
 
   useEffect(() => {
-    localStorage.setItem('sciflow-theme', themeMode);
+    try { localStorage.setItem('sciflow-theme', themeMode); } catch { /* 隐私模式 */ }
   }, [themeMode]);
 
-  // 主题落到 <html>（唯一外部副作用）；theme 为派生值
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+    try { localStorage.setItem('sciflow-theme-style', themeStyle); } catch { /* 隐私模式 */ }
+  }, [themeStyle]);
+
+  // 主题落到 <html>（唯一外部副作用）：风格 + 明暗 + theme-color
+  useEffect(() => {
+    applyTheme(theme, themeStyle);
+  }, [theme, themeStyle]);
 
   // 跟随系统：系统主题变化时更新 systemDark（仅订阅，不在回调外 setState）
   useEffect(() => {
@@ -302,7 +351,7 @@ function AppInner() {
     if (!newName.trim()) return;
     const p = await api.projects.create(newName.trim());
     void qc.invalidateQueries({ queryKey: ['projects'] });
-    setCurrentProjectId(p.id);
+    selectProject(p.id);
     setNewName('');
     setShowNewProject(false);
     setCommandOpen(false);
@@ -321,7 +370,7 @@ function AppInner() {
     if (!deletingProject) return;
     await api.projects.remove(deletingProject.id);
     void qc.invalidateQueries({ queryKey: ['projects'] });
-    if (currentProjectId === deletingProject.id) setCurrentProjectId(null);
+    if (currentProjectId === deletingProject.id) selectProject(null);
     toast('info', '项目已删除');
     setDeletingProject(null);
   };
@@ -348,7 +397,7 @@ function AppInner() {
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, mode: themeMode, setMode: setThemeMode, toggle: () => setThemeMode((m) => (resolveTheme(m) === 'dark' ? 'light' : 'dark')) }}>
+    <ThemeContext.Provider value={{ theme, mode: themeMode, style: themeStyle, setMode: setThemeMode, setStyle: setThemeStyle, toggle: () => setThemeMode((m) => (resolveTheme(m) === 'dark' ? 'light' : 'dark')) }}>
       <ToastContext.Provider value={toast}>
         {/* 全局登录门：仅 AUTH_MODE=jwt 企业模式可见，本地/桌面模式零干扰 */}
         <AuthGate />
@@ -378,7 +427,7 @@ function AppInner() {
                 onSelectView={setView}
                 projects={filteredProjects}
                 currentProjectId={currentProjectId}
-                onSelectProject={(id) => setCurrentProjectId(id)}
+                onSelectProject={selectProject}
                 projectQuery={projectQuery}
                 onProjectQuery={setProjectQuery}
                 onRefresh={() => void qc.invalidateQueries({ queryKey: ['projects'] })}
@@ -541,8 +590,8 @@ function SidebarContent({
 
       {/* 导航 */}
       <nav className="shrink-0" aria-label="功能导航">
-        {NAV_GROUPS.map((g) => (
-          <ShellNavGroup key={g.label} label={g.label} defaultCollapsed={g.defaultCollapsed}>
+        {NAV_GROUPS.map((g, gi) => (
+          <ShellNavGroup key={g.label} label={g.label} hint={g.hint} step={gi + 1} defaultCollapsed={g.defaultCollapsed}>
             {g.items.map((n) => {
               const Icon = n.icon;
               return (
@@ -664,11 +713,11 @@ function SidebarContent({
 /** Cmd+K 命令面板：搜索导航项 + 快捷动作 + 内容搜索（文献/知识库） */
 function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onClose: () => void; onNavigate: (v: View) => void; onNewProject: () => void; projectId: string | null }) {
   const [q, setQ] = useState('');
-  const { setMode } = useContext(ThemeContext);
+  const { setMode, setStyle } = useContext(ThemeContext);
   // F-3.1：命令清单单一来源 lib/commands.ts（label+keywords+hotkey 声明、run 注入），过滤走 filterCommands 双通道
   const commands = useMemo(
-    () => buildCommands({ onNavigate, onNewProject, setThemeMode: setMode, navGroups: NAV_GROUPS.map((g) => ({ label: g.label, items: g.items.map((n) => ({ key: n.key, label: n.label })) })) }),
-    [onNavigate, onNewProject, setMode],
+    () => buildCommands({ onNavigate, onNewProject, setThemeMode: setMode, setThemeStyle: setStyle, navGroups: NAV_GROUPS.map((g) => ({ label: g.label, items: g.items.map((n) => ({ key: n.key, label: n.label })) })) }),
+    [onNavigate, onNewProject, setMode, setStyle],
   );
 
   const filtered = useMemo(() => filterCommands(commands, q), [commands, q]);
@@ -824,13 +873,18 @@ function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onCl
   );
 }
 
-/** 移动端底部导航（≤900px）：只放最高频 5 个入口，其余走侧栏抽屉 */
+/**
+ * 移动端底部导航（≤900px）：只放最高频 5 个入口，其余走侧栏抽屉。
+ *
+ * v2.0：把「流水线」放进底栏、让出「评分」——流水线是本产品的核心能力入口，
+ * 而评分是阶段性的检查动作（从驾驶舱与写作页都能进）。旧底栏把最强能力藏进了抽屉。
+ */
 function MobileTabBar({ view, onSelect }: { view: View; onSelect: (v: View) => void }) {
   const items: { key: View | 'more'; label: string; icon: typeof LayoutDashboard }[] = [
     { key: 'workspace', label: '工作台', icon: LayoutDashboard },
-    { key: 'writing', label: '写作', icon: BookOpen },
     { key: 'literature', label: '文献', icon: Library },
-    { key: 'quality', label: '评分', icon: Gauge },
+    { key: 'pipeline', label: '流水线', icon: Workflow },
+    { key: 'writing', label: '写作', icon: BookOpen },
     { key: 'more', label: '更多', icon: MenuIcon },
   ];
   return (

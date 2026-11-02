@@ -18,13 +18,14 @@
 import 'dotenv/config';
 import { join } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { config as loadEnv } from 'dotenv';
-loadEnv({ path: join(__dirname, '..', '.env') });
+import { loadServerEnv } from './common/server-env';
+loadServerEnv();
 
 import { Command } from 'commander';
 import { NestFactory } from '@nestjs/core';
 
 import { APP_VERSION } from './common/version';
+import { registerConfigCommands, registerExtensionCommands, registerQualityCommands } from './config/config-cli';
 
 const CLI_VERSION = APP_VERSION;
 
@@ -38,7 +39,7 @@ async function localApi(path: string, opts?: { method?: string; body?: unknown }
   try {
     res = await fetch(`${apiBase()}${path}`, {
       method: opts?.method || 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Sciflow-Actor': 'cli' },
       body: opts?.body === undefined ? undefined : JSON.stringify(opts.body),
       signal: AbortSignal.timeout(60_000),
     });
@@ -268,6 +269,10 @@ program
     }
   });
 
+registerConfigCommands(program, localApi);
+registerExtensionCommands(program, localApi);
+registerQualityCommands(program, localApi);
+
 const mcp = program.command('mcp').description('MCP 协议');
 mcp
   .command('serve')
@@ -290,5 +295,6 @@ mcp
 program.parseAsync(process.argv).catch(async (e) => {
   console.error(`命令执行失败：${e?.message || e}`);
   await closeApp();
-  process.exit(1);
+  // 不用 process.exit 强退：Windows 下 libuv 会断言 uv async handle closing（实测）
+  process.exitCode = 1;
 });

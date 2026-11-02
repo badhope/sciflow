@@ -24,6 +24,9 @@ export interface PipelineStepDef {
 
 export const PIPELINE_STEPS: readonly PipelineStepDef[] = [
   { key: 'topic-verify', label: '主题验证', core: true, configurable: false, uiStep: true },
+  // v1.7：选题新颖性预检（对标 Elicit / Undermind 的 "is this already done?"）——
+  // 在花 token 做文献调研与起草之前，先用学术库近作比对，重叠过高时给出改题建议。
+  { key: 'novelty-check', label: '新颖性预检', core: false, configurable: true, uiStep: true },
   { key: 'literature', label: '文献调研', core: false, configurable: true, uiStep: true },
   { key: 'outline', label: '大纲生成', core: false, configurable: true, uiStep: true },
   // 起草在 graph 内部由 quality-gate 节点调用 runDrafting 完成，不是独立节点；

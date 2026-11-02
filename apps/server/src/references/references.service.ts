@@ -62,7 +62,7 @@ export interface PaperHit {
   doi: string;
   url: string;
   abstract: string;
-  source: 'manual';
+  source: 'manual' | 'scholar';
   citationCount: number;
   /** 跨库检索增强：命中来源库（文献库 references / 知识库 knowledge / 联网检索 web）；未标视为文献库 */
   origin?: 'library' | 'knowledge' | 'web';

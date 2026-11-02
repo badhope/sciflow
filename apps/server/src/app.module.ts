@@ -18,6 +18,8 @@ import { MemoryModule } from './memory/memory.module';
 import { ResearchModule } from './research/research.module';
 import { JudgmentModule } from './judgment/judgment.module';
 import { CustomizationModule } from './settings/customization.module';
+import { ConfigModule } from './config/config.module';
+import { ExtensionsModule } from './extensions/extensions.module';
 import { ExperimentsModule } from './experiments/experiments.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { WebSearchModule } from './websearch/websearch.module';
@@ -55,6 +57,8 @@ import { HttpExceptionFilter } from './common/http-exception.filter';
     ResearchModule,
     JudgmentModule,
     CustomizationModule,
+    ConfigModule,
+    ExtensionsModule,
     ExperimentsModule,
     DashboardModule,
   ],

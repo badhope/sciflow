@@ -1,7 +1,7 @@
 # SciFlow 架构文档（v1.0 现状）
 
 > 本文档是唯一真理源。任何影响架构、接口、数据模型、依赖的代码变更，必须同步回写本文档。
-> 状态基线：v1.0.0（2026-10-24）。重构决策依据见 §6 ADR 索引；本版审查结论文档 `docs/AUDIT-2026-10-23.md`。
+> 状态基线：v1.0.0（2026-10-24）。重构决策依据见 §6 ADR 索引；本版审查结论文档 `docs/archive/AUDIT-2026-10-23.md`。
 >
 > **本 §7「禁止重复造轮子守则」对所有后续开发会话生效**：动手前先查 §2.6 地图——能用成熟件的必须用，不允许在任务中途自造已有成熟替代的基建。
 
@@ -97,6 +97,172 @@
 | 8 | **版本单一来源**：`common/version.ts` 运行时解析 package.json；MCP serverInfo / MCP client / CLI 全部引用 `APP_VERSION`，禁止写死 | `apps/server/src/common/version.ts` | 运行时 `node -e` 断言 + MCP 握手回归 |
 
 ---
+
+## §2.16 v1.2 模型接入契约（2026-10-26）
+
+设置页从「手填模型名」升级为「地址 + Key → 自动发现 → 自动匹配能力」。以下契约后续不得回退：
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **三种主流协议**：`openai-compatible`（默认）/ `anthropic-messages` / `google-gemini`，分别用官方 `@ai-sdk/openai-compatible` / `@ai-sdk/anthropic` / `@ai-sdk/google` 构造模型，禁止手写各家 wire protocol | `packages/ai/src/ai-transport.service.ts buildModelWith` · `packages/ai/src/model-catalog.ts MODEL_PROTOCOLS` | `model-catalog.spec.ts` 解析/鉴权头用例 |
+| 2 | **模型发现单一实现**：`/models` 拉取与解析只在 `packages/ai/src/model-catalog.ts`（`fetchModelCatalog` + `parseCatalog`），设置页接口与 AI 传输层共用；过滤嵌入/语音/图像/视频等非聊天模型，网关上报的 context/max_output 必须保留 | `packages/ai/src/model-catalog.ts` · `apps/server/src/settings/settings.service.ts discoverModels` | `model-catalog.spec.ts` 10 条 + `settings.provider.spec.ts` 检测模型 3 条 |
+| 3 | **能力自动匹配可覆盖**：厂商行持久化 `protocol/context_window/max_output/tool_calling/models`；激活时 `applyProviderCapabilities` 写入运行连接；`maxOutput` 不得超过 `context_window`；未上报时输出上限回落 4096；`tool_calling=0` 时 chat 静默移除工具集 | `packages/db/src/schema.ts modelProviders` · `packages/ai/src/ai-transport.service.ts defaultMaxOutput/completeStream` · `settings.service.ts normalizeCapabilities` | `settings.provider.spec.ts` 夹取/回显用例 |
+| 4 | **表单值检测与测试不改状态**：`POST /api/settings/providers/discover` 与 `/test` 使用未保存的表单值；编辑态掩码 Key 必须回查库内真实 Key（禁止把 `***` 当 Key 上送）；两者都经 `checkOutboundUrl` SSRF 守卫 | `settings.controller.ts` · `settings.service.ts resolveFormKey/guardOutbound` | `settings.provider.spec.ts` 掩码/SSRF/临时配置用例 |
+| 5 | **保存即生效**：编辑激活中的厂商后必须重新 `switchProvider(id)`，避免「页面显示新模型、内存仍打旧端点」；协议/能力列走 `ensureColumn` 迁移旧库 | `settings.service.ts saveProvider` · `packages/db/src/database.ts ensureColumn` | `settings.provider.spec.ts` 激活刷新用例 |
+| 6 | **流式 usage 必需**：OpenAI 兼容 provider 固定 `includeUsage: true`，否则 token 成本与上下文占比恒为 0（本次浏览器实测发现） | `packages/ai/src/ai-transport.service.ts buildModelWith` | 实际流式冒烟返回非零 usage |
+
+## §2.17 v1.3 配置中心契约（2026-10-26）
+
+设置页从「分散的自定义面板」升级为统一配置中心：角色 / 约束工程 / 钩子 / 权限档 / 审计，**Web 设置页、CLI、对话工具三条入口共用同一服务**，任一入口写入其余入口立即生效。以下契约不得回退：
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **单一写入口**：所有配置写操作只经 `ConfigCenterService`；控制器、CLI（`sciflow config`）、对话工具（`config.*`，MCP 工具）都调用它，禁止各自直写 `app_setting` 或新表 | `apps/server/src/config/config-center.service.ts` · `apps/server/src/config/config.controller.ts` · `apps/server/src/config/config-cli.ts` | `config-center.spec.ts` 22 条（含 actor=chat/cli 审计、导入导出、审计不可变）+ `ConfigCenterSettings.test.tsx` 6 条（面板走真实 API） |
+| 2 | **权限矩阵**：`strict`（只读）/ `balanced`（角色/约束/钩子/提示词/技能）/ `open`（除核心保护项外全部）/ `unrestricted`（全面放开，默认）。核心保护项（鉴权、密钥与加密、SSRF、审计、数据库路径、监听地址端口、不可逆数据操作）**任何档位不可改**，且不经配置中心暴露 | `apps/server/src/config/permission.ts` · `config.service.assertAllowed` | `permission.spec.ts` 6 条 + 回归「strict 拒绝写入并留拒绝审计」 |
+| 3 | **角色唯一事实源**：`config_role`（is_default=1）是对话角色；设置页「角色与技能」保存时同步写角色库；ChatService 的 `personaConfig()` 优先读角色库，旧 `app_setting.system_prompt` 仅兼容回退 | `apps/server/src/settings/settings.service.ts getPersona/savePersona` · `apps/server/src/chat/chat.service.ts personaConfig` | 实测更新默认角色提示词后模型按新角色回答（ZETA-9 标记法） |
+| 4 | **约束/钩子注入单一实现**：`packages/ai/src/prompt-augmentation.ts` 的 `loadPromptAugmentation(scope)` 是唯一注入点，在 `AiTransportService` 的 complete / completeStructured / completeStream / 非流式工具回退四处 system 层统一追加；scope 由 caller 归类（chat/chatSessionSummary/judgmentIntent → chat，其余 → pipeline） | `packages/ai/src/prompt-augmentation.ts` · `packages/ai/src/ai-transport.service.ts withConfigAugmentation` | `prompt-augmentation.spec.ts` 6 条；实测开启约束后 prompt_tokens 2187 vs 关闭 2021 |
+| 5 | **钩子真实执行**：`chat:before` 的 block 钩子在 ChatService.stream 前置拦截（SSE error 事件）；`chat:after` / `pipeline:after` 在完成回调触发 webhook（`checkOutboundUrl` SSRF 守卫 + 5s 超时）；`pipeline:before` 在 PipelineService.create 前置拦截；每次执行与拒绝都落 `config_audit` | `apps/server/src/chat/chat.service.ts stream` · `apps/server/src/chat/chat.controller.ts onComplete` · `apps/server/src/pipeline/pipeline.service.ts create/invokeGraph` | `config-center.spec.ts` 钩子用例；实测关键词命中返回「禁止导出密钥（安全策略）」、普通问题正常放行 |
+| 6 | **技能开关真实生效**：`AgentToolBridge.enabledSkillKeys()` 读 `app_setting.skills`，按前缀裁剪工具（literature/references→文献检索、knowledge→知识库问答、writing/outline/chat.answer→写作辅助）；`config.*` 工具不受技能开关影响（否则关掉技能就无法在对话里改回来）；无项目上下文时不暴露必填 `projectId` 的工具 | `apps/server/src/agent/agent-tool-bridge.ts` | `agent-skill-gating.spec.ts` 4 条 |
+| 7 | **无项目也能配置**：ChatService 的 `useTools` 不再要求 projectId，配置类工具在任意对话可用；对话工具步数上限 12、单轮工具调用上限 24（一次对话完成多项配置） | `apps/server/src/chat/chat.service.ts` | 实测一次对话完成 4 项配置（角色+约束+钩子+预览，工具调用 4 次） |
+| 8 | **审计只追加**：`config_audit` 记录 actor（ui/cli/chat）、类别、动作、allowed、reason；被拒操作必须留痕；任何档位不得删除或改写审计 | `config-center.service.ts audit/listAudit` | 回归「strict 拒绝配置写入」「拒绝操作写入审计」 |
+| 9 | **预设离线可用**：内置 4 套（学术严谨/高效产出/审稿人视角/数据处理型），应用幂等（只替换 `source=preset` 的约束与 `[预设]` 前缀钩子）；外部来源用「粘贴导入」承接，不依赖外网 | `apps/server/src/config/config-presets.ts` | 回归「预设重复应用不叠加」 |
+| 10 | **导入导出**：`GET /api/config/export` 输出角色/约束/钩子/权限（不含审计与密钥）；`POST /api/config/import` 幂等（同标题同规则、同名同事件同类型跳过），`--replace` 清空用户自建项并先写 `bulk_delete` 审计，单条坏数据只跳过并回报；`permission.mode` 默认不应用（防借导入提权） | `apps/server/src/config/config-center.service.ts exportBundle/importBundle` · `config-cli.ts` · `ConfigCenterSettings.tsx` | `config-center.spec.ts` 导入导出 5 条 + CLI 实测两次导入不叠加 |
+| 11 | **权限升档逐级**：切换权限档有专用门禁——降档自由、升档每次最多一级（strict→balanced→open→unrestricted），非法值 400；DB 脏值 fail-closed 回落 strict。防止「只读」被一键解除 | `apps/server/src/config/permission.ts PERMISSION_RANK/parsePermissionMode` · `ConfigCenterService.setPermissionMode` | `permission.spec.ts` 6 条 + `config-center.spec.ts` 升档 2 条 + 实测 strict→unrestricted 被拒 |
+| 12 | **审计不可变**：`config_audit` 有 `BEFORE UPDATE/DELETE` 触发器，任何档位（含 unrestricted）都不能改写/删除审计；`merge=false` 批量删除前先快照写审计 | `packages/db/src/database.ts trg_config_audit_no_*` | `config-center.spec.ts` 审计不可变用例 |
+| 13 | **钩子唯一**：`config_hook` 建 `(name,event,type)` 唯一索引，创建前预检；防止同名钩子重复注入 | `packages/db/src/database.ts ux_config_hook_name_event_type` · `createHook` | `config-center.spec.ts` 重复钩子用例 |
+| 14 | **非流式对话同源**：`/api/chat` 与 MCP `chat.answer` 显式 `context: 'chat'`（作用域正确），并执行 `chat:before` block 钩子（400 可读原因） | `packages/ai/src/ai.service.ts chat/chatWithContext` · `ChatService.answer` | 实测关键词命中返回 400、普通消息正常 |
+
+**运行时巡检**：`node scripts/monitor_config_center.mjs --base <url> --log <log>` 只读检查 19 项（服务健康/配置完整/钩子唯一/注入预览全覆盖/工具暴露/对话真实返回+usage/审计拒绝原因/日志无 error），退出码非 0 即有异常；已接入 CI `regression` job（回归之后执行），本地验收矩阵新增 F4/F5 两条 CLI 冒烟（`final_acceptance.py` 23 项）。
+
+## §2.18 v1.4 扩展中心契约（2026-10-26）
+
+六类科研资产（skill / mcp / role / constraint / hook / prompt）统一管理，内置目录随仓库发布、默认启用，四种添加入口与对话入口共用同一服务。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **单表单一服务**：所有资产存 `extension_asset`（唯一 key 索引），写操作只经 `ExtensionsService.upsert/toggle/remove`；禁止在别处直写该表 | `packages/db/src/database.ts extension_asset` · `apps/server/src/extensions/extensions.service.ts` | `extensions.service.spec.ts` 18 条 |
+| 2 | **内置目录默认启用**：`BUILTIN_EXTENSION_ASSETS`（87 条：20 MCP / 31 技能 / 10 角色 / 10 约束 / 4 钩子 / 12 提示词）首次启动幂等播种，`enabled=1`；内置不可物理删除，只能停用（`resetBuiltin` 一键恢复） | `apps/server/src/extensions/extension-catalog.ts` · `ensureSeed/remove/resetBuiltin` | 回归「内置资产默认全启用」+ spec「内置不可物理删除」 |
+| 3 | **投影真实生效**：启用/停用必须同步对应子系统——技能→`app_setting.skills`（保留内置 4 项）、角色→`config_role`、约束→`config_constraint`（source=extension）、钩子→`config_hook`、提示词→`custom_prompt`（仅显式应用）、MCP→`mcp_server`（仅 HTTP 端点） | `ExtensionsService.project*` | spec「停用资产会撤回投影」+ 回归「扩展约束已注入 chat / 停用后不再注入」 |
+| 4 | **提示词模板需显式应用**：模板 `enabled=1` 仅代表可用，不自动覆盖系统默认；`POST /api/extensions/:id/apply` 才写 `custom_prompt`，同 toolKey 只保留一个生效（`app_setting.extension_prompt_active`） | `projectPrompt/applyPrompt` | spec「默认不覆盖 / 应用后写入 / 切换生效」；回归 citations 回填用例 |
+| 5 | **私有优势工具不外泄**：`visibility=private` 的资产（SciFlow 自研 13 项）不进导出包、不出现在外部 MCP 客户端的 `extension.list`；仅本机设置页可见可关 | `listPublic/exportBundle` · `mcp.service.ts extension.list` | spec「导出包排除 private」+ 回归「扩展导出不含私有工具」 |
+| 6 | **四种添加格式**：SKILL.md（YAML frontmatter）/ 模板 JSON（`{kind,name,manifest}`，可数组）/ MCP JSON（`mcpServers`，仅 http(s) 端点）/ ZIP（自动遍历内部 SKILL.md 与 JSON）；错误逐条返回（不整体失败），无法识别时 400 带格式说明 | `parseSkillMarkdown/parseTemplateJson/parseMcpJson/importRaw` | spec 解析器 4 条 + 导入 3 条 + 回归「SKILL.md 导入 / 非法格式报错」 |
+| 7 | **一键 AI 生成**：按 kind 模板出 JSON 草稿（不落库）；`jsonrepair` 修复模型常见非法 JSON；结构校验失败给可读错误；前端关闭 60s 默认超时（AI 生成允许 3 分钟） | `ExtensionsService.generate` · `ExtensionCenter.tsx` | spec「jsonrepair 容错」+ 真实浏览器验证 |
+| 8 | **每个资产面板都可添加**：角色/技能/提示词/约束/钩子/MCP 面板均挂 `ExtensionQuickAdd`（同一套四种方式），不允许某类资产只能从单一入口添加 | `ConfigCenterSettings.tsx` · `PersonaSettings.tsx` · `SettingsPage.tsx` · `McpToolList.tsx` | `ExtensionCenter.test.tsx` 11 条（含四模式按钮齐全） |
+| 9 | **对话入口**：MCP 工具 `extension.list/create/toggle/generate`；`extension.list` 对模型同样过滤 private（外部客户端不掌握私有资产清单） | `mcp.service.ts` · `agent-tool-bridge.ts` allowlist | 实测 MCP 工具数 23 且含 4 个 extension.* |
+| 10 | **CLI 对等**：`sciflow ext list|toggle|import|export|reset`，与 Web/对话同一 REST 服务 | `apps/server/src/config/config-cli.ts registerExtensionCommands` | CLI 实测 list/toggle/import/export |
+
+## §2.24 v1.9.1 全路由探针与接线真实性契约（2026-10-29）
+
+第二轮审计的方法论：**不看代码写了什么，看运行时真实发生什么**。工具：`scripts/route_probe.py`
+（97 条真实 HTTP 探针，入库可复跑）+ 读写两端扫描（app_setting / env / 前端 API 路径 vs OpenAPI）。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **全局输入管道不得误杀标量**：Nest 的 `@Body('field')` 逐字段取参会把 string 传给管道；管道若强制「必须是对象」，所有逐字段取参的端点全量 400。规则：标量放行、数组仍拒绝 | `common/input-validation.pipe.ts` · `references.controller.ts gap` | `input-validation.pipe.spec.ts` 5 条 + 回归 27.9 |
+| 2 | **新控制器禁止 `@Body('x')` 逐字段取参**（与管道语义强耦合）：一律 `@Body() body: {...}` + 显式校验 | 全部 controller | 代码审阅 |
+| 3 | **引用渲染器的降级产物必须可审计**：`[文献N]`（越界降级）与未渲染的 `[Ref:N]`/`[补充文献]` 是「引用断链」的物证，体检必须红牌（`residualAnchors`，每处 −10 不封顶；落库为空再 −60），客观检查器必须计硬伤（占位封顶 40） | `packages/core/src/citation-audit.ts` · `quality-audit.ts` | 回归 27.6/27.7 + citation-audit.spec 3 条 |
+| 4 | **起草 prompt 不得自相矛盾**：文献池为空时必须显式禁用引用标记（此前要求 `[Ref:编号]` 又给「（无可用文献）」，模型只能编造） | `packages/ai/src/prompts.ts DRAFT_SECTION` | prompt 分支 hasRefs 两侧文案 |
+| 5 | **配置三处可达性**：`pipeline_token_budget` / `retrieval_rerank` / `websearch_in_pipeline` 必须经 `GET/POST /api/customization/pipeline-settings` 读写，设置页有对应控件；禁止「报错让用户去设置，设置里却没有」 | `customization.service.ts` · `SettingsPage.tsx PipelineEditor` | 回归 27.8a-f |
+| 6 | **预算缺省口径单一**：键不存在 = 300k（与 `trackBudget` 一致），存在时 0 = 不限；两处读数不得分叉 | `customization.service.ts` vs `pipeline.service.ts` | 回归 27.8b |
+| 7 | **静态 OpenAPI 契约必须随版本再生**：`openapi.json` / `openapi.d.ts` 落后 5 个小版本（1.4.0→1.9.0）属于文档失真；发版前必须 `pnpm openapi:gen` | `openapi.json` · `apps/web/src/api/openapi.d.ts` | version 字段 = package version |
+| 8 | **审计手段入库**：`scripts/route_probe.py` 是全路由真实探针（建项目/文档/文献 → GET 全量 → POST 写操作），新路由合入时同步补探针 | `scripts/route_probe.py` | 本轮 97 条全通过 |
+
+## §2.23 v1.9 检索链路真实性、模块边界与引用体检契约（2026-10-29）
+
+本轮做的是「把宣称的能力真正接通」，而不是加功能。三条历史假象被修掉：向量检索从未产出过向量、
+模块边界规则从未命中、引用体检只查三类问题。以下契约禁止回退。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **嵌入必须真正可用**：`node-llama-cpp` 3.x 的 embedding 能力在 `model.createEmbeddingContext()` 返回的 `LlamaEmbeddingContext` 上（`LlamaContext` 没有该方法）。禁止在 `LlamaContext` 上调 `getEmbeddingFor`（历史缺陷：恒返回 null → 向量索引永远为空，「混合检索」实际只有 FTS5 单路） | `packages/retrieval/src/embedding.service.ts` | `retrieval-quality.spec.ts` 16 条 + 真实 /v1/embeddings 端点实测（embeddedChunks 从 0 变 1） |
+| 2 | **嵌入双后端**：`EMBEDDING_PROVIDER=auto`（默认）按「有 GGUF → local，否则 AI 已配置 → api」选择；`api` 走当前模型厂商的 `/embeddings`，零额外配置。Anthropic Messages 协议不提供 embeddings，必须返回 null 而不是伪装支持 | `embedding.service.ts` · `packages/ai/src/ai.service.ts embedTexts` · `knowledge.module.ts REMOTE_EMBEDDER` | `resolveEmbeddingBackend` 6 条单测 + health `capabilities.embeddingBackend` 实测为 api |
+| 3 | **维度守卫前置**：vec0 表固定 `FLOAT[384]`，任何后端产出的向量必须等于该维度；不符返回 null（该块降级全文检索），禁止让 insert 抛错回滚整个上传事务 | `embedding-config.ts toVectorBlob` | `toVectorBlob` 3 条（384 通过 / 3 与 768 拒绝 / null） |
+| 4 | **批量嵌入是主路径**：上传必须走 `embedBatch`（API 一次 64 条；本地受限并发 4），禁止逐条 `Promise.all(map(embed))` 打爆上游或抢满 CPU | `knowledge.service.ts embedChunks` | 上传实测（1 次请求 1 个 chunk，日志 1 次调用） |
+| 5 | **检索必须去冗余**：RRF 融合后做 MMR（λ=0.7，候选上限 40）。同一文档相邻块（800 字切块 + 15% 重叠）不得占满 topK | `packages/retrieval/src/mmr.ts` · `knowledge.service.ts search` | `retrieval-quality.spec.ts` 4 条（首条最相关 / 重复块被压掉 / 候选不足不填充 / 向量余弦优先） |
+| 6 | **外部学术 API 必须缓存 + 并行**：`ScholarSearchService.search` 走 10 分钟 TTL 进程内 LRU（200 条），三源 × 各关键词并行；禁止按 query 串行（4×3 = 12 次串行往返） | `research/scholar-search.service.ts` | `SCHOLAR_CACHE_TTL_MS` 可关；日志「学术检索」命中次数 |
+| 7 | **包边界必须可执行**：接口层（apps/server）禁止 `packages/{core,db,ai,retrieval}/src/**` 深路径导入，只允许 `apps/server/src/common/*` 桶或包名。**原 ESLint pattern `**/packages/*/src/*!(index)*` 在 minimatch 下从未命中（规则形同虚设）**，现改为显式列目录 | `eslint.config.mjs` | 反向探针：把深路径导入塞进 apps/server 必须报 error（实测已报） |
+| 8 | **包必须有公共出口**：`packages/{ai,retrieval}/src/index.ts` 是唯一出口（此前 `@sciflow/ai` 与 `@sciflow/retrieval` 连 package.json 都没有） | 各包 `index.ts` + `package.json` | 桶文件是唯一允许深路径的位置（`apps/server/src/common/*.ts` / `ai/*.ts`） |
+| 9 | **引用体检判定必须可复用**：判定下沉为纯函数 `packages/core/src/citation-audit.ts`，服务层只取数。新增 5 类判定：未引用条目 / 锚点断号 / 重复 DOI / 同 DOI 元数据冲突 / 孤儿引用；`issues: string[]` 历史契约保留，另给 `details[]`（level/code/items）供 UI 分级 | `packages/core/src/citation-audit.ts` · `documents.service.ts citationAudit` | `citation-audit.spec.ts` 11 条 + 回归 27.1-27.5 全绿 |
+| 10 | **引用体检禁止 N+1**：一次 `inArray` 批量取回 reference，禁止逐条 `db.select()`（200 条引用 = 200 次查询） | `documents.service.ts` | 代码审阅 + `citation-audit.spec.ts` 纯函数口径 |
+| 11 | **重组件必须按需加载**：`ForceGraph`（sigma+graphology ≈450KB）、`WritingEditor`（CodeMirror ≈610KB）、`WritingPreview`（react-markdown+KaTeX）必须 `lazy()`；编辑器句柄放独立轻量模块 `writing/editor-handle.ts`，否则父页面静态 import 会把 CodeMirror 拉回首屏 | `literature/LiteratureTools.tsx` · `WritingPage.tsx` · `writing/editor-handle.ts` | 构建产物：LiteraturePage 570KB→106KB、WritingPage 682KB→54KB，新增独立 ForceGraph/WritingEditor chunk |
+| 12 | **查询路径必须有索引**：`citation(reference_id)`、`memory_log(project_id, created_at DESC)`、`pipeline_task(status)`、`document(project_id, updated_at DESC)`、`reference(project_id, fingerprint)`。最后一项必须在 `ensureColumn('reference','fingerprint')` 之后建（老库该列靠迁移补齐，提前建会整段失败） | `packages/db/src/database.ts` | 启动日志无 `no such column`（历史回归曾因此 26 个 spec 全红） |
+
+## §2.22 v1.8 归属校验收口与实例级配置分级（2026-10-28）
+
+企业模式（`AUTH_MODE=jwt`）此前只有 5 个控制器有归属校验（documents / references / experiments / projects / pipeline），
+其余 8 个零校验；实例级配置（模型 Key / 权限档 / 钩子 / 扩展资产 / 用量 / 联网 Key）只要求登录。
+本批次把两类边界固化为契约。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **子资源归属必须可断言**：任何「有 projectId 的表」都要有对应的 `assertXxx(id, user)`，语义统一为「子资源 → 项目 → owner」，非 owner 一律 404（不泄露存在性），本地模式 no-op | `common/project-access.service.ts`（knowledge/memory/submission/researchDesign/reviewComment/agentExecution/qualityReport 七类新断言） | `project-access-subresources.spec.ts` 10 条（非 owner 404 / owner 放行 / 幽灵 id 404 / 本地模式全放行 / assertAdmin 三态） |
+| 2 | **控制器不得裸奔**：所有带数据面的 controller 必须注入 `ProjectAccessService` 并在每个 handler 断言。静态扫描（`scan_access.py` 思路）应只剩「无状态 AI 助手」与「全局期刊库只读」6 个端点可豁免 | 13 个 controller | 静态扫描 + `auth-surface.spec.ts` |
+| 3 | **实例级配置按角色分级**：`settings` / `config` / `extensions` / `customization` / `usage` / `websearch` / 期刊库增删 挂 `AdminGuard`（企业模式仅 admin，本地模式放行）。理由：改 baseURL 即可把全实例请求引到自己的服务器，改权限档即可放开自身限制 | `auth/admin.guard.ts` + 上述控制器类级 `@UseGuards(AdminGuard)` | `auth-surface.spec.ts` 2 条（控制器清单 + 三态语义） |
+| 4 | **禁止跨租户聚合**：`dashboard/overview`、`memory`、`documents` 列表在无 projectId 时，企业模式分别 403 / 403 / 400；本地模式保持原全库语义（CLI 与回归依赖） | 对应 controller | JWT 真机验证 23 项 |
+| 5 | **行业口径一致的双分数必须并排**：质量页必须同时展示「客观分（可复现、带指纹、流水线门禁使用）」与「LLM 7 维分（仅参考）」，并明写前者是门禁依据 | `QualityPage.tsx #objective-audit` | `QualityPage.test.tsx` 4 条（自动触发 / 六维+指纹 / 硬伤口径 / 门禁说明） |
+| 6 | **记忆必须项目作用域**：`MemoryPage` 请求必带 projectId；企业模式无 projectId 记忆列表直接 403 | `MemoryPage.tsx` · `memory.controller.ts` | `MemoryPage.test.tsx` 2 条（每个请求都带 projectId / 空态说明） |
+| 7 | **前端不得让成员吃 403**：能改实例配置的页面必须先解析角色；member 看到说明卡 + 个人偏好（外观），而不是整页报错 | `lib/use-auth-role.ts` · `SettingsPage.tsx` | JWT 真机（member 设置页降级视图） |
+| 8 | **筛选后的批量操作只作用于可见集合**：「导入当前结果」必须用 `visibleHits` 而不是 `hits`，避免把被过滤掉的条目静默写入 | `LiteratureTable.tsx importAll` | 按钮文案与实现同源（`导入当前结果`） |
+| 9 | **总览层必须先回答「哪几篇没达标」**：质量页必须提供项目级文档分总览（客观分对当前正文实时算 + 最新 LLM 分），最差优先；前端必须自带排序兜底，不得依赖接口顺序 | `QualityPage.tsx#quality-overview` · `quality.service.ts projectOverview` | `quality-overview.spec.ts` 5 条（排序/计数/LLM 最新/引用口径/空项目）+ `QualityPage.test.tsx` 3 条（总览渲染/默认选中最新/点击切换） |
+
+## §2.21 v1.7 主题风格包与科研能力补齐契约（2026-10-28）
+
+本批次把「明暗两态」升级为「风格 × 明暗」正交体系，并把三处对标科研工具的硬缺口接进自动化流水线。契约如下，禁止回退。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **主题两维正交**：`data-theme`（风格，6 套）与 `.dark`（明暗）互不覆盖；`applyTheme(resolved, style)` 是唯一写入点（同时写 data-theme / class / colorScheme / theme-color）。禁止在组件里手写 `classList.toggle('dark')` | `lib/theme.ts` · `App.tsx ThemeContext` | `theme.test.ts` 4 条（6 套齐备 / 元数据完整 / 两维互不覆盖 / 非法值回落） |
+| 2 | **风格包只覆盖 token**：`styles/themes.css` 每套包覆盖调色板（`--color-*`）、品牌与语义 token、圆角/阴影/密度/字体刻度；不得用 `!important` 大面积压组件，不得改组件类名。调色板必须保持 50→950 单调（组件大量成对使用 `bg-slate-50 dark:bg-slate-900`，反向即破版） | `apps/web/src/styles/themes.css` | 构建产物：`.text-slate-800{color:var(--color-slate-800)}` 仍成立；6 主题计算样式探针 |
+| 3 | **首屏无闪变**：`index.html` 预置脚本必须同时写 `data-theme` 与 `.dark`，且默认值与 `readStoredTheme()` 一致（均为 `system`）。历史上的 41ms 深→浅闪变源于两处默认值不一致 | `apps/web/index.html` · `lib/theme.ts` | 浏览器实测（无存储 + 系统深色） |
+| 4 | **主题不得只换卡片**：代码块、CodeMirror、玻璃顶栏、滚动条、选区、骨架屏、氛围光、焦点环全部走 token（`--code-*` / `--glass-*` / `--scrollbar-*` / `--selection-bg` / `--skeleton-*` / `--ambient-*` / `--focus-ring-*`）；`index.css` 的 `:root/.dark` 块外不得出现裸 hex | `index.css` | 脚本扫描（块外 hex = 2，均为注释/导出物） |
+| 5 | **高对比主题是真无障碍**：2px 实线边框、3px 焦点框、关闭 backdrop-filter 与氛围光、正文 21:1；不得只做「配色更艳」 | `themes.css :root[data-theme='contrast']` | 对比度脚本核算 |
+| 6 | **学术库发现检索只读**：`POST /api/references/discover` 只返回元数据，不入库、不下载全文；开关与流水线同一 `scholar_search` 设置（`isEnabledNow()`），AI_MOCK=1 时返回 `enabled:false` | `references.controller.ts discover` · `ScholarSearchService.isEnabledNow` | 实测 3 条真实命中（2025 异配图论文） |
+| 7 | **新颖性预检零 LLM**：重叠度用纯函数 `noveltyOverlap`（选题 token 为分母取最相近标题覆盖率），不得引入 LLM 判断（会漂移且对未见文献会编）；≥70% 必须写入产物「研究说明」，不只留日志；失败必须 fail-soft（预检不可用不阻断流水线） | `pipeline-metrics.ts noveltyOverlap` · `pipeline.graph.ts novelty-check` | `pipeline-metrics.spec.ts` 4 条 + 图节点 try/catch |
+| 8 | **自动配图必须可渲染**：写作预览的 ```mermaid 代码块由 `MermaidBlock` 渲染为 SVG；mermaid 必须按需 `import()`（主包禁止引用）；渲染失败保留源码 + 提示，不得白屏 | `components/MermaidBlock.tsx` · `WritingPreview.tsx CodeBlock` | 构建产物：主 chunk 无 mermaid；浏览器实测 SVG 出图 |
+| 9 | **步骤清单仍单一来源**：新增步骤必须同时写入 `packages/core/pipeline-steps.ts`（key/label/configurable/uiStep）与 graph 的 `.addNode`/`.addEdge`，且 graph 的 `stepEnabled()` 使用同名 key | `pipeline-steps.ts` · `pipeline.graph.ts` · `PipelineService.stepEnabled` | 设置页实测 10 步；`customization` API 返回含 novelty-check |
+
+## §2.20 v1.6 品牌与界面体系契约（2026-10-27）
+
+界面打磨不是"换配色"，而是把**信息层级、品牌识别、依赖可达性**三件事固化成契约，避免回退。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **品牌标志唯一来源**：`BrandMark` 是全站 logo 的单一实现（与 `public/favicon.svg` 同源几何）；三层语义不可删——主笔（粗细渐变 S）、主流线（贯穿细线）、成果节点（实心圆+外环）。禁止退回"圆环 + 渐变"式通用图形 | `components/BrandMark.tsx` | `BrandMark.test.tsx` 5 条（结构齐备 / inverse 不用渐变 / 词标与标语） |
+| 2 | **三种变体分工**：`mono`（跟随 currentColor）/ `gradient`（浅底彩色）/ `inverse`（品牌渐变底上的纯白反白）。品牌徽标容器 `.brand-logo` 内图形恒为白色（`--on-brand` 是给渐变按钮文字用的，暗色下是深墨色） | 同上 + `index.css .brand-logo` | 暗色模式实测（曾整块变白） |
+| 3 | **七种表面按信息角色选用**：`panel` 主面板（唯一带阴影）/ `inset` 内嵌（无阴影）/ `metric` 指标（无边框、可密集并排）/ `accent` 强调（品牌描边）/ `warning` 警示（琥珀左条）/ `danger` 危险区 / `plain` 纯容器。规则：**越靠近内容的容器阴影越弱**；禁止 `Card` 套 `Card` | `components/ui.tsx SurfaceTone` · `index.css .surface-*` | `ui.test.tsx` 4 条（各 tone 类名独立 / inset 不带 panel / plain 无表面类） |
+| 4 | **三档字体栈，零 CDN**：`--font-ui`（界面）/ `--font-read`（论文正文与预览，中文宋体+拉丁衬线）/ `--font-mono`。全部系统字体，不引 Google Fonts（境内不可达且阻塞首屏），不新增字体文件 | `index.css :root` + `.reading-surface` | 构建产物无字体外链 |
+| 5 | **页面抬头（Hero）**：每页首屏必须有唯一主任务锚点（标题 + 元信息 + 主操作）；低频配置（如项目写作偏好）折叠进 `<details>`，不占首屏最贵位置 | `DashboardPage.tsx .page-hero` | 浏览器实测（亮/暗/390px） |
+| 6 | **功能入口不得与主内容争层级**：5 个功能入口用紧凑分段导航条（`.page-quicknav`），不用 5 张等大卡片压在草稿列表之前 | `DashboardPage.tsx` | 浏览器实测 |
+| 7 | **设置页导航必须等于真实 DOM**：`sections` 数组顺序与页面 id 顺序一致；每个 id 必须在 DOM 中存在；跳转用滚动容器 `.app-shell__content` 而非 window（应用是壳内滚动），并锁定高亮 400ms 防重渲染回弹 | `SettingsPage.tsx` | 浏览器实测 4 个锚点逐个跳转（scrollTop + active 双验证） |
+| 8 | **境外模型必须显式标注**：厂商预置按「国内直连 → 本地 → 境外」排序；`region: 'global'` 的项在按钮上加「境外」角标，选中后在表单底部给替代路径说明（国产厂商 / 自建兼容网关 / 合规专线）。不写死任何第三方中转域名（寿命短、合规性各异） | `ProviderManager.tsx QUICK_PROVIDERS / REPLACE_HINT` | 类型 + 浏览器实测 |
+| 9 | **图表层按依赖拆分**：零依赖的 `MetricCard / ChartEmpty / SegBar / Sparkline / ProgressRing` 在 `charts-primitives.tsx`；recharts 组件（Donut/HBar/LineChart）在 `charts.tsx` 并 re-export 基础件，调用方 import 路径不变。约束：**主包不得引用 recharts** | `components/charts*.tsx` | 构建产物校验：主 chunk 中 `recharts` 出现次数为 0 |
+| 10 | **列表与空态语义**：空态用 `.empty-surface`（虚线 + 极浅底），不得长得像正常内容卡；长列表用 `.list-heavy`（`content-visibility:auto`）；全局 `scrollbar-gutter: stable` | `ui.tsx EmptyState` · `index.css` | 浏览器实测 |
+| 11 | **错误不得被吞**：页面级 `error` 必须渲染（`ErrorBox` + 可关闭）；禁止解构为 `_error` 后丢弃 | `LiteratureTable.tsx` | 浏览器实测（检索失败可见） |
+
+## §2.19 v1.5 客观质量检查器与真实论文流水线契约（2026-10-27）
+
+用 u2-flash 从 UI 端到端跑通多篇完整论文后固化：质量判定必须确定性可复现，起草必须名实相符，参考文献必须主题相关，润色不得挂死。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **门禁唯一依据是客观分**：`checkPaperQuality()` 六维各 20 分归一 100，硬伤封顶 40（空文 0）；LLM 分只作回炉建议，不参与合格判定——同一稿实测 LLM 在 27–59 漂移，取 min 会导致无意义回炉 | `packages/core/src/quality-audit.ts` · `pipeline.graph.ts effectiveScore` | `quality-audit.spec.ts` 23 条（含 100 次同分同指纹） |
+| 2 | **确定性要求**：纯函数、无随机/时间/网络；入口先归一 `
+
+`；任何带 `/g` 的模式只能经无状态克隆测试（`testAny`）——否则 `lastIndex` 会污染后续判定 | 同上 `testAny / text.replace(/
+
+?/g)` | spec「CRLF 等价」「/g 状态隔离 50 次」 |
+| 3 | **学术诚信（名实相符）**：自述「不报告新的原始实验」却写「实验结果表明…优于/提升/有效」且无结果表/带数值指标 → 硬伤封顶 40。本系统不运行实验，任何本文实证结论都属编造 | `NO_EXPERIMENT_DISCLAIMER` · `EXPERIMENT_RESULT_CLAIM` · `EXPERIMENT_EVIDENCE` | spec 4 条（含真实验稿不误伤） |
+| 4 | **结构按文章类型判定**：综述/框架类要求 引言/讨论/结论（「方法」可由框架/机理/评估协议承担，「结果」可由评估/分析承担）；实证类（有结果表或带百分数指标）才要求完整 IMRaD | 同上 `SYNONYMS / isReviewLike` | spec「综述类不误罚」「实证类仍要求」 |
+| 5 | **起草名实相符**：`DRAFT_SECTION` 明令禁止把文献结论写成「本文实验表明」；`planResearch`/`WRITE_OUTLINE` 禁止把「跑实验并报告新结果」列为目标——大纲不设实验章节，只设「评估协议设计 / 已有实证证据归纳」 | `packages/ai/src/prompts.ts` | 真实跑批全文 0 处虚构实证结论 |
+| 6 | **引用池一致性**：起草 prompt 的 `[Ref:N]` 与渲染必须用同一输入（projectId + topic + keywords）重算同一池；池排序按 token 相关度（不按被引数），相关条目 ≥8 时剔除零相关旧条目 | `refsForDraft/referencesForPrompt` · `buildRefsPrompt/renderCitations` 签名 | 真实跑批 19/19 条主题相关 |
+| 7 | **评审附录编号**：必须 `citation JOIN reference ORDER BY citations.created_at`（= 正文首次出现序），不得用文献池顺序拼附录 | `pipeline.graph.ts reviewRefRows` | 评审不再误报「引用编号错乱」 |
+| 8 | **学术检索只收相关**：OpenAlex/Crossref/arXiv 三源合并后过「标题≥1 token + 合计≥2 token + 覆盖≥2 个检索词分组」门禁，再按覆盖数排序 | `ScholarSearchService.search` | 真实跑批离线验证 20 条全为 GNN 主题 |
+| 9 | **润色不得嵌套限流**：`polish()` 不得再包 `this.limit`（`complete()` 内已有同一 p-limit，嵌套会饿死）；并行润色 + 单段 90s 超时 + 600s 总看门狗，失败保留原文 | `packages/ai/src/ai.service.ts polish` | 真实跑批 14 段 90s 完成（原 5.5h 挂死） |
+| 10 | **LLM 评审 fail-soft**：评审空响应/解析失败只降级为「仅客观检查」，不得把已起草完成的流水线判 failed | `pipeline.graph.ts try/catch reviewResult` | 真实事故复现（第 3 轮 failed → 修复后第 4/5 轮完成） |
+| 11 | **产物必须可见**：工作台优先展示任务产物文档（`task.documentId` > 显式选择清理 > 最新一篇）；写作页 `?doc=` 变化必须同步（原只在挂载时读一次） | `WorkspacePage.tsx` · `WritingPage.tsx` | 浏览器实测两次（旧稿 → 新稿） |
+| 12 | **失败可重跑**：`POST /api/pipeline/:id/rerun` 沿用原主题新建任务（运行中拒绝，AI 未配置拒绝）；流水线页失败卡片给按钮 | `PipelineService.rerun` · `PipelinePage.tsx` | `pipeline-rerun.spec.ts` 4 条 |
+| 13 | **导出格式**：Markdown/docx 的参考文献作者必须 `parseAuthors()` 后再拼，禁止直接把 JSON 数组字符串写进正文 | `documents.service.ts exportMarkdown` | 导出实测「— Soroush Vahidi (2025), arXiv」 |
+| 14 | **检查器可复用**：API `GET /api/documents/:id/objective-audit`、CLI `quality check`、写作页「客观检查器」面板三处共用同一纯函数；前端切换文档必须清空上一份报告 | `documents.controller.ts` · `config-cli.ts` · `WritingToolsPanel.tsx` | CLI + UI 实测同分同指纹 |
 
 ## §2.9 模块化布局（M3，2026-10-18）
 

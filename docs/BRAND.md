@@ -76,7 +76,7 @@ teal  #2dd4bf  →  cyan #22d3ee  →  sky #38bdf8    （135° 线性）
 | `--card-shadow` | 双层卡片阴影 | 深色版 | 所有 Card |
 | `--bg-app` | #f4f6fb | #0b1220 | 应用背景 |
 | `--ink` | #1c2a44 | #e2e8f0 | 正文墨色 |
-| `theme-color`（meta） | #0d9488 | — | 浏览器地址栏品牌色 |
+| `theme-color`（meta） | 随主题变化 | — | 由 `applyTheme()` 按 风格 × 明暗 写入（v1.7，此前恒为 #0d9488） |
 
 ### 3.3 语义色
 
@@ -129,9 +129,9 @@ teal  #2dd4bf  →  cyan #22d3ee  →  sky #38bdf8    （135° 线性）
 
 | 端 | 必须落实 |
 |---|---|
-| Web | favicon.svg / apple-touch-icon / theme-color / 侧栏品牌标志 / 品牌组件类 |
+| Web | favicon.svg / apple-touch-icon / theme-color / 侧栏品牌标志 / 品牌组件类 / 6 套主题风格包（`styles/themes.css`） |
 | 桌面端 | 窗口图标（build/icon.png）、安装包图标（NSIS/DMG）、产品名 "SciFlow"、启动backgroundColor `#f4f6fb`（避免白闪）、关于页 Logo 横版 |
-| 文档 | README 头图用横版组合；截图统一亮色主题 + 品牌背景 |
+| 文档 | README 头图用横版组合；截图以默认「科研青绿」亮色为主，多主题截图见 `out/` |
 | 导出物（MD/DOCX/HTML） | 模板页眉/封面可放横版 Logo；文档属性作者写 "SciFlow" |
 
 ## 9. 变更流程

@@ -55,9 +55,9 @@
 
 | 端 | 选型 | 备注 |
 | --- | --- | --- |
-| 后端 | NestJS 11 · TypeScript（strict）· Drizzle ORM · better-sqlite3（WAL）· zod · Vercel AI SDK · LangGraph · MCP 官方 SDK | AI 走 OpenAI 兼容协议；编排只在 `pipeline/pipeline.graph.ts` |
+| 后端 | NestJS 11 · TypeScript（strict）· Drizzle ORM · better-sqlite3（WAL）· zod · Vercel AI SDK · LangGraph · MCP 官方 SDK | AI 支持 OpenAI 兼容 / Anthropic Messages / Google Gemini；编排只在 `pipeline/pipeline.graph.ts` |
 | 前端 | React 19 · Vite 6 · Tailwind CSS v4 · TanStack Query/Table · Recharts · sigma.js + graphology · CodeMirror 6 · react-markdown + KaTeX | 图表一律走 `components/charts.tsx` 或既有图谱组件 |
-| 工程 | pnpm workspace · vitest（server 68 / web 50）· Playwright · promptfoo · GitHub Actions（Node 22）· Python 3 回归脚本（165 项） | CI 三 job：类型/单测/构建 · 全量回归 · E2E+评测 |
+| 工程 | pnpm workspace · vitest（server 366 / web 134 / desktop 5）· Playwright · promptfoo · GitHub Actions（Node 22）· Python 3 回归脚本（238 项） | CI 三 job：类型/单测/构建 · 全量回归 · E2E+评测 |
 | 数据 | SQLite 单文件（WAL、外键开、busy_timeout 5000ms） | 启动时 schema 自检自动建表/补列，幂等 |
 
 ## 3. 如何新增一个后端模块（5 步）
@@ -107,8 +107,26 @@ AI_MOCK=1 AI_RPM_CAP=120 DATABASE_PATH=/tmp/sciflow_regression.db PORT=3000 \
 SCIFLOW_BASE=http://localhost:3000 AI_MOCK=1 python3 scripts/full_regression.py
 ```
 
-- 回归基线（本机实测）：mock 网关 **PASS 165 / FAIL 0 / KNOWN 0**（KNOWN 机制保留，当前空集）。
+- 当前回归基线（本机全新库 + AI_MOCK=1）：mock 网关 **PASS 238 / FAIL 0 / KNOWN 0**；KNOWN 机制保留，当前空集。
+- 配置中心另有 19 项只读巡检（已接入 CI regression job）：
+  `node scripts/monitor_config_center.mjs --base http://localhost:3000 --log /tmp/server.log`
+- 完整验收矩阵：`python scripts/final_acceptance.py`（**23 项**，含 CLI `config status/preview` 冒烟）。
+- 扩展中心测试：`apps/server/src/extensions/extensions.service.spec.ts`（18）+ `apps/web/src/pages/settings/ExtensionCenter.test.tsx`（11）。
+- 主题风格包：`apps/web/src/lib/theme.test.ts`（6 条，含两维正交与非法值回落）；改 `styles/themes.css` 后必须跑一次 `pnpm --filter @sciflow/web test`。
+- 单测基线（v1.9.5）：server **345** / web **134** / desktop **5**。
 - mock 模式跑端到端流水线时务必把 `AI_RPM_CAP` 调大（如 120），否则默认令牌桶会等待导致超时。
+
+### 企业模式（AUTH_MODE=jwt）验证
+
+权限边界改动必须做一次真机验证，不能只跑单测（单测里 AUTH_MODE 默认 none，容易全绿但线上 403/404 打脸）：
+
+```bash
+pnpm --filter @sciflow/server build
+node scripts/verify-jwt-access.mjs                        # 自拉独立库+端口 3110，28 项断言，跑完即关
+node scripts/verify-jwt-access.mjs --port 3110 --keep     # 保留服务供手工排查
+```
+
+脚本覆盖六类：无 token 401 / 数据面 404 / 配置面 403 / 自己资源 200 / 跨租户聚合 403·400 / 提权 403，失败以非 0 退出可直接接 CI。
 
 ## 6. 代码风格红线
 

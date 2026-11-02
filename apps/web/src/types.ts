@@ -55,6 +55,19 @@ export interface Reference {
   isDuplicateOf?: string;
 }
 
+/** 学术库发现检索的结果（未入库：无 id/projectId/createdAt，需走导入接口才成为 Reference） */
+export type DiscoveredReference = {
+  title: string;
+  authors?: string[] | string;
+  year?: number | null;
+  venue?: string;
+  doi?: string;
+  url?: string;
+  abstract?: string;
+  citationCount?: number;
+  source?: string;
+};
+
 /** 文献录入入参（authors 兼容数组与 JSON 字符串两种形态） */
 export type ReferenceInput = {
   title: string;
@@ -112,6 +125,73 @@ export interface QualityReport {
   createdAt: number;
 }
 
+/** 客观质量检查器（确定性规则引擎）单维度报告 */
+export interface ObjectiveQualityDimension {
+  key: string;
+  label: string;
+  score: number;
+  weight: number;
+  evidence: string[];
+}
+
+/** 客观质量检查器 API 响应外壳（report 内才是五维报告） */
+export interface ObjectiveAuditResponse {
+  documentId: string;
+  title: string;
+  report: ObjectiveQualityReport;
+  llmHistory: { totalScore: number; createdAt: number; scores: string | Record<string, number> }[];
+}
+
+/** 项目内全部文档的最新分总览（GET /api/quality/project-overview） */
+export interface ProjectQualityOverviewItem {
+  documentId: string;
+  title: string;
+  status: string;
+  updatedAt: number;
+  chars: number;
+  objectiveScore: number;
+  fingerprint: string;
+  hardFailCount: number;
+  hardFails: string[];
+  llmScore: number | null;
+  llmScoredAt: number | null;
+  passed: boolean;
+}
+
+export interface ProjectQualityOverview {
+  projectId: string;
+  total: number;
+  passed: number;
+  failed: number;
+  unscored: number;
+  items: ProjectQualityOverviewItem[];
+}
+
+/** GET /api/documents/:id/objective-audit 的 report 字段 —— 同一文本必然同分同指纹 */
+export interface ObjectiveQualityReport {
+  totalScore: number;
+  dimensions: ObjectiveQualityDimension[];
+  hardFails: string[];
+  stats: {
+    chars: number;
+    cjkChars: number;
+    englishWords: number;
+    sections: number;
+    paragraphs: number;
+    sentences: number;
+    citations: number;
+    referenceEntries: number;
+    uniqueCitations: number;
+    avgSentenceChars: number;
+    duplicateParagraphs: number;
+    placeholderHits: number;
+    boilerplateHits?: number;
+    maxSectionShare?: number;
+  };
+  fingerprint: string;
+  standard?: { key: string; label: string; passScore: number };
+}
+
 export interface PipelineStep {
   key: string;
   label: string;
@@ -143,14 +223,48 @@ export interface ExperimentDesignRecord {
   createdAt: number;
 }
 
+/** 厂商协议（主流三选一） */
+export type ModelProtocol = 'openai-compatible' | 'anthropic-messages' | 'google-gemini';
+
+/** 检测到的模型条目（/models 元数据） */
+export interface DiscoveredModel {
+  id: string;
+  displayName?: string;
+  contextWindow?: number;
+  maxOutput?: number;
+  toolCalling?: boolean;
+  ownedBy?: string;
+}
+
 export interface ModelProvider {
   id: string;
   name: string;
   baseUrl: string;
   apiKey: string;
   model: string;
+  protocol: ModelProtocol;
+  contextWindow: number;
+  maxOutput: number;
+  toolCalling: number;
+  models: DiscoveredModel[];
   isActive: number;
   createdAt: number;
+}
+
+/** 检测模型响应 */
+export interface ModelDiscoveryResult {
+  ok: boolean;
+  models: DiscoveredModel[];
+  error?: string;
+  endpoint?: string;
+}
+
+/** 连接测试响应 */
+export interface ProviderTestResult {
+  ok: boolean;
+  reply: string;
+  model: string;
+  latencyMs: number;
 }
 
 export interface McpServerInfo {
@@ -407,7 +521,10 @@ export interface EvidenceResult {
 }
 
 export interface AppSettings {
-  ai: { baseUrl: string; model: string; fastModel: string; strongModel: string; configured: boolean; models: string[] };
+  ai: {
+    baseUrl: string; model: string; fastModel: string; strongModel: string; configured: boolean; models: string[];
+    protocol: ModelProtocol; contextWindow: number; maxOutput: number; toolCalling: boolean;
+  };
   env: { node: string; database: string; port: number };
   sources: { literature: string[] };
 }
@@ -687,16 +804,86 @@ export interface CitationAudit {
   noDoi: number;
   ghost: number;
   score: number;
+  /** v1.9 新增（可选，兼容旧后端） */
+  missingAnchors?: number[];
+  uncitedCount?: number;
+  duplicateDoi?: string[];
+  /** 面向用户的文案（历史字段） */
   issues: string[];
+  /** 结构化明细（分级着色与定位） */
+  details?: { level: 'red' | 'yellow' | 'info'; code: string; message: string; items?: (string | number)[] }[];
 }
 
 /** B-5.2 网搜 provider 配置（/api/web/config；key 掩码回显，保存时传新值） */
 export interface WebSearchConfig {
-  provider: 'duckduckgo' | 'searxng' | 'tavily' | 'serper' | 'brave';
+  provider: 'duckduckgo' | 'so360' | 'searxng' | 'tavily' | 'serper' | 'brave';
   searxngUrl?: string;
   tavilyKey?: string;
   serperKey?: string;
   braveKey?: string;
   chatFallback?: boolean;
-  available?: { duckduckgo: boolean; searxng: boolean; tavily: boolean; serper: boolean; brave: boolean };
+  available?: { duckduckgo: boolean; so360: boolean; searxng: boolean; tavily: boolean; serper: boolean; brave: boolean };
 }
+
+/** 配置中心：权限档 */
+export type PermissionMode = 'strict' | 'balanced' | 'open' | 'unrestricted';
+export interface PermissionModeInfo { value: PermissionMode; label: string; description: string }
+export interface CoreProtectedItem { key: string; label: string; reason: string }
+export interface PermissionInfo { mode: PermissionMode; modes: PermissionModeInfo[]; coreProtected: CoreProtectedItem[] }
+
+export interface ConfigRole {
+  id: string; name: string; systemPrompt: string; isDefault: number; enabled: number; createdAt: number; updatedAt: number;
+}
+export interface ConfigConstraint {
+  id: string; title: string; rule: string; level: 'must' | 'must_not' | 'should'; scope: 'all' | 'chat' | 'pipeline';
+  enabled: number; sortOrder: number; source: string; createdAt: number; updatedAt: number;
+}
+export interface ConfigHook {
+  id: string; name: string; event: 'chat:before' | 'chat:after' | 'pipeline:before' | 'pipeline:after';
+  type: 'prompt_inject' | 'block' | 'webhook'; config: string; enabled: number; priority: number; createdAt: number; updatedAt: number;
+}
+export interface ConfigAuditEntry {
+  id: string; actor: string; category: string; action: string; target: string; detail: string; allowed: number; reason: string; createdAt: number;
+}
+export interface ConfigPresetSummary { id: string; name: string; description: string; constraints: number; hooks: number }
+export interface ConfigSnapshot {
+  permission: PermissionInfo;
+  roles: ConfigRole[];
+  constraints: ConfigConstraint[];
+  hooks: ConfigHook[];
+  presets: ConfigPresetSummary[];
+  audit: ConfigAuditEntry[];
+  defaults: number;
+}
+export interface ConfigPreview { scope: 'chat' | 'pipeline'; text: string; role: ConfigRole | null }
+
+/** 扩展中心（v1.4） */
+export type ExtensionKind = 'skill' | 'mcp' | 'role' | 'constraint' | 'hook' | 'prompt';
+export interface ExtensionAsset {
+  id: string;
+  key: string;
+  kind: ExtensionKind;
+  name: string;
+  description: string;
+  source: 'builtin-public' | 'builtin-private' | 'user' | 'import' | string;
+  repo: string;
+  license: string;
+  install: string;
+  tags: string;
+  manifest: string;
+  enabled: number;
+  visibility: 'public' | 'private' | string;
+  createdAt: number;
+  updatedAt: number;
+}
+export interface ExtensionTemplate {
+  kind: ExtensionKind;
+  fields: { key: string; label: string; required: boolean; example?: string }[];
+  jsonExample: Record<string, unknown>;
+}
+export interface ExtensionKindsResponse {
+  kinds: { value: ExtensionKind; label: string; description: string; total: number; enabled: number }[];
+  assets: ExtensionAsset[];
+  templates: ExtensionTemplate[];
+}
+export interface ExtensionImportResult { added: number; updated: number; assets: ExtensionAsset[]; errors: string[] }

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { AiService, ChatMessage, ChatStreamOptions } from '../ai/ai.service';
 import { MemoryService } from '../memory/memory.service';
@@ -6,10 +6,12 @@ import { KnowledgeService } from '../knowledge/knowledge.service';
 import { ChatSessionService } from './chat-session.service';
 import { WebSearchService } from '../websearch/websearch.service';
 import { AgentToolBridge } from '../agent/agent-tool-bridge';
+import { ConfigCenterService } from '../config/config-center.service';
+import { loadDefaultRole } from '../common/prompt-augmentation';
 import { AgentTraceService } from '../agent/agent-trace.service';
 import { db } from '../db/database';
 import { projects, appSettings } from '../db/schema';
-import { envInt } from '../../../../packages/core/src/env';
+import { envInt } from '../common/env';
 
 /** RAG 来源（随 SSE 首事件下发给前端）
  *  向后兼容：旧字段 docName/score 保留；chunkText/chunkSeq/referenceId/referenceTitle 为本轮新增附加字段，
@@ -66,6 +68,7 @@ export class ChatService {
     private readonly websearch: WebSearchService,
     private readonly tools: AgentToolBridge,
     private readonly trace: AgentTraceService,
+    private readonly config: ConfigCenterService,
   ) {}
 
   /** 组装项目上下文：程序/情景记忆 + 知识库检索片段（NotebookLM 式 RAG 注入）；同时返回去重后的来源列表
@@ -164,7 +167,10 @@ export class ChatService {
   private personaConfig(): { systemPrompt?: string; skillsDesc?: string } {
     try {
       const read = (key: string): string => db.select().from(appSettings).where(eq(appSettings.key, key)).get()?.value ?? '';
-      const sys = read('system_prompt');
+      // 配置中心角色库优先：设置页「角色」页签保存的默认角色即对话角色；
+      // 旧版 system_prompt（persona 面板）保留兼容，仅当角色库无默认角色时使用。
+      const role = loadDefaultRole();
+      const sys = role?.systemPrompt?.trim() ? role.systemPrompt : read('system_prompt');
       let skills: { name: string; description: string; enabled: number }[] = [];
       try {
         skills = JSON.parse(read('skills') || '[]');
@@ -189,6 +195,9 @@ export class ChatService {
     docContext?: string,
     opts: Pick<ChatRuntimeOptions, 'model' | 'webSearch'> = {},
   ) {
+    // 非流式入口同样执行 chat:before 钩子（block 在此拦截；prompt_inject 由 AI 层注入）
+    const before = await this.config.runEventHooks('chat:before', { text: message, projectId }, 'chat');
+    if (before.blocked) throw new BadRequestException(before.blocked);
     const { context, sources } = await this.contextFor(projectId, message, docContext, history.length, opts.webSearch === true);
     const persona = this.personaConfig();
     const fullContext = persona.skillsDesc ? `${context}\n\n【可用技能】\n${persona.skillsDesc}\n（回答需要时可利用对应技能获取事实依据）` : context;
@@ -210,9 +219,13 @@ export class ChatService {
 
   stream(message: string, history: ChatMessage[] = [], projectId?: string, docContext?: string, opts: ChatRuntimeOptions = {}) {
     return this.contextFor(projectId, message, docContext, history.length, opts.webSearch === true).then(async ({ context, sources }) => {
+      // chat:before 钩子：block 类型在此拦截（抛错由 controller 转为 SSE error 事件）
+      const before = await this.config.runEventHooks('chat:before', { text: message, projectId }, 'chat');
+      if (before.blocked) throw new BadRequestException(before.blocked);
       // Agent 工具：开启时把 MCP 工具集注入本轮请求，模型可自主决定检索文献/查知识库。
       // projectId 一并注入，保证工具只在当前项目范围内检索（避免跨项目数据泄露）。
-      const useTools = this.tools.isEnabled() && Boolean(projectId);
+      // 无项目时仍保留工具：配置中心工具（config.*）不依赖项目，用户可在任意对话里完成设置。
+      const useTools = this.tools.isEnabled();
       // chat 会话建一次 agent_execution：工具调用能真正落到 agent_step（此前 chat 路径 runId 恒空，
       // 工具调用只在 llm_call_log 里有一条 kind='tool'，前端「Agent 执行历史」完全看不到）
       let runId: string | undefined;
@@ -230,7 +243,8 @@ export class ChatService {
         modelName: opts.model,
         enableThinking: opts.enableThinking,
         signal: opts.signal,
-        ...(toolSet && toolNames.length ? { tools: toolSet, maxSteps: 3 } : {}),
+        // 配置中心工具可多次调用（一次对话里完成角色+约束+钩子等），步数上限提高到 12
+        ...(toolSet && toolNames.length ? { tools: toolSet, maxSteps: 12 } : {}),
       };
       const persona = this.personaConfig();
       const fullContext = persona.skillsDesc ? `${context}\n\n【可用技能】\n${persona.skillsDesc}\n（回答需要时可利用对应技能获取事实依据）` : context;

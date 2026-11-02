@@ -1,6 +1,489 @@
-# 更新日志 · Changelog
+# Changelog
 
-本项目格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，语义化版本号。以下按 `git log` 自底向上归纳历轮功能与修复，未含真实密钥。
+All notable changes to this project are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
+adheres to [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+### Fixed
+
+- **All real model endpoints were rejected by the outbound guard.** The address
+  classifier treated any non-IP string as dangerous, so a hostname such as
+  `api.openai.com` was refused before DNS resolution. Every real provider call
+  failed with "blocked address"; only the in-process mock gateway worked, which
+  is why the existing tests — all of them using IP literals — never caught it.
+  The classifier now returns false for hostnames and the decision happens at
+  connection time against each resolved address.
+- **IPv6 link-local blocking only matched the `fe80` prefix.** The real range is
+  `fe80::/10`, so `fe90::1` through `febf::1` passed the check. Address
+  classification now uses `net.BlockList` with correct CIDR prefixes for
+  `fe80::/10`, `fc00::/7` and `ff00::/8`.
+
+### Changed
+
+- Removed the duplicate address-classification implementation in
+  `apps/server/src/common/outbound-guard.ts`; it now reuses
+  `packages/core/src/ip-policy`, so the API and the AI transport share one rule
+  set instead of two copies that could drift.
+- `isBlockedAddress` and `isCloudMetadataAddress` are documented as accepting
+  IP literals only. `isIpLiteral` is exported for callers that need to branch.
+
+### Added
+
+- Behavioural regression tests covering hostname pass-through, the full IPv6
+  link-local range, IPv4-mapped IPv6 bypasses, and the distinction between
+  public and reserved addresses.
+- Release process (`docs/RELEASE.md`), issue and pull request templates, a
+  secret-guard workflow, and version tags for every released version.
+- Bilingual README with English as the primary language.
+
+## [1.9.5] - 2026-10-31
+
+前端信息架构重构 + 评分门禁补漏：把界面按「科研生命周期」重排，堵住「篇幅不达标也能过门」的漏洞。
+
+### Fixed
+- **篇幅未达标准也能过质量门（Major）**：实测一篇 2307 字稿件在「SCI 通用期刊」档
+  （要求 4500 字）篇幅仅得 5/20，但结构/引用/可读性全满分，总分 **89 通过 80 分门禁**。
+  修复：正文低于所选标准下限 90% 直接判硬伤（封顶 40），不再让形式分救回体量不足的稿子。
+
+### Changed（前端信息架构）
+- **导航从「按工具分类」改为「按科研生命周期」**：旧的「核心工作/自动化/记录与洞察」
+  把核心能力（全自动流水线）折进默认收起的组里；新结构为
+  `① 研究立项 ② 证据与资料 ③ 写作与质量 ④ 投稿与复盘`，带序号与副标题，段内按阶段排序，
+  用户从上往下走即可。工具页（实验/记忆）不再与主流程抢位。
+- **移动端底栏换位**：用「流水线」替掉「评分」——流水线是核心能力入口，评分是阶段性检查。
+- **新增「项目驾驶舱」**（首屏唯一主区域）：一次回答三个问题——现在在第几阶段（0-6 进度）、
+  下一步点哪个按钮（由阶段推断，空项目也能给对第一步）、质量门达没达标（分数/标准/及格线/
+  硬伤数/还差几分）。统计卡、环形图、执行追踪降为次级区块。
+- `ShellNavGroup` 支持 `hint` 副标题与 `step` 序号。
+
+### Verification
+- server 345 / web 134 单测全绿（新增 6 条驾驶舱行为断言 + 1 条篇幅硬伤回归）
+- 回归 238/238、巡检 25/25、探针 96/96、lint 0
+- 浏览器实测（真实 dev 服务）：导航四段与序号渲染正确，驾驶舱显示「阶段 0/6 · 当前：选题」
+  「下一步：运行一次流水线」「质量门：未评分」
+
+## [1.9.4] - 2026-10-30
+
+评分体系重构：不再把「结构完整」当成「内容优秀」，引入五档可选标准与信息密度维度。
+
+### Added
+- **五档质量标准**：草稿迭代 / SCI 通用期刊（默认）/ 顶刊 IEEE Trans·Nature 子刊 / 综述 Survey / 会议 CCF-B/C。
+  每档独立约束正文篇幅、章节数、唯一引用数、每章引用密度、句长、模板腔密度、章节均衡与及格线。
+- **第 7 个确定性维度「信息密度」**：模板腔/套话密度 + 最大章节占比；专门拦截「格式像论文、内容没有信息量」的稿件。
+- **引用强度评分**：引用闭环不再只判「有没有引用」，还按所选标准要求唯一引用数与每章密度；默认 SCI 档低于 15 篇会按比例扣分，顶刊档要求 30 篇。
+- **设置页标准选择器**：质量门实际使用的标准、及格线和标准名在客观检查器卡片中显示。
+
+### Changed
+- `quality-audit` 默认阈值从 3000 字/4 章收紧为 SCI 通用期刊档 4500 字/5 章/15 个唯一引用；保留 `minChars/minSections` 显式参数兼容 CLI/旧调用。
+- pipeline quality gate 读取 `app_setting.quality_standard`，回炉及格线按标准变化，不再固定 80。
+- README 删除版本流水账，改为核心能力、定位、评分原则与真实验证证据优先。
+
+### Verification
+- server 344 tests / web 128 tests / lint 0；评分标准单测覆盖五档、套话密度、章节均衡、引用强度与 strict 长文。
+- `https://api.agnes-ai.cn/v1/models` 可达，测试令牌返回 401；真实 Key 不在本机凭据库，未伪造真实论文端到端结果。
+
+## [1.9.3] - 2026-10-30
+
+第四轮审计抓到本仓库**最深的一个假象**：mock 网关对 AI SDK 的结构化消息全部失配。
+修复它之后，此前三轮「mock 全链路回归」的可信度被重新校准——它们验证的只是管道连通。
+
+### Fixed
+- **mock 网关对 AI SDK 数组消息全部失配（Critical）**：AI SDK 发送的 `content` 是
+  结构化数组（`[{type:'text',text:'…'},…]`），而 `getLastUserContent` 直接 `String(content)`
+  → 得到 `"[object Object]"` → **27 条 mock 路由规则全部失配**，任何 AI 调用都返回兜底问答文本。
+  后果：此前所有 mock 回归里，大纲/起草/评审/润色/翻译拿到的都是同一段通用文本——
+  各步骤的输出契约从未被真实验证过。修复：新增 `extractMessageText`（string /
+  text-part 数组 / 混合数组三形态），12 条单测锁定。
+- **mock 起草不守「空池禁引用」契约**：mock 修复暴露后，空文献池场景起草产物带
+  `[文献1][文献2]` 残留锚点（客观 40 分硬伤）——mock 无论文献池是否为空都硬编码
+  `[Ref:1][Ref:2]`。修复：按 prompt 是否含 `[Ref:N]` 文献清单决定输出锚点，
+  并按章节标题返回**差异化内容**（此前 5 个章节同一段文本触发「重复段落」硬伤）。
+  实测：空池流水线 objective 40→69、残留锚点 0、审计 60 分（无引用，非假绿）。
+- **检索重排静默无效**：`rerankChunks` 没有 mock 规则 → 开启 `retrieval_rerank` 后
+  mock 返回兜底文本 → zod 解析失败 → 被 catch 静默吞掉 →「重排已开启」但排序从未变过。
+  修复：补 mock 规则（按关键词命中打分，确定性可断言）。实测 `rerankScore` 字段首次出现。
+- **润色永远返回空**：mock 的 `extractPolishText` 只认「待处理文本：」，而自定义提示词
+  分支用「待处理正文：」→ 提取失败 → 返回整段 prompt → 触发 ai.service 失败保护
+  （< 原长 30%）→ 润色结果恒为空 + 「输出异常」。实测修复前 `polished: ""`，
+  修复后 304 字正常返回。
+- **翻译接口 500**：`POST /documents/:id/translate` 不传 `text` 时，`polish_record.original`
+  NOT NULL 约束直接炸出未捕获 SqliteError（HTTP 500）。修复：空 text 回落文档正文，
+  两者皆空返回 400 可读提示。
+
+### Tests
+- server **336**（+12：mock-gateway.spec——三形态路由 / 空池禁引用 / 章节差异化 / 重排打分 / 润色双标记）
+- 回归 235/235、巡检 25/25、探针 96/96、web 128/128、lint 0（全绿后提交）
+
+## [1.9.2] - 2026-10-29
+
+第三轮逐模块「宣称 vs 实现」审计（websearch / experiments / memory / MCP / desktop）修复批次。
+方法：每个模块用真实 HTTP / 真实 Python 沙箱 / 真实 MCP 握手验证，不读代码下结论。
+
+### Fixed
+- **零 Key 联网搜索在国内网络恒为空转（Major）**：实测 `api.duckduckgo.com` 在国内网络
+  连接超时，且其 Instant Answer API 本身只返回「实体摘要」而非网页搜索结果——
+  「什么都不配默认走 DDG 兜底」实际恒为 0 结果，且失败**静默**返回 `[]`（HTTP 201），
+  用户无从区分「没有结果」与「源不可用」。修复：
+  ① 新增 `so360` provider（免 Key、国内可达，实测返回相关结果，解析抽纯函数带 4 条单测）；
+  ② DDG 失败自动降级 so360，全链失败返回带 `notice` 的诊断（不再静默）；
+  ③ 设置页新增「测试当前引擎」按钮与 provider 选项说明。
+- **程序记忆注入不可观测（Minor）**：`proceduralMemory` 会注入起草 prompt，但没有任何
+  痕迹可验证「记忆真的进了 prompt」。端到端实测（写入记忆 → 跑流水线 → 查日志）后补
+  `[记忆] 程序记忆已注入起草 prompt（N 字）` 打点。
+
+### Verified（本轮确认真实可用，无需修改）
+- 实验沙箱：Windows 下真实 spawn Python 3.14 执行脚本，`6*7→42`、死循环正确判 `timeout`
+- 程序记忆：写入 → 起草注入 → 日志可见（3 处打点）
+- MCP 双向：`initialize/tools/list/resources/list/resources/templates/list` 全通，
+  serverInfo 版本 1.9.1，SSRF 正确拒绝回环地址
+- desktop 打包链静态完整（pnpm deploy → extraResources 二级目录规避 node_modules 丢弃）
+
+### Tests
+- server 324（+4：so360 解析）
+- 回归 232 → **235**（27.10a-c 网搜诊断）
+- 全路由探针 96/96；巡检 25/25
+
+## [1.9.1] - 2026-10-29
+
+第二轮「宣称 vs 实现」审计（全路由真实探针 97 条 + 静态接线扫描）修复批次。
+方法：不是看代码写了什么，而是对每个路由发真实 HTTP、对每个配置项追读写两端。
+
+### Fixed
+- **「研究缺口」功能全量不可用（P0）**：`POST /api/references/gap` 用 `@Body('projectId')`
+  逐字段取参，而全局 `InputValidationPipe` 对 body 入参要求「必须是 JSON 对象」——
+  管道收到的是 **string**，于是无条件 400。前端按钮永远失败，且回归脚本没覆盖该路由，
+  缺陷存在两个版本未被发现。修复：管道放行标量（那是 `@Body('x')` 的合法语义），
+  控制器改整对象取参 + 显式校验；回归新增 27.9 断言。
+- **空文献池产出的「伪引用」全链路隐形（P0）**：引用渲染器把越界锚点降级为 `[文献N]`，
+  但引用体检只认 `[n]/[Ref:n]/【n】`、客观质量检查器只认 `[数字]`——于是「引用全断」
+  被报成「没有引用」（60 分），正文里全是读者无法溯源的伪引用却不触发任何硬伤
+  （实测同一稿体检 60 分、客观 77 分、0 硬伤）。修复链：
+  ① 起草 prompt 空池时显式禁用引用标记（此前两条指令自相矛盾，模型只能编造）；
+  ② 引用体检新增 `residualAnchors` 红牌判定（每处 −10 不封顶，落库为空再 −60）；
+  ③ 客观检查器把 `[文献N]/[Ref:N]/[补充文献]` 计入占位硬伤（封顶 40）。
+  回归新增 27.6/27.7。
+- **三个配置项「文档说有、设置里没有」**：`pipeline_token_budget` / `retrieval_rerank` /
+  `websearch_in_pipeline` 此前只能改库或环境变量——预算耗尽的报错让用户「到设置中调整」，
+  `docs/CONFIGURATION.md` 也声称「设置页 websearch_in_pipeline」，实际 UI 无此开关。
+  修复：并入 `GET/POST /api/customization/pipeline-settings`（四元组：深度/预算/重排/联网），
+  设置页「流水线步骤与运行参数」面板新增三项控件；预算缺省口径与流水线统一为 300k。
+
+### Changed
+- 静态 `openapi.json` 重新生成：v1.4.0/147 paths → **v1.9.0/151 paths**（补齐
+  objective-audit / pipeline rerun / references discover / quality project-overview），
+  前端类型定义 `openapi.d.ts` 同步。
+
+### Fixed (2)
+- **mock 网关缺「扩展资产生成器」路由**：`extension.generate`（一键 AI 生成资产）在 mock 模式下
+  必然 JSON 解析失败——该功能在 CI/验收里从未被端到端冒烟过。补 mock 路由后探针 96/96 全绿。
+  教训：匹配特征必须取自 **user message**（`getLastUserContent` 只看最后一条 user），
+  首版用 system 消息里的「资产生成器」做特征，永远不命中。
+
+### Tests
+- server 320（+8：input-validation.pipe 5 条、citation-audit 残留 3 条）
+- 回归 223 → **232**（新增 27.6/27.7/27.8a-f/27.9 共 9 条，全部针对本轮修复）
+- 探针脚本 `scripts/route_probe.py`（96 条真实请求）入库，供后续审计复用；当前 **0 失败**
+
+## [1.9.0] - 2026-10-29
+
+这次不是加功能，而是**把宣称的能力真正接通**：审计发现三处「文档说有、代码里没有」的假象——
+向量检索从未产出过向量（调用了 node-llama-cpp 不存在的 API）、模块边界 ESLint 规则从未命中、
+引用体检只查三类问题。三处全部修复并补上护栏，另加检索去冗余与前端按需加载。
+
+### Fixed
+- **向量检索从未真正工作（P0）**：`EmbeddingService` 在 `LlamaContext` 上调 `getEmbeddingFor`，
+  而 node-llama-cpp 3.x 只在 `model.createEmbeddingContext()` 返回的 `LlamaEmbeddingContext` 上提供该方法。
+  结果 `embed()` 恒返回 null，`knowledge_chunks_embedding` 表永远是空的——README 宣称的
+  「sqlite-vec 向量 ANN + FTS5 混合检索」实际只有 FTS5 单路。修复后端到端实测：上传 1 篇资料后
+  `embeddedChunks` 从 0 变 1，同义改写查询能命中。
+- **向量维度无守卫**：模型输出非 384 维时 vec0 insert 抛错，整个上传事务回滚（用户看到 500）。
+  现在入口统一守卫，维度不符该块降级全文检索并给出可操作提示。
+- **模块边界规则形同虚设**：`eslint.config.mjs` 的 pattern `**/packages/*/src/*!(index)*` 在
+  eslint 的 minimatch 实现下**从未命中**——把 `packages/core/src/quality-audit` 深路径导入塞进
+  `apps/server` 仍然 0 报错。改为显式列目录后规则真实生效，并同步把 28 处深路径导入收敛到
+  `apps/server/src/common/*` 桶。
+
+### Added
+- **嵌入双后端**：`EMBEDDING_PROVIDER=auto|local|api`。已配置模型 Key 的用户无需再手动下载 GGUF——
+  直接用同厂商的 `/embeddings`（`ai` SDK `embedMany`），零额外配置即可启用语义检索。
+  本地 GGUF 仍是默认优先（数据不出机器）。
+- **批量嵌入**：上传走 `embedBatch`（API 每批 64 条；本地受限并发 4），替代逐条 `Promise.all`。
+- **MMR 检索去冗余**（`packages/retrieval/src/mmr.ts`）：RRF 融合后按「相关性 − 冗余度」贪心重排，
+  解决「同一篇文档的相邻块占满 topK」——5 条来源其实是同一段话的 5 个切片。
+- **引用体检 5 类新判定**：未引用条目、锚点断号、重复 DOI、同 DOI 元数据冲突、孤儿引用；
+  判定下沉为纯函数 `packages/core/src/citation-audit.ts`，`issues[]` 历史契约保留，
+  另给 `details[]`（level/code/items）供 UI 红/黄/绿分级。
+- **学术检索 TTL 缓存 + 全并行**：`ScholarSearchService.search` 加 10 分钟 LRU（`SCHOLAR_CACHE_TTL_MS` 可关），
+  三源 × 各关键词并行（原按 query 串行，4 关键词 × 3 源 = 12 次往返）。
+- **包公共出口**：`packages/ai`、`packages/retrieval` 补 `index.ts` 与 `package.json`
+  （此前连包描述文件都没有，`@sciflow/ai` 无法被当作包引用）。
+- **查询路径索引 5 条**：`citation(reference_id)` / `memory_log(project_id, created_at DESC)` /
+  `pipeline_task(status)` / `document(project_id, updated_at DESC)` / `reference(project_id, fingerprint)`。
+- **健康探针暴露嵌入真实后端**：`capabilities.embeddingBackend`（local/api/none）+ `embeddingDimension`；
+  设置页自检同步（此前只看 `EMBEDDING_MODEL_PATH` 是否存在，配了远程 Key 也显示「未配置」，与实际相反）。
+
+### Changed
+- **前端按需加载**：`ForceGraph`（sigma+graphology）、`WritingEditor`（CodeMirror）、
+  `WritingPreview`（react-markdown+KaTeX）改为 `lazy()`。编辑器句柄拆到独立轻量模块
+  `pages/writing/editor-handle.ts`，否则父页面静态 import 会把 CodeMirror 拉回首屏。
+  实测：`LiteraturePage` 570KB→106KB、`WritingPage` 682KB→54KB（编辑器与预览各自独立 chunk）。
+- **单测速度**：server vitest 开 `isolate: false`（spec 均为纯函数/服务级用例，DB 已按进程隔离），
+  40 个 spec 总时长 40s→10s。
+- **ESLint 忽略 `.tmp/`**：本机做对标调研时把参考仓库拉进工作区，会让 `eslint .` 直接崩（缺对方插件）。
+
+### Tests
+- server 285→312（新增 `citation-audit.spec.ts` 11 条、`retrieval-quality.spec.ts` 16 条）
+- 全量回归 223/223、配置中心巡检 25/25、web 128/128、lint 0 error
+
+## [1.8.0] - 2026-10-28
+
+安全收口 + 体验补洞批次：把「归属校验」从 5 个控制器补到全部 13 个（企业模式跨租户越权彻底关闭），
+把「实例级配置」从"登录即可改"收紧为管理员专属并给出前端降级视图，质量页补上流水线真正使用的客观分，
+记忆中心补上量化指标与项目作用域。
+
+### Security
+- **补齐 8 个控制器的归属校验（IDOR）**：`knowledge` / `memory` / `research` / `quality` / `submission` / `agent-trace` / `dashboard` / `chat` 此前**完全零校验**（v1.7 只补了 pipeline）。企业模式下任一账号可：
+  - 用他人 projectId 上传/读取知识库资料原文、做跨项目 RAG 问答（他人私有资料进自己的 prompt）
+  - 读他人项目的情景记忆（每次研究的主题与结论摘要）、删他人记忆
+  - 列他人项目的实验设计稿、读写他人文档的审稿意见、用他人正文生成回复信
+  - 按 documentId 读他人稿件的评分与改进建议，按 report id 读任意报告
+  - 列他人项目的投稿记录与事件流（期刊名/稿号/修回截止日）、改他人投稿状态、删他人投稿
+  - 用他人 projectId 读执行轨迹（输入原文/模型/token）、读单次 run 详情
+  - 无 projectId 拉全库总览（他人待确认大纲、超期投稿、低分文档标题）
+  - `GET /documents/:id/objective-audit` 单独漏在 citation-audit 之外
+  - 关闭方式：`ProjectAccessService` 新增 `assertKnowledgeDoc / assertMemory / assertSubmission / assertResearchDesign / assertReviewComment / assertAgentExecution / assertQualityReport`，13 个控制器全部改为「子资源 → 项目 → owner」断言，非本人一律 404（不泄露存在性）；本地模式行为不变。
+- **实例级配置收紧为管理员专属（AdminGuard）**：`settings`（模型厂商/Key/baseURL/连接测试）、`config`（权限档/角色/约束/钩子/预设/审计）、`extensions`（内置资产启停）、`customization`（意图/步骤开关/质量权重/提示词）、`usage`（全实例成本）、`websearch`（provider Key）、`submission` 的期刊库增删。此前只要求登录 —— 任一 member 改 baseURL 即可把全实例请求（含他人稿件）引到自己的服务器，或直接放开权限档。新增 `apps/server/src/auth/admin.guard.ts`；本地模式（AUTH_MODE!=jwt）直接放行，零登录体验不变。
+- **企业模式禁止跨租户聚合**：`dashboard/overview`、`memory` 列表、`documents` 列表在无 projectId 时分别改为 403 / 403 / 400（原来静默返回全库）。
+
+### Added
+- **质量页「全部文档最新分」总览卡**：进入页面即列出项目内所有文档的客观分（对当前正文实时计算，零模型成本）+ 最新 LLM 分，按**最差优先**排序，带达标/未达标/空文计数与硬伤徽标；点击任一行切换当前文档。此前只能一篇一篇选文档看分，真实痛点「哪几篇还没达标」无法回答。后端新增 `GET /api/quality/project-overview`（归属校验 + 前端兜底排序，不依赖接口顺序）。
+- **质量页「客观检查器」卡片**：切换文档即自动出分（纯规则、零模型成本），展示六维分 + FNV 指纹 + 硬伤口径（空文/过短 0 分 vs 其余封顶 40）+ 统计明细。此前该页只有 LLM 7 维分，而流水线门禁用的是客观分 —— 用户会看到「页面 62 分却过闸」的认知冲突。卡片上明写「流水线质量门用的就是这个分」。
+- **记忆中心 KPI 卡片**：记忆总量 / 情景记忆 / 程序记忆 / 近 7 天新增四项量化指标（此前这些数字只能从环形图里读）。空态补一张「两类记忆从哪来」说明卡（含项目隔离说明）。
+- **记忆中心按项目隔离**：`MemoryPage` 新增 `project` 参数，列表与概览请求都带 projectId（企业模式服务端强制）；契约测试锁定「请求一定带 projectId」。
+- **文献发现结果的排序与年份筛选**：学术库命中 20 条时可按「相关度 / 最新 / 高被引」排序 + 年份下限过滤；「全部导入」改为「导入当前结果」，只导入筛选后的集合（隐藏操作是数据污染来源）。
+- **普通成员设置页降级视图**：企业模式 member 打开设置页不再吃一墙 403，改为一张说明卡（哪些是实例级配置、可正常使用哪些功能）+ 外观主题（个人偏好，对所有人开放）。新增 `lib/use-auth-role.ts`（health + /auth/me 派生，带缓存）。
+
+### Changed
+- `App.tsx` 的 `MemoryPage` 传入 `project`；`api.memory.list` 增加 projectId 参数。
+- `pipeline-access.spec.ts` 的「列表」语义扩展到 9 条；`auth-surface.spec.ts` 增加 AdminGuard 契约 2 条。
+
+### Verification
+- server **285 passed / 38 files**（新增子资源归属 10 条 + AdminGuard 契约 2 条 + 质量总览 5 条）；web **128 passed / 19 files**（新增记忆项目作用域 2 条 + 客观检查器卡片 4 条 + 总览/默认选中 3 条）；desktop 5 passed。
+- `pnpm lint` 0 problem；typecheck ×2；`pnpm -r build` 全绿。
+- **JWT 模式真机验证**（独立库 + `AUTH_MODE=jwt`）：
+  - admin 注册 → 建项目 → 知识库上传/列表 200；无 token 访问 settings 401；幽灵 projectId 404；无 projectId 记忆 403。
+  - member（第二位注册）：读他人项目文档/知识库/投稿全部 404；settings/config/extensions/customization/usage/websearch 全部 403；提权 `POST /config/permission` 403；自己的项目文档/记忆/总览 200；无 projectId 总览 403、文档列表 400。共 23 项断言全 PASS。
+- 浏览器巡检：11 个页面 × 亮/暗 + 5 个页面 × 390px，无 console 错误、无横向溢出；6 主题 × 明暗 × 4 页面共 48 张截图，主题均真实生效（采样 `--background` / `--card` / `--radius-lg` / `data-theme` 断言）。
+- **`scripts/verify-jwt-access.mjs`（新增，28 项断言）**：自拉独立库 + 独立端口跑真实 HTTP，覆盖数据面 404 / 配置面 403 / 自己资源 200 / 无 token 401 / 跨租户聚合 403·400 / 提权 403；已接入 CI（`types-unit-build` job），失败以非 0 退出。此前这套验证只是一次性临时脚本，删掉就无法复现。
+- **`use-auth-role.test.ts`（新增 8 条）**：角色解析契约 —— 本地模式 none、admin/member 判定、无 token 不误请求、接口异常 fail-closed 到 member、并发 inflight 去重、缓存与 reset（登出/换号不残留）、hook 的 loading→实际值。
+
+## [1.7.0] - 2026-10-28
+
+主题多样化 + 科研能力补齐批次：把「只有明暗两种外观」升级为 6 套风格包，并补上对标科研工具的三处硬缺口（学术库发现检索、自动配图可渲染、选题新颖性预检进入自动化流水线）。
+
+### Added
+- **6 套主题风格包（与明暗正交）**：科研青绿（默认）/ 学术经典（纸墨衬线·零阴影·2px 圆角）/ 暖色纸感（米黄纸底·柔影·长读）/ 现代极简（纯灰阶·单强调色·去氛围光）/ 暗夜实验室（深蓝黑·霓虹青·等宽数字）/ 高对比无障碍（纯黑白·2px 边框·3px 焦点框·WCAG AAA）。
+  - 实现方式：Tailwind v4 工具类编译为 `var(--color-*)`，风格包只覆盖调色板 + 品牌/语义 token + 圆角/阴影/密度/字体刻度，**2600+ 处类名零改动**即可整站换肤（`apps/web/src/styles/themes.css`，约 700 行，gzip 后仍为个位数 KB）。
+  - 新增 `data-theme` 维度与 `applyTheme(resolved, style)` 单一写入点；`theme-color` meta 随主题更新；`index.html` 预置脚本同时写风格与明暗，刷新无闪变。
+  - 设置页新增「外观与主题」分区（置顶）：6 张真实 token 绘制的预览卡 + 明暗三态；命令面板新增 6 条「风格：X」命令；`lib/theme.ts` 新增 `THEME_STYLES` 单一事实源与 `readStoredStyle`（非法值回落默认）。
+- **学术库发现检索（文献页）**：新增 `POST /api/references/discover`，文献页检索区加「本地文献库 / 学术库检索」切换。学术库走 OpenAlex + Crossref + arXiv（免 Key），只返回元数据不入库，命中项按标题去重标记「已导入」。此前三源检索只被流水线内部调用，UI 上新项目没有任何发现文献的入口。
+- **自动配图真实渲染**：新增 `MermaidBlock`（按需 `import('mermaid')`，绝不进主包）接管写作预览里的 ```mermaid 代码块。此前流水线「自动配图」生成的图表在预览中只是一段代码文本，图表价值为 0。深色/风格切换时自动重绘；语法错误保留源码 + 提示，不炸页面。
+- **新颖性预检节点（流水线第 2 步）**：`novelty-check` 在文献调研前用学术库比对近 8 年同题工作，输出「重叠度（高/中/低）+ 相近工作 + 改题建议」；重叠度 ≥70% 时把提醒写入产物「研究说明」，不只留在日志里。重叠度口径为纯函数 `noveltyOverlap`（以选题 token 为分母取最相近标题覆盖率），零 LLM 调用、结论可复现。可在设置页单独关闭。
+- **`pipeline-metrics` 新增纯函数 + 4 条单测**：`tokenizeForMatch`（中英分词，与学术检索门禁同规则）、`noveltyOverlap`。
+
+### Changed
+- **主题层去除硬编码颜色**：`index.css` 中 `:root/.dark` 之外的 19 处 hex + 40 处 rgba 全部收敛为 token（玻璃层 `--glass-bg/--glass-blur`、代码块 `--code-bg/fg/border`、链接 `--link`、选区 `--selection-bg`、滚动条、骨架屏、氛围光 `--ambient-1/2`、焦点环 `--focus-ring-color/-w`、气泡前景 `--bubble-user-ink`），使每套风格包都能接管代码块/编辑器/玻璃顶栏，而不是只换卡片底色。
+- **对比度还债**：`--muted-foreground` 由 `#64748b`（在 `#f4f6fb` 上 4.40:1，低于 AA）调至 `#5d6d85`（4.87:1）；`--font-heading` 引入，学术/纸感两套用衬线标题。
+- **Electron 启动底色跟随系统明暗**（原来固定 `#f4f6fb`，深色用户启动闪白一帧）。
+- **默认明暗由 `light` 改为 `system`**（`lib/theme.ts` 与 `index.html` 预置脚本原本不一致，导致首帧按 system 渲染、挂载后被翻回浅色，实测约 41ms 的深→浅闪变）。
+
+### Security
+- **流水线端点补归属校验（IDOR）**：`PipelineController` 此前完全没有 `ProjectAccessService` 校验，而 documents / references / knowledge 全部都有——企业模式（`AUTH_MODE=jwt`）下，知道 taskId 的任一账号可读他人流水线的主题、产物文档 id 与执行轨迹，也可替他人项目起流水线烧对方 token。现在 `create/list/:id/confirm-outline/stop/rerun/delete` 全部按「任务 → 项目 → 归属」断言，非本人一律 404（不泄露存在性）；列表在企业模式必须显式传 projectId，本地模式保持零登录全量返回（CLI/回归依赖）。新增 `pipeline-access.spec.ts` 9 条。
+
+### Fixed
+- **文献页检索结果卡排到右列**：`LiteratureTable` 直接返回 Fragment，而它是 `grid lg:grid-cols-2` 的一个网格项——命中多时（学术库检索 15-20 条）结果卡会各自成为网格项，把 AI 工具面板挤到下一行、整页错位。现在包单容器 + `space-y-4`。
+- **设置页滚动监听的死代码**：`useEffect` 里 `return` 之后的两条语句永不执行（`onScroll()` 与一个错误的 `window.removeEventListener`），且依赖 `[activeSection, sections]` 导致每次高亮变化都重建监听。改为 `[sections]` 单依赖 + 真实容器监听。
+- **`--on-brand` 误用**：阶段条徽标前景写死 `#1f1300`，在深色/高对比主题下不可读，改用 `--on-brand`。
+- **文献检索结果类型**：`hits` 原声明为本地 `Reference[]`，接学术库元数据时缺 `id/projectId` 等字段；结果卡按可选字段渲染（已核对每条使用点）。
+- **`.tmp-brand-mark.txt` 空文件**清理。
+
+### Verification
+- server **268 passed / 36 files**（新增选题重叠度 4 条 + 流水线归属校验 9 条）；web **111 passed / 16 files**（新增主题包契约 4 条）；desktop 5 passed；mock 全量回归 **PASS 221 / FAIL 0**。
+- `pnpm lint` 0 problem；typecheck ×2 通过；`pnpm -r build` 全绿（mermaid 拆为独立异步 chunk，主包无 mermaid 代码）。
+- `scripts/final_acceptance.py` **23/23**；`scripts/full_regression.py`（全新库 + AI_MOCK=1，端口 3101）**PASS 221 / FAIL 0 / KNOWN 0**。
+- 浏览器实测（1600×1000，真实后端 3100 + vite 5273）：6 套风格 × 明暗共 12 张截图；点选风格即时生效、`meta[theme-color]` 同步、刷新后保持；写作预览 mermaid 渲染出 SVG；文献页「学术库检索」切换可见；设置页流水线步骤编辑器出现「新颖性预检」（10 步）。
+- 对比度脚本核算 12 组正文/辅助文字组合，正文 ≥13:1、辅助 ≥4.87:1，高对比主题 21:1。
+
+## [1.6.0] - 2026-10-27
+
+品牌与界面打磨批次：全站视觉体系重做（品牌 3.0 标志 / 七种表面层级 / 三档字体），修掉一批「所有卡片长得一样」的信息架构问题，并把境外模型依赖的可用性问题在 UI 上摊开。
+
+### Added
+- **品牌标志 3.0（墨流 · Current）**：由「两段同心圆弧拼 S」改为**单一连续笔势**——粗细渐变的主 S 水流 + 贯穿全图的主流线 + 收笔处的成果节点。2.0 的同心圆在 24px 以下会退化成两个圈，且与通用 AI 产品的「圆环 + 渐变」高度雷同；3.0 缩到 16px 仍能读出方向。同源更新 favicon。
+- **品牌组合排版 3.0**：词标拆 Sci（中等字重）+ Flow（渐变加粗），标语前加 1px 竖分隔线并拉开字距（0.14em），形成期刊页眉式分栏感，替代「图标 + 两行随便的小字」。
+- **七种表面层级（SurfaceTone）**：`panel` / `inset` / `metric` / `accent` / `warning` / `danger` / `plain`。此前全站 61 处 `<Card>` 只有一种视觉，指标、图表、表单、列表、危险区完全同权重。现在按信息角色选用，规则是「越靠近内容的容器阴影越弱」。
+- **三档字体栈**：`--font-ui`（界面，系统无衬线优先）/ `--font-read`（论文正文与预览，中文宋体 + 拉丁衬线）/ `--font-mono`。全部为系统字体，**零 CDN 依赖**（Google Fonts 在国内不可达且会阻塞首屏），也不新增字体文件。
+- **页面抬头（Hero）**：项目总览从「一张塞满内容的大白卡」改为品牌化抬头 + 折叠式偏好设置，首屏出现明确的「运行流水线 / 继续写作」主操作。
+- **快捷导航条**：原 5 张等大功能卡（与草稿列表抢主次）改为一行紧凑分段导航，功能不减、视觉权重降低。
+- **写作工具面板分组**：9 个等权 section 归并为「写作辅助 / 评审与质量 / 过程资产」三组，组内网格用容器查询自适应列数。
+- **设置页导航重建**：11 个锚点与真实 DOM 顺序对齐（原顺序错乱，且 `settings-persona` / `settings-extensions` / `settings-config` 三个锚点在 DOM 中不存在，点了没反应）；补上「连接测试」入口；跳转后导航项横向居中、高亮跟随。
+- **厂商预置重排 + 境外可用性提示**：国内可直连厂商（DeepSeek / 通义 / 智谱 / Kimi / 豆包 / UniSound / 硅基流动 / 百度千帆）排前，本地 Ollama 次之，OpenAI / Anthropic / Gemini 标注「境外」并附替代路径说明。原先 OpenAI、Google 排前两位，新用户点第一个必然连接失败。
+- **文献引用选择器**：加搜索（标题/作者/期刊/年份）、已引用优先、按年份倒序（文献库 85 条时不再逐条翻找）。
+
+### Changed
+- **图表层拆分**：`MetricCard / ChartEmpty / SegBar / Sparkline / ProgressRing` 从 `charts.tsx` 拆到零依赖的 `charts-primitives.tsx`；recharts 从主包剥离为独立 chunk（主包 **0 引用 recharts**，436KB 图表库按需加载，基础件仅 3.34KB）。
+- **空态容器**：改为虚线边 + 极浅底，与正常内容卡区分（避免「空态也像有数据」）。
+- **长列表绘制**：扩展中心 / 知识库列表加 `content-visibility: auto`，视口外行不参与布局与绘制。
+- **全局**：`scrollbar-gutter: stable`，避免筛选/分页切换时整页横向跳动。
+
+### Fixed
+- **文献页错误完全不可见**：`error` 被解构为 `_error` 后丢弃，检索/导入/核验失败时用户点完按钮毫无反应。现在页面顶部统一展示并可关闭。
+- **写作页工具面板大片空白**：分组后 section 高度不一致，grid 默认拉伸导致「写作辅助」下方一整屏空白（改 `align-items: start` + 自适应行高）。
+- **暗色模式对比度**：inset 面板与迷你统计卡在暗色下几乎不可见；品牌徽标内图形在暗色下变成深墨色（`--on-brand` 语义误用）。
+- **设置页跳转无效**：滚动容器是 `.app-shell__content` 而非 `window`，且平滑滚动被重渲染打断；改为容器级即时滚动 + 高亮锁定 400ms。
+- **MiniStat 卡套卡**：全链路小卡原本在白卡内再套一层白底带边，改为透明弱底。
+
+### Verification
+- web **107 passed**（16 files，新增表面语义 4 条 + 品牌组件 5 条）/ server 255 passed / desktop 5 passed。
+- typecheck ×2 / eslint **0 problem** / build ×3 全绿。
+- 浏览器实测：工作台（亮/暗/390px 移动端）、设置页（11 锚点逐个跳转验证）、写作页（工具分组）、文献页、质量页；移动端无横向溢出（scrollWidth = clientWidth = 390）。
+- 主包体积：recharts 引用数 **0**；`charts-primitives` 3.34KB、`charts` 436KB（独立异步 chunk）。
+
+## [1.5.0] - 2026-10-27
+
+真实论文全流程验收批次：用 u2-flash 从 UI 端到端跑完多篇完整论文，把「跑不通 / 跑完看不见产物 / 分数注水」逐条修掉；新增**确定性客观质量检查器**（六维硬指标 + 学术诚信检测）作为门禁唯一判定依据，LLM 评分降为参考建议。
+
+### Added
+- **客观质量检查器 `packages/core/src/quality-audit.ts`**：纯函数、零随机、零网络，六维各 20 分（结构完整性 / 篇幅达标 / 引用闭环 / 可读性 / 修辞严谨 / **学术诚信**）归一为 100 分；硬伤（占位符、空文、重复段落、长篇零引用、悬空锚点、名实不符）直接封顶 40 或 0；附 FNV-1a 指纹，同文本必然同分同指纹。
+- **学术诚信维度（名实相符）**：检测「自述未开展原始实验 / 仅归纳已有研究」却给出「实验结果表明…优于/提升/有效」的稿子——本系统不运行实验，这类结论属于编造研究成果。实测拦下一稿：原 97 分假绿灯 → 40 分硬伤。
+- **结构维度按文章类型判定**：综述/框架类不再被「缺方法/结果章节」误罚（本系统不跑实验，强求结果章节只会逼模型编数据）；实证类（有结果表/带数值指标）仍按 IMRaD 要求。
+- **`GET /api/documents/:id/objective-audit`**：返回六维报告 + 硬伤 + 统计 + 指纹 + 最近 LLM 评分历史（对照漂移）。
+- **CLI `sciflow quality check --doc <id> | --file <path>`**。
+- **前端「客观检查器」面板**（写作页 → AI 工具）：六维条形图、硬伤清单、指纹、字符/章节/引用统计、证据展开、手动重跑；切换文档自动清空避免串分。
+- **`POST /api/pipeline/:id/rerun`**：失败/中断任务一键沿用原主题重跑（此前只能删除任务再手输主题）；流水线页失败卡片加「重跑本任务」按钮。
+- **内置免 Key 学术检索 `ScholarSearchService`**：OpenAlex + Crossref + arXiv 三源合并去重，为全新项目补充真实文献元数据（否则起草阶段零参考文献，引用维度必然崩）。
+- **文献相关性门禁**：检索词分组覆盖 + token 级相关度排序 + 标题必命中；实测把 DeepLab / 图像修复 / 遥感超分等跨域高被引论文挡在参考池外。
+
+### Changed
+- **质量门以客观分为准**（原为 LLM 分与客观分取 min）：同一稿件 LLM 评分实测在 27–59 之间随机漂移，取 min 会让「内容没变差但模型心情变了」反复回炉。LLM 反馈仍注入回炉提示词，但不参与合格判定。
+- **参考文献排序改为相关性优先**：原按被引数排序导致池子里前几条是 DeepLab/Bagging 等离题高被引论文；现在按「主题词 + 检索词」token 相关度排序，相关条目 ≥8 时剔除零相关旧条目。
+- **起草池与渲染池输入统一**（projectId + topic + keywords）：此前起草不传主题、渲染不传主题，两个池顺序不同 → 正文 `[n]` 与参考文献编号错位（评审据此误判「引用严重错误」）。
+- **评审附录按 citation 插入序编号**：此前用文献池顺序拼附录，正文 [18] 与附录第 18 条对不上。
+- **润色改为真并行**：去掉了嵌套 `p-limit`（外层占满并发槽时内层 `complete()` 永不调度，实测挂死 5.5 小时）；11 段/14 段并行润色实测 71–90 秒完成，另加 600s 总看门狗 fail-soft。
+- **评审 LLM 失败降级**：`reviewPaper` 空响应不再让整条已起草完成的流水线判 failed，改为仅用客观检查继续。
+
+### Fixed
+- **润色死锁**（严重）：`polish()` 内层 `this.limit` 与 `complete()` 内同一 p-limit 嵌套，`AI_RPM_CAP` 较小时永久饿死；任务卡 5.5h、0 CPU、0 外连、0 LLM 调用记录。
+- **流水线产物不可见**：完成后工作台仍展示旧稿（`docs[0]` 按 updatedAt 升序=最旧一篇）；现在优先展示任务产物，并在任务完成的瞬间清掉用户此前的显式选择。
+- **写作页 `?doc=` 失效**：`initialDocId` 只在挂载时读一次，点「完整编辑器」打开任何文档都落到同一篇；无指定时也默认取最旧一篇（改为最新）。
+- **导出参考文献作者显示为 JSON 数组**：`exportMarkdown` 未走 `parseAuthors`，导出成 `— ["A","B"]`（docx 路径本来就是对的）。
+- **检查器 CRLF 失配**：同一文本 LF 得 97、CRLF 得 82（`^`/`$` 锚定规则在 `
+
+` 上全部失效）；入口统一换行归一。
+- **检查器 `/g` lastIndex 污染**：`RegExp.test` 在 `/g` 模式推进 `lastIndex`，同一正则第二次调用结果不同 → 「综述类」判定时真时假；统一改为无状态克隆测试，并加 50 次连测守护。
+- **`AI 返回空响应` 死循环重试**：`defaultMaxOutput()` 用厂商上报的 131072 导致 180s 超时，改为封顶 8192；润色按输入长度估算输出上限。
+- **模型重复输出章节标题 / 自造参考文献块**：`sanitizeSectionDraft` 剥掉复述标题与自造 `## 参考文献`（曾把正文截断成首章）。
+- **流水线步骤失败即整条 failed**：文献检索/学术检索失败均静默降级，不阻塞主流程。
+
+### Verification
+- server 253 passed（35 files）/ web 98 passed（15 files）/ desktop 5 passed；typecheck ×2 / eslint 0 problem / build ×3 全绿。
+- 客观检查器单测 23 条：100 次同分同指纹、CRLF 等价、/g 状态隔离 50 次、名实不符硬伤、真实验稿不误伤、综述结构不误罚。
+- 真实端到端（u2-flash，全程 UI 操作）：论文《异配图节点分类中残差聚合的失效边界：机理分析与评估协议》15,019 字符 / 9 章 / 19 条引用，客观分 **98/100**（结构 20 / 篇幅 20 / 引用 20 / 可读 17 / 严谨 20 / 诚信 20），指纹 `q88eff328`，连续 3 次调用完全一致；全文 0 处虚构实验结论。
+- 参考池 19 条全部为异配图 / 过平滑 / 残差连接 / 节点分类主题（此前混入 DeepLab、图像修复、遥感超分等 5 篇跨域论文）。
+
+## [1.4.0] - 2026-10-26
+
+扩展中心批次：内置 87 条科研资产（社区开源 74 + SciFlow 私有优势 13）随仓库发布、默认全启用；技能/ MCP / 角色 / 约束 / 钩子 / 提示词六类统一管理，四种添加入口 + 对话入口，全部真实投影到对应子系统。
+
+### Added
+- **扩展中心（`/api/extensions`）**：`extension_asset` 单表承载六类资产；`source=builtin-public`（社区开源，含仓库/许可证/安装方式）/ `builtin-private`（SciFlow 私有优势工具，仅本机可见）/ `user` / `import`；`enabled` 默认 1。
+- **内置目录 87 条**：
+  - 20 个 MCP（Context7、DeepWiki、arXiv、Paper Search、Zotero、BioMCP、Semantic Scholar、CNKI、Obsidian、NotebookLM、Basic Memory、Deep Research、Agentset、DocsAgent、PaperDebugger、PDFMathTranslate、Lit Review Tools、Patsnap、Obsidian Wiki、LLM for Zotero）
+  - 31 个技能（Anthropic 官方 Skills、Academic Research Skills 53.9k★、Codex/Claude 学术三件套、Agent Research Skills、Claude Scholar、Academic Humanizer、Claude Prism、LatteReview、Paper Proofreading、AI Research Writing、Deep Research Prompts、Awesome Agent Skills 等 + 13 个 SciFlow 私有：引用体检/统计口径审计/可复现性方案/伦理扫描/图表规范/新颖性扫描/基金契合/投稿风险/审稿答辩/精读矩阵/实验计划/数据可用性/提示词加固）
+  - 10 个角色（方法学家/统计顾问/期刊编辑/基金评审/数据管理员/伦理审查员/科研馆员/可复现性专员/图表设计师/审稿回复专家）
+  - 10 条约束、4 个钩子、12 个提示词模板
+- **四种添加入口（每个资产面板都有）**：① 手填模板 ② 粘贴 SKILL.md / 模板 JSON / MCP JSON ③ 拖拽上传 .md/.json/.zip（ZIP 自动解析内部 SKILL.md 与 JSON）④ 一键 AI 生成（按模板出草稿，jsonrepair 容错，确认后落库）。第五入口：对话工具 `extension.list/create/toggle/generate`。
+- **投影真实生效**：启用/停用同步到 `app_setting.skills`（技能，保留内置 4 项）/ `config_role` / `config_constraint` / `config_hook` / `custom_prompt`（仅显式「应用」时）/ `mcp_server`（HTTP 端点）。
+- **私有优势工具不外泄**：导出包与外部 MCP 客户端的 `extension.list` 均过滤 `visibility=private`。
+- **CLI**：`sciflow ext list|toggle|import|export|reset`。
+- **设置页新增「扩展中心」分区**：分类计数、私有开关、停用/启用/删除/恢复内置/导出；各资产面板（角色/技能/提示词/约束/钩子/MCP）内置「从扩展中心添加」快捷入口。
+- **回归新增 12 条**（快照/六类齐全/默认启用/含私有/模板齐全/导出不含私有/手填新增并注入/停用撤回/删除/SKILL.md 导入/非法格式报错）。
+- **巡检新增 5 项**（资产 ≥80 / 内置全启用 / 含私有 / 导出不含私有 / 扩展工具暴露），巡检总数 19→24。
+
+### Changed
+- **提示词模板默认不覆盖系统默认**：模板「启用」只代表可用，必须显式点「应用」才写入 `custom_prompt`——自动覆盖会静默改变流水线起草的 [n] 锚点契约（回归实测 citations 回填失败，故收紧）。
+- **资产 key 生成**：非 ASCII 名称改用哈希短码（此前中文名净化后产生空 slug 冲突）。
+
+### Fixed
+- **AI 生成返回非法 JSON 时整体失败**：改用 `jsonrepair` 修复（与 `AiService` 同策略），失败时才报可读错误。
+- **前端一键生成 60s 超时**：AI 生成最长 3 分钟，改为显式 `AbortSignal.timeout(300_000)` 关闭默认兜底。
+
+### Tests
+- 新增 `apps/server/src/extensions/extensions.service.spec.ts`（18）、`apps/web/src/pages/settings/ExtensionCenter.test.tsx`（11）。
+- 门禁：server 221 / web 98 / lint 0 / typecheck ×2 / build ×2 / final_acceptance 23/23 / 回归 **PASS 220 / FAIL 0** / 巡检 24/24。
+
+## [1.3.0] - 2026-10-26
+
+配置中心批次：角色 / 约束工程 / 钩子 / 权限矩阵 / 审计统一到一个服务，Web 设置页、CLI、对话工具三条入口共享同一数据源，任一入口写入其余入口立即可见并真实生效。
+
+### Added
+- **配置中心（`/api/config`）**：角色库（默认角色即对话角色，可切换/删除非默认）、约束工程（level=must/must_not/should，scope=all/chat/pipeline，按 sortOrder 注入）、钩子（`chat:before|chat:after|pipeline:before|pipeline:after` × `prompt_inject|block|webhook`）、权限档、审计、预设、生效预览。
+- **权限矩阵**：`strict`（只读）/`balanced`（角色/约束/钩子/提示词/技能）/`open`/`unrestricted`（全面放开，默认档）。核心保护项（鉴权、密钥与加密、SSRF、审计、数据库路径、监听地址端口、不可逆操作）任何档位不可改，UI 明示原因。
+- **对话内完成配置**：新增 8 个 MCP 工具 `config.snapshot / set_permission / upsert_role / upsert_constraint / delete_constraint / upsert_hook / apply_preset / preview`，模型可在同一轮对话里连续调用完成多项设置（步数上限 12、单轮 24 次），完成后前端显示「工具调用 · N 次」折叠卡并汇总结果。
+- **CLI 对等入口**：`sciflow config status|permission|role|constraint|hook|preset|preview|audit`，与 Web/对话同一服务；写操作带 `X-Sciflow-Actor: cli` 审计来源。
+- **技能开关真实生效**：停用「文献检索 / 知识库问答 / 写作辅助」会同步裁掉对应 MCP 工具；配置工具不受影响。
+- **内置预设 4 套**（离线）：学术严谨型、高效产出型、审稿人视角、数据处理型；应用幂等。
+- **配置包导入 / 导出**：`GET /api/config/export` / `POST /api/config/import`（`sciflow config export|import`，设置页「导出 JSON / 粘贴导入」）。导出不含审计与密钥；导入幂等（同标题同规则/同名同事件同类型跳过），`--replace` 可覆盖用户自建项，单条坏数据只跳过不整体失败。
+- **运行时巡检脚本** `scripts/monitor_config_center.mjs`：19 项只读检查（含对话真实返回与 usage、日志无 error），供监控 / CI 使用。
+- 设置页新增「配置中心」分区：权限档、一键预设、角色、约束（带注入预览）、钩子、审计。
+
+### Changed
+- **角色唯一事实源**：`config_role` 取代 `app_setting.system_prompt` 作为角色来源；设置页「角色与技能」保存时同步写角色库，旧数据保留兼容回退。
+- **约束/钩子注入点收敛**：`packages/ai/src/prompt-augmentation.ts` 为唯一实现，`AiTransportService` 四个 LLM 入口统一追加 system 层；设置页预览与真实调用同源。
+- **无项目也能用工具**：ChatService 不再要求 projectId 才注入工具集；无项目时自动隐藏必填 projectId 的科研工具，保留配置工具。
+- **CLI 退出**：命令失败改用 `process.exitCode`（Windows 下 `process.exit` 触发 libuv 断言）。
+
+### Fixed
+- **设置页角色与配置中心不同步**：此前两套存储各自为政，页面显示与模型实际收到的不一致；现已统一。
+- **配置类对话工具在无项目时不可用**：此前 `useTools` 依赖 projectId，导致空库用户无法通过对话完成设置。
+- **权限档可被一键解除（监控 AI P1）**：`setPermissionMode` 此前只校验枚举、不过权限矩阵，strict 下 40 秒即可切回 unrestricted；现改为专用门禁——降档自由、**升档每次最多一级**，非法值 400（不再静默回落），导入包夹带的 `permission.mode` 默认忽略。
+- **非法权限档静默提权（P2）**：`normalizePermissionMode` 未知值原回落 `unrestricted`；现 fail-closed 回落 `strict`，DB 读取遇脏值告警。
+- **重复钩子重复注入（P1）**：`config_hook` 缺唯一约束导致同名同事件同类型可重复创建、每次对话重复注入；现加 `ux_config_hook_name_event_type` 唯一索引 + 创建前预检。
+- **非流式对话绕过 chat 作用域与钩子（P2）**：`/api/chat`、MCP `chat.answer` 走 caller=general 被判为 pipeline 作用域，且不执行 `chat:before`；现显式 `context: 'chat'` 并接入 block 钩子（返回 400 而非 500）。
+- **审计可被删除（P2）**：`config_audit` 现加 `BEFORE UPDATE/DELETE` 触发器（任何档位不可改写/删除）；`merge=false` 导入先快照被删条目写入 `bulk_delete` 审计。
+- **唯一默认角色可被停用（P3）**：`updateRole` 增加不变量守卫，禁止把唯一可用默认角色取消默认或停用。
+- **巡检脚本假绿（P2）**：检查项从 14 增至 19（钩子重复/类型、默认角色原始计数、全部适用约束覆盖、审计拒绝原因、日志文件存在），并补充日志体积记录。
+- **block 钩子抛裸 Error → 500**：改为 `BadRequestException`，非流式入口返回 400 可读原因。
+
+### Tests
+- 新增 `apps/server/src/config/permission.spec.ts`（6）、`config-center.spec.ts`（22）、`agent/agent-skill-gating.spec.ts`（4）、`packages/ai/src/prompt-augmentation.spec.ts`（6）、`apps/web/src/pages/settings/ConfigCenterSettings.test.tsx`（6）。
+- 回归脚本新增配置中心 16 条断言（快照/约束增删停用与注入/钩子增删与拦截/权限拒绝与审计/预设幂等）。
+- 门禁：server 203 / web 87 / lint 0 error / typecheck ×2 / build ×2 / final_acceptance **23/23**（新增 CLI config status/preview 两项）/ 回归 PASS 205 / 巡检 19/19（已接入 CI）。
+
+## [1.2.0] - 2026-10-26
+
+模型接入体验批次：设置页从「手填模型名」升级为「填地址和 Key → 自动检测模型 → 自动匹配能力 → 连接测试」，并在真实浏览器里用 UniSound u2-flash 端到端验证。
+
+### Added
+- **三种主流协议**：OpenAI 兼容（默认）/ Anthropic Messages / Google Gemini，官方 AI SDK provider 接入（`@ai-sdk/anthropic` 4.0.78、`@ai-sdk/google` 4.0.93），与仓库现有 `ai@7.0.137` 的 provider 依赖版本对齐。
+- **自动检测模型**：填写 Base URL + Key 后 800ms 防抖自动拉取 `/models`（也可点「检测模型」），结果展开为可选列表并显示上下文窗口 / 输出上限 / 工具调用能力；网关元数据缺失时允许手填。`POST /api/settings/providers/discover`。
+- **连接测试**：表单内「测试连接」与厂商行内「测试」均用当前表单值（未保存）发最小消息，不切换、不落库；失败按鉴权/模型不存在/超时给可读原因。`POST /api/settings/providers/test`。
+- **能力自动匹配**：厂商行新增 `protocol/context_window/max_output/tool_calling/models`，激活即生效；最大输出超过上下文窗口时服务端钳制，未上报时单次输出上限回落 4096；`tool_calling=0` 时 chat 静默移除工具集而不是被上游 400。
+- **常见厂商预置**：只预置地址与协议（OpenAI / Anthropic / Gemini / DeepSeek / 通义 / 智谱 / Kimi / 豆包 / UniSound / Ollama），不再硬编码模型名（旧硬编码已过时会误导）。
+- **本地端点开关**：Ollama 等回环地址需显式勾选「本地/内网端点」，仍拒绝云元数据地址（SSRF 守卫不放松）。
+
+### Fixed
+- **StrictMode 下对话永远停在「正在生成…」**：`useChatSession` 的挂载清理把 `mountedRef` 置 false 后未在重新挂载时复位，`onDone/onError` 被整体吞掉（浏览器实测复现，修复后正常收尾）。
+- **流式 token 恒为 0**：OpenAI 兼容 provider 未开 `includeUsage`，上游 usage 块从不返回；开启后成本与上下文占比恢复真实值。
+- **编辑激活中的厂商不生效**：此前只改库不刷新内存连接，出现「页面显示新模型、实际仍打旧端点」；更新激活厂商后重新 `switchProvider`。
+- **掩码 Key 被当真实 Key 上送**：检测/测试接口编辑态提交掩码回显时回查库内真实 Key，避免 `***` 触发 401。
+
+### Tests
+- 新增 `packages/ai/src/model-catalog.spec.ts`（10）、`apps/server/src/settings/settings.provider.spec.ts`（9）、`apps/web/src/pages/settings/ProviderManager.test.tsx`（8）。
+- 门禁：server 165 / web 81、typecheck ×2、eslint 0 error、server build 全绿。
+- 真实浏览器验证：设置页点击「UniSound MaaS」→ 键盘输入 Key → 自动检测 29 个模型 → 选择 u2-flash（上下文 1M / 输出 131K）→ 「测试连接」1425ms 正常 → 保存 → 激活 → 列表「测试」1592ms 正常 → 工作台对话真实返回「正常」并落 `llm_call_log`。
 
 ## [1.1.0] - 2026-10-25
 
@@ -121,7 +604,7 @@
 
 ## [0.9.0] - 2026-10-23
 
-品牌与体验打磨批次 + 全维度审查驱动的数据完整性修复。审查报告见 [`docs/AUDIT-2026-10-23.md`](docs/AUDIT-2026-10-23.md)（35 条发现、具名竞品矩阵、路线图）。
+品牌与体验打磨批次 + 全维度审查驱动的数据完整性修复。审查报告见 [`docs/archive/AUDIT-2026-10-23.md`](docs/archive/AUDIT-2026-10-23.md)（35 条发现、具名竞品矩阵、路线图）。
 
 ### Security
 - **Critical · PATCH 可越权改写非白名单字段**：`PATCH /documents/:id` 曾把整个 body 展开进 `db.update().set()`，实测可改写 `id / projectId / version / versions`（企业模式下等于绕过项目归属边界）。改为白名单 `{title, content, outline, status}`，其余字段一律丢弃。
@@ -164,7 +647,7 @@
 - `apps/server/src/documents/documents-integrity.spec.ts`：6 条真实 SQLite 完整性回归（白名单/级联/快照/导出/引用渲染），突变验证有效（回退修复必红）。
 - `apps/web/src/lib/{format,theme}.ts` + 测试：字数格式化与主题解析纯函数。
 - `scripts/seed-demo.mjs`：可重复执行的演示数据种子（只走 REST API，库非空自动跳过，`RUN_PIPELINE=1` 可跑通流水线）。
-- `docs/AUDIT-2026-10-23.md`：全维度审查与对标报告。
+- `docs/archive/AUDIT-2026-10-23.md`：全维度审查与对标报告。
 - `docs/media/demo.mp4`：24 秒真实操作导览视频。
 - README 中英文版：12 张实机截图 + 视频 + 设计语言规范表。
 
@@ -262,7 +745,7 @@
 ## [0.6.0] - 2026-10-20
 
 实测驱动的正确性批次：装依赖、起服务、用 Chromium 逐页操作后发现 12 个用户可见缺陷，修复后又由独立审计抓出 13 个本轮引入的回归。同时补全 Agent 工具链（此前完全不可用），重建前端布局契约。
-详细记录见 [`docs/RUNTIME-FINDINGS.md`](docs/RUNTIME-FINDINGS.md)。
+详细记录见 [`docs/archive/RUNTIME-FINDINGS.md`](docs/archive/RUNTIME-FINDINGS.md)。
 
 ### Added
 - **Agent 工具链（核心能力）**：`AgentToolBridge` 把 11 个 MCP 工具转成模型可调用工具，对话中模型能自主检索文献库/知识库。带项目作用域（防跨项目检索）、调用次数上限、单项超时、轨迹落库。实测真实模型单轮触发 5 次工具调用并引用真实文献元数据。
@@ -272,7 +755,7 @@
 - **LaTeX / HTML 导出**：`DocExporter` 接上两个按钮（本地纯函数转换，不依赖网络）。
 - **引用顺序护栏**：新增 `citation-order.spec.ts`（5 条），并做过红绿验证。
 - **用量分型统计**：`llm_call_log.kind` 区分 `llm` / `tool`，成本看板不再被无 token 的工具调用污染；新增 `tools` 汇总。
-- **文档**：`docs/RUNTIME-FINDINGS.md`（实测记录）+ `docs/runtime-screenshots/`（修复前后对照）。
+- **文档**：`docs/archive/RUNTIME-FINDINGS.md`（实测记录）+ `docs/runtime-screenshots/`（修复前后对照）。
 
 ### Fixed
 - **工作台流式回答平方膨胀**：`onDelta` 回调参数是累积全文，工作台却按增量追加（5 个分片后长度 10→31）。抽出 `applyStreamDelta` 纯函数统一语义。
@@ -321,8 +804,8 @@
 - **任务级 token 预算器（B-2.2）**：起草/评审/润色三点打点，默认 300k tokens，`pipeline_token_budget` 可调（0=不限），超限任务终止。
 - **流水线 DAG 实时图（F-2.1）**：自绘轻量 SVG 零依赖——状态八色着色、回炉回路虚线回边（Reflexion 语义可视化）、retry 徽标、当前步骤呼吸动画。
 - **成本仪表盘增量（F-2.3）**：usage 新增 `byModel`（fast/strong 档位分布）与 `budgetTokens`（预算上限透出），设置页补预算指标卡与模型分布 HBar。
-- **docs/HANDOFF.md**：新环境/新会话续接唯一入口（起步/完成度/待办/踩坑清单/文档地图）。
-- **docs/audit-report.md + docs/archive/audit-notes.md**：深度审计报告与 76 项原始疑点笔记入仓归档。
+- **docs/archive/HANDOFF.md**：新环境/新会话续接唯一入口（起步/完成度/待办/踩坑清单/文档地图）。
+- **docs/archive/audit-report.md + docs/archive/audit-notes.md**：深度审计报告与 76 项原始疑点笔记入仓归档。
 
 ### Fixed
 - **H1 Reflexion 定向回炉**：旧实现 instructions 恒空、只回传 feedback 原文 → 新增 REFLEXION_PLAYBOOK 按最低分两维生成章节级修订指令，结构化落库供下轮起草逐条落实（自动改分真正可演示）。

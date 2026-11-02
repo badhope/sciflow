@@ -3,6 +3,11 @@ import { randomUUID } from 'node:crypto';
 import pRetry from 'p-retry';
 import pLimit from 'p-limit';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { createAnthropic } from '@ai-sdk/anthropic';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { fetchModelCatalog, normalizeProtocol, type ModelProtocol } from './model-catalog';
+import { safeOutboundFetch } from './safe-outbound';
+import { loadPromptAugmentation } from './prompt-augmentation';
 import { generateText, generateObject, streamText, stepCountIs, jsonSchema as aiJsonSchema, type ModelMessage, type LanguageModelUsage } from 'ai';
 import type { LanguageModel, ToolSet } from 'ai';
 import { decryptSecret } from '../../db/src/secret-crypto';
@@ -11,6 +16,14 @@ import { db } from '../../db/src/database';
 import { llmCallLogs, customPrompts } from '../../db/src/schema';
 import { eq } from 'drizzle-orm';
 import { envInt } from '../../core/src/env';
+
+const TEMPLATE_API_KEYS = new Set(['sk-your-api-key-here', 'sk-你的key', '${ai_api_key}', '<api_key>']);
+
+export function normalizeApiKey(raw: unknown): string {
+  const value = String(raw ?? '').trim();
+  if (!value || TEMPLATE_API_KEYS.has(value.toLowerCase())) return '';
+  return value;
+}
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -64,6 +77,8 @@ export interface CompleteOptions {
   tools?: ToolSet;
   /** 允许多步工具调用（默认 1，即单轮） */
   maxSteps?: number;
+  /** 失败重试次数（默认 4；润色等长输出场景应降低，避免空响应重试把流水线拖死） */
+  retries?: number;
 }
 
 /**
@@ -80,11 +95,20 @@ export class AiTransportService {
 
   protected baseUrl = (process.env.AI_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3').replace(/\/$/, '');
   /** 当前生效密钥：优先 env，被激活厂商覆盖（v0.3.0 起库内为密文，读取时解密）。私有字段 + getter 暴露。 */
-  private _secretKey = process.env.AI_API_KEY || '';
+  private _secretKey = normalizeApiKey(process.env.AI_API_KEY || '');
+  protected mockConnectionActive = false;
   /** fast 档：轻量快速模型（默认） */
   protected fastModel = process.env.AI_MODEL_FAST || process.env.AI_MODEL || '';
   /** strong 档：强模型（高难任务；未配置则回落 fast） */
   protected strongModel = process.env.AI_MODEL_STRONG || this.fastModel;
+  /** 协议（OpenAI 兼容 / Anthropic Messages / Google Gemini）；被激活厂商覆盖 */
+  protected protocol: ModelProtocol = normalizeProtocol(process.env.AI_PROTOCOL);
+  /** 上下文窗口（0=未知） */
+  protected contextWindow = 0;
+  /** 单次最大输出（0=未知，回落 4096） */
+  protected maxOutput = 0;
+  /** 是否支持工具调用（无元数据时默认 true，保持既有行为） */
+  protected toolCalling = true;
 
   // ---------- 并发限流：p-limit（成熟库替代手写实现） ----------
   // RPM 换算为并发上限：假设单请求 ~10s，RPM 60 → 最多 6 并发；取保守值避免 429
@@ -101,7 +125,7 @@ export class AiTransportService {
 
   /** 覆盖当前生效密钥（解密后写入） */
   protected setApiKey(v: string): void {
-    this._secretKey = v;
+    this._secretKey = normalizeApiKey(v);
   }
 
   /** 切换激活厂商（设置页调用，立即生效） */
@@ -110,29 +134,78 @@ export class AiTransportService {
       | { base_url?: string; ['api_key']?: string; model?: string }
       | undefined;
     if (!row) throw new HttpException('模型厂商不存在', HttpStatus.NOT_FOUND);
+    this.mockConnectionActive = false;
+    this.setApiKey('');
     this.baseUrl = String(row.base_url).replace(/\/$/, '');
-    if (row['api_key']) this.setApiKey(decryptSecret(String(row['api_key'])));
+    this.setApiKey(row['api_key'] ? normalizeApiKey(decryptSecret(String(row['api_key']))) : '');
     this.fastModel = String(row.model);
     this.strongModel = String(row.model);
+    this.applyProviderCapabilities(row as Record<string, unknown>);
     sqlite.prepare('UPDATE model_provider SET is_active = 0 WHERE is_active = 1').run();
     sqlite.prepare('UPDATE model_provider SET is_active = 1, updated_at = ? WHERE id = ?').run(Date.now(), id);
   }
 
   /** 回退到环境变量配置（删除激活中的厂商时调用，避免内存残留失效厂商） */
   resetToEnv() {
+    this.mockConnectionActive = false;
     this.baseUrl = (process.env.AI_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3').replace(/\/$/, '');
-    this.setApiKey(process.env.AI_API_KEY || '');
+    this.setApiKey(normalizeApiKey(process.env.AI_API_KEY || ''));
     this.fastModel = process.env.AI_MODEL_FAST || process.env.AI_MODEL || '';
     this.strongModel = process.env.AI_MODEL_STRONG || this.fastModel;
+    this.protocol = normalizeProtocol(process.env.AI_PROTOCOL);
+    this.contextWindow = 0;
+    this.maxOutput = 0;
+    this.toolCalling = true;
   }
 
-  /** 是否已配置 AI：仅当确有可用密钥时为 true（不再对未配置状态谎报可用） */
   get configured(): boolean {
-    return !!this.apiKey;
+    try {
+      const url = new URL(this.baseUrl);
+      return (url.protocol === 'http:' || url.protocol === 'https:')
+        && !url.username && !url.password
+        && !!this.fastModel.trim()
+        && (this.mockConnectionActive || !!this.apiKey);
+    } catch {
+      return false;
+    }
   }
 
-  get config(): { baseUrl: string; model: string; fastModel: string; strongModel: string; configured: boolean } {
-    return { baseUrl: this.baseUrl, model: this.fastModel, fastModel: this.fastModel, strongModel: this.strongModel, configured: this.configured };
+  get config(): {
+    baseUrl: string; model: string; fastModel: string; strongModel: string; configured: boolean; mock: boolean;
+    protocol: ModelProtocol; contextWindow: number; maxOutput: number; toolCalling: boolean;
+  } {
+    return {
+      baseUrl: this.baseUrl, model: this.fastModel, fastModel: this.fastModel, strongModel: this.strongModel, configured: this.configured, mock: this.mockConnectionActive,
+      protocol: this.protocol, contextWindow: this.contextWindow, maxOutput: this.maxOutput, toolCalling: this.toolCalling,
+    };
+  }
+
+  /** 读取厂商行内的能力列（旧库缺列时按未知/默认处理） */
+  protected applyProviderCapabilities(row: Record<string, unknown> | undefined): void {
+    if (!row) return;
+    this.protocol = normalizeProtocol(row['protocol']);
+    const num = (v: unknown): number => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+    };
+    this.contextWindow = num(row['contextWindow'] ?? row['context_window']);
+    this.maxOutput = num(row['maxOutput'] ?? row['max_output']);
+    const tc = row['toolCalling'] ?? row['tool_calling'];
+    this.toolCalling = tc === undefined || tc === null ? true : Number(tc) !== 0;
+  }
+
+  /**
+   * 单次请求的输出上限：优先显式参数；否则用厂商上报值，但**夹到 8192**。
+   *
+   * 历史事故（本轮实测）：u2-flash 上报 max_output=131072，若原样下发，模型会一直生成到
+   * 上限，单章起草耗时 170s+ 直接触发 180s 请求超时，流水线反复失败。
+   * 学术章节 800-1500 字，8192 tokens 足够；需要更长输出的调用方显式传 maxTokens。
+   */
+  protected defaultMaxOutput(): number {
+    const reported = this.maxOutput > 0 ? this.maxOutput : 0;
+    const cap = this.contextWindow > 0 ? Math.min(reported || this.contextWindow, this.contextWindow) : reported;
+    if (cap > 0) return Math.max(1, Math.min(cap, 8192));
+    return 4096;
   }
 
   /** 自定义提示词查询：用户配置优先，未配置返回 null（调用方回退系统默认） */
@@ -155,12 +228,32 @@ export class AiTransportService {
   }
 
   protected assertConfigured(): void {
-    if (!this.apiKey) {
+    if (!this.configured) {
       throw new HttpException(
         'AI 服务未配置：请在 apps/server/.env 中设置 AI_API_KEY（支持 OpenAI、DeepSeek、通义等 OpenAI 兼容接口）',
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
+  }
+
+  /**
+   * 把配置中心的约束/钩子注入到 system 层（单一注入点，chat 与流水线都经过这里）。
+   * - scope 按 caller 归类：chat / chatSessionSummary / judgmentIntent → chat，其余 → pipeline
+   * - 无配置时零开销（返回原数组）
+   */
+  protected withConfigAugmentation(messages: ChatMessage[], caller: string): ChatMessage[] {
+    const scope = ['chat', 'chatSessionSummary', 'judgmentIntent'].includes(caller) ? 'chat' : 'pipeline';
+    const augmentation = loadPromptAugmentation(scope);
+    if (!augmentation) return messages;
+    const firstSystem = messages.findIndex((m) => m.role === 'system');
+    if (firstSystem >= 0) {
+      const next = messages.slice();
+      next[firstSystem] = { ...next[firstSystem], content: `${next[firstSystem].content}
+
+${augmentation}` };
+      return next;
+    }
+    return [{ role: 'system', content: augmentation }, ...messages];
   }
 
   /** 最近一次调用的总 token 数（流水线预算器打点用；每次调用覆盖） */
@@ -278,12 +371,31 @@ export class AiTransportService {
   /** 构造 AI SDK 模型实例（每次调用读取当前 baseUrl/key，保证设置页切换立即生效） */
   protected buildModel(modelId: string, signal?: AbortSignal): LanguageModel {
     void signal;
+    return this.buildModelWith(this.protocol, this.baseUrl, this._secretKey, modelId);
+  }
+
+  /** 按协议构造模型实例（连接测试用临时配置时也走这里，保证协议行为一致） */
+  protected buildModelWith(protocolValue: string, baseUrl: string, apiKey: string, modelId: string): LanguageModel {
+    const protocol = normalizeProtocol(protocolValue);
+    const base = String(baseUrl || '').replace(/\/+$/, '');
+    if (protocol === 'anthropic-messages') {
+      const provider = createAnthropic({ name: 'sciflow', baseURL: base, apiKey, fetch: safeOutboundFetch });
+      return provider(modelId);
+    }
+    if (protocol === 'google-gemini') {
+      const provider = createGoogleGenerativeAI({ name: 'sciflow', baseURL: base, apiKey, fetch: safeOutboundFetch });
+      return provider(modelId);
+    }
     const provider = createOpenAICompatible({
       name: 'sciflow',
-      baseURL: this.baseUrl,
-      apiKey: this._secretKey,
-      headers: { Authorization: `Bearer ${this._secretKey}` },
+      baseURL: base,
+      apiKey,
+      headers: { Authorization: `Bearer ${apiKey}` },
       supportsStructuredOutputs: true,
+      fetch: safeOutboundFetch,
+      // 流式 usage：OpenAI 兼容端点默认不返回 usage 块，开启 includeUsage 后
+      // AI SDK 会带 stream_options.include_usage，token 成本/上下文占比才不是全 0
+      includeUsage: true,
     });
     return provider(modelId);
   }
@@ -300,11 +412,11 @@ export class AiTransportService {
     return this.limit(async () =>
       pRetry(
         async () => {
-          const { instructions, rest } = this.splitSystemMessages(messages);
+          const { instructions, rest } = this.splitSystemMessages(this.withConfigAugmentation(messages, caller));
           const callArgs = {
             model: this.buildModel(model),
             temperature: opts.temperature ?? 0.7,
-            maxOutputTokens: opts.maxTokens ?? 4096,
+            maxOutputTokens: opts.maxTokens ?? this.defaultMaxOutput(),
             abortSignal: AiTransportService.withTimeout(opts.signal),
             instructions,
             messages: rest,
@@ -324,7 +436,7 @@ export class AiTransportService {
           return { text, usage };
         },
         {
-          retries: 4,
+          retries: opts.retries ?? 4,
           factor: 2,
           minTimeout: 2000,
           maxTimeout: 60_000,
@@ -369,11 +481,11 @@ export class AiTransportService {
     return this.limit(async () =>
       pRetry(
         async () => {
-          const { instructions, rest } = this.splitSystemMessages(messages);
+          const { instructions, rest } = this.splitSystemMessages(this.withConfigAugmentation(messages, caller));
           const { object, usage } = await generateObject({
             model: this.buildModel(model),
             temperature: opts.temperature ?? 0.3,
-            maxOutputTokens: opts.maxTokens ?? 4096,
+            maxOutputTokens: opts.maxTokens ?? this.defaultMaxOutput(),
             abortSignal: AiTransportService.withTimeout(opts.signal),
             schema,
             instructions,
@@ -405,6 +517,8 @@ export class AiTransportService {
    */
   async completeStream(messages: ChatMessage[], opts: CompleteOptions = {}): Promise<ReadableStream<Uint8Array>> {
     this.assertConfigured();
+    // 厂商能力为「不支持工具调用」时静默移除工具集：模型直接文本作答，而不是被上游 400 拒绝
+    if (!this.toolCalling && opts.tools) opts = { ...opts, tools: undefined, maxSteps: undefined };
     const t0 = Date.now();
     const model = this.resolveModel(opts);
     const caller = opts.context || 'general';
@@ -462,12 +576,14 @@ export class AiTransportService {
     t0: number,
     selfLog: AiTransportService['logLlmCall'],
   ): Promise<ReadableStream<Uint8Array> | null> {
-    const { instructions, rest } = this.splitSystemMessages(messages);
+    const { instructions, rest } = this.splitSystemMessages(this.withConfigAugmentation(messages, caller));
     const encoder = new TextEncoder();
     const useFallback = process.env.AI_TOOLS_NONSTREAM !== 'off';
     if (!useFallback) return null;
-    // 先取出模型实例（buildModel 依赖 this，必须在构造 ReadableStream 之前调用一次）
+    // 先取出模型实例与输出上限（依赖 this，必须在构造 ReadableStream 之前取值——
+    // ReadableStream 的 start 回调里 this 指向 UnderlyingSource，不是 service 实例）
     const streamModel = this.buildModel(model, opts.signal);
+    const maxOut = opts.maxTokens ?? this.defaultMaxOutput();
     const sse = new ReadableStream<Uint8Array>({
       async start(controller) {
         const enqueue = (obj: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
@@ -475,7 +591,7 @@ export class AiTransportService {
           const r = await generateText({
             model: streamModel,
             temperature: opts.temperature ?? 0.7,
-            maxOutputTokens: opts.maxTokens ?? 4096,
+            maxOutputTokens: maxOut,
             // 工具回退是一次性完整生成（可能含多步工具循环），按步数放宽总时长；
             // 单步仍受限，避免整个循环被一个挂起步骤拖死。
             abortSignal: AiTransportService.withTimeout(opts.signal, AiTransportService.requestTimeoutMs() * Math.max(1, opts.maxSteps ?? 1)),
@@ -522,7 +638,7 @@ export class AiTransportService {
     selfLog: AiTransportService['logLlmCall'],
   ): Promise<ReadableStream<Uint8Array>> {
     return this.limit(async () => {
-      const { instructions, rest } = this.splitSystemMessages(messages);
+      const { instructions, rest } = this.splitSystemMessages(this.withConfigAugmentation(messages, caller));
       // 流式用「空闲看门狗」而不是总时长：正常长文流可以跑几分钟，
       // 但上游一旦停止出包（挂起/半死连接）必须及时中止，否则流水线永久卡 running。
       const idle = new AbortController();
@@ -538,7 +654,7 @@ export class AiTransportService {
       const result = streamText({
         model: this.buildModel(model, opts.signal),
         temperature: opts.temperature ?? 0.7,
-        maxOutputTokens: opts.maxTokens ?? 4096,
+        maxOutputTokens: opts.maxTokens ?? this.defaultMaxOutput(),
         abortSignal: AiTransportService.withTimeout(idle.signal, idleMs),
         instructions,
         messages: rest,
@@ -608,20 +724,43 @@ export class AiTransportService {
     });
   }
 
-  /** 查询可用模型列表（OpenAI 兼容 /models；openai-compatible v4 未暴露列表方法，保留 fetch） */
+  /** 查询可用模型列表（协议感知；与设置页「检测模型」共用 model-catalog 单一实现） */
   async listModels(): Promise<string[]> {
     this.assertConfigured();
+    const r = await fetchModelCatalog({ baseUrl: this.baseUrl, apiKey: this._secretKey, protocol: this.protocol, timeoutMs: 15_000, fetchImpl: safeOutboundFetch as unknown as typeof fetch });
+    if (!r.ok) return [];
+    return r.models.map((m) => m.id).slice(0, 50);
+  }
+
+  /** 用「尚未保存的表单配置」做连接测试：不改当前激活厂商、不落库 */
+  async testProviderConfig(cfg: {
+    baseUrl: string;
+    apiKey?: string;
+    protocol?: string;
+    model: string;
+    maxOutput?: number;
+  }): Promise<{ ok: boolean; reply: string; model: string; latencyMs: number }> {
+    const target = String(cfg.model || '').trim();
+    const t0 = Date.now();
     try {
-      const res = await fetch(`${this.baseUrl}/models`, {
-        headers: { Authorization: `Bearer ${this._secretKey}` },
-        signal: AbortSignal.timeout(15_000),
+      const { text } = await generateText({
+        model: this.buildModelWith(cfg.protocol || 'openai-compatible', cfg.baseUrl, cfg.apiKey || '', target),
+        temperature: 0,
+        maxOutputTokens: Math.min(512, Math.max(16, Number(cfg.maxOutput) || 512)),
+        abortSignal: AbortSignal.timeout(60_000),
+        messages: [{ role: 'user', content: '请只回复两个字：正常' }],
       });
-      if (!res.ok) return [];
-      const data = (await res.json()) as { data?: Array<{ id?: string } | null> };
-      const ids: string[] = (data.data || []).filter((m): m is { id?: string } => !!m).map((m) => m.id).filter((id): id is string => !!id && !id.includes('image') && !id.includes('video'));
-      return ids.slice(0, 20);
-    } catch {
-      return [];
+      return { ok: true, reply: text.trim() || '（空回复）', model: target, latencyMs: Date.now() - t0 };
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      const friendly = /401|403|invalid api key|unauthorized|authentication/i.test(msg)
+        ? `鉴权失败：Key 或协议不匹配（${msg.slice(0, 160)}）`
+        : /404|not found|model_not_found/i.test(msg)
+          ? `模型或端点不存在：${msg.slice(0, 160)}`
+          : /abort|timeout|timed out/i.test(msg)
+            ? '连接超时：端点无响应'
+            : msg.slice(0, 300);
+      return { ok: false, reply: friendly, model: target, latencyMs: Date.now() - t0 };
     }
   }
 
@@ -651,18 +790,25 @@ export class AiTransportService {
 
   /** 从 model_provider 表读取激活厂商并覆盖连接配置（LiteLLM 式多厂商切换） */
   protected applyActiveProvider(): void {
+    this.mockConnectionActive = false;
+    this.setApiKey('');
     try {
       const row = sqlite
         .prepare('SELECT * FROM model_provider WHERE is_active = 1 LIMIT 1')
         .get() as { base_url?: string; ['api_key']?: string; model?: string } | undefined;
-      if (row?.base_url && row?.model) {
-        this.baseUrl = String(row.base_url).replace(/\/$/, '');
-        if (row['api_key']) this.setApiKey(decryptSecret(String(row['api_key'])));
-        this.fastModel = String(row.model);
-        this.strongModel = String(row.model);
+      if (row) {
+        if (row.base_url && row.model) {
+          this.baseUrl = String(row.base_url).replace(/\/$/, '');
+          this.setApiKey(row['api_key'] ? normalizeApiKey(decryptSecret(String(row['api_key']))) : '');
+          this.fastModel = String(row.model);
+          this.strongModel = String(row.model);
+          this.applyProviderCapabilities(row as Record<string, unknown>);
+        }
+      } else {
+        this.setApiKey(normalizeApiKey(process.env.AI_API_KEY || ''));
       }
     } catch {
-      /* 表不存在时回退环境变量 */
+      this.setApiKey(normalizeApiKey(process.env.AI_API_KEY || ''));
     }
   }
 }

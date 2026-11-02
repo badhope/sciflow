@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { AdminGuard } from './admin.guard';
 
 /**
  * 企业认证模块（默认旁路，不破坏本地/桌面零登录体验）
@@ -58,7 +59,7 @@ function resolveJwtSecret(): string {
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, { provide: APP_GUARD, useClass: JwtAuthGuard }],
-  exports: [JwtModule],
+  providers: [AuthService, { provide: APP_GUARD, useClass: JwtAuthGuard }, AdminGuard],
+  exports: [JwtModule, AdminGuard],
 })
 export class AuthModule {}

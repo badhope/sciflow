@@ -5,7 +5,7 @@ import { db } from '../db/database';
 import { pipelineTasks, projects, documents, reflexionLogs, qualityReports, references } from '../db/schema';
 import { buildPipelineGraph, type PipelineGraphDeps, type StepStatusWire } from './pipeline.graph';
 import { applyStepWire } from './pipeline.service';
-import { MOCK_OUTLINE } from '../../../../packages/ai/src/mock-gateway';
+import { MOCK_OUTLINE } from '../common/mock-gateway';
 
 /**
  * 流水线 v1.0 新能力回归：反共识大纲变体（F2）与研究深度（depth 多轮检索）。
@@ -33,6 +33,7 @@ function baseDeps(over: Partial<PipelineGraphDeps> = {}): PipelineGraphDeps {
     renderCitations: (_p, _d, content) => content,
     crossEnrich: async () => ({ libraryHits: [], knowledgeHits: [], notice: null, meta: { lib: [], kn: [] }, summary: '检索到 0 条' }),
     researchDepth: () => 1,
+    noveltyCheck: async () => ({ overlap: 10, similar: [], advice: '测试桩' }),
     notify: async (taskId, key, status, output, retryCount, extra) => {
       notifyCalls.push({ key, status, output, extra });
       await defaultNotify(taskId, key, status, output, retryCount, extra);

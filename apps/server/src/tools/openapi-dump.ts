@@ -7,12 +7,13 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { writeFileSync } from 'node:fs';
 import { AppModule } from '../app.module';
+import { APP_VERSION } from '../common/version';
 
 (async () => {
   const app = await NestFactory.create(AppModule, { logger: false });
   const doc = SwaggerModule.createDocument(
     app,
-    new DocumentBuilder().setTitle('SciFlow API').setDescription('本地优先科研工作台（单用户）').setVersion('0.8.1').build(),
+    new DocumentBuilder().setTitle('SciFlow API').setDescription('本地优先科研工作台（单用户）').setVersion(APP_VERSION).build(),
   );
   const out = process.argv[2] || 'openapi.json';
   writeFileSync(out, JSON.stringify(doc, null, 2));

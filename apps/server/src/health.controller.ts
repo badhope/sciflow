@@ -2,10 +2,14 @@ import { Controller, Get } from '@nestjs/common';
 import { AiService } from './ai/ai.service';
 import { Public } from './auth/public.decorator';
 import { sqlite, vecLoaded } from './db/database';
+import { EmbeddingService } from './knowledge/embedding.service';
 
 @Controller()
 export class HealthController {
-  constructor(private readonly ai: AiService) {}
+  constructor(
+    private readonly ai: AiService,
+    private readonly embedding: EmbeddingService,
+  ) {}
 
   @Public()
   @Get('health')
@@ -17,6 +21,7 @@ export class HealthController {
     } catch {
       dbOk = false;
     }
+    const emb = this.embedding.status();
     return {
       status: dbOk ? 'ok' : 'degraded',
       time: Date.now(),
@@ -25,10 +30,14 @@ export class HealthController {
       db: dbOk,
       desktop: process.env.SCIFLOW_DESKTOP === '1',
       ai: this.ai.config,
-      // 能力探测：前端据此显示「向量检索 / 仅全文检索」降级状态，而不是静默劣化
+      // 能力探测：前端据此显示「向量检索 / 仅全文检索」降级状态，而不是静默劣化。
+      // embeddingModel 必须反映**真实可用后端**（local/api）：此前只看 EMBEDDING_MODEL_PATH
+      // 是否存在，配了远程 Key 也会显示「未配置」，与实际能力相反。
       capabilities: {
         vectorSearch: vecLoaded,
-        embeddingModel: Boolean(process.env.EMBEDDING_MODEL_PATH),
+        embeddingModel: emb.backend !== 'none',
+        embeddingBackend: emb.backend,
+        embeddingDimension: emb.dimension,
       },
     };
   }
@@ -66,7 +75,7 @@ export class HealthController {
       checks: {
         db: { ok: dbOk, latencyMs: dbLatencyMs },
         vector: { ok: vecOk, extensionLoaded: vecLoaded, embeddedChunks: vecRows },
-        ai: { configured: ai.configured, model: ai.model, strongModel: ai.strongModel, baseUrl: ai.baseUrl },
+        ai: { configured: ai.configured, mock: ai.mock, model: ai.model, strongModel: ai.strongModel, baseUrl: ai.baseUrl },
       },
     };
   }

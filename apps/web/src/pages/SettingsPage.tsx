@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ToastContext } from '../App';
 import { CheckCircle2, Database, FlaskConical, Keyboard, Loader2, Plug, Plus, Power, Server, Trash2, Wand2, Workflow, XCircle, Gauge } from 'lucide-react';
 import { HOTKEY_DOCS, hotkeyLabel } from '../lib/hotkeys-docs';
@@ -12,6 +12,11 @@ import { WebSearchSettings } from './settings/WebSearchSettings';
 import { UsageStats } from './settings/UsageStats';
 import { McpToolList } from './settings/McpToolList';
 import { PersonaSettings } from './settings/PersonaSettings';
+import { ConfigCenterSettings } from './settings/ConfigCenterSettings';
+import { ExtensionCenter, ExtensionQuickAdd } from './settings/ExtensionCenter';
+import { AppearanceSettings } from './settings/AppearanceSettings';
+import { useAuthRole } from '../lib/use-auth-role';
+import { Lock } from 'lucide-react';
 
 const ModelIcon = ({ ok }: { ok?: boolean }) =>
   ok === undefined ? null : ok ? <CheckCircle2 size={16} className="text-emerald-500" /> : <XCircle size={16} className="text-rose-500" />;
@@ -132,6 +137,7 @@ function PromptEditor() {
         onToggle={() => setOpen(o => !o)}
       >
         <div className="mt-4">
+          <div className="mb-3"><ExtensionQuickAdd kind="prompt" label="从扩展中心添加提示词模板" /></div>
           <div className="text-xs text-slate-400 dark:text-slate-500 mb-3">
             每个 AI 科研工具（综述/精读/缺口/对比/评审…）默认提示词可被你的自定义覆盖：点击「编辑」写入你的专属提示词（含你的领域规范/输出格式/风格要求），未配置时自动使用系统默认。
           </div>
@@ -176,9 +182,83 @@ function PromptEditor() {
 /* ------------------------------------------------------------------ */
 function PipelineEditor() {
   const { state, togglePipelineStep, resetPipeline } = useSettings();
+  const toast = useContext(ToastContext);
   const [open, setOpen] = useState(false);
   const offCount = state.pipelineSteps.filter((s) => !s.enabled).length;
   const summary = offCount > 0 ? `${state.pipelineSteps.length - offCount}/${state.pipelineSteps.length} 步启用（${offCount} 步已关）` : `${state.pipelineSteps.length} 步全启用（默认）`;
+
+  /**
+   * 运行参数（v1.9.1 补接线）：token 预算 / 检索重排 / 流水线联网检索。
+   * 三者此前只能改库或环境变量——预算耗尽的报错让用户「到设置中调整」，
+   * 但设置里根本没有这一项。这里接入 customization.pipeline-settings 单一入口。
+   */
+  const [runParams, setRunParams] = useState<{
+    tokenBudget: number;
+    retrievalRerank: boolean;
+    webSearch: boolean;
+    qualityStandard: string;
+    qualityStandardLabel: string;
+    qualityPassScore: number;
+  } | null>(null);
+  const [budgetDraft, setBudgetDraft] = useState('');
+  const [savingBudget, setSavingBudget] = useState(false);
+  useEffect(() => {
+    if (!open || runParams) return;
+    let cancelled = false;
+    api.customization.getPipelineSettings().then((r) => {
+      if (cancelled) return;
+      setRunParams({
+        tokenBudget: r.tokenBudget,
+        retrievalRerank: r.retrievalRerank,
+        webSearch: r.webSearch,
+        qualityStandard: r.qualityStandard,
+        qualityStandardLabel: r.qualityStandardLabel,
+        qualityPassScore: r.qualityPassScore,
+      });
+      setBudgetDraft(String(r.tokenBudget));
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [open, runParams]);
+
+  const saveBudget = async () => {
+    const n = Math.floor(Number(budgetDraft));
+    if (!Number.isFinite(n) || n < 0) { toast('error', 'token 预算需为非负整数（0=不限）'); return; }
+    setSavingBudget(true);
+    try {
+      const r = await api.customization.setPipelineSettings({ tokenBudget: n });
+      setRunParams({
+        tokenBudget: r.tokenBudget,
+        retrievalRerank: r.retrievalRerank,
+        webSearch: r.webSearch,
+        qualityStandard: r.qualityStandard,
+        qualityStandardLabel: r.qualityStandardLabel,
+        qualityPassScore: r.qualityPassScore,
+      });
+      toast('success', '预算已更新，对之后新建的流水线生效');
+    } catch (e: unknown) {
+      toast('error', errMsg(e));
+    } finally {
+      setSavingBudget(false);
+    }
+  };
+
+  const toggleParam = async (patch: { retrievalRerank?: boolean; webSearch?: boolean }) => {
+    try {
+      const r = await api.customization.setPipelineSettings(patch);
+      setRunParams({
+        tokenBudget: r.tokenBudget,
+        retrievalRerank: r.retrievalRerank,
+        webSearch: r.webSearch,
+        qualityStandard: r.qualityStandard,
+        qualityStandardLabel: r.qualityStandardLabel,
+        qualityPassScore: r.qualityPassScore,
+      });
+    } catch (e: unknown) {
+      toast('error', errMsg(e));
+    }
+  };
+
+  const fmtK = (n: number) => (n >= 10000 ? `${Math.round(n / 1000)}k` : String(n));
 
   return (
     <CollapsibleCard
@@ -218,6 +298,82 @@ function PipelineEditor() {
           <Button variant="outline" className="text-xs" onClick={resetPipeline}>
             恢复默认（全启用）
           </Button>
+        </div>
+
+        <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+          <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">运行参数</div>
+          {!runParams ? (
+            <div className="text-xs text-slate-400">加载中…</div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="text-xs text-slate-700 dark:text-slate-200 w-32 shrink-0" htmlFor="pipeline-token-budget">任务 token 预算</label>
+                <Input
+                  id="pipeline-token-budget"
+                  className="w-40"
+                  inputMode="numeric"
+                  value={budgetDraft}
+                  onChange={(e) => setBudgetDraft(e.target.value)}
+                  placeholder="300000（0=不限）"
+                />
+                <Button variant="outline" className="text-xs" onClick={() => void saveBudget()} disabled={savingBudget}>
+                  {savingBudget ? <Loader2 size={13} className="animate-spin" /> : null} 保存
+                </Button>
+                <span className="text-[11px] text-slate-400">
+                  当前 {runParams.tokenBudget > 0 ? `${fmtK(runParams.tokenBudget)} tokens/任务` : '不限'}；超出后流水线终止并提示
+                </span>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-xs text-slate-700 dark:text-slate-200 w-32 shrink-0">检索重排（LLM）</span>
+                <button
+                  className={`relative w-7 h-4 rounded-full transition-colors ${runParams.retrievalRerank ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                  aria-pressed={runParams.retrievalRerank}
+                  aria-label="检索重排开关"
+                  onClick={() => void toggleParam({ retrievalRerank: !runParams.retrievalRerank })}
+                >
+                  <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${runParams.retrievalRerank ? 'left-3.5' : 'left-0.5'}`} />
+                </button>
+                <span className="text-[11px] text-slate-400 flex-1">
+                  知识库检索后用模型按问题相关性重打分（更准但更慢更贵，默认关）
+                </span>
+                <Badge tone={runParams.retrievalRerank ? 'teal' : 'slate'}>{runParams.retrievalRerank ? '开启' : '关闭'}</Badge>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-xs text-slate-700 dark:text-slate-200 w-32 shrink-0">流水线联网检索</span>
+                <button
+                  className={`relative w-7 h-4 rounded-full transition-colors ${runParams.webSearch ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                  aria-pressed={runParams.webSearch}
+                  aria-label="流水线联网检索开关"
+                  onClick={() => void toggleParam({ webSearch: !runParams.webSearch })}
+                >
+                  <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${runParams.webSearch ? 'left-3.5' : 'left-0.5'}`} />
+                </button>
+                <span className="text-[11px] text-slate-400 flex-1">
+                  文献步骤 0 命中时并入公开网页线索（只作写作参考、不进文献库；provider 在「联网搜索」配置）
+                </span>
+                <Badge tone={runParams.webSearch ? 'teal' : 'slate'}>{runParams.webSearch ? '开启' : '关闭'}</Badge>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="text-xs text-slate-700 dark:text-slate-200 w-32 shrink-0">质量评审标准</label>
+                <Select
+                  className="w-56"
+                  value={runParams.qualityStandard}
+                  onChange={(v: string) => void toggleParam({ qualityStandard: v } as never)}
+                  options={[
+                    { value: 'draft', label: '草稿迭代（快速产出，及格 70）' },
+                    { value: 'standard', label: 'SCI 通用期刊（及格 80）' },
+                    { value: 'strict', label: '顶刊 IEEE Trans / Nature 子刊（及格 85）' },
+                    { value: 'review', label: '综述 Survey / Review（及格 80）' },
+                    { value: 'conference', label: '会议论文 CCF-B/C（及格 78）' },
+                  ]}
+                />
+                <span className="text-[11px] text-slate-400 flex-1">
+                  决定评分阈值与质量门及格线：当前「{runParams.qualityStandardLabel}」，及格 {runParams.qualityPassScore} 分。篇幅、引用强度、句式、模板腔与章节均衡的合格线随标准缩放——满分 = 该级别可投稿，而不是形式合规。
+                </span>
+                <Badge tone="teal">{runParams.qualityStandardLabel} · {runParams.qualityPassScore} 分及格</Badge>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </CollapsibleCard>
@@ -312,38 +468,87 @@ function SettingsLayout() {
     }
   };
 
+  /**
+   * 设置页分区导航：**必须与下方 DOM 的真实顺序一致**。
+   * 历史缺陷：导航顺序是 AI→角色→用量→路由→…→MCP→扩展→配置→自定义，
+   * 实际 DOM 是 AI→扩展→配置→角色→用量→…；且 settings-persona / settings-extensions /
+   * settings-config 三个锚点当时在 DOM 里不存在（点了没反应），settings-custom 是空 div。
+   * 现在按真实顺序组织，并把「连接测试」补进导航（原来有卡片却没有入口）。
+   */
   const sections = useMemo(() => [
+    { id: 'settings-appearance', label: '外观与主题' },
     { id: 'settings-ai', label: 'AI 服务' },
+    { id: 'settings-extensions', label: '扩展中心' },
+    { id: 'settings-config', label: '配置中心' },
     { id: 'settings-persona', label: '角色与技能' },
     { id: 'settings-usage', label: '用量成本' },
     { id: 'settings-providers', label: '模型路由' },
     { id: 'settings-web', label: '联网搜索' },
     { id: 'settings-check', label: '环境自检' },
+    { id: 'settings-model-test', label: '连接测试' },
     { id: 'settings-mcp', label: 'MCP 工具' },
-    { id: 'settings-custom', label: '自定义' },
+    { id: 'settings-custom', label: '高级自定义' },
   ], []);
-  const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  /**
+   * 跳转分区。
+   * 实测坑：本应用的滚动容器是 .app-shell__content（overflowY:auto），不是 window；
+   * 且 `smooth` 滚动在长页面上会被后续的 activeSection 重渲染打断。
+   * 这里显式对容器做 scrollTo（扣除导航条高度），并把导航项自身滚到中间。
+   */
+  const jump = (id: string) => {
+    const node = document.getElementById(id);
+    if (!node) return;
+    const scroller = document.querySelector<HTMLElement>('.app-shell__content');
+    const navH = document.querySelector<HTMLElement>('.settings-nav')?.getBoundingClientRect().height ?? 0;
+    const nav = document.querySelector('.settings-nav');
+    const navBottom = nav ? nav.getBoundingClientRect().bottom : 0;
+    if (scroller) {
+      const top = node.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - navBottom + navH;
+      // 用 auto 而非 smooth：平滑滚动会被 setActiveSection 触发的重渲染打断（实测滚了 0px 就停）
+      scroller.scrollTo({ top, behavior: 'auto' });
+    } else {
+      node.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+    // 导航项只做横向滚动；用 scrollIntoView 会连带滚动主内容容器，把刚滚好的位置又拉回去
+    const navEl = document.querySelector<HTMLElement>('.settings-nav');
+    const navItem = document.querySelector<HTMLElement>(`.settings-nav__item[data-target="${id}"]`);
+    if (navEl && navItem && navEl.scrollWidth > navEl.clientWidth) {
+      navEl.scrollTo({ left: navItem.offsetLeft - navEl.clientWidth / 2 + navItem.offsetWidth / 2, behavior: 'auto' });
+    }
+    jumpLockRef.current = true;
+    setActiveSection(id);
+    window.setTimeout(() => { jumpLockRef.current = false; }, 400);
+  };
 
   // 滚动跟踪：高亮当前视口内的分区（对标大厂设置页的导航激活态）
   const [activeSection, setActiveSection] = useState(sections[0].id);
+  /**
+   * 跳转期间锁定高亮：scrollTo 是异步生效的，滚动监听会在位置真正到位前
+   * 读到旧位置并把 active 改回上一节（实测「点配置中心，高亮停在扩展中心」）。
+   * 锁 400ms 足够覆盖一次即时滚动 + 一次渲染。
+   */
+  const jumpLockRef = useRef(false);
   useEffect(() => {
+    const scroller = document.querySelector<HTMLElement>('.app-shell__content');
     const onScroll = () => {
-      const anchor = document.querySelector<HTMLElement>('.settings-nav');
-      const offset = anchor?.getBoundingClientRect().bottom ?? 80;
+      const nav = document.querySelector<HTMLElement>('.settings-nav');
+      const offset = nav ? nav.getBoundingClientRect().bottom : 80;
+      // 取「顶部已越过导航条底边」的最后一个分区：长分区滚动到一半时也能正确高亮
+      let current = sections[0].id;
       for (const s of sections) {
         const node = document.getElementById(s.id);
         if (!node) continue;
-        const rect = node.getBoundingClientRect();
-        if (rect.top <= offset + 40 && rect.bottom > offset) {
-          if (activeSection !== s.id) setActiveSection(s.id);
-          break;
-        }
+        // 容差取 8px：跳转后目标节点顶部恰好落在导航条下沿，用 24px 容差会被判成上一个分区
+        if (node.getBoundingClientRect().top <= offset + 8) current = s.id;
       }
+      if (jumpLockRef.current) return;
+      setActiveSection((prev) => (prev === current ? prev : current));
     };
-    window.addEventListener('scroll', onScroll, { passive: true, capture: true });
+    const target: HTMLElement | Window = scroller ?? window;
+    target.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
-    return () => window.removeEventListener('scroll', onScroll, { capture: true } as EventListenerOptions);
-  }, [activeSection, sections]);
+    return () => target.removeEventListener('scroll', onScroll);
+  }, [sections]);
 
   return (
     <div className="page-container">
@@ -356,12 +561,17 @@ function SettingsLayout() {
             key={it.id}
             type="button"
             onClick={() => jump(it.id)}
+            data-target={it.id}
+            aria-current={activeSection === it.id ? 'true' : undefined}
             className={`settings-nav__item ${activeSection === it.id ? 'settings-nav__item--active' : ''}`}
           >
             {it.label}
           </button>
         ))}
       </nav>
+
+      {/* 外观与主题：风格包 + 明暗模式 */}
+      <AppearanceSettings />
 
       {/* AI 配置总览 */}
       <Card className="p-4 mb-4" id="settings-ai">
@@ -405,8 +615,14 @@ function SettingsLayout() {
         )}
       </Card>
 
+      {/* 扩展中心：内置社区开源资产 + SciFlow 私有优势工具（默认全启用） */}
+      <div id="settings-extensions"><ExtensionCenter /></div>
+
+      {/* 配置中心：角色库 / 约束工程 / 钩子 / 权限 / 预设 / 审计 */}
+      <div id="settings-config"><ConfigCenterSettings /></div>
+
       {/* 角色与技能（persona + skills） */}
-      <PersonaSettings />
+      <div id="settings-persona"><PersonaSettings /></div>
 
       {/* Usage Stats */}
       <div id="settings-usage"><UsageStats /></div>
@@ -461,7 +677,7 @@ function SettingsLayout() {
       </Card>
 
       {/* 快捷键速查（F-3.2）：数据源 lib/hotkeys-docs，与真实注册一一对应（commands.test 锁定） */}
-      <Card className="p-4 mb-4" id="settings-hotkeys">
+      <Card className="p-4 mb-4" id="settings-model-test">
         <SectionTitle>
           <span className="flex items-center gap-2">
             <Keyboard size={16} className="text-teal-600" /> 快捷键速查
@@ -532,6 +748,35 @@ function SettingsLayout() {
 /* ------------------------------------------------------------------ */
 export function SettingsPage() {
   const toast = useContext(ToastContext);
+  const role = useAuthRole();
+
+  /**
+   * 企业模式的普通成员（v1.8）：实例级配置（模型 Key / baseURL / 权限档 / 钩子 /
+   * 扩展资产 / 用量 / 联网 provider）在服务端已收紧为 admin 专属。这里直接给出
+   * 只读说明，而不是让用户点进去吃一墙 403。
+   * 外观与主题属于个人偏好（纯 localStorage），对所有人开放 —— 所以设置页不整页隐藏。
+   */
+  if (role === 'member') {
+    return (
+      <div className="page-container">
+        <Card className="p-5 mb-4" id="settings-member-notice">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+              <Lock size={16} aria-hidden="true" />
+            </span>
+            <div>
+              <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">当前账号是普通成员</div>
+              <div className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                模型接入、权限档、注入钩子、扩展资产、用量统计与联网服务商属于实例级配置，仅管理员可修改。
+                你可以正常使用工作台、写作、文献、知识库、流水线、质量与投稿；如需调整模型或权限，请联系管理员。
+              </div>
+            </div>
+          </div>
+        </Card>
+        <AppearanceSettings />
+      </div>
+    );
+  }
 
   return (
     <SettingsProvider toast={toast}>

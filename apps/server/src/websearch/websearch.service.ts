@@ -24,6 +24,7 @@ import { db } from '../db/database';
 import { sqlite } from '../db/database';
 import { webSearchCache } from '../db/schema';
 import { allowPrivateOutbound, checkOutboundUrl } from '../common/outbound-guard';
+import { parseSo360Html } from './so360-parser';
 
 export interface SearchResult {
   title: string;
@@ -31,7 +32,7 @@ export interface SearchResult {
   snippet: string;
 }
 
-export type ProviderName = 'duckduckgo' | 'searxng' | 'tavily' | 'serper' | 'brave';
+export type ProviderName = 'duckduckgo' | 'so360' | 'searxng' | 'tavily' | 'serper' | 'brave';
 
 interface ProviderConfig {
   provider: ProviderName;
@@ -51,7 +52,7 @@ const SETTING_KEYS = {
 
 /** 校验 provider 名合法性（防注入任意字符串进日志/配置） */
 function isProviderName(v: string): v is ProviderName {
-  return ['duckduckgo', 'searxng', 'tavily', 'serper', 'brave'].includes(v);
+  return ['duckduckgo', 'so360', 'searxng', 'tavily', 'serper', 'brave'].includes(v);
 }
 
 @Injectable()
@@ -108,6 +109,7 @@ export class WebSearchService {
       chatFallback: this.isChatSearchEnabled(),
       available: {
         duckduckgo: true,
+        so360: true,
         searxng: !!c.searxngUrl,
         tavily: !!c.tavilyKey,
         serper: !!c.serperKey,
@@ -155,43 +157,68 @@ export class WebSearchService {
 
   // ---------- 搜索主入口 ----------
 
-  /** 搜索（带缓存）：按当前 provider 分发；失败自动降级到 duckduckgo 兜底 */
+  /** 搜索（带缓存与诊断）：按当前 provider 分发；失败按「国内可达性」降级链兜底。
+   *
+   * 降级链设计（v1.9.2 实测）：api.duckduckgo.com 在国内网络**不可达**（连接超时），
+   * 且其 Instant Answer API 本身只返回「实体摘要」而非网页搜索结果——
+   * 什么都不配时默认走 DDG 等于零结果空转，且此前失败是**静默**的（返回 []，
+   * 用户无从区分「没有结果」与「源不可用」）。
+   * 现在失败链：主 provider → so360（国内可达、免 Key）→ 返回带 notice 的空结果，
+   * 让调用方（chat 兜底 / 流水线 / 设置页测试）能明确告知用户原因。
+   */
   async search(query: string): Promise<SearchResult[]> {
+    const { results } = await this.searchWithDiagnostics(query);
+    return results;
+  }
+
+  /** 搜索 + 诊断：结果与「为什么是空的」一起返回（v1.9.2 反静默降级） */
+  async searchWithDiagnostics(query: string): Promise<{ results: SearchResult[]; provider: ProviderName; notice: string | null }> {
     const q = query.trim();
-    if (!q) return [];
+    if (!q) return { results: [], provider: this.getConfig().provider, notice: null };
     const cached = this.cacheGet(q);
-    if (cached) return cached;
+    if (cached) return { results: cached, provider: this.getConfig().provider, notice: null };
 
     const cfg = this.getConfig();
-    let results: SearchResult[] = [];
-    try {
-      switch (cfg.provider) {
-        case 'searxng':
-          results = await this.searchSearxng(q, cfg.searxngUrl);
-          break;
-        case 'tavily':
-          results = await this.searchTavily(q, cfg.tavilyKey);
-          break;
-        case 'serper':
-          results = await this.searchSerper(q, cfg.serperKey);
-          break;
-        case 'brave':
-          results = await this.searchBrave(q, cfg.braveKey);
-          break;
-        default:
-          results = await this.searchDuckDuckGo(q);
-      }
-    } catch (e: any) {
-      this.logger.warn(`[${cfg.provider}] 搜索失败，降级到 duckduckgo: ${e?.message || e}`);
+    const attempts: { provider: ProviderName; run: () => Promise<SearchResult[]> }[] = [];
+    switch (cfg.provider) {
+      case 'searxng':
+        attempts.push({ provider: 'searxng', run: () => this.searchSearxng(q, cfg.searxngUrl) });
+        break;
+      case 'tavily':
+        attempts.push({ provider: 'tavily', run: () => this.searchTavily(q, cfg.tavilyKey) });
+        break;
+      case 'serper':
+        attempts.push({ provider: 'serper', run: () => this.searchSerper(q, cfg.serperKey) });
+        break;
+      case 'brave':
+        attempts.push({ provider: 'brave', run: () => this.searchBrave(q, cfg.braveKey) });
+        break;
+      case 'so360':
+        attempts.push({ provider: 'so360', run: () => this.searchSo360(q) });
+        break;
+      default:
+        attempts.push({ provider: 'duckduckgo', run: () => this.searchDuckDuckGo(q) });
+        attempts.push({ provider: 'so360', run: () => this.searchSo360(q) }); // 国内可达兜底
+    }
+
+    const errors: string[] = [];
+    for (const attempt of attempts) {
       try {
-        results = await this.searchDuckDuckGo(q);
-      } catch (e2: any) {
-        this.logger.warn(`duckduckgo 兜底也失败: ${e2?.message || e2}`);
-        return [];
+        const results = await attempt.run();
+        if (results.length > 0) {
+          this.cachePut(q, results);
+          return { results, provider: attempt.provider, notice: null };
+        }
+        errors.push(`${attempt.provider}: 0 条`);
+      } catch (e: any) {
+        errors.push(`${attempt.provider}: ${e?.message || e}`);
       }
     }
-    this.cachePut(q, results);
-    return results;
+    const notice =
+      `联网检索不可用：${errors.join('；')}。` +
+      '国内网络建议改用 so360（免 Key）或自建 SearXNG；也可填写 Tavily/Serper/Brave Key。';
+    this.logger.warn(`[websearch] ${notice}`);
+    return { results: [], provider: cfg.provider, notice };
   }
 
   // ---------- 各 Provider 实现 ----------
@@ -256,7 +283,7 @@ export class WebSearchService {
     }));
   }
 
-  /** DDG Instant Answer（零配置兜底） */
+  /** DDG Instant Answer（仅返回实体摘要，非网页搜索；境外可达时作首试） */
   private async searchDuckDuckGo(q: string): Promise<SearchResult[]> {
     const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(q)}&format=json&no_html=1&skip_disambig=1`;
     const data = await this.fetchJson(url, { headers: { 'User-Agent': 'SciFlow/0.5 (local research tool)' } });
@@ -269,6 +296,41 @@ export class WebSearchService {
         results.push({ title: t.Text.split(' - ')[0] || t.Text.slice(0, 60), url: t.FirstURL, snippet: t.Text });
       }
     }
+    return results;
+  }
+
+  /**
+   * 360 搜索（so.com，免 Key、国内可达；v1.9.2 新增）。
+   *
+   * 为什么需要：原「零配置兜底」DuckDuckGo 在国内网络不可达（连接超时），且其
+   * Instant Answer API 本身只返回实体摘要——号称「通用搜索」实际恒为空，
+   * 失败还静默返回 []。本产品定位国内科研用户，必须有一个国内可达的免 Key 网页源。
+   *
+   * 实现说明：解析结果页 `li.res-list` 块中的 h3.res-title > a（标题/链接），
+   * 链接是 so.com 跳转域，直链需要再解一次跳转——这里保留跳转链接（浏览器可打开），
+   * 摘要取 result 块内文本；不引入 HTML 解析库（仅两处正则，依赖纪律见 §7）。
+   */
+  private async searchSo360(q: string): Promise<SearchResult[]> {
+    const url = `https://www.so.com/s?q=${encodeURIComponent(q)}&pn=1`;
+    const guard = await checkOutboundUrl(url, { allowPrivate: allowPrivateOutbound() });
+    if (!guard.ok) throw new Error(`出站地址被拒绝：${guard.reason}`);
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 10_000);
+    let html: string;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        },
+        signal: ctrl.signal,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      html = await res.text();
+    } finally {
+      clearTimeout(timeout);
+    }
+    const results = parseSo360Html(html, WebSearchService.MAX_RESULTS);
     return results;
   }
 
