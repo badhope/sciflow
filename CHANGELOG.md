@@ -1,6 +1,42 @@
-# 更新日志 · Changelog
+# Changelog
 
-本项目格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，语义化版本号。以下按 `git log` 自底向上归纳历轮功能与修复，未含真实密钥。
+All notable changes to this project are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
+adheres to [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+### Fixed
+
+- **All real model endpoints were rejected by the outbound guard.** The address
+  classifier treated any non-IP string as dangerous, so a hostname such as
+  `api.openai.com` was refused before DNS resolution. Every real provider call
+  failed with "blocked address"; only the in-process mock gateway worked, which
+  is why the existing tests — all of them using IP literals — never caught it.
+  The classifier now returns false for hostnames and the decision happens at
+  connection time against each resolved address.
+- **IPv6 link-local blocking only matched the `fe80` prefix.** The real range is
+  `fe80::/10`, so `fe90::1` through `febf::1` passed the check. Address
+  classification now uses `net.BlockList` with correct CIDR prefixes for
+  `fe80::/10`, `fc00::/7` and `ff00::/8`.
+
+### Changed
+
+- Removed the duplicate address-classification implementation in
+  `apps/server/src/common/outbound-guard.ts`; it now reuses
+  `packages/core/src/ip-policy`, so the API and the AI transport share one rule
+  set instead of two copies that could drift.
+- `isBlockedAddress` and `isCloudMetadataAddress` are documented as accepting
+  IP literals only. `isIpLiteral` is exported for callers that need to branch.
+
+### Added
+
+- Behavioural regression tests covering hostname pass-through, the full IPv6
+  link-local range, IPv4-mapped IPv6 bypasses, and the distinction between
+  public and reserved addresses.
+- Release process (`docs/RELEASE.md`), issue and pull request templates, a
+  secret-guard workflow, and version tags for every released version.
+- Bilingual README with English as the primary language.
 
 ## [1.9.5] - 2026-10-31
 
@@ -568,7 +604,7 @@
 
 ## [0.9.0] - 2026-10-23
 
-品牌与体验打磨批次 + 全维度审查驱动的数据完整性修复。审查报告见 [`docs/AUDIT-2026-10-23.md`](docs/AUDIT-2026-10-23.md)（35 条发现、具名竞品矩阵、路线图）。
+品牌与体验打磨批次 + 全维度审查驱动的数据完整性修复。审查报告见 [`docs/archive/AUDIT-2026-10-23.md`](docs/archive/AUDIT-2026-10-23.md)（35 条发现、具名竞品矩阵、路线图）。
 
 ### Security
 - **Critical · PATCH 可越权改写非白名单字段**：`PATCH /documents/:id` 曾把整个 body 展开进 `db.update().set()`，实测可改写 `id / projectId / version / versions`（企业模式下等于绕过项目归属边界）。改为白名单 `{title, content, outline, status}`，其余字段一律丢弃。
@@ -611,7 +647,7 @@
 - `apps/server/src/documents/documents-integrity.spec.ts`：6 条真实 SQLite 完整性回归（白名单/级联/快照/导出/引用渲染），突变验证有效（回退修复必红）。
 - `apps/web/src/lib/{format,theme}.ts` + 测试：字数格式化与主题解析纯函数。
 - `scripts/seed-demo.mjs`：可重复执行的演示数据种子（只走 REST API，库非空自动跳过，`RUN_PIPELINE=1` 可跑通流水线）。
-- `docs/AUDIT-2026-10-23.md`：全维度审查与对标报告。
+- `docs/archive/AUDIT-2026-10-23.md`：全维度审查与对标报告。
 - `docs/media/demo.mp4`：24 秒真实操作导览视频。
 - README 中英文版：12 张实机截图 + 视频 + 设计语言规范表。
 
@@ -709,7 +745,7 @@
 ## [0.6.0] - 2026-10-20
 
 实测驱动的正确性批次：装依赖、起服务、用 Chromium 逐页操作后发现 12 个用户可见缺陷，修复后又由独立审计抓出 13 个本轮引入的回归。同时补全 Agent 工具链（此前完全不可用），重建前端布局契约。
-详细记录见 [`docs/RUNTIME-FINDINGS.md`](docs/RUNTIME-FINDINGS.md)。
+详细记录见 [`docs/archive/RUNTIME-FINDINGS.md`](docs/archive/RUNTIME-FINDINGS.md)。
 
 ### Added
 - **Agent 工具链（核心能力）**：`AgentToolBridge` 把 11 个 MCP 工具转成模型可调用工具，对话中模型能自主检索文献库/知识库。带项目作用域（防跨项目检索）、调用次数上限、单项超时、轨迹落库。实测真实模型单轮触发 5 次工具调用并引用真实文献元数据。
@@ -719,7 +755,7 @@
 - **LaTeX / HTML 导出**：`DocExporter` 接上两个按钮（本地纯函数转换，不依赖网络）。
 - **引用顺序护栏**：新增 `citation-order.spec.ts`（5 条），并做过红绿验证。
 - **用量分型统计**：`llm_call_log.kind` 区分 `llm` / `tool`，成本看板不再被无 token 的工具调用污染；新增 `tools` 汇总。
-- **文档**：`docs/RUNTIME-FINDINGS.md`（实测记录）+ `docs/runtime-screenshots/`（修复前后对照）。
+- **文档**：`docs/archive/RUNTIME-FINDINGS.md`（实测记录）+ `docs/runtime-screenshots/`（修复前后对照）。
 
 ### Fixed
 - **工作台流式回答平方膨胀**：`onDelta` 回调参数是累积全文，工作台却按增量追加（5 个分片后长度 10→31）。抽出 `applyStreamDelta` 纯函数统一语义。
@@ -768,8 +804,8 @@
 - **任务级 token 预算器（B-2.2）**：起草/评审/润色三点打点，默认 300k tokens，`pipeline_token_budget` 可调（0=不限），超限任务终止。
 - **流水线 DAG 实时图（F-2.1）**：自绘轻量 SVG 零依赖——状态八色着色、回炉回路虚线回边（Reflexion 语义可视化）、retry 徽标、当前步骤呼吸动画。
 - **成本仪表盘增量（F-2.3）**：usage 新增 `byModel`（fast/strong 档位分布）与 `budgetTokens`（预算上限透出），设置页补预算指标卡与模型分布 HBar。
-- **docs/HANDOFF.md**：新环境/新会话续接唯一入口（起步/完成度/待办/踩坑清单/文档地图）。
-- **docs/audit-report.md + docs/archive/audit-notes.md**：深度审计报告与 76 项原始疑点笔记入仓归档。
+- **docs/archive/HANDOFF.md**：新环境/新会话续接唯一入口（起步/完成度/待办/踩坑清单/文档地图）。
+- **docs/archive/audit-report.md + docs/archive/audit-notes.md**：深度审计报告与 76 项原始疑点笔记入仓归档。
 
 ### Fixed
 - **H1 Reflexion 定向回炉**：旧实现 instructions 恒空、只回传 feedback 原文 → 新增 REFLEXION_PLAYBOOK 按最低分两维生成章节级修订指令，结构化落库供下轮起草逐条落实（自动改分真正可演示）。
