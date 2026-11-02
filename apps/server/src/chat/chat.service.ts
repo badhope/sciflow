@@ -4,6 +4,7 @@ import { AiService, ChatMessage, ChatStreamOptions } from '../ai/ai.service';
 import { MemoryService } from '../memory/memory.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { ChatSessionService } from './chat-session.service';
+import { CompactionService } from './compaction.service';
 import { WebSearchService } from '../websearch/websearch.service';
 import { AgentToolBridge } from '../agent/agent-tool-bridge';
 import { ConfigCenterService } from '../config/config-center.service';
@@ -65,6 +66,7 @@ export class ChatService {
     private readonly memory: MemoryService,
     private readonly knowledge: KnowledgeService,
     private readonly chatSession: ChatSessionService,
+    private readonly compaction: CompactionService,
     private readonly websearch: WebSearchService,
     private readonly tools: AgentToolBridge,
     private readonly trace: AgentTraceService,
@@ -198,12 +200,15 @@ export class ChatService {
     // 非流式入口同样执行 chat:before 钩子（block 在此拦截；prompt_inject 由 AI 层注入）
     const before = await this.config.runEventHooks('chat:before', { text: message, projectId }, 'chat');
     if (before.blocked) throw new BadRequestException(before.blocked);
-    const { context, sources } = await this.contextFor(projectId, message, docContext, history.length, opts.webSearch === true);
+    // 长对话先压缩，避免历史无限增长撑爆上下文窗口
+    const compacted = this.compaction.compact(history);
+    const effectiveHistory = compacted.messages;
+    const { context, sources } = await this.contextFor(projectId, message, docContext, effectiveHistory.length, opts.webSearch === true);
     const persona = this.personaConfig();
     const fullContext = persona.skillsDesc ? `${context}\n\n【可用技能】\n${persona.skillsDesc}\n（回答需要时可利用对应技能获取事实依据）` : context;
     const answerText = fullContext
-      ? await this.ai.chatWithContext(message, history, fullContext, { modelName: opts.model }, persona.systemPrompt)
-      : await this.ai.chat(message, history, { modelName: opts.model }, persona.systemPrompt);
+      ? await this.ai.chatWithContext(message, effectiveHistory, fullContext, { modelName: opts.model }, persona.systemPrompt)
+      : await this.ai.chat(message, effectiveHistory, { modelName: opts.model }, persona.systemPrompt);
     return { answer: answerText, sources };
   }
 
@@ -218,7 +223,13 @@ export class ChatService {
   }
 
   stream(message: string, history: ChatMessage[] = [], projectId?: string, docContext?: string, opts: ChatRuntimeOptions = {}) {
-    return this.contextFor(projectId, message, docContext, history.length, opts.webSearch === true).then(async ({ context, sources }) => {
+    // 长对话先压缩：这是 harness 的核心能力，避免历史撑爆窗口后模型开始丢早期指令
+    const compacted = this.compaction.compact(history);
+    const effectiveHistory = compacted.messages;
+    if (compacted.compacted) {
+      this.logger.log(`[compact] 压缩 ${compacted.beforeChars} → ${compacted.afterChars} 字符，归纳 ${compacted.droppedTurns} 轮`);
+    }
+    return this.contextFor(projectId, message, docContext, effectiveHistory.length, opts.webSearch === true).then(async ({ context, sources }) => {
       // chat:before 钩子：block 类型在此拦截（抛错由 controller 转为 SSE error 事件）
       const before = await this.config.runEventHooks('chat:before', { text: message, projectId }, 'chat');
       if (before.blocked) throw new BadRequestException(before.blocked);
@@ -249,8 +260,8 @@ export class ChatService {
       const persona = this.personaConfig();
       const fullContext = persona.skillsDesc ? `${context}\n\n【可用技能】\n${persona.skillsDesc}\n（回答需要时可利用对应技能获取事实依据）` : context;
       const stream = fullContext
-        ? await this.ai.streamChatWithContext(message, history, fullContext, streamOpts, persona.systemPrompt)
-        : await this.ai.streamChat(message, history, streamOpts, persona.systemPrompt);
+        ? await this.ai.streamChatWithContext(message, effectiveHistory, fullContext, streamOpts, persona.systemPrompt)
+        : await this.ai.streamChat(message, effectiveHistory, streamOpts, persona.systemPrompt);
       if (runId) {
         // 流已返回（SSE 转发在 controller 层完成）：这里只负责收尾执行记录，
         // 失败/中断也标记 done，避免执行历史长期停在 running。

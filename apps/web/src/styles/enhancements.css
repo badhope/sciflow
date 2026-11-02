@@ -1,0 +1,219 @@
+/* ============================================================================
+   视觉增强层 v2 —— 在既有 token 之上补齐「深度、材质、动效编排」
+   ----------------------------------------------------------------------------
+   原则：
+   1. 不新增色值，全部复用 index.css 的品牌 token（避免两套调色板漂移）。
+   2. 只在**信息层级**需要的地方加材质，不做无差别毛玻璃（那是最廉价的"高级感"）。
+   3. 所有动效都可被 prefers-reduced-motion 关闭。
+   4. 新增的类名统一 v2- 前缀，便于识别与回滚。
+   ============================================================================ */
+
+/* ---- 深度刻度：把「卡片 / 浮层 / 抽屉」的阴影差拉开 ----
+   旧版只有两档阴影，视觉上卡片和弹层贴在一起，层次感弱。
+   这里按 z 轴深度分四档，阴影越深、越远、越软。 */
+:root {
+  --depth-1: 0 1px 2px rgba(23, 32, 44, 0.04);
+  --depth-2: 0 1px 2px rgba(23, 32, 44, 0.05), 0 4px 12px -6px rgba(23, 32, 44, 0.10);
+  --depth-3: 0 2px 4px rgba(23, 32, 44, 0.05), 0 12px 28px -12px rgba(23, 32, 44, 0.16);
+  --depth-4: 0 4px 8px rgba(23, 32, 44, 0.06), 0 24px 56px -20px rgba(23, 32, 44, 0.24);
+  /* 高光边：模拟光源自上而下，让卡片有"实体感"而不是平面色块 */
+  --edge-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.dark {
+  --depth-1: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --depth-2: 0 1px 3px rgba(0, 0, 0, 0.36), 0 4px 14px -6px rgba(0, 0, 0, 0.34);
+  --depth-3: 0 2px 5px rgba(0, 0, 0, 0.38), 0 14px 32px -12px rgba(0, 0, 0, 0.44);
+  --depth-4: 0 4px 10px rgba(0, 0, 0, 0.42), 0 28px 60px -20px rgba(0, 0, 0, 0.58);
+  --edge-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* ---- 卡片材质：主面板带高光边，hover 时阴影升级 ----
+   只有可交互卡片才响应 hover，静态卡不跳动（否则整页都在"呼吸"）。 */
+.v2-surface {
+  background: var(--card);
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  box-shadow: var(--depth-2), var(--edge-highlight);
+  border-radius: var(--r-lg);
+}
+.v2-surface--interactive {
+  transition: box-shadow var(--dur-2) var(--ease), transform var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease);
+}
+.v2-surface--interactive:hover {
+  box-shadow: var(--depth-3), var(--edge-highlight);
+  border-color: color-mix(in srgb, var(--brand-500) 32%, var(--border));
+  transform: translateY(-1px);
+}
+.v2-surface--interactive:active {
+  transform: translateY(0);
+  box-shadow: var(--depth-1), var(--edge-highlight);
+}
+
+/* ---- 焦点可见性：键盘用户必须能看清焦点在哪 ----
+   旧版各组件自定 focus ring，深浅色下表现不一；这里统一。 */
+.v2-focusable:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* ---- 骨架屏：内容占位用真实形状而非通用灰条 ----
+   通用灰条会让用户误以为加载失败；带品牌色微光的骨架更像"正在生成"。 */
+@keyframes v2-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.v2-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-a) 0%,
+    var(--skeleton-b) 42%,
+    var(--skeleton-a) 84%
+  );
+  background-size: 200% 100%;
+  animation: v2-shimmer 1.5s linear infinite;
+  border-radius: var(--r-sm);
+}
+
+/* ---- 入场编排：列表项依次出现，而不是整块闪现 ----
+   用 CSS 变量控制序号，避免为每一项写 inline animation-delay。 */
+@keyframes v2-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.v2-stagger > * {
+  animation: v2-rise 0.28s var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+/* ---- 状态点：运行中脉冲，完成静止 ----
+   脉冲只给"正在进行"的状态，完成态静止，避免整页都在动。 */
+@keyframes v2-ring {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-500) 42%, transparent); }
+  70% { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.v2-live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--brand-500);
+  animation: v2-ring 1.8s ease-out infinite;
+}
+
+/* ---- 数字强调：等宽数字 + 字距收紧，让指标卡读数不抖动 ----
+   比例字体下 1 和 8 宽度不同，数值刷新时整行会左右跳。 */
+.v2-numeric {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.01em;
+}
+
+/* ---- 渐进式披露：详情默认收起，展开时有高度过渡 ----
+   用于"高级选项""原始数据"等不该占据首屏的内容。 */
+.v2-disclosure > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  user-select: none;
+}
+.v2-disclosure > summary::-webkit-details-marker { display: none; }
+.v2-disclosure__chevron {
+  transition: transform var(--dur-2) var(--ease);
+  color: var(--muted-foreground);
+}
+.v2-disclosure[open] .v2-disclosure__chevron { transform: rotate(90deg); }
+
+/* ---- 滚动渐隐：长列表顶部/底部边缘淡出，暗示还有内容 ----
+   比"突然截断"更符合直觉，也不需要额外 JS 计算滚动位置。 */
+.v2-fade-edges {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+}
+
+/* ---- 分隔线：比 1px 实线更轻，用于同组内容之间 ----
+   渐变到透明，避免把内容切得太生硬。 */
+.v2-divider {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in srgb, var(--border) 90%, transparent) 16%,
+    color-mix(in srgb, var(--border) 90%, transparent) 84%,
+    transparent
+  );
+  border: 0;
+}
+
+/* ---- 标签页：底部指示条随选中项滑动 ----
+   纯 CSS 实现（不用 JS 测量），依赖 flex 等分。 */
+.v2-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+}
+.v2-tab {
+  position: relative;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+}
+.v2-tab:hover { color: var(--foreground); background: color-mix(in srgb, var(--muted) 50%, transparent); }
+.v2-tab[aria-selected="true"] { color: var(--brand-700); }
+.v2-tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--brand-grad);
+}
+
+/* ---- 空态：给下一步动作，而不只是"暂无数据" ----
+   空态是最容易被忽略的体验缺口：用户看到的应该是"可以做什么"。 */
+.v2-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-8) var(--sp-5);
+  text-align: center;
+  color: var(--muted-foreground);
+}
+.v2-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  background: var(--brand-grad-soft);
+  color: var(--brand-600);
+}
+
+/* ---- 无障碍：尊重系统的减少动效偏好 ---- */
+@media (prefers-reduced-motion: reduce) {
+  .v2-surface--interactive,
+  .v2-skeleton,
+  .v2-stagger > *,
+  .v2-live-dot,
+  .v2-disclosure__chevron {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+/* ---- 高对比度模式：边框必须可见 ---- */
+@media (prefers-contrast: more) {
+  .v2-surface { border-color: var(--border); }
+  .v2-tab[aria-selected="true"] { text-decoration: underline; text-underline-offset: 4px; }
+}
