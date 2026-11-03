@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-11-03
+
 ### Added
 
 - **Agent harness.** Four capabilities borrowed from coding-agent infrastructure
