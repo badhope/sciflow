@@ -1,20 +1,17 @@
-import { useId } from 'react';
-
 /**
- * SciFlow 品牌标志 ·「墨流 3.0 · Current」
+ * SciFlow 品牌标志 ·「朱印 1.0」
  *
- * 3.0 相对 2.0 的重做原因（品牌体检结论）：
- *  2.0 的 S 是「两段同心圆弧拼 S」，在 24px 以下会退化成两个圈，且与
- *  众多 AI 产品惯用的「圆环 + 渐变」非常接近 —— 一眼就是模板产物。
- *  3.0 改为**单一连续笔势**：一条从右上落笔、经中宫转折、左下收笔的
- *  粗细渐变水流（模拟书法运笔的提按），配合一道贯穿的细「主流线」与
- *  一个实心「成果节点」。图形语义唯一、缩到 16px 仍能读出方向感。
+ * 4.0 相对 3.0 的重做原因（去 AI 模板化，2026-11）：
+ *  3.0 的「主笔 + 主流线 + 成果节点外环」三件套，在市面上与大量 AI 产品的
+ *  「一笔流 + 轨道 + 节点」图标同构，用户看到的第一眼仍是「AI 工具」。
+ *  4.0 回到东方学术批注的源头——**朱砂印**：审阅、评定、定稿的印记。
+ *  全标只有两个颜色（墨黛 / 朱砂）、两个形状（一笔 S + 收笔一点），
+ *  没有渐变、没有光晕、没有轨道——印章的干脆就是辨识度。
  *
- * 造型语言（三层）：
- *  1. 主笔：粗细渐变的 S 形水流（右上 → 左下），表达「想法流经流程」。
- *  2. 主流线：一条贯穿全图的细直线，表达「可复现的流程主线」——
- *     这是 SciFlow 与「AI 随手画个环」的区分点。
- *  3. 成果节点：实心圆 + 外环，落在主笔收笔处，表达「沉淀为可发表成果」。
+ * 造型语言（两层）：
+ *  1. 主笔：单条连续 S 形水流（右上 → 中宫 → 左下），科研全流程一笔贯通。
+ *  2. 朱点：收笔处一点朱砂，「流程走完，落下一个审阅的印记」——
+ *     这是全品牌的签名细节，深浅色下都保持朱砂色（mono 场景随 currentColor）。
  *
  * 几何：48×48 视框、≥2px 安全边距；16/24/32/48/64 下等比可辨识。
  */
@@ -25,56 +22,26 @@ export function BrandMark({
 }: {
   className?: string;
   title?: string;
-  /** mono=跟随 currentColor（单色/暗底场景）；gradient=品牌渐变（浅底彩色场景） */
-  variant?: 'mono' | 'gradient' | 'inverse';
+  /** mono=跟随 currentColor（单色场景）；brand=黛蓝主笔+朱点（浅底场景）；inverse=白主笔+朱点（印底/深底场景） */
+  variant?: 'mono' | 'gradient' | 'brand' | 'inverse';
 }) {
-  const uid = useId().replace(/[:]/g, '');
-  const strokeId = `sf-stroke-${uid}`;
-  const glowId = `sf-glow-${uid}`;
-  const tinted = variant === 'gradient';
-  const stroke = tinted ? `url(#${strokeId})` : 'currentColor';
+  // 兼容旧调用点：'gradient' 是 3.0 时代的 API 名，4.0 起渲染为平涂品牌色（黛蓝）
+  const stroke = variant === 'mono' ? 'currentColor' : variant === 'inverse' ? '#ffffff' : 'var(--brand-600, #2F5480)';
+  // 朱点固定朱砂色，深浅色各一档；mono 下跟随文字色，避免脱离语境
+  const dotFill =
+    variant === 'mono' ? 'currentColor' : `var(--brand-seal-${variant === 'inverse' ? 'on-dark' : 'light'}, #BE3B2A)`;
   return (
     <svg viewBox="0 0 48 48" className={className} role="img" aria-label={title} fill="none">
-      {tinted && (
-        <defs>
-          {/* 笔势渐变：青绿（起）→ 湖蓝（中）→ 深蓝（收），与 --brand-grad 同源 */}
-          {/* 停靠色改用主题 token：品牌渐变在三套主题包（学术/纸感/极简…）下颜色不同，
-              写死 teal→sky 会让 logo 与按钮/导航高亮脱节（v1.7 主题化）。 */}
-          <linearGradient id={strokeId} x1="40" y1="8" x2="8" y2="40" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="var(--brand-400, #14b8a6)" />
-            <stop offset="0.5" stopColor="var(--brand-500, #0f9e94)" />
-            <stop offset="1" stopColor="var(--brand-600, #0b7f78)" />
-          </linearGradient>
-          <filter id={glowId} x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="0.7" result="b" />
-            <feMerge>
-              <feMergeNode in="b" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-      )}
-      <g filter={tinted ? `url(#${glowId})` : undefined}>
-        {/* 主流线：贯穿全图的流程主线 */}
-        <path
-          d="M9.5 38.5 L38.5 9.5"
-          stroke={stroke}
-          strokeWidth={1.1}
-          strokeLinecap="round"
-          opacity={tinted ? 0.4 : 0.34}
-        />
-        {/* 主笔：单条连续 S 形水流，起笔细、中宫厚、收笔出锋 */}
-        <path
-          d="M37.6 12.4c-1.9-2.6-5.4-3.9-8.6-2.7-3.5 1.3-5 4.7-3.9 7.7 1.2 3.2 4.6 4.4 7.7 5.3 3.4 1 6.6 2.4 7.4 5.6.8 3.4-1.4 6.7-4.9 7.7-2.8.8-5.6.1-7.4-1.9"
-          stroke={stroke}
-          strokeWidth={6.0}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {/* 成果节点：实心圆 + 外环（收笔处沉淀） */}
-        <circle cx="10.4" cy="37.6" r="3.5" fill={stroke} />
-        <circle cx="10.4" cy="37.6" r="6.4" stroke={stroke} strokeWidth={1.1} opacity={tinted ? 0.45 : 0.38} />
-      </g>
+      {/* 主笔：单条连续 S 形水流，起笔细、中宫厚、收笔出锋 */}
+      <path
+        d="M32.4 16.05a8.25 8.25 0 1 0-8.4 7.95 8.25 8.25 0 1 1-8.4 7.95"
+        stroke={stroke}
+        strokeWidth={4.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* 收笔一点朱砂：全品牌的签名细节 */}
+      <circle cx="14.55" cy="33" r="2.6" fill={dotFill} />
     </svg>
   );
 }
@@ -82,10 +49,9 @@ export function BrandMark({
 /**
  * 品牌组合：标志 + 词标 + 标语。
  *
- * 3.0 排版规则（真正品牌的做法，而非「图标 + 两行任意小字」）：
- *  - 词标用**字距收紧 + 粗细分层**：Sci 中等字重（墨），Flow 用品牌渐变；
- *  - 标语前加 1px 竖分隔线，形成期刊页眉式的分栏感；
- *  - 标语字距拉开（0.14em），与词标形成字号/字距的强对比。
+ * 4.0 排版规则：
+ *  - 词标「Sci」墨色 + 「Flow」朱砂——字标即印文，与印底同源；
+ *  - 标语前保留 1px 竖分隔线（期刊页眉式的分栏感），字距 0.14em。
  */
 export function BrandLockup({ subtitle = '让科研从想法到成文' }: { subtitle?: string }) {
   return (
@@ -96,7 +62,9 @@ export function BrandLockup({ subtitle = '让科研从想法到成文' }: { subt
       <div className="min-w-0 leading-none">
         <div className="flex items-baseline gap-[1px]">
           <span className="brand-wordmark text-[17px] font-semibold text-slate-900 dark:text-slate-50">Sci</span>
-          <span className="brand-wordmark brand-gradient-text text-[17px] font-bold">Flow</span>
+          <span className="brand-wordmark text-[17px] font-bold text-[color:var(--brand-seal-light,#BE3B2A)] dark:text-[color:var(--brand-seal-on-dark,#D4674F)]">
+            Flow
+          </span>
         </div>
         <div className="mt-[5px] flex items-center gap-1.5">
           <span className="h-[9px] w-px bg-slate-300 dark:bg-slate-600" aria-hidden="true" />

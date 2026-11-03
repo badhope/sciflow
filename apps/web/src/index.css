@@ -13,43 +13,58 @@
   /* 对比度修正：默认 slate-400 (#94a3b8) 在白底上仅 2.6:1，达不到 WCAG AA。
      辅助文字统一提升到 slate-500 档（4.6:1），深色模式保持原亮度。 */
   --color-slate-400: #5b6b82;
-  /* 品牌青绿：Tailwind 默认 teal-600 (#0d9488) 白底仅 3.7:1；正文一律走加深档 */
-  --color-teal-600: #0b7f78;
-  --color-teal-500: #0f9e94;
-  /* ---- SciFlow 品牌 token（科研流体：teal → cyan → sky） ---- */
-  --brand-400: #14b8a6;
-  --brand-500: #0f9e94;
-  --brand-600: #0b7f78;
-  /* 正文级品牌文字色：≥4.5:1（白底 4.86:1），--brand-500 仅用于图形填充 */
-  --brand-700: #0b6f68;
-  /* 品牌渐变（墨流 2.0：科研蓝绿，比 1.x 更鲜活；三档均保证白字 ≥4.5:1，深色模式沿用提亮版） */
-  --brand-grad: linear-gradient(135deg, #0f9e94 0%, #0b8fb4 48%, #0b6fc4 100%);
-  --on-brand: #ffffff;
-  --brand-grad-soft: linear-gradient(135deg, rgba(15, 158, 148, 0.10), rgba(11, 143, 180, 0.08) 52%, rgba(11, 111, 196, 0.06));
-  --brand-glow: 0 8px 28px rgba(11, 143, 180, 0.22), 0 2px 8px rgba(15, 158, 148, 0.18);
+  /* ---- 品牌令牌 ·「朱印 1.0」（2026-11 去模板化重塑）----
+     三色体系：纸（暖白底）· 墨（近黑正文）· 黛（蓝灰主色）· 朱砂（签名点睛）。
+     teal-* 工具类整段重映射为黛蓝阶——组件类名零改动即整站换色，
+     与主题风格包（styles/themes.css）同一机制。 */
+  --color-teal-50: #f0f4f8;
+  --color-teal-100: #e1e8f1;
+  --color-teal-200: #c4d2e2;
+  --color-teal-300: #9fb6cf;
+  --color-teal-400: #7090b4;
+  --color-teal-500: #47719e;
+  --color-teal-600: #2f5480;
+  --color-teal-700: #234367;
+  --color-teal-800: #1b3450;
+  --color-teal-900: #142840;
+  --color-teal-950: #0d1b2d;
+
+  --brand-400: #7090b4;
+  --brand-500: #47719e;
+  --brand-600: #2f5480;
+  /* 正文级品牌文字色：≥4.5:1（白底 8.5:1），--brand-500 仅用于图形填充 */
+  --brand-700: #234367;
+  /* 朱砂：全品牌签名点睛色（Logo 收笔点 / Flow 词标 / 印底） */
+  --brand-seal-light: #be3b2a;
+  --brand-seal-on-dark: #d4674f;
+  /* 主按钮/徽标底：同色相两档微差，读作平涂——多色渐变是"AI 味"的主要来源 */
+  --brand-grad: linear-gradient(135deg, #33587f 0%, #254468 100%);
+  --on-brand: #f7fafd;
+  --brand-grad-soft: linear-gradient(135deg, rgba(47, 84, 128, 0.09), rgba(47, 84, 128, 0.04));
+  --brand-glow: 0 6px 16px rgba(47, 84, 128, 0.14), 0 1px 4px rgba(47, 84, 128, 0.1);
   --card-shadow: 0 1px 2px rgba(23, 32, 44, 0.05), 0 8px 24px -14px rgba(23, 32, 44, 0.12);
-  --bg-app: #f4f6fb;
-  --ink: #1c2a44;
+  --bg-app: #f5f4f0;
+  --ink: #262b33;
 
   /* ---- 语义色（图表 / 状态 / 文本层级统一走这些，禁止页面里写死 hex） ---- */
-  --background: #f4f6fb;
-  --foreground: #1c2a44;
+  --background: #f5f4f0;
+  --foreground: #262b33;
   --card: #ffffff;
-  --card-foreground: #1c2a44;
+  --card-foreground: #262b33;
   --popover: #ffffff;
-  --popover-foreground: #1c2a44;
-  --primary: #0f9e94;
+  --popover-foreground: #262b33;
+  --primary: #2f5480;
   --primary-foreground: #ffffff;
-  --secondary: #eef2f7;
-  --secondary-foreground: #334155;
-  --muted: #eef2f7;
-  --muted-foreground: #5d6d85;
-  --accent: #e6f4f2;
-  --accent-foreground: #0f766e;
+  --secondary: #edece7;
+  --secondary-foreground: #3a4148;
+  --muted: #edece7;
+  --muted-foreground: #63696f;
+  --accent: #e9eef4;
+  --accent-foreground: #2f5480;
   --destructive: #e11d48;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #0f9e94;
+  --border: #e3e1da;
+  --input: #e3e1da;
+  --ring: #47719e;
 
   --blue: #2563eb;
   --orange: #ea580c;
@@ -64,13 +79,13 @@
   --emerald-500: #10b981;
   --sky-500: #0ea5e9;
 
-  /* 图表系列色：默认全部落在品牌/辅助色上，保持克制 */
-  --viz-series-1: #0f9e94;
-  --viz-series-2: #0b8fb4;
-  --viz-series-3: #2563eb;
-  --viz-series-4: #7c3aed;
-  --viz-series-5: #ea580c;
-  --viz-series-6: #64748b;
+  /* 图表系列色：黛蓝为轴，朱砂/苔绿/赭石做对比档，保持学术图表的克制 */
+  --viz-series-1: #47719e;
+  --viz-series-2: #be3b2a;
+  --viz-series-3: #55743f;
+  --viz-series-4: #9a6b2f;
+  --viz-series-5: #35707e;
+  --viz-series-6: #6b7280;
 
   /* 布局节奏：内容页统一最大宽度，避免切页时左右边界跳动 */
   --page-max: 1152px;
@@ -98,21 +113,21 @@
 
   /* ---- 主题风格层默认值（v1.7）：被 :root[data-theme] 风格包覆盖 ---- */
   --font-heading: var(--font-ui);
-  --glass-bg: rgba(255, 255, 255, 0.72);
-  --glass-blur: blur(12px) saturate(1.4);
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  --glass-blur: blur(10px) saturate(1.15);
   --bubble-user-ink: #ffffff;
   --code-bg: #0f172a;
   --code-fg: #e2e8f0;
   --code-border: rgba(148, 163, 184, 0.18);
   --link: var(--brand-600);
-  --selection-bg: color-mix(in srgb, var(--brand-500) 22%, transparent);
-  --scrollbar-thumb: #c3cede;
-  --scrollbar-thumb-hover: #9fb0c9;
+  --selection-bg: color-mix(in srgb, var(--brand-500) 20%, transparent);
+  --scrollbar-thumb: #c8c5bd;
+  --scrollbar-thumb-hover: #a9a69d;
   --skeleton-a: rgba(148, 163, 184, 0.12);
   --skeleton-b: rgba(148, 163, 184, 0.22);
-  --ambient-1: rgba(13, 148, 136, 0.06);
-  --ambient-2: rgba(8, 145, 178, 0.04);
-  --focus-ring-color: rgba(13, 148, 136, 0.40);
+  --ambient-1: rgba(47, 84, 128, 0.05);
+  --ambient-2: rgba(190, 59, 42, 0.03);
+  --focus-ring-color: rgba(47, 84, 128, 0.4);
   --focus-ring-w: 2px;
   --sidebar-tint: var(--card);
 
@@ -134,37 +149,50 @@
 }
 .dark {
   color-scheme: dark;
+  /* 墨夜：暖调近黑 + 黛蓝提亮档（与亮色同一色相，降饱和提亮度） */
   --color-slate-400: #94a3b8;
-  --color-teal-600: #2dd4bf;
-  --color-teal-500: #14b8a6;
-  --brand-700: #5eead4;
-  --brand-grad: linear-gradient(135deg, #2dd4bf 0%, #22d3ee 52%, #38bdf8 100%);
-  /* 提亮渐变上白字仅 1.8:1，改用深墨字（6.8–9.4:1） */
-  --on-brand: #04211f;
-  --brand-grad-soft: linear-gradient(135deg, rgba(20, 184, 166, 0.12), rgba(6, 182, 212, 0.09) 55%, rgba(14, 165, 233, 0.06));
-  --brand-glow: 0 8px 30px rgba(20, 184, 166, 0.20), 0 2px 8px rgba(6, 182, 212, 0.18);
-  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px -14px rgba(6, 182, 212, 0.14);
-  --bg-app: #0b1220;
-  --ink: #e2e8f0;
+  --color-teal-50: #12181f;
+  --color-teal-100: #16202b;
+  --color-teal-200: #1e2c3c;
+  --color-teal-300: #b3c9e4;
+  --color-teal-400: #96b4d8;
+  --color-teal-500: #7fa3cc;
+  --color-teal-600: #5b85b4;
+  --color-teal-700: #86a9d2;
+  --color-teal-800: #6e97c4;
+  --color-teal-900: #a5c0e0;
+  --color-teal-950: #c7d9ee;
+  --brand-400: #96b4d8;
+  --brand-500: #7fa3cc;
+  --brand-600: #5b85b4;
+  --brand-700: #a5c0e0;
+  --brand-grad: linear-gradient(135deg, #3d6288 0%, #2c4b6e 100%);
+  /* 提亮底上白字对比不足，改用暖白墨字 */
+  --on-brand: #f2f6fb;
+  --brand-grad-soft: linear-gradient(135deg, rgba(127, 163, 204, 0.10), rgba(127, 163, 204, 0.05));
+  --brand-glow: 0 6px 18px rgba(0, 0, 0, 0.35), 0 1px 4px rgba(0, 0, 0, 0.30);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px -14px rgba(0, 0, 0, 0.35);
+  --bg-app: #101318;
+  --ink: #e6e4de;
 
-  --background: #0b1220;
-  --foreground: #e2e8f0;
-  --card: #101a2e;
-  --card-foreground: #e2e8f0;
-  --popover: #101a2e;
-  --popover-foreground: #e2e8f0;
-  --primary: #14b8a6;
-  --primary-foreground: #04211f;
-  --secondary: #17233b;
-  --secondary-foreground: #cbd5e1;
-  --muted: #17233b;
-  --muted-foreground: #94a3b8;
-  --accent: #14303a;
-  --accent-foreground: #5eead4;
+  --background: #101318;
+  --foreground: #e6e4de;
+  --card: #171b21;
+  --card-foreground: #e6e4de;
+  --popover: #171b21;
+  --popover-foreground: #e6e4de;
+  --primary: #7fa3cc;
+  --primary-foreground: #0e1620;
+  --secondary: #20262e;
+  --secondary-foreground: #c9cfd6;
+  --muted: #20262e;
+  --muted-foreground: #9aa1a9;
+  --accent: #1c2733;
+  --accent-foreground: #9fb9d9;
   --destructive: #fb7185;
-  --border: #22304d;
-  --input: #22304d;
-  --ring: #14b8a6;
+  --border: #2a313a;
+  --input: #2a313a;
+  --ring: #7fa3cc;
 
   --blue: #60a5fa;
   --orange: #fb923c;
@@ -178,22 +206,22 @@
   --emerald-500: #34d399;
   --sky-500: #38bdf8;
 
-  --viz-series-1: #2dd4bf;
-  --viz-series-2: #22d3ee;
-  --viz-series-3: #60a5fa;
-  --viz-series-4: #a78bfa;
-  --viz-series-5: #fb923c;
+  --viz-series-1: #7fa3cc;
+  --viz-series-2: #d4674f;
+  --viz-series-3: #8fb577;
+  --viz-series-4: #c79a55;
+  --viz-series-5: #5f98a6;
   --viz-series-6: #94a3b8;
 
-  --glass-bg: rgba(9, 15, 29, 0.72);
-  --selection-bg: color-mix(in srgb, var(--brand-500) 26%, transparent);
-  --scrollbar-thumb: #334155;
-  --scrollbar-thumb-hover: #475569;
+  --glass-bg: rgba(13, 17, 23, 0.72);
+  --selection-bg: color-mix(in srgb, var(--brand-500) 24%, transparent);
+  --scrollbar-thumb: #39424d;
+  --scrollbar-thumb-hover: #4c5661;
   --skeleton-a: rgba(148, 163, 184, 0.10);
   --skeleton-b: rgba(148, 163, 184, 0.20);
-  --ambient-1: rgba(13, 148, 136, 0.09);
-  --ambient-2: rgba(8, 145, 178, 0.06);
-  --focus-ring-color: rgba(20, 184, 166, 0.45);
+  --ambient-1: rgba(127, 163, 204, 0.07);
+  --ambient-2: rgba(212, 103, 79, 0.05);
+  --focus-ring-color: rgba(127, 163, 204, 0.45);
   --sh-card-hover: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 
@@ -498,7 +526,7 @@ select:focus-visible {
 /* 内容页统一容器（宽度/留白一处定义） */
 .page-container { width: 100%; max-width: var(--page-max); margin-inline: auto; }
 
-/* 用户气泡：teal-600 白字仅 3.7:1，改用品牌 600 深一档（4.86:1） */
+/* 用户气泡：品牌 600 黛蓝，白字对比 7.6:1 */
 .bubble-user { background: var(--brand-600); color: var(--bubble-user-ink); }
 
 /* 品牌渐变文字/图标辅助 */
@@ -509,12 +537,11 @@ select:focus-visible {
   color: transparent;
 }
 
-/* 品牌渐变按钮底色（primary Button 用）：默认收敛为平面，
-   光晕只在 hover 时出现——常驻发光是"AI 应用味"的另一大来源 */
+/* 品牌主按钮：平涂感两档微差底 + 极轻投影；光晕只在 hover 出现且幅度收敛 */
 .brand-btn {
   background-image: var(--brand-grad);
   color: var(--on-brand);
-  box-shadow: 0 1px 2px rgba(9, 42, 77, 0.18);
+  box-shadow: 0 1px 2px rgba(37, 68, 104, 0.18);
   transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
 }
 .brand-btn:hover {
@@ -532,13 +559,12 @@ select:focus-visible {
   box-shadow: var(--brand-glow);
 }
 
-/* Logo 徽标：渐变底 + 极浅描边（釉面高光已移除，几何标志本身足够） */
+/* 品牌徽标：朱砂印底（平涂）+ 白文标志。印章就是图标本体，任何主题下不变色 */
 .brand-logo {
-  background-image: var(--brand-grad);
-  /* 徽标内图形恒为白色：--on-brand 在暗色主题下是深墨色（给渐变按钮文字用），
-     沿用到徽标上会出现「浅青渐变底 + 深色笔画」糊成一团（实测截图整块变白）。 */
+  background: var(--brand-seal-light, #be3b2a);
+  /* 徽标内图形恒为白色：与 icon-master 的白文主笔同源 */
   color: #ffffff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 1px 2px rgba(9, 42, 77, 0.20);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 1px 2px rgba(80, 20, 10, 0.22);
 }
 
 /* 侧边栏品牌区（墨流 2.0）：左上品牌光晕 + 底部渐变分隔线 */

@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import dns from 'node:dns/promises';
 import { checkOutboundUrl, isBlockedAddress } from './outbound-guard';
 
 /**
@@ -7,7 +8,15 @@ import { checkOutboundUrl, isBlockedAddress } from './outbound-guard';
  * 背景（2026-10 安全审计）：SearXNG 实例地址与外部 MCP 服务器 URL 完全由用户输入，
  * 且服务端直接 fetch / 建立 MCP 连接 —— 实测可请求 http://127.0.0.1:3000/api/health
  * 与 http://169.254.169.254/latest/meta-data/（云元数据）。修复后必须逐条守住。
+ *
+ * 域名路径一律 mock `dns.lookup`：真实 DNS 依赖网络环境——实测本机代理 fake-ip 模式
+ * 会把 example.com 解析到 198.18.0.0/15（RFC 2544 基准测试保留段），守卫按契约正确
+ * 拒绝，导致「公网放行」用例误报。守卫行为本身没有问题，不该用不确定的网络环境做断言。
  */
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('isBlockedAddress', () => {
   it('拒绝回环 / 私有 / 链路本地 / 元数据地址', () => {
@@ -92,9 +101,13 @@ describe('checkOutboundUrl', () => {
   });
 
   it('公网地址放行', async () => {
+    // mock 解析结果：单测不依赖真实 DNS（见文件头说明），只验证「公网解析结果 → 放行」这条分支
+    vi.spyOn(dns, 'lookup').mockResolvedValue([
+      { address: '93.184.216.34', family: 4 },
+    ] as never);
     const r = await checkOutboundUrl('https://example.com/api');
     expect(r.ok).toBe(true);
-    expect(r.addresses?.length).toBeGreaterThan(0);
+    expect(r.addresses).toEqual(['93.184.216.34']);
   });
 
   it('非法 URL 给出可读原因', async () => {

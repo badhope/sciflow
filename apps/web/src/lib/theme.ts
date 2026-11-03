@@ -43,7 +43,7 @@ export function resolveTheme(mode: ThemeMode, prefersDark = systemPrefersDark())
 
 /** 浏览器地址栏/桌面标题栏配色：每套风格给明暗两色，随主题切换 */
 const THEME_COLOR: Record<ThemeStyle, { light: string; dark: string }> = {
-  sciflow: { light: '#f4f6fb', dark: '#0b1220' },
+  sciflow: { light: '#f5f4f0', dark: '#101318' },
   academic: { light: '#f7f2e8', dark: '#1c1814' },
   paper: { light: '#faf6ee', dark: '#221d18' },
   minimal: { light: '#fafafa', dark: '#0d0d0d' },
@@ -77,9 +77,9 @@ export interface ThemeStyleDef {
 export const THEME_STYLES: ThemeStyleDef[] = [
   {
     id: 'sciflow',
-    name: '科研青绿',
-    tagline: '默认 · 冷静理性的流体渐变',
-    swatch: { bg: '#f4f6fb', surface: '#ffffff', accent: '#0f9e94', ink: '#1c2a44' },
+    name: '朱印纸墨',
+    tagline: '默认 · 暖纸白底 · 黛蓝主色 · 朱砂点睛',
+    swatch: { bg: '#f5f4f0', surface: '#ffffff', accent: '#2f5480', ink: '#262b33' },
     bestFor: '通用科研全流程',
     prefers: 'light',
   },
