@@ -158,13 +158,55 @@ async function main() {
     if (upToDate) {
       ok(`better-sqlite3 已是 Electron ${electronVersion} ABI（跳过）`);
     } else {
-      // 统一使用系统 CA（部分内网/企业证书环境需要）；Windows 走 node-gyp + MSVC，无需 shell 特判
-      execSync(
-        `npx --yes node-gyp rebuild --release --target=${electronVersion} --dist-url=https://electronjs.org/headers`,
-        { cwd: sqliteDir, stdio: 'inherit', shell: true, env: { ...process.env, NODE_OPTIONS: '--use-system-ca' } },
-      );
+      // 2026-11 改进：三级获取策略，全部免工具链——
+      //   ① GitHub 官方预编译包（prebuild-install 默认）
+      //   ② npmmirror 二进制镜像（--download 直链；GitHub 被墙/抖动时的可用源）
+      //   ③ node-gyp 源码重编（需要 VS C++ 工具链；CI runner 自带，本机通常没有）
+      // ABI 号用 node-abi 从 electronVersion 精确换算（禁止手猜映射表）。
+      let viaPrebuild = false;
+      const pkgJson = JSON.parse(fs.readFileSync(path.join(sqliteDir, 'package.json'), 'utf8'));
+      const pkgVer = pkgJson.version;
+      let abi = '';
+      try {
+        const { createRequire } = await import('node:module');
+        const desktopRequire = createRequire(path.join(root, 'apps', 'desktop', 'package.json'));
+        const nodeAbi = desktopRequire('node-abi');
+        abi = nodeAbi.getAbi(electronVersion, 'electron');
+      } catch {
+        console.warn('\x1b[33m[prepare]\x1b[0m node-abi 不可用，跳过镜像直链（仅影响②）');
+      }
+      const platformTag = `${process.platform}-${process.arch}`;
+      const mirrorUrl = abi
+        ? `https://registry.npmmirror.com/-/binary/better-sqlite3/v${pkgVer}/better-sqlite3-v${pkgVer}-electron-v${abi}-${platformTag}.tar.gz`
+        : '';
+
+      for (const attempt of [
+        { label: `GitHub 预编译包 (electron v${electronVersion})`, cmd: `npx --yes prebuild-install -r electron -t ${electronVersion} --verbose` },
+        ...(mirrorUrl ? [{ label: `npmmirror 镜像 (ABI ${abi})`, cmd: `npx --yes prebuild-install -r electron -t ${electronVersion} --download "${mirrorUrl}"` }] : []),
+      ]) {
+        try {
+          console.log(`\x1b[36m[prepare]\x1b[0m 尝试下载 ${attempt.label} …`);
+          execSync(attempt.cmd, {
+            cwd: sqliteDir, stdio: 'inherit', shell: true, env: { ...process.env, NODE_OPTIONS: '--use-system-ca' },
+          });
+          viaPrebuild = fs.existsSync(binary);
+          if (viaPrebuild) {
+            ok(`better-sqlite3 预编译包就绪（${attempt.label}，免工具链）`);
+            break;
+          }
+        } catch {
+          console.warn(`\x1b[33m[prepare]\x1b[0m ${attempt.label} 不可用`);
+        }
+      }
+      if (!viaPrebuild) {
+        console.warn('\x1b[33m[prepare]\x1b[0m 预编译两条路都不可用，回退 node-gyp 源码重编…');
+        execSync(
+          `npx --yes node-gyp rebuild --release --target=${electronVersion} --dist-url=https://electronjs.org/headers`,
+          { cwd: sqliteDir, stdio: 'inherit', shell: true, env: { ...process.env, NODE_OPTIONS: '--use-system-ca' } },
+        );
+      }
       fs.writeFileSync(abiStamp, electronVersion);
-      ok(`better-sqlite3 已按 Electron ${electronVersion} ABI 重编`);
+      ok(`better-sqlite3 已按 Electron ${electronVersion} ABI 就绪`);
     }
   }
 
@@ -197,11 +239,29 @@ async function main() {
   // 关键：pnpm 在 .pnpm/node_modules/<pkg> 下留了指向被删目录的符号链接。
   // 7-Zip 打包时会因悬空链接报 `WARNING: 系统找不到指定的路径` 并以 exit 1 失败
   // （实测 NSIS 阶段 7za process failed 1）。这里清理所有指向不存在目标的链接。
+  // 2026-11 修复：Windows junction 在 readdir Dirent 上 isSymbolicLink() 返回 false，
+  // 旧实现把它当目录递归、readdir(ENOENT) 异常把整个清扫吞掉——改为 lstat 逐项判定 +
+  // 单项异常不中断；并无条件剔除 .pnpm/node_modules 下的 @sciflow/* 工作区自链接
+  // （pnpm deploy 的产物自带 dist，这些指向仓库源码的相对链接在安装包里永远是悬空的）。
   let dangling = 0;
   const sweepLinks = (dir) => {
-    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return; // 目录本身不可读（可能就是悬空 junction），由调用方的 lstat 分支处理
+    }
+    for (const e of entries) {
       const full = path.join(dir, e.name);
-      if (e.isSymbolicLink()) {
+      let st;
+      try {
+        st = fs.lstatSync(full);
+      } catch {
+        fs.rmSync(full, { force: true }); // lstat 都失败的死条目，直接删
+        dangling += 1;
+        continue;
+      }
+      if (st.isSymbolicLink()) {
         try {
           fs.statSync(full); // 跟随，目标不存在会抛
         } catch {
@@ -210,7 +270,7 @@ async function main() {
         }
         continue;
       }
-      if (e.isDirectory()) sweepLinks(full);
+      if (st.isDirectory()) sweepLinks(full);
     }
   };
   try {
@@ -218,8 +278,14 @@ async function main() {
     // .pnpm 内部还有一层 node_modules 链接目录（前面遍历已覆盖），再兜底一次
     const nested = path.join(pnpmStore, 'node_modules');
     if (fs.existsSync(nested)) sweepLinks(nested);
-  } catch {
-    /* ignore */
+    // 工作区自链接无条件剔除：@sciflow/* 指向仓库源码的相对 junction，安装包内必然悬空
+    const wsSelfLinks = path.join(pnpmStore, 'node_modules', '@sciflow');
+    if (fs.existsSync(wsSelfLinks)) {
+      fs.rmSync(wsSelfLinks, { recursive: true, force: true });
+      dangling += 1;
+    }
+  } catch (e) {
+    console.warn(`\x1b[33m[prepare]\x1b[0m 悬空链接清扫异常（继续）：${String(e?.message || e).slice(0, 120)}`);
   }
   ok(`已清理 ${dangling} 个悬空符号链接`);
 

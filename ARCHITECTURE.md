@@ -96,6 +96,14 @@
 | 7 | **尾部块识别单一来源**：`tail-blocks.ts` 是唯一实现（含「研究资料」），`documents.service.polish` 与 `pipeline.graph.polish` 必须共用，禁止自写 indexOf/正则 | `pipeline/tail-blocks.ts` | `documents.polish` 与 graph 同函数 |
 | 8 | **版本单一来源**：`common/version.ts` 运行时解析 package.json；MCP serverInfo / MCP client / CLI 全部引用 `APP_VERSION`，禁止写死 | `apps/server/src/common/version.ts` | 运行时 `node -e` 断言 + MCP 握手回归 |
 
+## §2.25 v1.11 Harness 加固契约（2026-11-04，生态对标后补齐）
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **工具重复调用护栏**：同一（工具名 + 参数稳定哈希，键序不敏感）在一次请求内最多真实执行 `AGENT_TOOL_REPEAT_LIMIT`（默认 3）次，超限拒绝执行并返回可读换路提示；计数在 buildToolSet 闭包内按请求隔离 | `apps/server/src/agent/agent-tool-bridge.ts`（`toolCallKey`/`repeatCounts`） | `agent-tool-repeat.spec.ts` 3 条 |
+| 2 | **模型降级链（仅非流式）**：`AI_MODEL_FALLBACK` 配置备选模型；主模型 p-retry 耗尽且用户未取消 → 备选模型再试一次，成功以 `caller:fallback` 留痕、失败保留主模型错误。流式路径不适用（增量已出无法安全重放），禁止把降级扩到流式 | `packages/ai/src/ai-transport.service.ts`（`generateWithRetry`/`fallbackModel`/complete catch） | 门禁：完整回归 + 手动断言主模型故障场景 |
+| 3 | **桌面原生模块：预编译优先**：`prepare-server.mjs` 先用 better-sqlite3 官方 Electron 预编译包（prebuild-install `-r electron`），失败才回退 node-gyp 源码重编；`CI=true` 环境下 pnpm 交互确认自动放行 | `apps/desktop/scripts/prepare-server.mjs` · `.github/workflows/desktop-installer.yml`（tag 触发出 exe） | 本机打包实测 + CI |
+
 ---
 
 ## §2.16 v1.2 模型接入契约（2026-10-26）

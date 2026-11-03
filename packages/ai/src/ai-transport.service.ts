@@ -402,7 +402,59 @@ ${augmentation}` };
 
   /** 非 stream_options.include_usage 兼容探测：某些网关拒绝该参数（保留容错语义由 AI SDK headers/参数层处理） */
 
-  /** 非流式补全（p-limit 限流 + p-retry 指数退避重试 + token 成本追踪） */
+  /** 降级链配置：AI_MODEL_FALLBACK 指定备选模型（同一端点），主模型重试耗尽后自动切换一次。
+   *  动态读取 env 以便测试注入；流式路径不适用（中途失败已有增量输出，无法安全重放）。 */
+  protected fallbackModel(): string {
+    return (process.env.AI_MODEL_FALLBACK || '').trim();
+  }
+
+  /** 单模型生成（含 p-retry 指数退避）：complete 与降级链共用的最小生成单元 */
+  protected async generateWithRetry(
+    messages: ChatMessage[],
+    opts: CompleteOptions,
+    model: string,
+    caller: string,
+    retries: number,
+  ): Promise<{ text: string; usage: { inputTokens?: number; outputTokens?: number } | undefined }> {
+    return pRetry(
+      async () => {
+        const { instructions, rest } = this.splitSystemMessages(this.withConfigAugmentation(messages, caller));
+        const callArgs = {
+          model: this.buildModel(model),
+          temperature: opts.temperature ?? 0.7,
+          maxOutputTokens: opts.maxTokens ?? this.defaultMaxOutput(),
+          abortSignal: AiTransportService.withTimeout(opts.signal),
+          instructions,
+          messages: rest,
+        };
+        if (opts.jsonSchema) {
+          // 结构化路径：走 generateObject（v7 中 response_format json_schema 仅由它下发）
+          const { object, usage } = await generateObject({
+            ...callArgs,
+            schema: aiJsonSchema(opts.jsonSchema.schema),
+          });
+          const text = JSON.stringify(object);
+          if (!text.trim()) throw new AiEmptyResponseError();
+          return { text, usage };
+        }
+        const { text, usage } = await generateText(callArgs);
+        if (!text.trim()) throw new AiEmptyResponseError();
+        return { text, usage };
+      },
+      {
+        retries,
+        factor: 2,
+        minTimeout: 2000,
+        maxTimeout: 60_000,
+        onFailedAttempt: (err) => {
+          if (!AiTransportService.isRetriableLimit(err) && !(err instanceof AiEmptyResponseError)) throw err;
+          this.logger.warn(`AI 调用重试：第 ${err.attemptNumber} 次失败，剩余 ${err.retriesLeft} 次（${String((err as { message?: string }).message || '').slice(0, 80)}）`);
+        },
+      },
+    );
+  }
+
+  /** 非流式补全（p-limit 限流 + p-retry 指数退避重试 + token 成本追踪 + 可选降级链） */
   async complete(messages: ChatMessage[], opts: CompleteOptions = {}): Promise<string> {
     this.assertConfigured();
     const t0 = Date.now();
@@ -410,42 +462,7 @@ ${augmentation}` };
     const caller = opts.context || 'general';
 
     return this.limit(async () =>
-      pRetry(
-        async () => {
-          const { instructions, rest } = this.splitSystemMessages(this.withConfigAugmentation(messages, caller));
-          const callArgs = {
-            model: this.buildModel(model),
-            temperature: opts.temperature ?? 0.7,
-            maxOutputTokens: opts.maxTokens ?? this.defaultMaxOutput(),
-            abortSignal: AiTransportService.withTimeout(opts.signal),
-            instructions,
-            messages: rest,
-          };
-          if (opts.jsonSchema) {
-            // 结构化路径：走 generateObject（v7 中 response_format json_schema 仅由它下发）
-            const { object, usage } = await generateObject({
-              ...callArgs,
-              schema: aiJsonSchema(opts.jsonSchema.schema),
-            });
-            const text = JSON.stringify(object);
-            if (!text.trim()) throw new AiEmptyResponseError();
-            return { text, usage };
-          }
-          const { text, usage } = await generateText(callArgs);
-          if (!text.trim()) throw new AiEmptyResponseError();
-          return { text, usage };
-        },
-        {
-          retries: opts.retries ?? 4,
-          factor: 2,
-          minTimeout: 2000,
-          maxTimeout: 60_000,
-          onFailedAttempt: (err) => {
-            if (!AiTransportService.isRetriableLimit(err) && !(err instanceof AiEmptyResponseError)) throw err;
-            this.logger.warn(`AI 调用重试：第 ${err.attemptNumber} 次失败，剩余 ${err.retriesLeft} 次（${String((err as { message?: string }).message || '').slice(0, 80)}）`);
-          },
-        },
-      ),
+      this.generateWithRetry(messages, opts, model, caller, opts.retries ?? 4),
     ).then(({ text, usage }) => {
       const tokens = this.usageTokens(usage);
       this.logLlmCall({
@@ -457,7 +474,31 @@ ${augmentation}` };
         success: true,
       });
       return text;
-    }).catch((err) => {
+    }).catch(async (err) => {
+      // 降级链：主模型重试耗尽后，若配置了备选模型且请求未被用户取消，用备选模型再试一次。
+      // 只覆盖非流式路径——流式一旦吐出增量就无法安全重放。
+      const fb = this.fallbackModel();
+      if (fb && fb !== model && !opts.signal?.aborted) {
+        const t1 = Date.now();
+        try {
+          this.logger.warn(`AI 主模型失败，启用降级链：${model} -> ${fb}（${String(err?.message || err).slice(0, 120)}）`);
+          const { text, usage } = await this.generateWithRetry(messages, opts, fb, caller, 1);
+          const tokens = this.usageTokens(usage);
+          this.logLlmCall({
+            caller: `${caller}:fallback`,
+            model: fb,
+            promptTokens: tokens.prompt,
+            completionTokens: tokens.completion,
+            latencyMs: Date.now() - t1,
+            success: true,
+          });
+          return text;
+        } catch (fbErr) {
+          this.logLlmCall({ caller: `${caller}:fallback`, model: fb, promptTokens: 0, completionTokens: 0, latencyMs: Date.now() - t1, success: false, error: fbErr?.message });
+          // 降级也失败：保留原始主模型错误（更有诊断价值），降级错误仅留痕
+          this.logger.warn(`AI 降级模型也失败：${String(fbErr?.message || fbErr).slice(0, 120)}`);
+        }
+      }
       this.logLlmCall({ caller, model, promptTokens: 0, completionTokens: 0, latencyMs: Date.now() - t0, success: false, error: err?.message });
       if (err instanceof HttpException) throw err;
       if (err instanceof AiEmptyResponseError) {

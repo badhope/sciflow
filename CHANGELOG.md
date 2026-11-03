@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-11-04
+
+### Added
+
+- **Agent harness 加固（生态对标后补齐，详见 `docs/ECOSYSTEM-AUDIT.md`）**：
+  - *工具重复调用护栏*：同一（工具 + 参数稳定哈希，键序不敏感）在一次请求内最多真实执行 3 次（`AGENT_TOOL_REPEAT_LIMIT`），超限拒绝执行并给模型可读换路提示。这是 2026 生产事故榜第一名「失控循环」里次数上限拦不住的空转。3 条行为测试。
+  - *模型降级链*：`AI_MODEL_FALLBACK` 配置备选模型，主模型重试耗尽且用户未取消时自动切换重试一次，`caller:fallback` 留痕。仅覆盖非流式路径（流式增量已出无法安全重放），行为在契约表（ARCHITECTURE §2.25）锁死。
+- **Windows 安装包（exe）**：
+  - 新增 `desktop-installer` CI 工作流：tag 触发 GitHub runner 出 NSIS 安装包并附 Release，手动触发可下 artifact——本机没有 VS C++ 工具链也能出包。
+  - 原生模块三级获取链：GitHub 官方 Electron 预编译包 → npmmirror 镜像直链（`prebuild-install --download`，ABI 由 node-abi 精确换算）→ node-gyp 重编。前两级免工具链。
+  - Electron 钉到 `42.11.18`（ABI 146，npmmirror 有官方预编译包；安全底线 ≥41.10.7 仍满足）。44 的 ABI 149 预编译镜像尚未同步，升级前先确认预编译可用。
+- **生态对标与真实性审计文档**（`docs/ECOSYSTEM-AUDIT.md`）：四道门禁基线、MCP/A2A/AG-UI 三层协议取舍（A2A/AG-UI 登记引入时机而非实现）、12 个同类项目逐项对标（9 项已覆盖 / 2 项非目标 / 2 项缺口登记）、轮子审计抽查。
+
+### Fixed
+
+- **安装包打包在悬空 junction 上失败**：pnpm deploy 产物里 `.pnpm/node_modules/@sciflow/*` 是指向仓库源码的相对 junction（Windows 下 readdir 的 Dirent 把 junction 报成普通目录），旧清扫器递归进去 ENOENT 后被外层 catch 静默吞掉，7-Zip 打包报「系统找不到指定的路径」exit 1。清扫器改为 lstat 逐项判定 + 单项异常不中断，并无条件剔除工作区自链接。
+- **README 引用已删除的 writing.png**：空库截图流程诚实跳过写作页后旧文件未清理，三份 README 与落地页已撤下该图（写作页能力由工作台截图覆盖）。
+
 ### Changed
 
 - **品牌重塑 2.0「朱印」：去 AI 模板化，亮色暖纸为默认。** 旧视觉（青绿→湖蓝→天蓝三色渐变 + 轨道环 + 节点圆点 + 玻璃拟态 + 常驻辉光）与大量 AI 产品图标/界面同构；新体系回到科研工作的本体语言——纸、墨、黛、朱砂：
