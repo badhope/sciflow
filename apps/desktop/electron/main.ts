@@ -169,7 +169,7 @@ function createWindow(apiBase: string) {
     minHeight: 680,
     title: 'SciFlow · 让科研从想法到成文',
     // 窗口底色跟随系统明暗：固定浅色会让深色用户启动时闪白一帧
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b1220' : '#f4f6fb',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#101318' : '#f5f4f0',
     autoHideMenuBar: true,
     show: false,
     icon: isDev ? path.join(__dirname, '..', 'build', 'icon.png') : undefined,
@@ -212,7 +212,7 @@ function createWindow(apiBase: string) {
       mainWindow?.loadURL(
         'data:text/html;charset=utf-8,' +
           encodeURIComponent(
-            `<body style="font-family:sans-serif;background:#f4f6fb;color:#1c2a44;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0">
+            `<body style="font-family:sans-serif;background:#f5f4f0;color:#262b33;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0">
              <h2>未检测到前端开发服务器</h2>
              <p>请先在仓库根目录执行：<code>pnpm dev:web</code>，然后重启桌面端（<code>pnpm desktop:dev</code>）。</p>
              <p style="color:#64748b">后端 API 已就绪：${apiBase}</p></body>`,
