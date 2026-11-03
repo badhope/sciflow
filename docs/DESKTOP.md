@@ -6,6 +6,26 @@ Electron 主进程启动内嵌 NestJS 后端（随机回环端口），然后用
 加载前端静态资源（`resources/web`），页面通过 preload 注入的 `window.sciflowDesktop.apiBase`
 访问后端。
 
+## 1.1 原生模块与安装包（2026-11 更新）
+
+- **better-sqlite3 ABI**：`prepare-server.mjs` 按 Electron 版本用 node-abi 精确换算 ABI，三级获取：
+  ① GitHub 官方预编译包 → ② npmmirror 二进制镜像直链（`--download`）→ ③ node-gyp 源码重编（需 VS C++）。
+  前两级免工具链。镜像可能滞后新 Electron 的 ABI（如 v149），此时优先 ①/③ 或降级 Electron 小版本。
+- **Electron 版本**：当前钉 `42.11.18`（ABI 146）。安全底线 ≥ 41.10.7（5 条 high 修复线）；
+  升级到 44+ 前先确认 better-sqlite3 已发布对应 ABI 的预编译包，或 CI runner 可重编。
+- **Windows 安装包 CI**：打 tag `v*` 触发 `.github/workflows/desktop-installer.yml`，
+  在 GitHub runner 出 NSIS 安装包并附到 Release；`workflow_dispatch` 手动触发可下 artifact。
+- **构建环境变量**（本机与 CI 均建议显式设置）：`CI=true`（electron-builder 的
+  pnpm collector 会在工作区跑 production install，无 TTY 会交互卡死）、
+  `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`、
+  `ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/`
+  （NSIS/7zip 等构建工具链走镜像，GitHub 直连被墙/抖动时必备）。
+  **构建会把工作区 dev 依赖剪掉**（electron-builder 的 pnpm collector 行为），
+  构建完成后必须重跑 `pnpm install --frozen-lockfile` 恢复开发树。
+- **pnpm 交互确认**：electron-builder 会在 bundle 内跑 `pnpm install --production`，
+  无 TTY 时必须 `CI=true`（或 `confirmModulesPurge=false`），否则打包中断。
+- **产物位置**：`apps/desktop/release/SciFlow-Setup-<version>-x64.exe`（dist 输出目录即 release/）。
+
 ## 2. 为什么不用 `file://`（重要，勿回退）
 
 这是 0.7.0 / 0.8.0 早期版本「**打开软件什么都没有（白屏）**」的根因，两层原因叠加：

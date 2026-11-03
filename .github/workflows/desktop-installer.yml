@@ -1,0 +1,73 @@
+name: desktop-installer
+
+# Windows 安装包（exe）CI 构建：本机没有 VS C++ 工具链也能出包。
+# 产物：dist/*.exe（NSIS 安装包）+ latest.yml（自动更新元数据），上传为 workflow artifact。
+# 发版：打 tag v* 时自动创建 GitHub Release 并附安装包。
+#
+# 关键点（源自 docs/DESKTOP.md 与 ARCHITECTURE §7 教训）：
+#  - Electron 镜像走 npmmirror（CI 网络对 github release 更稳）
+#  - better-sqlite3 必须按 Electron ABI 重编（prepare-server.mjs 幂等处理，优先 prebuild-install 下载
+#    Electron 预编译包，无预编译才回退 node-gyp——runner 自带 VS 工具链，回退可用）
+#  - node_modules 必须放二级目录 resources/bundle/server（根级会被 electron-builder 静默丢弃）
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+        env:
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+
+      - name: 构建服务端与前端
+        run: |
+          pnpm --filter @sciflow/server build
+          pnpm --filter @sciflow/web build
+
+      - name: 打包 Windows 安装包
+        run: pnpm desktop:dist
+        env:
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+
+      - name: 收集产物
+        shell: bash
+        run: |
+          mkdir -p release-artifacts
+          find apps/desktop/dist -maxdepth 1 -name "*.exe" -exec cp {} release-artifacts/ \; 2>/dev/null || true
+          find apps/desktop/dist -maxdepth 1 -name "latest.yml" -exec cp {} release-artifacts/ \; 2>/dev/null || true
+          ls -la release-artifacts
+
+      - name: 上传 artifact（每次运行都可下载）
+        uses: actions/upload-artifact@v4
+        with:
+          name: sciflow-windows-installer
+          path: release-artifacts/
+          if-no-files-found: error
+
+      - name: 附加到 GitHub Release（仅 tag 触发）
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/*
+          generate_release_notes: true
