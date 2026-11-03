@@ -333,7 +333,8 @@ export function QualityPage({ project }: { project: Project }) {
           </div>
         ) : objective && objective.docId === docId ? (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
+            {/* 七个维度：lg 一行七列；sm 4+3 两行——避免 6 列网格下第 7 项孤行（v1.9.4 新增信息密度维后失衡） */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-3">
               {objective.report.dimensions.map((d) => (
                 <div key={d.key} className="rounded-lg border border-slate-100 px-2.5 py-2 dark:border-slate-800">
                   <div className="text-[11px] text-slate-500 dark:text-slate-400">{d.label}</div>
