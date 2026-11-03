@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef, type SortingState } from '@tanstack/react-table';
 import { ExtractionHeatmap } from './ExtractionHeatmap';
-import { BookOpenCheck, FileDown, FlaskConical, Loader2, ShieldCheck, StickyNote, Trash2, Upload } from 'lucide-react';
+import { BookOpenCheck, ChevronRight, FileDown, FlaskConical, Loader2, ShieldCheck, StickyNote, Trash2, Upload } from 'lucide-react';
 import type { DiscoveredReference, EvidenceResult, PaperComparisonResult, Project, Reference, ReferenceGraph, DeepDiveResult, GapResult, ExtractedPaper, ExtractionField, ExtractionTableResult, ScreeningItem } from '../../types';
 import { Badge, Button, Card, CollapsibleCard, ConfirmDialog, Empty, ErrorBox, Input, Spinner, Textarea, jsonText, errMsg } from '../../components/ui';
 import { ChartEmpty, Donut, HBar } from '../../components/charts';
@@ -847,9 +847,17 @@ export function LiteratureTable(props: LiteratureTableProps) {
           <Empty text="文献库为空。三步获得第一批文献：① 粘贴 DOI（自动识别去重）② 导入 BibTeX（文件/粘贴）③ 手动添加文献或上传全文到知识库" />
         ) : (
           <>
-            {/* 文献库统计概览 */}
-            <div className="mb-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800">
-              <div className="grid md:grid-cols-2 gap-3">
+            {/* 文献库统计概览：默认折叠——图表是回顾性信息，列表才是主任务；
+                收起后首屏直接看到文献条目（2026-11 界面治理：图表常驻把列表挤到三屏外） */}
+            <details className="v2-disclosure mb-3 rounded-lg bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 p-3">
+              <summary>
+                <ChevronRight size={13} className="v2-disclosure__chevron" aria-hidden="true" />
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                  库内概览 · {refs.length} 篇
+                  <span className="ml-2 font-normal text-slate-400 dark:text-slate-500">年份 / 来源分布与高被引</span>
+                </span>
+              </summary>
+              <div className="mt-3 grid md:grid-cols-2 gap-3">
                 <div>
                   <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1.5">年份分布</div>
                   <HBar data={yearDist} />
@@ -865,7 +873,7 @@ export function LiteratureTable(props: LiteratureTableProps) {
                   <HBar data={topCited} />
                 </div>
               )}
-            </div>
+            </details>
 
             <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
               {refs.slice(0, visibleCount).map((r) => {

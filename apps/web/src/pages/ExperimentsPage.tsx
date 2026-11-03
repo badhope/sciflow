@@ -7,19 +7,19 @@ import type { Doc, Experiment, Project } from '../types';
 import { Badge, Button, Card, ConfirmDialog, Empty, ErrorBox, Input, SectionTitle, Select, Textarea, errMsg } from '../components/ui';
 import { ExperimentDesignCard } from './experiments/DesignCard';
 
-const DEFAULT_CODE = `# 在本机沙箱中运行 Python（超时 10s，临时目录隔离）
-import math
+/* 输入引导（占位提示，不预填）——预填示例代码会被当成"真实数据"误提交/误留存（2026-11 治理） */
+const CODE_PLACEHOLDER = `# 在本机沙箱中运行 Python（超时 10s，临时目录隔离），例如：
 
+import math
 result = sum(math.sqrt(i) for i in range(1, 101))
 print(f"sqrt(1..100) 之和 = {result:.4f}")
 
-# 如需出图，matplotlib 直接 savefig('fig.png') 即可被自动采集
+# 出图：matplotlib savefig('fig.png') 会被自动采集
 # import matplotlib
 # matplotlib.use('Agg')
 # import matplotlib.pyplot as plt
 # plt.plot([0, 1, 2], [0, 1, 4])
-# plt.savefig('fig.png')
-`;
+# plt.savefig('fig.png')`;
 
 function statusBadge(s: Experiment['status']) {
   if (s === 'ok') return <Badge tone="green">成功</Badge>;
@@ -43,7 +43,7 @@ export function ExperimentsPage({ project }: { project: Project }) {
   const [selected, setSelected] = useState<Experiment | null>(null);
   const qc = useQueryClient();
   const [goal, setGoal] = useState('');
-  const [code, setCode] = useState(DEFAULT_CODE);
+  const [code, setCode] = useState('');
   const [documentId, setDocumentId] = useState('');
   const [running, setRunning] = useState(false);
   const [conclusionDraft, setConclusionDraft] = useState('');
@@ -197,7 +197,7 @@ export function ExperimentsPage({ project }: { project: Project }) {
             </div>
             <div>
               <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Python 代码</div>
-              <Textarea rows={12} className="font-mono text-xs" value={code} onChange={(e) => setCode(e.target.value)} spellCheck={false} />
+              <Textarea rows={12} className="font-mono text-xs" value={code} onChange={(e) => setCode(e.target.value)} placeholder={CODE_PLACEHOLDER} spellCheck={false} />
             </div>
             <Button onClick={run} loading={running} disabled={!code.trim()} className="w-full">
               {running ? <Loader2 size={15} className="animate-spin" /> : <Play size={15} />}

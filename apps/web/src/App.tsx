@@ -406,7 +406,9 @@ function AppInner() {
             sidebarWidth={224}
             toolbarTitle={VIEW_LABELS[view]}
             stageBar={
-              currentProject && view !== 'settings' ? (
+              /* 项目总览不显示全局阶段条：驾驶舱（ProjectCockpit）已内含完整阶段导航，
+                 两处同时渲染是同屏重复（2026-11 界面治理审计） */
+              currentProject && view !== 'settings' && view !== 'dashboard' ? (
                 <StageBar
                   project={currentProject}
                   view={view}
@@ -479,11 +481,31 @@ function AppInner() {
                 </div>
               )}
               {!currentProject && view !== 'settings' ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">
-                  <div className="text-lg">请先创建一个研究项目</div>
-                  <Button onClick={() => setShowNewProject(true)}>
+                /* 无项目空态：按 Empty 规范给出「现在做什么」的三步引导，
+                   而不是一句干巴巴的提示（2026-11 界面治理：默认状态即门面） */
+                <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-1.5 text-center px-4">
+                  <div className="w-14 h-14 rounded-2xl brand-logo flex items-center justify-center mb-3">
+                    <Plus size={24} className="text-white" aria-hidden="true" />
+                  </div>
+                  <div className="text-lg font-medium text-slate-600 dark:text-slate-300">创建你的第一个研究项目</div>
+                  <div className="max-w-md text-xs leading-relaxed text-slate-400 dark:text-slate-500">
+                    项目是文献、知识库、写作与投稿的容器。建好后从左侧进入任意工作区，或直接在流水线里给一个主题跑全流程。
+                  </div>
+                  <Button className="mt-4" onClick={() => setShowNewProject(true)}>
                     <Plus size={16} aria-hidden="true" /> 新建项目
                   </Button>
+                  <ol className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2 max-w-xl w-full text-left" aria-label="上手路径">
+                    {[
+                      ['① 建项目', '起个名字即可，随时可改'],
+                      ['② 灌入语料', '粘贴 DOI / 导入 BibTeX / 上传 PDF 到知识库'],
+                      ['③ 开跑', '对话逐节起草，或流水线一键成文 + 质量门'],
+                    ].map(([t, d]) => (
+                      <li key={t} className="rounded-lg border border-slate-200/70 dark:border-slate-800 bg-white/60 dark:bg-slate-900/40 px-3 py-2">
+                        <div className="text-xs font-medium text-slate-600 dark:text-slate-300">{t}</div>
+                        <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed">{d}</div>
+                      </li>
+                    ))}
+                  </ol>
                 </div>
               ) : (
                 <>{PAGE_RENDERERS[view]({ project: currentProject, openDoc: (id: string) => navigate(`/writing?doc=${id}`), onNavigate: setView, initialDocId: selectedDocId })}</>
