@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { tool as aiTool, jsonSchema } from 'ai';
 import type { ToolSet } from 'ai';
+import { createHash } from 'node:crypto';
 import { McpService } from '../mcp/mcp.service';
 import { TaskListService, type TaskInput } from './task-list.service';
 import { ApprovalService } from './approval.service';
@@ -31,6 +32,26 @@ export interface AgentToolCallRecord {
 
 const MAX_TOOL_CALLS = envInt('AGENT_MAX_TOOL_CALLS', 24, { min: 1, max: 100 });
 const TOOL_TIMEOUT_MS = envInt('AGENT_TOOL_TIMEOUT_MS', 20_000, { min: 1_000, max: 300_000 });
+/** 同一（工具，参数）组合在一次请求内的最大重复次数——超过即拒绝执行并要求模型换路径。
+ *  这是 2026 生产事故榜第一名「失控循环」的重复检测护栏：次数上限拦不住
+ *  「24 次以内反复调同一个工具刷同一批结果」的空转。 */
+const TOOL_REPEAT_LIMIT = envInt('AGENT_TOOL_REPEAT_LIMIT', 3, { min: 2, max: 20 });
+
+/** 参数稳定序列化：键排序后再哈希，避免模型改写参数键序导致重复检测失效 */
+function toolCallKey(name: string, args: Record<string, unknown>): string {
+  const stable = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(stable);
+    if (v && typeof v === 'object') {
+      return Object.fromEntries(
+        Object.entries(v as Record<string, unknown>)
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+          .map(([k, val]) => [k, stable(val)]),
+      );
+    }
+    return v;
+  };
+  return `${name}:${createHash('sha1').update(JSON.stringify(stable(args))).digest('hex').slice(0, 16)}`;
+}
 
 @Injectable()
 export class AgentToolBridge {
@@ -93,6 +114,8 @@ export class AgentToolBridge {
         .filter(Boolean),
     );
     let callCount = 0;
+    // 重复调用护栏：键 → 已出现次数（每次请求独立闭包，并发会话互不影响）
+    const repeatCounts = new Map<string, number>();
     const set: ToolSet = {};
     const skills = this.enabledSkillKeys();
     for (const t of this.mcp.list()) {
@@ -114,6 +137,15 @@ export class AgentToolBridge {
           // 项目作用域：凡是 schema 里声明了 projectId 的工具，一律用当前会话的项目覆盖
           const schemaProps = (t.inputSchema?.properties ?? {}) as Record<string, unknown>;
           const scoped = projectId && 'projectId' in schemaProps ? { ...args, projectId } : args;
+          // 重复检测：同一（工具+参数）出现次数达上限即拒绝，给出可读原因让模型换路径
+          const key = toolCallKey(t.name, scoped);
+          const seen = (repeatCounts.get(key) ?? 0) + 1;
+          repeatCounts.set(key, seen);
+          if (seen > TOOL_REPEAT_LIMIT) {
+            return {
+              error: `该工具与相同参数已重复调用 ${seen - 1} 次（上限 ${TOOL_REPEAT_LIMIT}），结果不会变化。请换不同参数、改用其他工具，或直接基于已有信息回答`,
+            };
+          }
           return this.invoke(t.name, scoped, runId);
         },
       });

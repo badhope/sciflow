@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![版本](https://img.shields.io/badge/version-1.10.0-black.svg)](CHANGELOG.md)
+[![版本](https://img.shields.io/badge/version-1.11.0-black.svg)](CHANGELOG.md)
 
 [English](README.en.md) · **简体中文**
 
@@ -34,9 +34,9 @@
 | --- | --- |
 | <img src="docs/screenshots/dash.png" alt="项目驾驶舱" width="100%"> | <img src="docs/screenshots/pipeline.png" alt="全自动流水线" width="100%"> |
 
-| 论文写作：大纲、编辑与预览 | 质量评分：七维打分 |
+| 质量评分：七维打分 | 深色主题（墨夜配色） |
 | --- | --- |
-| <img src="docs/screenshots/writing.png" alt="论文写作" width="100%"> | <img src="docs/screenshots/quality.png" alt="质量评分" width="100%"> |
+| <img src="docs/screenshots/quality.png" alt="质量评分" width="100%"> | <img src="docs/screenshots/settings-dark.png" alt="深色主题" width="100%"> |
 
 | 文献调研 | 知识库：基于资料的问答 |
 | --- | --- |
@@ -178,7 +178,7 @@ packages/retrieval  向量与全文检索、MMR、嵌入
 
 ## 项目状态
 
-当前版本：**1.10.0**。完整历史见 [`CHANGELOG.md`](CHANGELOG.md)，后续规划见 [`docs/product-roadmap.md`](docs/product-roadmap.md)。
+当前版本：**1.11.0**。完整历史见 [`CHANGELOG.md`](CHANGELOG.md)，后续规划见 [`docs/product-roadmap.md`](docs/product-roadmap.md)。
 
 已知缺口：真实模型端到端需要你自己的 API Key；Docker 与 Playwright 套件在 CI 中执行，未在每台开发机上验证；Windows 下桌面安装包需要 C++ 工具链。
 
