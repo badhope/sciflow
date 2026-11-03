@@ -271,8 +271,17 @@ export function Skeleton({ className = '', lines = 3 }: { className?: string; li
   );
 }
 
-export function Empty({ text, hint, illustration }: { text: string; hint?: string; illustration?: IllustrationKey }) {
+export function Empty({ text, hint, illustration, compact = false }: { text: string; hint?: string; illustration?: IllustrationKey; compact?: boolean }) {
   const IllustrationComp = illustration ? ILLUSTRATIONS[illustration] : null;
+  if (compact) {
+    /* 紧凑变体：窄栏卡片内的空态——一条引导就够，大图标 + 大留白会把主任务挤出视口 */
+    return (
+      <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-700 px-3 py-2.5 text-center">
+        <div className="text-xs text-slate-500 dark:text-slate-400">{text}</div>
+        {hint && <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{hint}</div>}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-center justify-center gap-1.5 text-center py-12">
       {IllustrationComp ? (
