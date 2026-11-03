@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![Version](https://img.shields.io/badge/version-1.10.0-black.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.11.0-black.svg)](CHANGELOG.md)
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -36,7 +36,7 @@ All screenshots are captured from the running application against a seeded demo 
 
 | Writing · outline, editor and preview | Quality · seven-dimension scoring |
 | --- | --- |
-| ![Writing](docs/screenshots/writing.png) | ![Quality](docs/screenshots/quality.png) |
+| ![Quality](docs/screenshots/quality.png) | ![Dark theme](docs/screenshots/settings-dark.png) |
 
 | Literature screening | Knowledge base · grounded Q&A |
 | --- | --- |
@@ -174,7 +174,7 @@ Deeper detail lives in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Project status
 
-Current release: **1.10.0**. See [`CHANGELOG.md`](CHANGELOG.md) for the full history and [`docs/product-roadmap.md`](docs/product-roadmap.md) for what is next.
+Current release: **1.11.0**. See [`CHANGELOG.md`](CHANGELOG.md) for the full history and [`docs/product-roadmap.md`](docs/product-roadmap.md) for what is next.
 
 Known gaps: real-model end-to-end runs require your own API key; Docker and Playwright suites are exercised in CI but not on every contributor machine; the desktop installer requires a C++ toolchain on Windows.
 
