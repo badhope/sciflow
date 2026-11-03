@@ -114,6 +114,147 @@
         ]
       }
     },
+    "/agent/tasks": {
+      "get": {
+        "operationId": "AgentHarnessController_listTasks",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "runId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentHarness"
+        ]
+      },
+      "post": {
+        "operationId": "AgentHarnessController_replaceTasks",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentHarness"
+        ]
+      },
+      "delete": {
+        "operationId": "AgentHarnessController_clearTasks",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "runId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentHarness"
+        ]
+      }
+    },
+    "/agent/tasks/{id}/status": {
+      "post": {
+        "operationId": "AgentHarnessController_setTaskStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentHarness"
+        ]
+      }
+    },
+    "/agent/approvals": {
+      "get": {
+        "operationId": "AgentHarnessController_pendingApprovals",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentHarness"
+        ]
+      }
+    },
+    "/agent/approvals/{id}": {
+      "post": {
+        "operationId": "AgentHarnessController_decideApproval",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentHarness"
+        ]
+      }
+    },
     "/mcp/info": {
       "get": {
         "operationId": "McpController_info",
@@ -3690,7 +3831,7 @@
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "1.9.0",
+    "version": "1.10.0",
     "contact": {}
   },
   "tags": [],
