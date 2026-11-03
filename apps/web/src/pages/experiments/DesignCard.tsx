@@ -76,7 +76,7 @@ export function ExperimentDesignCard({ project }: { project: Project }) {
           产出可直接执行的变量表（自变量/因变量/控制变量）、对照组设置、样本量与统计功效提示、实验流程与分析计划；设计稿自动保存。
         </div>
         {designs.length === 0 ? (
-          <Empty text="还没有实验设计稿" hint="输入研究问题生成第一份设计稿" />
+          <Empty compact text="还没有实验设计稿" hint="输入研究问题生成第一份设计稿" />
         ) : (
           <div className="space-y-2">
             {designs.map((d) => (
