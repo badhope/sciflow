@@ -93,6 +93,10 @@ async function main() {
         localStorage.setItem('sciflow-theme', m);
       }, [theme, mode]);
       await page.goto(`${BASE}/#/settings`, { waitUntil: 'networkidle' });
+      // 关键：目标 URL 与当前相同（#/settings → #/settings）是同文档导航，不会重载页面，
+      // localStorage 的新值不会被 React 启动逻辑读到——上一轮的明暗会"粘"在这里。
+      // 必须显式 reload 让应用重启并从 localStorage 恢复主题（2026-11-03 实测修复）。
+      await page.reload({ waitUntil: 'networkidle' });
       await page.waitForTimeout(900);
       const ok = await page.evaluate(([t, m]) => document.documentElement.dataset.theme === t && document.documentElement.classList.contains('dark') === (m === 'dark'), [theme, mode]);
       if (!ok) throw new Error(`主题未生效：${theme}/${mode}`);
