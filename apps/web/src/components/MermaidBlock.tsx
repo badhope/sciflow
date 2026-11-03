@@ -36,8 +36,8 @@ function brandFontFamily(): string {
 }
 
 function brandAccent(): string {
-  if (typeof document === 'undefined') return '#0f9e94';
-  return getComputedStyle(document.documentElement).getPropertyValue('--brand-500').trim() || '#0f9e94';
+  if (typeof document === 'undefined') return '#47719e';
+  return getComputedStyle(document.documentElement).getPropertyValue('--brand-500').trim() || '#47719e';
 }
 
 let seq = 0;
