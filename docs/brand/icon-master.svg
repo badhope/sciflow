@@ -1,26 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="SciFlow app icon">
   <!--
-    SciFlow 主图标（App Icon Master · 1024×1024）· 墨流 2.0 · 2026-10-25
-    概念：渐变圆角方底 + 白色主 S 水流 + 细数据闭环轨道 + 思想节点 + 收笔墨滴。
-    规范：品牌渐变 #0b8079 → #0a7896 → #0b6fc4（135°），白色流线，圆角方底（r≈22%）。
-    导出：本文件是唯一图标源；PNG/ICO/ICNS 由 scripts/generate-icons.mjs 从此渲染，禁止手改位图。
+    SciFlow 主图标（App Icon Master · 1024×1024）· 朱印 1.0 · 2026-11-03
+    概念：一方朱砂印章。平涂印底（无渐变）+ 一笔白文 S，如刻印般干脆。
+      - 朱砂（#BE3B2A）是中国学术批注的传统色——审阅、评定、定稿的印记；
+      - 一笔 S = 科研全流程一笔贯通（沿用墨流 3.0 的单笔势，删去轨道环与节点圆点，
+        那两项是 AI 产品图标的模板件，与「自己的品牌」相悖）；
+      - 全图标只有两个颜色、三个形状：印底、主笔、印角留白。
+    规范：唯一图标源；PNG/ICO/ICNS 由 scripts/generate-icons.mjs 从此渲染，禁止手改位图。
+    深色桌面上朱砂与黑底对比 3.4:1，白色主笔始终是第一可读元素。
   -->
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0b8079"/>
-      <stop offset="0.52" stop-color="#0a7896"/>
-      <stop offset="1" stop-color="#0b6fc4"/>
-    </linearGradient>
-  </defs>
-  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
-  <!-- 数据闭环轨道（细弧，右上入 → 左下出） -->
-  <path d="M 750.4 241.6 A 368 368 0 1 0 241.6 750.4"
-        fill="none" stroke="#ffffff" stroke-width="28" stroke-linecap="round" opacity="0.30"/>
-  <!-- 主 S 水流 -->
+  <rect width="1024" height="1024" rx="224" fill="#BE3B2A"/>
+  <!-- 主笔：单条连续 S 形水流（右上起笔 → 中宫转折 → 左下收笔） -->
   <path d="M 691.2 342.4 A 176 176 0 1 0 512 512 A 176 176 0 1 1 332.8 681.6"
-        fill="none" stroke="#ffffff" stroke-width="88" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- 思想节点 -->
-  <circle cx="758.4" cy="211.2" r="51.2" fill="#ffffff"/>
-  <!-- 收笔墨滴 -->
-  <circle cx="310.4" cy="704" r="27.2" fill="#ffffff" opacity="0.75"/>
+        fill="none" stroke="#ffffff" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 印角留白：右下角一方小白印角，如钤印时垫纸的错位感 -->
+  <rect x="736" y="736" width="64" height="64" rx="20" fill="#ffffff" opacity="0.92"/>
 </svg>

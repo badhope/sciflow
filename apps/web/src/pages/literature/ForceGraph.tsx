@@ -23,9 +23,9 @@ import { Button } from '../../components/ui';
 const VIZ_VARS = ['--viz-series-1', '--viz-series-2', '--viz-series-3', '--viz-series-4', '--viz-series-5', '--viz-series-6'] as const;
 
 function readVizPalette(): string[] {
-  if (typeof document === 'undefined') return ['#0f9e94', '#0b8fb4', '#2563eb', '#7c3aed', '#ea580c', '#64748b'];
+  if (typeof document === 'undefined') return ['#47719e', '#be3b2a', '#55743f', '#9a6b2f', '#35707e', '#64748b'];
   const cs = getComputedStyle(document.documentElement);
-  const fallback = ['#0f9e94', '#0b8fb4', '#2563eb', '#7c3aed', '#ea580c', '#64748b'];
+  const fallback = ['#47719e', '#be3b2a', '#55743f', '#9a6b2f', '#35707e', '#64748b'];
   const colors = VIZ_VARS.map((v, i) => cs.getPropertyValue(v).trim() || fallback[i]);
   return colors;
 }
@@ -37,7 +37,7 @@ function buildPalettes() {
   const read = (name: string, fb: string) => root?.getPropertyValue(name).trim() || fb;
   return {
     venue: base,
-    community: [...base, read('--purple', '#7c3aed'), read('--amber-500', '#f59e0b')],
+    community: [...base, read('--purple', '#9a6b2f'), read('--amber-500', '#f59e0b')],
     dupEdge: read('--rose-500', '#f43f5e'),
     mutedEdge: read('--border', '#cbd5e1'),
     dimmedNode: read('--muted', '#e2e8f0'),
