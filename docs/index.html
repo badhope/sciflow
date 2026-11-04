@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SciFlow · 本地优先的科研全流程 AI 助手</title>
-<meta property="og:title" content="SciFlow · 本地优先的科研全流程 AI 助手">
-<meta property="og:description" content="本地优先、单机部署的科研 AI 助手：多智能体流水线覆盖文献调研→写作→质量门→投稿全生命周期，SQLite 单文件开箱即跑，无需外部数据库或托管服务。">
+<title>SciFlow · 从选题到可投稿：确定性质量门的科研全流程工作台</title>
+<meta property="og:title" content="SciFlow · 从选题到可投稿：确定性质量门的科研全流程工作台">
+<meta property="og:description" content="一条流水线直通投稿：确定性的七维质量门（同文同分可复现）、引用三级追踪与七类体检、证据链断点直接标出。每个数字都能在你自己的机器上重跑验证。">
 <meta property="og:type" content="website">
-<meta name="description" content="SciFlow 是一个本地优先、单机部署的科研 AI 助手：多智能体流水线完成文献调研→写作→质量门→投稿全生命周期，SQLite 单文件开箱即跑，无需外部数据库或托管服务。">
+<meta name="description" content="SciFlow 是一个科研全流程工作台：确定性的七维质量门、引用三级追踪与七类体检、证据链断点直接标出，LangGraph 编排覆盖文献调研→写作→质量门→投稿全生命周期。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2714%27%20fill%3D%27%23BE3B2A%27%2F%3E%3Cpath%20d%3D%27M%2043.2%2021.4%20A%2011%2011%200%201%200%2032%2032%20A%2011%2011%200%201%201%2020.8%2042.6%27%20fill%3D%27none%27%20stroke%3D%27%23fff%27%20stroke-width%3D%276.4%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%2F%3E%3Ccircle%20cx%3D%2719.4%27%20cy%3D%2744%27%20r%3D%273.2%27%20fill%3D%27%23fff%27%2F%3E%3C%2Fsvg%3E">
 <style>
 /* ============ 主题变量 ============ */
@@ -242,12 +242,12 @@ footer a:hover{color:var(--brand2)}
 <!-- ===== Hero ===== -->
 <section class="hero" id="top">
   <div class="wrap">
-    <span class="eyebrow">Local-First AI Research Workbench · 单用户本地科研智能体工作台</span>
-    <h1>把科研全流程<br><span class="grad-text">交给本地多智能体</span></h1>
-      <p class="tag">SciFlow 是本地优先、单机部署的科研全流程 AI 助手：输入一个研究主题，由 LangGraph 编排的多智能体流水线接管，完成文献调研 → 写作 → 质量门 → 投稿辅助的完整生命周期，文献与 Key 默认保存在本地 SQLite。</p>
+    <span class="eyebrow">Research Workbench · 确定性质量门 · 引用可溯 · 可验证工程</span>
+    <h1>从选题到投稿<br><span class="grad-text">不过质量门不交稿</span></h1>
+      <p class="tag">SciFlow 把科研闭环做成一条可验收的流水线：输入研究主题，LangGraph 编排完成文献调研 → 写作 → 质量门 → 投稿辅助。质量门由确定性规则计分（同文同分），引用从正文锚点到文献条目三级可溯，证据链断在哪一步直接标出来。</p>
     <div class="badges">
-      <span class="badge">🗄️ <b>本地优先</b> SQLite 单文件</span>
-      <span class="badge">🤖 <b>多智能体</b> 自动流水线</span>
+      <span class="badge">🔍 <b>引用可溯</b> 锚点 → citation → reference</span>
+      <span class="badge">🚦 <b>确定性质量门</b> 同文同分可复现</span>
       <span class="badge">📊 <b>Recharts + sigma.js</b> 可视化</span>
       <span class="badge">🔌 <b>三协议接入</b> 自配模型 Key</span>
     </div>
@@ -342,7 +342,7 @@ footer a:hover{color:var(--brand2)}
 
       <div class="card">
         <div class="ic">🤖</div>
-        <h3>多智能体流水线</h3>
+        <h3>全流程流水线</h3>
         <p>LangGraph 编排全自动流水线：主题验证 → 文献调研 → 大纲（人工确认）→ 并行分章起草 → 7 维质量门 → 润色 → 引用格式化。</p>
         <ul><li>Reflexion 自动回炉</li><li>Checkpoint 断点续跑</li><li>fast / strong 模型路由</li></ul>
       </div>
@@ -554,7 +554,7 @@ AI_RPM_CAP=<span class="s">8</span></pre>
       <a href="#features">特性</a><a href="#architecture">架构</a><a href="#quickstart">快速开始</a>
       <a href="#aiconfig">AI 配置</a><a href="#docs">仓库</a><a href="#license">许可</a>
     </div>
-    <div>SciFlow · Local-First AI Research Workbench · MIT License</div>
+    <div>SciFlow · Research-Grade AI Research Workbench · MIT License</div>
   </div>
 </footer>
 
