@@ -52,10 +52,12 @@ jobs:
 
       - name: 收集产物
         shell: bash
+        # electron-builder.yml 的 directories.output = release（2026-11-04 修正：此前错写 dist 导致 CI 打包成功但收集不到产物）
         run: |
           mkdir -p release-artifacts
-          find apps/desktop/dist -maxdepth 1 -name "*.exe" -exec cp {} release-artifacts/ \; 2>/dev/null || true
-          find apps/desktop/dist -maxdepth 1 -name "latest.yml" -exec cp {} release-artifacts/ \; 2>/dev/null || true
+          find apps/desktop/release -maxdepth 1 -name "*.exe" -exec cp {} release-artifacts/ \; 2>/dev/null || true
+          find apps/desktop/release -maxdepth 1 -name "latest.yml" -exec cp {} release-artifacts/ \; 2>/dev/null || true
+          find apps/desktop/release -maxdepth 1 -name "*.blockmap" -exec cp {} release-artifacts/ \; 2>/dev/null || true
           ls -la release-artifacts
 
       - name: 上传 artifact（每次运行都可下载）
