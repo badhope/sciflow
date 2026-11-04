@@ -109,7 +109,7 @@ docker compose -f docker-compose.prod.yml up --build    # production
 ```bash
 pnpm build && pnpm icons
 pnpm desktop:dev     # development
-pnpm desktop:dist    # installer in apps/desktop/dist/
+pnpm desktop:dist    # installer in apps/desktop/release/
 ```
 
 No local C++ toolchain? Push a tag (`v*`) — the [`desktop-installer` workflow](.github/workflows/desktop-installer.yml) builds the Windows NSIS installer on a GitHub runner and attaches it to the release. Native modules use better-sqlite3's official Electron prebuilds first, and fall back to source rebuild only when needed.
