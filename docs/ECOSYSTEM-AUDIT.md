@@ -103,7 +103,7 @@ Onyx、Khoj、SurfSense、AutoGen。吸收原则：**只吸收与本仓定位（
 |---|---|---|
 | MCP SDK 1.32.x 对 2026-07 stateless 规范的适配 | **已闭环：适配正常**。`scripts/mcp-handshake.mjs`（官方 SDK 客户端）对 `/api/mcp/rpc` 走通 initialize → tools/list（23 工具）→ tools/call → resources/list → resources/read，5/5 通过 | `BASE=… node scripts/mcp-handshake.mjs`，已纳入回归常跑清单 |
 | Electron 44（ABI 149）预编译镜像同步 | **未同步**（镜像最高 ABI 146 = Electron 42）。当前钉 42.11.18 是正确决策；升 44 前以同命令复查 | `curl registry.npmmirror.com/-/binary/better-sqlite3/v12.11.1/` 过滤 electron-v149 |
-| desktop-installer CI 首跑 | **首跑失败但打包成功**：electron-builder 在 runner 上完成 NSIS 打包，仅「收集产物」步骤用了错误目录（`dist`，实际 `release/`）→ 已修正工作流并重新 dispatch | GitHub Actions run 41698278507 步骤表 |
+| desktop-installer CI 首跑 | **已闭环：端到端成功**。Run 1 失败（产物目录写错 dist）→ Run 2/3 修正后收集仍失败（收集步骤 `|| true` 吞错）→ 加硬失败与诊断输出后 Run 4 全绿：打包 ✓ 收集 ✓ 上传 ✓，artifact `sciflow-windows-installer`（541MB）。CI 出 exe 链路可用 | GitHub Actions runs #1–#4 + artifact API |
 
 ## 7. 变更记录（本文所述动作的落点）
 
