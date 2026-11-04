@@ -223,7 +223,10 @@ const ROUTE_TABLE: RouteRule[] = [
     },
   },
   // 6) 7 维评审
-  { matches: (p) => p.includes('同行评审专家') && p.includes('"scores"'), respond: () => j({ scores: { literature: 88, logic: 86, citation: 90, language: 89, novelty: 84, figures: 85, format: 87 }, feedback: '整体结构完整、论证链清晰；建议补充近三年文献的对比分析；图表标注可进一步统一规范。' }) },
+  { matches: (p) => p.includes('同行评审专家') && p.includes('"scores"'), respond: () => j({
+    scores: { literature: 82, logic: 86, citation: 90, language: 88, novelty: 74, figures: 84, format: 91 },
+    feedback: '总体评价：稿件结构完整，对图神经网络在分子性质预测中的消息传递框架与自监督预训练两条主线的归纳清晰，引用均能溯源到可核查的原始文献，达到了草稿迭代标准。主要问题：1）文献覆盖偏窄，近五年的对比学习预训练工作只讨论了单一范式，建议补充并比较至少两类预训练目标的差异；2）「贡献与创新」维度偏弱，引言未明确给出本文归纳框架相对于已有综述的差异点；3）讨论与结论部分重复度较高，结论应指出局限性与未来工作而不是重述结果。次要问题：1）关键词未在摘要后显式列出；2）「自监督预训练」一节的对比表述可以表格化以增强自明性；3）参考文献著录格式建议统一标注文献类型（[J]/[C]）。'
+  }) },
   // 7) 润色
   { matches: (p) => p.includes('学术语言编辑') && p.includes('polished'), respond: (p) => { const original = extractPolishText(p); return j({ original, polished: original, reason: 'mock 确定性润色：保留原意与专业术语，规范学术表达与段落衔接。' }); } },
   // 8) 学术翻译
