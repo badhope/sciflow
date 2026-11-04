@@ -1,6 +1,6 @@
 # SciFlow
 
-**A local-first multi-agent research workbench that takes a topic to a submittable manuscript — with every step observable, every citation traceable, and every draft scored against a deterministic quality gate.**
+**A research workbench that takes a topic to a submittable manuscript — and refuses to hand back anything that fails inspection: a deterministic quality gate, citations that resolve to a real paper, and a verification suite you can rerun yourself.**
 
 [![CI](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -12,17 +12,16 @@
 
 ---
 
-## Why teams use it
+## What actually makes it different
 
-Most writing tools stop at "generate text". SciFlow runs the whole research loop and refuses to hand back something that does not pass inspection.
-
-| What you get | What it means in practice |
+|  |  |
 | --- | --- |
-| **One pipeline to submission** | Topic validation → literature survey → outline gate → section drafting → quality gate → polish → citation formatting → journal submission tracking |
-| **A quality gate, not a vibe check** | Seven deterministic dimensions scored by rules, not an LLM's mood. Below threshold triggers targeted revision up to three rounds |
-| **Citations that resolve to a real paper** | Every `[n]` anchor traces to a citation row, then to a reference row. Ghost citations, orphan entries, broken numbering and duplicate DOIs are flagged by number |
-| **Nothing hidden in a black box** | Per-step execution trace, token usage, duration Gantt chart, and a deep health probe |
-| **Your keys stay yours** | Local SQLite, local embeddings option, bring your own model endpoint. No account required |
+| **One pipeline to submission** | Topic validation → literature survey → outline gate → section drafting → quality gate → polish → citation formatting → journal submission tracking. Checkpoints after every step, resumes after a restart |
+| **A quality gate, not a vibe check** | Seven dimensions scored by deterministic rules with a stable fingerprint — same text, same score, reproducible. Below threshold triggers targeted revision, up to three rounds |
+| **Citations that resolve to a real paper** | Every `[n]` anchor traces to a citation row, then to a reference row. Ghost anchors, orphan entries, broken numbering and duplicate DOIs are flagged by number. Empty reference pool ⇒ drafting prompts forbid citation markers outright |
+| **The evidence chain is visible** | The writing view renders the argument's provenance — research question, literature evidence, in-text anchors, citation records — and marks exactly where it breaks. 22 references with zero anchors is reported as two broken links, not a green check |
+| **Guarded autonomy** | Tool approval pauses side-effecting actions with a readable reason; tool-call repetition guard stops loop idling; model fallback chain survives a dead primary endpoint; every LLM call is logged with cost |
+| **Claims you can verify** | The verification table below is rerunnable on your machine. If a number is wrong, that's a bug — file it |
 
 ## Screenshots
 
@@ -52,19 +51,14 @@ All screenshots are captured from the running application against a seeded demo 
 
 ## Core capabilities
 
-**Research pipeline.** LangGraph orchestration with a human outline checkpoint. Topic verification, recursive literature survey (depth 1–3), outline with contrarian variants, parallel section drafting, quality gate with automatic revision, polish, and citation formatting. Pipelines checkpoint after each step and resume after a restart.
-
-**Deterministic quality gate.** Seven dimensions — structure, length, citation closure and strength, readability, rhetoric, integrity, information density — evaluated by rules with a stable fingerprint. Five selectable standards from draft iteration to top-journal submission, each with its own length, citation-count and pass thresholds. A manuscript below 90% of the required length is a hard cap, not something decorative points can rescue.
-
-**Citation integrity.** Three-level traceability from text anchor to citation to reference. Seven audit classes including ghost anchors, orphan entries, duplicate DOI and metadata conflict. When the reference pool is empty, drafting prompts forbid citation markers outright, so the model cannot invent references.
-
-**Retrieval that works offline.** sqlite-vec approximate nearest neighbour plus FTS5 trigram full-text, fused with reciprocal rank fusion and de-duplicated by MMR. Embeddings run either through a local GGUF model or through your configured provider's `/embeddings` endpoint. Academic search hits OpenAlex, Crossref and arXiv directly with TTL caching.
-
-**Model freedom.** OpenAI-compatible, Anthropic Messages and Google Gemini protocols. Point it at DeepSeek, Zhipu, Kimi, Qwen, OpenRouter, a local Ollama instance, or anything else that speaks the protocol. Separate fast and strong model tiers, plus endpoint detection and a connection test.
-
-**MCP in both directions.** Expose SciFlow's literature, retrieval and pipeline tools to Claude or any MCP client, and attach external MCP servers as additional tools.
-
-**Headless operation.** `sciflow run --topic "…" --auto --out ./paper/` produces a manuscript without opening a window.
+- **Research pipeline (LangGraph).** Human outline checkpoint, recursive literature survey (depth 1-3), outline with contrarian variants, parallel section drafting, quality gate with automatic revision, polish, citation formatting.
+- **Deterministic quality gate.** Seven rule-scored dimensions (structure, length, citation closure and strength, readability, rhetoric, integrity, information density). Five selectable standards from draft iteration to top-journal submission. Below 90% of required length is a hard cap - no decorative points can rescue it.
+- **Citation integrity.** Anchor to citation to reference three-level traceability; seven audit classes. The reference pool cannot be lied to.
+- **Agent harness.** Model-maintained task list, context compaction, mentions, tool approval, tool-call repetition guard (AGENT_TOOL_REPEAT_LIMIT), model fallback chain (AI_MODEL_FALLBACK).
+- **Retrieval.** sqlite-vec + FTS5 trigram, reciprocal-rank fusion, MMR dedup; embeddings via local GGUF or your provider; academic search against OpenAlex, Crossref, arXiv with TTL caching.
+- **Model freedom.** OpenAI-compatible / Anthropic / Gemini protocols; fast and strong tiers; a local Ollama or GGUF model behaves the same as a cloud endpoint.
+- **MCP in both directions.** Expose SciFlow tools to any MCP client; attach external MCP servers. Handshake verified by scripts/mcp-handshake.mjs.
+- **Headless.** sciflow run --topic "..." --auto --out ./paper/ produces a manuscript without opening a window.
 
 ## Quick start
 
@@ -130,16 +124,15 @@ Every number below comes from a command that was actually executed on the curren
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Server unit and integration | `pnpm --filter @sciflow/server test` | 47 files, 376 tests |
-| Web unit | `pnpm --filter @sciflow/web test` | 21 files, 135 tests |
-| Types | `pnpm -r typecheck` | clean |
-| Lint | `pnpm lint` | 0 errors |
-| Build | `pnpm -r build` | success |
-| Black-box regression | `python scripts/full_regression.py` | 240 passed, 0 failed |
+| Server unit and integration | `pnpm --filter @sciflow/server test` | 52 files, 404 tests |
+| Web unit | `pnpm --filter @sciflow/web test` | 25 files, 175 tests |
+| Desktop unit | `pnpm --filter @sciflow/desktop test` | 1 file, 5 tests |
+| Types / Lint / Build | `pnpm -r typecheck` + `pnpm lint` + `pnpm -r build` | clean / 0 errors / success |
+| Black-box regression | `python scripts/full_regression.py` | 238 passed, 0 failed, 0 known-gaps |
 | Route probe | `python scripts/route_probe.py` | 96 routes, 0 failures |
+| Acceptance matrix | `python scripts/final_acceptance.py` | 23 of 23 |
 | Config monitor | `node scripts/monitor_config_center.mjs` | 25 of 25 |
-| Access boundary | `node scripts/verify-jwt-access.mjs` | 28 of 28 |
-| Dependencies | `pnpm audit --registry=https://registry.npmjs.org` | no known vulnerabilities |
+| MCP protocol handshake | `node scripts/mcp-handshake.mjs` | 5 of 5 steps |
 
 ## Architecture
 
@@ -176,7 +169,7 @@ Deeper detail lives in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 Current release: **1.11.0**. See [`CHANGELOG.md`](CHANGELOG.md) for the full history and [`docs/product-roadmap.md`](docs/product-roadmap.md) for what is next.
 
-Known gaps: real-model end-to-end runs require your own API key; Docker and Playwright suites are exercised in CI but not on every contributor machine; the desktop installer requires a C++ toolchain on Windows.
+Known gaps: real-model end-to-end runs require your own API key; Docker and Playwright suites run in CI but not on every contributor machine; Windows installer builds locally need a C++ toolchain, or use the desktop-installer CI workflow (verified green). Honest-gap tracking lives in docs/ECOSYSTEM-AUDIT.md.
 
 ## License
 
