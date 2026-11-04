@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **desktop-installer CI 产物收集目录写错**（`dist` → 实际 `release/`，含 blockmap）：GitHub runner 上 NSIS 打包本身已成功，仅收集步骤失败；已修正并重新 dispatch。三份 README 的安装包输出路径同步修正。
+- 新增 `scripts/mcp-handshake.mjs`：官方 SDK 客户端对 `/api/mcp/rpc` 走真实协议链路（initialize → tools/list → tools/call → resources），作为回归常跑成员——ECOSYSTEM-AUDIT 的「MCP 2026-07 stateless 适配」待核实项据此闭环（5/5 通过）。
+
+
 ## [1.11.0] - 2026-11-04
 
 ### Added
