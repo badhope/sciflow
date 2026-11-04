@@ -1,6 +1,6 @@
 # SciFlow
 
-**本地优先的多智能体科研工作台：从研究主题一路做到可投稿的成稿 —— 每一步可观测，每一条引用可溯源，每一版草稿都要通过确定性的质量门。**
+**科研工作台：从研究主题一路做到可投稿的成稿 —— 不过检验不交稿：确定性的质量门、能查到原文的引用、一套你自己就能重跑的验证体系。**
 
 [![CI](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -12,17 +12,16 @@
 
 ---
 
-## 为什么选它
+## 它到底不同在哪
 
-多数写作工具停在「把文字生成出来」。SciFlow 跑完整个科研闭环，并且拒绝交回一份过不了检验的稿子。
-
-| 你能得到什么 | 实际意味着什么 |
+|  |  |
 | --- | --- |
-| **一条流水线直通投稿** | 选题验证 → 文献调研 → 大纲确认 → 分章起草 → 质量门 → 润色 → 引用格式化 → 期刊投稿跟踪 |
-| **确定性的质量门，不是感觉打分** | 七个维度按规则计分，同一份文本必然同分；低于阈值自动定向修订，最多三轮 |
-| **引用真的能查到那一篇** | 正文 `[n]` 锚点 → citation 表 → references 表三级追踪；幽灵锚点、孤儿引用、断号、重复 DOI 都定位到具体编号 |
-| **过程不藏在黑盒里** | 每步执行轨迹、Token 用量、耗时甘特图，以及深度健康探针 |
-| **密钥始终是你自己的** | 本地 SQLite、可选本地嵌入模型、自带模型端点，不需要注册账号 |
+| **一条流水线直通投稿** | 选题验证 → 文献调研 → 大纲确认 → 分章起草 → 质量门 → 润色 → 引用格式化 → 期刊投稿跟踪。每步写检查点，重启可续跑 |
+| **确定性的质量门，不是感觉打分** | 七个维度按规则计分，同一份文本必然同分、可复现；低于阈值自动定向修订，最多三轮 |
+| **引用真的能查到那一篇** | 正文 `[n]` 锚点 → citation 表 → references 表三级追踪；幽灵锚点、孤儿引用、断号、重复 DOI 都定位到具体编号。文献池为空时，起草提示词直接禁用引用标记 |
+| **证据链可见** | 写作视图把论证来路画成一条链——研究问题、文献依据、正文锚点、引用记录——并直接标出断在哪里。22 篇文献但正文零锚点，报「2 处断点」，不是绿勾 |
+| **有护栏的自主** | 工具审批在副作用操作前暂停并给出人话理由；重复调用护栏防止空转；模型降级链兜住主端点宕机；每次 LLM 调用带成本留痕 |
+| **宣称皆可验证** | 下方验证表在你自己机器上可复跑。数字对不上，就是 bug——欢迎提 issue |
 
 ## 界面截图
 
@@ -52,23 +51,14 @@
 
 ## 核心能力
 
-**科研流水线。** LangGraph 编排，大纲处保留人工确认。选题验证、递归文献调研（深度 1–3）、带反共识变体的大纲、并行分章起草、带自动回炉的质量门、润色、引用格式化。每个环节结束后写检查点，服务重启可续跑。
-
-**确定性质量门。** 七个维度 —— 结构、篇幅、引用闭环与强度、可读性、修辞、诚信、信息密度 —— 全部由规则计算并带稳定指纹。五档可选标准从草稿迭代到顶刊投稿，各自约束篇幅、引用数与及格线。正文低于标准下限 90% 直接判硬伤封顶，不靠形式分救回体量不足的稿子。
-
-**引用完整性。** 从正文锚点到 citation 再到 reference 的三级追踪。七类体检覆盖幽灵锚点、孤儿条目、重复 DOI 与元数据冲突。文献池为空时起草提示词直接禁用引用标记，模型无从编造。
-
-**能离线工作的检索。** sqlite-vec 近似最近邻加 FTS5 trigram 全文，用 RRF 融合、MMR 去冗余。嵌入可走本地 GGUF 模型，也可走你已配置厂商的 `/embeddings` 接口。学术检索直连 OpenAlex、Crossref 与 arXiv，带 TTL 缓存。
-
-**模型自由。** 支持 OpenAI 兼容、Anthropic Messages、Google Gemini 三种协议。可指向 DeepSeek、智谱、Kimi、通义、OpenRouter、本地 Ollama，或任何兼容端点。快慢双档路由，附端点探测与连接测试。
-
-**MCP 双向。** 把文献、检索与流水线能力暴露给 Claude 或其他 MCP 客户端；也能接入外部 MCP 服务器作为额外工具。
-
-**无界面运行。** `sciflow run --topic "…" --auto --out ./paper/` 不打开窗口也能出稿。
-
-**Agent harness（智能体基础设施）**。编程智能体需要的那套底座，用在科研上：模型自己维护的任务清单让长任务可核对而不是黑盒；上下文压缩在窗口溢出前把早期轮次折叠成结构化摘要；`@` 提及把指定文献/文档/资料拉进当前这一轮；工具审批在产生副作用的操作（跑代码、改正文、改全局配置）前暂停，并给出人能读懂的理由而不是一个工具名。
-
-**证据链**。写作视图把论证的来路画成一条链——研究问题、文献依据、正文锚点、引用记录、可溯源条目——并直接标出断在哪里。22 篇文献但正文零锚点，会报"2 处断点"而不是一个绿勾。
+- **科研流水线（LangGraph）**：大纲处保留人工确认，递归文献调研（深度 1–3）、带反共识变体的大纲、并行分章起草、带自动回炉的质量门、润色、引用格式化。
+- **确定性质量门**：七个维度全部由规则计算并带稳定指纹（结构、篇幅、引用闭环与强度、可读性、修辞、诚信、信息密度）。五档可选标准从草稿迭代到顶刊投稿，各自约束篇幅、引用数与及格线。正文低于标准下限 90% 直接判硬伤封顶。
+- **引用完整性**：锚点 → citation → reference 三级追踪，七类体检。文献池为空时，起草提示词直接禁用引用标记——模型无从编造。
+- **Agent harness**：模型维护的任务清单、上下文压缩、`@` 提及、工具审批、重复调用护栏（`AGENT_TOOL_REPEAT_LIMIT`）、模型降级链（`AI_MODEL_FALLBACK`）。
+- **检索**：sqlite-vec + FTS5 trigram，RRF 融合、MMR 去冗余；嵌入走本地 GGUF 或厂商接口；学术检索直连 OpenAlex、Crossref、arXiv，带 TTL 缓存。
+- **模型自由**：OpenAI 兼容 / Anthropic / Gemini 三种协议，快慢双档路由；本地 Ollama 或本地 GGUF 模型与云厂商端点行为一致。
+- **MCP 双向**：把本原能力暴露给任何 MCP 客户端，也能接入外部 MCP 服务器。握手由 [`scripts/mcp-handshake.mjs`](scripts/mcp-handshake.mjs) 持续验证。
+- **无界面运行**：`sciflow run --topic "…" --auto --out ./paper/` 不打开窗口也能出稿。
 
 ## 快速开始
 
@@ -132,18 +122,17 @@ pnpm desktop:dist    # 安装包输出到 apps/desktop/release/
 
 下表中的每个数字都来自在当前代码树上实际执行的命令。
 
-| 检查项 | 命令 | 结果 |
+| 检查项 | 命令 | 结果（2026-11-04，当前代码树） |
 | --- | --- | --- |
-| 服务端单测与集成 | `pnpm --filter @sciflow/server test` | 47 文件，376 项 |
-| 前端单测 | `pnpm --filter @sciflow/web test` | 21 文件，135 项 |
-| 类型检查 | `pnpm -r typecheck` | 通过 |
-| 代码规范 | `pnpm lint` | 0 error |
-| 构建 | `pnpm -r build` | 成功 |
-| 黑盒回归 | `python scripts/full_regression.py` | 240 通过，0 失败 |
+| 服务端单测与集成 | `pnpm --filter @sciflow/server test` | 52 文件，404 项 |
+| 前端单测 | `pnpm --filter @sciflow/web test` | 25 文件，175 项 |
+| 桌面端单测 | `pnpm --filter @sciflow/desktop test` | 1 文件，5 项 |
+| 类型 · 规范 · 构建 | `pnpm -r typecheck` · `pnpm lint` · `pnpm -r build` | 通过 · 0 error · 成功 |
+| 黑盒回归 | `python scripts/full_regression.py` | 238 通过，0 失败，0 存量缺口 |
 | 全路由探针 | `python scripts/route_probe.py` | 96 条路由，0 失败 |
+| 验收矩阵 | `python scripts/final_acceptance.py` | 23/23 |
 | 配置巡检 | `node scripts/monitor_config_center.mjs` | 25/25 |
-| 权限边界 | `node scripts/verify-jwt-access.mjs` | 28/28 |
-| 依赖审计 | `pnpm audit --registry=https://registry.npmjs.org` | 无已知漏洞 |
+| MCP 协议握手 | `node scripts/mcp-handshake.mjs` | 5/5 |
 
 ## 架构
 
@@ -180,7 +169,7 @@ packages/retrieval  向量与全文检索、MMR、嵌入
 
 当前版本：**1.11.0**。完整历史见 [`CHANGELOG.md`](CHANGELOG.md)，后续规划见 [`docs/product-roadmap.md`](docs/product-roadmap.md)。
 
-已知缺口：真实模型端到端需要你自己的 API Key；Docker 与 Playwright 套件在 CI 中执行，未在每台开发机上验证；Windows 下桌面安装包需要 C++ 工具链。
+已知缺口：真实模型端到端需要你自己的 API Key；Docker 与 Playwright 套件在 CI 中执行，未在每台开发机上验证；Windows 安装包本机构建需要 C++ 工具链，或直接用 [`desktop-installer` CI 工作流](.github/workflows/desktop-installer.yml)（已验证全绿）。诚实的缺口追踪见 [`docs/ECOSYSTEM-AUDIT.md`](docs/ECOSYSTEM-AUDIT.md)。
 
 ## 许可证
 
