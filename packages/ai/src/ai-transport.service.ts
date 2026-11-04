@@ -415,7 +415,7 @@ ${augmentation}` };
     model: string,
     caller: string,
     retries: number,
-  ): Promise<{ text: string; usage: { inputTokens?: number; outputTokens?: number } | undefined }> {
+  ): Promise<{ text: string; usage?: LanguageModelUsage }> {
     return pRetry(
       async () => {
         const { instructions, rest } = this.splitSystemMessages(this.withConfigAugmentation(messages, caller));
@@ -474,7 +474,7 @@ ${augmentation}` };
         success: true,
       });
       return text;
-    }).catch(async (err) => {
+    }).catch(async (err: any) => {
       // 降级链：主模型重试耗尽后，若配置了备选模型且请求未被用户取消，用备选模型再试一次。
       // 只覆盖非流式路径——流式一旦吐出增量就无法安全重放。
       const fb = this.fallbackModel();
@@ -493,7 +493,7 @@ ${augmentation}` };
             success: true,
           });
           return text;
-        } catch (fbErr) {
+        } catch (fbErr: any) {
           this.logLlmCall({ caller: `${caller}:fallback`, model: fb, promptTokens: 0, completionTokens: 0, latencyMs: Date.now() - t1, success: false, error: fbErr?.message });
           // 降级也失败：保留原始主模型错误（更有诊断价值），降级错误仅留痕
           this.logger.warn(`AI 降级模型也失败：${String(fbErr?.message || fbErr).slice(0, 120)}`);

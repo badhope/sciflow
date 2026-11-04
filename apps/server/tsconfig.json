@@ -49,5 +49,5 @@
     "noImplicitAny": false
   },
   "include": ["src/**/*", "../../packages/core/src/**/*", "../../packages/db/src/**/*", "../../packages/ai/src/**/*", "../../packages/retrieval/src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.spec.ts"]
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "../../packages/*/src/**/*.spec.ts"]
 }
