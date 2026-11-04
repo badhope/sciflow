@@ -95,8 +95,15 @@ Onyx、Khoj、SurfSense、AutoGen。吸收原则：**只吸收与本仓定位（
 1. **提示注入专项检测**：外源网页/文献摘要进入上下文前无专门消毒层（概率中/影响高）。
    方向：外源内容包裹 + 指令特征过滤，放 `packages/ai/prompt-augmentation` 旁。
 2. **OTel trace 导出**：自有轨迹已在库，缺标准导出（概率低/影响中）。方向：OTLP exporter 挂 agent-trace.service。
-3. **MCP 2026-07 stateless 变更适配核实**：`[待核实: 用 @modelcontextprotocol/sdk 最新版对接 MCP Inspector 跑一遍握手]`。
-4. **评审意见闭环 / 段落级恢复**：路线图既有项，维持 Partial 标注。
+3. **评审意见闭环 / 段落级恢复**：路线图既有项，维持 Partial 标注。
+
+## 6.1 待核实项闭环（2026-11-04）
+
+| 原 `[待核实]` 项 | 结论 | 验证方式 |
+|---|---|---|
+| MCP SDK 1.32.x 对 2026-07 stateless 规范的适配 | **已闭环：适配正常**。`scripts/mcp-handshake.mjs`（官方 SDK 客户端）对 `/api/mcp/rpc` 走通 initialize → tools/list（23 工具）→ tools/call → resources/list → resources/read，5/5 通过 | `BASE=… node scripts/mcp-handshake.mjs`，已纳入回归常跑清单 |
+| Electron 44（ABI 149）预编译镜像同步 | **未同步**（镜像最高 ABI 146 = Electron 42）。当前钉 42.11.18 是正确决策；升 44 前以同命令复查 | `curl registry.npmmirror.com/-/binary/better-sqlite3/v12.11.1/` 过滤 electron-v149 |
+| desktop-installer CI 首跑 | **首跑失败但打包成功**：electron-builder 在 runner 上完成 NSIS 打包，仅「收集产物」步骤用了错误目录（`dist`，实际 `release/`）→ 已修正工作流并重新 dispatch | GitHub Actions run 41698278507 步骤表 |
 
 ## 7. 变更记录（本文所述动作的落点）
 
