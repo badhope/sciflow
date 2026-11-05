@@ -65,7 +65,7 @@ decision not to build it.
 | Submission | Journal matching | Shipped | Matches against the local journal library with decision-time hints |
 | Submission | Cover letter generation | Shipped | Structured generation from the manuscript |
 | Submission | Submission tracking | Shipped | Append-only status events with a multi-state machine |
-| Submission | Review reply | Partial | Replies are generated per request; review comments are not yet linked back into the loop |
+| Submission | Review reply | Partial | Each reply now ships with a structured revision plan (category/severity/action) that can be linked into the pipeline's reflexion log via `taskId`; automatic re-execution of plan items is next |
 | Integration | MCP server and client | Shipped | Expose tools and resources; attach external MCP servers |
 | Integration | Headless CLI | Shipped | `sciflow run` produces a manuscript without the UI |
 | Integration | Desktop application | Partial | Packaging works; a Windows installer build requires a C++ toolchain |
