@@ -10,6 +10,7 @@ import { SettingsProvider, useSettings } from './settings/settings-context';
 import { ProviderManager } from './settings/ProviderManager';
 import { WebSearchSettings } from './settings/WebSearchSettings';
 import { UsageStats } from './settings/UsageStats';
+import { AuditLogPanel } from './settings/AuditLogPanel';
 import { McpToolList } from './settings/McpToolList';
 import { PersonaSettings } from './settings/PersonaSettings';
 import { ConfigCenterSettings } from './settings/ConfigCenterSettings';
@@ -626,6 +627,9 @@ function SettingsLayout() {
 
       {/* Usage Stats */}
       <div id="settings-usage"><UsageStats /></div>
+
+      {/* 安全与审计：审计流水 + 运行指标（企业部署的可回溯凭证与健康面板） */}
+      <div id="settings-audit"><AuditLogPanel /></div>
 
       {/* Model Routing + Provider Manager */}
       <div id="settings-providers"><ProviderManager settings={state.settings} /></div>

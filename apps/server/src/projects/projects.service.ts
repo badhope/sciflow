@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { db } from '../db/database';
+import { db, sqlite } from '../db/database';
 import { projects, documents, references, pipelineTasks, reflexionLogs, screeningQueue, extractionFields, extractionValues, reviewComments, experiments, submissions, submissionStatusEvents, citations, qualityReports, polishRecords, knowledgeDocs, knowledgeChunks, memoryLogs, agentExecutions, agentSteps, chatSessions } from '../db/schema';
 import { parseJson } from '../common/json-guard';
+import { BUNDLE_TABLES, BUNDLE_VERSION, buildIdMap, remapRow, renameOnImport, validateBundle } from './project-bundle';
 
 /** Zod schemas for projects input validation */
 const createProjectSchema = z.object({
@@ -124,4 +125,107 @@ export class ProjectsService {
     db.delete(projects).where(eq(projects.id, id)).run();
     return { ok: true };
   }
+
+  /**
+   * 项目全量导出：把项目及其全部子表行打包成一个自包含 JSON。
+   * includeRuntime=true 时附带流水线任务/反思日志/Agent 轨迹（归档或调试用）。
+   */
+  exportBundle(projectId: string, includeRuntime = false) {
+    const project = this.get(projectId);
+    const tables: Record<string, Record<string, unknown>[]> = {};
+    const counts: Record<string, number> = {};
+    for (const spec of BUNDLE_TABLES) {
+      if (!spec.defaultInclude && !includeRuntime) continue;
+      try {
+        const rows = sqlite
+          .prepare(`SELECT * FROM ${spec.table} WHERE ${spec.projectColumn} = ?`)
+          .all(projectId) as Record<string, unknown>[];
+        // snake_case → camelCase，使导出包与 API 形状一致（导入端按 camelCase 读取）
+        const mapped = rows.map((r) => toCamelRow(r, spec.dropFields));
+        tables[spec.key] = mapped;
+        counts[spec.key] = mapped.length;
+      } catch {
+        // 表不存在（旧库/未迁移）：跳过而不是让整个导出失败
+        tables[spec.key] = [];
+        counts[spec.key] = 0;
+      }
+    }
+    return {
+      bundleVersion: BUNDLE_VERSION,
+      exportedAt: Date.now(),
+      project: toCamelRow(project as unknown as Record<string, unknown>),
+      tables,
+      counts,
+    };
+  }
+
+  /**
+   * 项目导入：为整个包生成新 id（避免撞主键），重映射所有外键后写入。
+   * 返回新项目 id 与各表导入行数；同名项目自动改名为「（导入）」。
+   */
+  importBundle(raw: unknown, ownerId = '') {
+    const checked = validateBundle(raw);
+    if (!checked.ok) throw new BadRequestException(checked.reason);
+    const bundle = checked.bundle;
+    const existingNames = (db.select({ name: projects.name }).from(projects).all() as { name: string }[]).map((r) => r.name);
+    const idMap = buildIdMap(bundle, () => randomUUID());
+    const newProjectId = idMap.get(String(bundle.project.id));
+    if (!newProjectId) throw new BadRequestException('项目包缺少项目 id');
+
+    const name = renameOnImport(String(bundle.project.name || ''), existingNames);
+    const now = Date.now();
+    const projectRow = remapRow(bundle.project, idMap, {
+      id: newProjectId,
+      name,
+      createdAt: now,
+      updatedAt: now,
+      ownerId,
+    });
+
+    const stats: Record<string, number> = {};
+    db.transaction(() => {
+      db.insert(projects).values(projectRow as never).run();
+      for (const spec of BUNDLE_TABLES) {
+        const rows = bundle.tables[spec.key];
+        if (!Array.isArray(rows) || rows.length === 0) {
+          stats[spec.key] = 0;
+          continue;
+        }
+        let inserted = 0;
+        for (const row of rows) {
+          const mapped = remapRow(row, idMap, { projectId: newProjectId });
+          try {
+            db.run(sql`INSERT INTO ${sql.raw(spec.table)} (${sql.raw(Object.keys(mapped).map(toSnake).join(', '))}) VALUES (${sql.join(Object.values(mapped).map((v) => sql`${v === undefined ? null : v}`), sql`, `)})`);
+            inserted += 1;
+          } catch {
+            // 单行失败不中断整个导入（例如目标库缺列）：统计里体现为少导入了若干行
+          }
+        }
+        stats[spec.key] = inserted;
+      }
+    });
+
+    return { projectId: newProjectId, name, stats };
+  }
+}
+
+/** DB 列名（snake_case）→ API 字段名（camelCase） */
+function toCamel(key: string): string {
+  return key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+}
+
+/** API 字段名（camelCase）→ DB 列名（snake_case） */
+function toSnake(key: string): string {
+  return key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+}
+
+/** 导出行转 camelCase，并按需丢弃大体积字段 */
+function toCamelRow(row: Record<string, unknown>, dropFields: string[] = []): Record<string, unknown> {
+  const drop = new Set(dropFields);
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) {
+    if (drop.has(k)) continue;
+    out[toCamel(k)] = v;
+  }
+  return out;
 }
