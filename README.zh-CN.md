@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![版本](https://img.shields.io/badge/version-1.12.0-black.svg)](CHANGELOG.md)
+[![版本](https://img.shields.io/badge/version-1.13.0-black.svg)](CHANGELOG.md)
 
 [English](README.md) · **简体中文**
 
@@ -24,6 +24,11 @@
 | **宣称皆可验证** | 下方验证表在你自己机器上可复跑。数字对不上，就是 bug——欢迎提 issue |
 
 ## 界面截图
+
+<!-- demo-video -->
+[<img src="docs/media/demo.mp4" alt="SciFlow 演示：工作台、流水线、质量评分、写作、文献、知识库、实验、总览与设置" width="100%">](docs/media/demo.mp4)
+
+*端到端实录（mock 模型端点 + 演示数据，与发布构建同源）。点击可看完整视频。*
 
 以下截图均取自真实运行的界面与种子演示数据。
 
@@ -170,7 +175,7 @@ packages/retrieval  向量与全文检索、MMR、嵌入
 
 ## 项目状态
 
-当前版本：**1.12.0**。完整历史见 [`CHANGELOG.md`](CHANGELOG.md)，后续规划见 [`docs/product-roadmap.md`](docs/product-roadmap.md)。
+当前版本：**1.13.0**。完整历史见 [`CHANGELOG.md`](CHANGELOG.md)，后续规划见 [`docs/product-roadmap.md`](docs/product-roadmap.md)。
 
 已知缺口：真实模型端到端需要你自己的 API Key；Docker 与 Playwright 套件在 CI 中执行，未在每台开发机上验证；Windows 安装包本机构建需要 C++ 工具链，或直接用 [`desktop-installer` CI 工作流](.github/workflows/desktop-installer.yml)（已验证全绿）。诚实的缺口追踪见 [`docs/ECOSYSTEM-AUDIT.md`](docs/ECOSYSTEM-AUDIT.md)。
 

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import pLimit from 'p-limit';
 import { Command } from '@langchain/langgraph';
 import { db } from '../db/database';
-import { pipelineTasks, documents, pipelineConfigs, appSettings, projects, llmCallLogs } from '../db/schema';
+import { pipelineTasks, documents, pipelineConfigs, appSettings, projects, llmCallLogs, references } from '../db/schema';
 import { AiService } from '../ai/ai.service';
 import { ReferencesService, PaperHit } from '../references/references.service';
 import { parseJson, parseStringList } from '../common/json-guard';
@@ -20,6 +20,7 @@ import { ConfigCenterService } from '../config/config-center.service';
 import { ScholarSearchService } from '../research/scholar-search.service';
 import { buildWebHits, isWebSearchEnabled } from './pipeline-websearch';
 import { normalizeKnScore, noveltyOverlap } from './pipeline-metrics';
+import { noveltyFallback } from './novelty-fallback';
 import { envInt } from '../common/env';
 
 /** UI 步骤条（单一来源：packages/core/pipeline-steps） */
@@ -467,14 +468,27 @@ export class PipelineService implements OnModuleInit {
    */
   private async noveltyCheck(topic: string): Promise<{
     skipped?: boolean;
+    offline?: boolean;
+    basis?: string;
+    specificity?: number;
     overlap: number;
     similar: { title: string; year: number | null; venue: string; doi: string }[];
     advice: string;
   }> {
     if (!this.scholar.isEnabled((k) => this.readSetting(k))) {
-      return { skipped: true, overlap: 0, similar: [], advice: '学术检索关闭' };
+      // 学术检索关闭：不再沉默返回 skipped，改用本地库证据做确定性降级判断
+      const localTitles = this.readLocalTitlesForNovelty();
+      const fb = noveltyFallback({ topic, localTitles });
+      return { ...fb, similar: [] };
     }
-    const hits = await this.scholar.search([topic], 8);
+    let hits: Awaited<ReturnType<typeof this.scholar.search>> = [];
+    try {
+      hits = await this.scholar.search([topic], 8);
+    } catch {
+      // 学术库不可达（离线/被墙/超时）：同样降级到本地证据，绝不假装查过
+      const fb = noveltyFallback({ topic, localTitles: this.readLocalTitlesForNovelty() });
+      return { ...fb, similar: [] };
+    }
     if (!hits.length) {
       return { skipped: false, overlap: 0, similar: [], advice: '学术库未找到相近工作，选题可能较新；建议再用 1-2 组同义词复核' };
     }
@@ -493,6 +507,16 @@ export class PipelineService implements OnModuleInit {
           ? '重叠度中等：选题方向已有人做，需在引言明确差异化定位（方法/数据/场景/评价维度至少一项不同）'
           : '重叠度低：相近工作较少，注意确认是"真空白"还是"检索词未覆盖"';
     return { overlap: best, similar, advice };
+  }
+
+  /** 本地库标题池（项目文献 + 知识库文档名）：新颖性离线降级的证据来源 */
+  private readLocalTitlesForNovelty(): string[] {
+    try {
+      const rows = db.select({ title: references.title }).from(references).all();
+      return rows.map((r) => r.title || '').filter(Boolean);
+    } catch {
+      return [];
+    }
   }
 
   private stepEnabled(key: string): boolean {

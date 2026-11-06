@@ -28,6 +28,20 @@ export const writing = {
     list: (projectId: string) => request<Doc[]>(`/api/documents?projectId=${projectId}`),
     get: (id: string) => request<Doc>(`/api/documents/${id}`),
     citationAudit: (id: string) => request<CitationAudit>(`/api/documents/${id}/citation-audit`),
+    /** 逐节 diff（当前 vs 历史版本）：unchanged / changed / added / removed */
+    sectionDiff: (id: string, version?: number) =>
+      request<{ version: number | null; sections: { title: string; level: number; status: 'unchanged' | 'changed' | 'added' | 'removed'; changed: boolean }[] }>(
+        `/api/documents/${id}/sections/diff${typeof version === 'number' ? `?version=${version}` : ''}`),
+    /** 按评审意见定向重写某一节（只改该节，改前自动快照） */
+    reviseSection: (id: string, title: string, reviewPoints: string) =>
+      request<{ content: string; changed: boolean }>(`/api/documents/${id}/sections/revise`, {
+        method: 'POST', body: JSON.stringify({ title, reviewPoints }),
+      }),
+    /** 段落级恢复：只回滚指定章节，恢复前自动快照全文 */
+    restoreSection: (id: string, version: number, title: string) =>
+      request<{ content: string; changed: boolean }>(`/api/documents/${id}/sections/restore`, {
+        method: 'POST', body: JSON.stringify({ version, title }),
+      }),
     /** 客观质量检查器（确定性规则引擎）：同一正文必然同分同指纹，不受模型漂移影响 */
     objectiveAudit: (id: string) => request<ObjectiveAuditResponse>(`/api/documents/${id}/objective-audit`),
     create: (projectId: string, title: string) =>

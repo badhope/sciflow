@@ -14,7 +14,8 @@
           var styles = ['sciflow', 'academic', 'paper', 'minimal', 'night', 'contrast'];
           var s = localStorage.getItem('sciflow-theme-style');
           document.documentElement.dataset.theme = styles.indexOf(s) >= 0 ? s : 'sciflow';
-          var m = localStorage.getItem('sciflow-theme') || 'system';
+          // 产品默认亮色：无存储值即 light；用户显式选 dark / system 时仍以存储值为准
+          var m = localStorage.getItem('sciflow-theme') || 'light';
           var dark = m === 'dark' || (m === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
           if (dark) document.documentElement.classList.add('dark');
           document.documentElement.style.colorScheme = dark ? 'dark' : 'light';

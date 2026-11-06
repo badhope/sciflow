@@ -56,6 +56,102 @@ function diffLines(oldText: string, newText: string): DiffResult {
 /** 旧版 localStorage key 前缀：sciflow:vname:<docId>:v<N> */
 const vNamePrefix = (docId: string) => `sciflow:vname:${docId}:v`;
 
+type SectionEntry = { title: string; level: number; status: 'unchanged' | 'changed' | 'added' | 'removed'; changed: boolean };
+
+/**
+ * 段落级恢复面板：列出所选历史版本与当前正文逐节差异，支持只回滚某一节。
+ * 后端 POST /documents/:id/sections/restore 会先自动快照全文，避免误操作不可退。
+ */
+function SectionRestorePanel({ docId, snapshots, baseVersion }: { docId: string; snapshots: VersionSnapshot[]; baseVersion: string }) {
+  const [sections, setSections] = useState<SectionEntry[]>([]);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const versionNum = useMemo(
+    () => (baseVersion === 'current' ? null : Number(baseVersion.replace('v', ''))),
+    [baseVersion],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!docId || versionNum === null || !Number.isFinite(versionNum)) return;
+    (async () => {
+      try {
+        const res = await api.documents.sectionDiff(docId, versionNum);
+        if (!cancelled) setSections((res.sections || []) as SectionEntry[]);
+      } catch (e: unknown) {
+        if (!cancelled) setNote(`读取章节差异失败：${errMsg(e)}`);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [docId, versionNum, snapshots]);
+
+  const changedCount = sections.filter((s) => s.changed).length;
+
+  /** 按意见修改：把本节在 diff 中识别出的差异描述作为评审要点交给模型定向重写 */
+  const revise = async (title: string) => {
+    const v = Number(baseVersion.replace('v', ''));
+    const hit = sections.find((s) => s.title === title);
+    if (!hit) return;
+    const points = `与 v${v} 相比，本节存在「${hit.status}」差异；请按最新评审要求补全内容、消除该差异，并保持引用标记不变。`;
+    setBusy(`revise:${title}`);
+    setNote('');
+    try {
+      const res = await api.documents.reviseSection(docId, title, points);
+      setNote(res.changed ? `已按意见重写「${title}」（修改前已自动快照）` : `「${title}」未产生变化`);
+    } catch (e: unknown) {
+      setNote(`修改失败：${errMsg(e)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const restore = async (title: string) => {
+    const v = Number(baseVersion.replace('v', ''));
+    setBusy(title);
+    setNote('');
+    try {
+      const res = await api.documents.restoreSection(docId, v, title);
+      setNote(res.changed ? `已恢复「${title}」到 v${v}，其余章节未改动（恢复前已自动快照）` : `「${title}」与 v${v} 内容一致，无需恢复`);
+    } catch (e: unknown) {
+      setNote(`恢复失败：${errMsg(e)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!docId || baseVersion === 'current' || sections.length === 0) {
+    return note ? <div className="mt-2 text-[11px] text-amber-500">{note}</div> : null;
+  }
+
+  return (
+    <div className="mt-3 border-t border-dashed border-slate-200 dark:border-slate-700 pt-2">
+      <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+        按章节恢复（{baseVersion}）：{changedCount} 节有差异，可只回滚某一节
+      </div>
+      <div className="space-y-1 max-h-40 overflow-auto">
+        {sections.filter((s) => s.changed).map((s) => (
+          <div key={`${s.title}-${s.status}`} className="flex items-center gap-2 text-[11px] rounded border border-slate-200 dark:border-slate-700 px-2 py-1">
+            <span className={`rounded px-1.5 py-0.5 shrink-0 ${s.status === 'added' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : s.status === 'removed' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'}`}>{s.status}</span>
+            <span className="truncate flex-1 text-slate-700 dark:text-slate-200">{s.title || '（无标题前言）'}</span>
+            {s.status !== 'added' && (
+              <>
+                <Button variant="outline" className="text-[11px] px-1.5 py-0.5 shrink-0" disabled={busy !== null} onClick={() => restore(s.title)}>
+                  {busy === s.title ? '恢复中…' : '恢复此节'}
+                </Button>
+                <Button variant="outline" className="text-[11px] px-1.5 py-0.5 shrink-0" disabled={busy !== null} onClick={() => revise(s.title)}>
+                  {busy === `revise:${s.title}` ? '修改中…' : '按意见修改'}
+                </Button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+      {note && <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{note}</div>}
+    </div>
+  );
+}
+
 export function VersionDiffModal({
   open,
   onClose,
@@ -207,6 +303,7 @@ export function VersionDiffModal({
           </div>
         ))}
       </div>
+      <SectionRestorePanel docId={docId} snapshots={snapshots} baseVersion={diffB} />
       <div className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
         红 = 左栏独有（相对删除） · 绿 = 右栏独有（新增） · 按行 LCS 对比（≤{MAX_DIFF_LINES} 行完整对比）。
         版本名保存在后端；浏览器本地旧命名已自动迁移。

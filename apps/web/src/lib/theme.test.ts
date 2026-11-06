@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyTheme, readStoredStyle, resolveTheme, THEME_STYLES, type ThemeStyle } from './theme';
+import { applyTheme, DEFAULT_THEME_MODE, readStoredStyle, readStoredTheme, resolveTheme, THEME_STYLES, type ThemeStyle } from './theme';
 
 describe('resolveTheme（R2）', () => {
   it('system 跟随系统偏好', () => {
@@ -9,6 +9,21 @@ describe('resolveTheme（R2）', () => {
   it('显式选择优先于系统', () => {
     expect(resolveTheme('light', true)).toBe('light');
     expect(resolveTheme('dark', false)).toBe('dark');
+  });
+});
+
+describe('默认亮色（产品要求）', () => {
+  it('无存储值时默认亮色而非跟随系统', () => {
+    localStorage.removeItem('sciflow-theme');
+    expect(readStoredTheme()).toBe('light');
+    expect(DEFAULT_THEME_MODE).toBe('light');
+  });
+  it('用户显式选择 dark/system 仍被尊重', () => {
+    localStorage.setItem('sciflow-theme', 'dark');
+    expect(readStoredTheme()).toBe('dark');
+    localStorage.setItem('sciflow-theme', 'system');
+    expect(readStoredTheme()).toBe('system');
+    localStorage.removeItem('sciflow-theme');
   });
 });
 
