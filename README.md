@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![Version](https://img.shields.io/badge/version-1.14.0-black.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.15.0-black.svg)](CHANGELOG.md)
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -62,6 +62,8 @@ All screenshots are captured from the running application against a seeded demo 
 - **Agent harness.** Model-maintained task list, context compaction, `@` mentions for papers/documents, tool approval, tool-call repetition guard (`AGENT_TOOL_REPEAT_LIMIT`), model fallback chain (`AI_MODEL_FALLBACK`).
 - **Untrusted-content defense.** External text (literature abstracts, pasted review comments, web search results) is sanitized before it reaches a prompt: invisible Unicode stripped, code-fence smuggling neutralized, and instruction-override / role-hijack / system-probe / tool-lure signals detected deterministically (six signal classes, English and Chinese); flagged passages are wrapped with a one-time random spotlighting mark (OWASP/spotlighting practice).
 - **Review reply with a revision plan.** A reply letter now comes back with a structured per-comment revision plan (category, severity, suggested action), optionally linked into the pipeline's `reflexion_log` via `taskId` — the review-to-revision loop starts from data, not vibes.
+- **Project bundles.** Export one project as a self-contained JSON (project plus 16 child tables) and import it elsewhere: ids are remapped, foreign keys follow, a name clash becomes "（导入）". Round-trip verified end to end.
+- **Operations surface.** `GET /api/metrics` speaks Prometheus text format 0.0.4 (service/db/memory/entity counts, all SQL COUNT, never a table scan); the settings page renders the same numbers plus the config/permission audit trail with a denied-only filter.
 - **OTel trace export.** Persisted traces (`llm_call_log`, `agent_execution`) export as OTLP/HTTP-JSON spans with `gen_ai.*` attributes to any collector (`OTEL_EXPORTER_OTLP_ENDPOINT`); disabled with zero overhead when unset.
 - **Retrieval.** sqlite-vec + FTS5 trigram, reciprocal-rank fusion, MMR dedup; embeddings via local GGUF or your provider; academic search against OpenAlex, Crossref, arXiv with TTL caching.
 - **Model freedom.** OpenAI-compatible / Anthropic / Gemini protocols; fast and strong model tiers; local Ollama or a local GGUF model work the same as a cloud endpoint.
@@ -134,8 +136,8 @@ Every number below comes from a command that was actually executed on the curren
 
 | Check | Command | Result (2026-11-06, this tree) |
 | --- | --- | --- |
-| Server unit and integration | `pnpm --filter @sciflow/server test` | 55 files, 439 tests |
-| Web unit | `pnpm --filter @sciflow/web test` | 25 files, 175 tests |
+| Server unit and integration | `pnpm --filter @sciflow/server test` | 59 files, 494 tests |
+| Web unit | `pnpm --filter @sciflow/web test` | 26 files, 182 tests |
 | Desktop unit | `pnpm --filter @sciflow/desktop test` | 1 file, 5 tests |
 | Types · Lint · Build | `pnpm -r typecheck` · `pnpm lint` · `pnpm -r build` | clean · 0 errors · success |
 | Black-box regression | `python scripts/full_regression.py` | 238 passed, 0 failed, 0 known-gaps |
@@ -189,7 +191,7 @@ State chain: `Project → Document (versioned) → Citation → Reference`, with
 
 ## Project status
 
-Current release: **1.14.0**. See [`CHANGELOG.md`](CHANGELOG.md) for the full history and [`docs/product-roadmap.md`](docs/product-roadmap.md) for what is next.
+Current release: **1.15.0**. See [`CHANGELOG.md`](CHANGELOG.md) for the full history and [`docs/product-roadmap.md`](docs/product-roadmap.md) for what is next.
 
 Known gaps: real-model end-to-end runs require your own API key; Docker and Playwright suites run in CI but not on every contributor machine; Windows installer builds locally need a C++ toolchain **or** the [`desktop-installer` CI workflow](.github/workflows/desktop-installer.yml) (verified green). Honest-gap tracking lives in [`docs/ECOSYSTEM-AUDIT.md`](docs/ECOSYSTEM-AUDIT.md).
 
