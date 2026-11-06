@@ -52,7 +52,7 @@
     "rxjs": "^7.8.1",
     "sqlite-vec": "^0.1.7-alpha.2",
     "undici": "^7.30.1",
-    "unpdf": "^1.8.1",
+    "unpdf": "^2.1.0",
     "zod": "^4.6.6"
   },
   "devDependencies": {
