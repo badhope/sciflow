@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![Version](https://img.shields.io/badge/version-1.15.0-black.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.15.1-black.svg)](CHANGELOG.md)
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -191,7 +191,7 @@ State chain: `Project → Document (versioned) → Citation → Reference`, with
 
 ## Project status
 
-Current release: **1.15.0**. See [`CHANGELOG.md`](CHANGELOG.md) for the full history and [`docs/product-roadmap.md`](docs/product-roadmap.md) for what is next.
+Current release: **1.15.1**. See [`CHANGELOG.md`](CHANGELOG.md) for the full history and [`docs/product-roadmap.md`](docs/product-roadmap.md) for what is next.
 
 Known gaps: real-model end-to-end runs require your own API key; Docker and Playwright suites run in CI but not on every contributor machine; Windows installer builds locally need a C++ toolchain **or** the [`desktop-installer` CI workflow](.github/workflows/desktop-installer.yml) (verified green). Honest-gap tracking lives in [`docs/ECOSYSTEM-AUDIT.md`](docs/ECOSYSTEM-AUDIT.md).
 

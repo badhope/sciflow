@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.15.1] - 2026-11-06
+
+官网（GitHub Pages · `docs/index.html`）此前**没有任何下载入口**，也没有版本标注——用户打开官网
+只能看到功能介绍和源码克隆步骤，找不到安装包。本次补齐并让它能自动跟随发版。
+
+### Added
+
+- **官网下载区**：Hero 主按钮改为「下载 Windows 安装包」，新增 `#downloads` 区块给出三条路径
+  （Windows 安装包 / 源码运行 / Docker），导航栏增加「下载」入口。
+- **稳定下载直链**：`releases/latest/download/SciFlow-Setup-x64.exe`。CI 在收集产物时额外生成一份
+  不带版本号的固定名副本，因此该链接每次发版自动指向新版，官网无需随版本改文案。
+- **Pages 发布工作流** `.github/workflows/pages.yml`：仅在 `docs/**` 变化时部署，部署前把页面里的
+  「当前版本」替换成 `package.json` 的版本号——版本标注不再靠手改。
+
+### Fixed
+
+- **官网快速开始教的是旧用法**：写着「开两个终端分别跑 server 与 web」，而产品早已支持单端口
+  （`pnpm build && pnpm start` 后 `http://localhost:3000` 同时出 API 与界面）。已改正，开发态热更新
+  单独说明。
+- 官网版本标注与安装包说明（约 562 MB、含全部依赖、装完即用）同步为当前值。
+
 ## [1.15.0] - 2026-11-06
 
 一轮「可验证性 + 体验补全」：先审计已有的东西是否真实接通，再补企业级与通用体验缺口。

@@ -92,6 +92,8 @@ html[data-theme="dark"] .theme-icon-moon{display:none}
 }
 .badge b{color:var(--brand2)}
 .cta-row{display:flex;gap:14px;justify-content:center;margin-top:38px;flex-wrap:wrap}
+.dl-note{margin-top:14px;font-size:.86rem;color:var(--muted)}
+.dl-note a{color:var(--brand,#BE3B2A);text-decoration:underline;text-underline-offset:2px}
 .hero-shot{margin:52px auto 0;max-width:1040px}
 .hero-shot img{width:100%;height:auto;display:block;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
 .hero-shot figcaption{text-align:center;color:var(--muted);font-size:.86rem;margin-top:12px}
@@ -222,6 +224,7 @@ footer a:hover{color:var(--brand2)}
     <nav class="links" id="navLinks">
       <a href="#features">特性</a>
       <a href="#architecture">架构</a>
+      <a href="#downloads">下载</a>
       <a href="#quickstart">快速开始</a>
       <a href="#aiconfig">AI 配置</a>
       <a href="#docs">文档</a>
@@ -252,9 +255,11 @@ footer a:hover{color:var(--brand2)}
       <span class="badge">🔌 <b>三协议接入</b> 自配模型 Key</span>
     </div>
     <div class="cta-row">
-      <a class="btn btn-primary" href="#quickstart">快速开始</a>
-      <a class="btn btn-ghost" href="#docs">查看仓库</a>
+      <a class="btn btn-primary" href="https://github.com/Morningstar202604/sciflow/releases/latest" rel="noopener">下载 Windows 安装包</a>
+      <a class="btn btn-ghost" href="#quickstart">快速开始</a>
+      <a class="btn btn-ghost" href="#downloads">全部下载</a>
     </div>
+    <p class="dl-note">当前版本 <b>v1.15.1</b> · Windows x64 安装包（约 562 MB，含全部依赖，装完即用）· <a href="https://github.com/Morningstar202604/sciflow/releases" rel="noopener">历史版本</a></p>
     <figure class="hero-shot">
       <img src="screenshots/workspace.png" alt="SciFlow 工作台：研究项目、文献预览与 AI 对话" width="1600" height="1000">
       <figcaption>真实运行的界面：工作台、项目驾驶舱与 AI 对话</figcaption>
@@ -430,6 +435,41 @@ footer a:hover{color:var(--brand2)}
 </section>
 
 <!-- ===== 快速开始 ===== -->
+<section id="downloads">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 class="sec-title">下载<span class="grad-text">安装</span></h2>
+      <p class="sec-sub">推荐用安装包：自带 Node 运行时与后端服务，不需要配置开发环境。想改代码或跑在服务器上，再用下面的源码方式。</p>
+    </div>
+    <div class="code-grid">
+      <div>
+        <div class="step-label"><span class="step-num">A</span>Windows 安装包（推荐）</div>
+        <pre class="code"><span class="c"># 方式一：打开最新 Release 手动下载</span>
+<a href="https://github.com/Morningstar202604/sciflow/releases/latest" rel="noopener">github.com/Morningstar202604/sciflow/releases/latest</a>
+<span class="c"># 方式二：稳定直链（每次发版自动更新，无需找版本号）</span>
+<a href="https://github.com/Morningstar202604/sciflow/releases/latest/download/SciFlow-Setup-x64.exe" rel="noopener">releases/latest/download/SciFlow-Setup-x64.exe</a>
+<span class="c"># 装完从开始菜单启动，首次运行在「设置」里填模型 Key</span></pre>
+      </div>
+      <div>
+        <div class="step-label"><span class="step-num">B</span>源码运行（任意平台）</div>
+        <pre class="code"><span class="c"># 需要 Node ≥ 20 + pnpm 11</span>
+git clone https://gitcode.com/badhope/sciflow.git
+cd sciflow &amp;&amp; pnpm install
+pnpm build &amp;&amp; pnpm start
+<span class="c"># 打开 http://localhost:3000</span></pre>
+      </div>
+      <div>
+        <div class="step-label"><span class="step-num">C</span>Docker</div>
+        <pre class="code">git clone https://gitcode.com/badhope/sciflow.git
+cd sciflow
+docker compose -f docker-compose.prod.yml up --build
+<span class="c"># 打开 http://localhost:3000</span></pre>
+      </div>
+    </div>
+    <p class="dl-note" style="margin-top:18px">安装包与全部历史版本：<a href="https://github.com/Morningstar202604/sciflow/releases" rel="noopener">GitHub Releases</a> · 各镜像源码：<a href="https://gitcode.com/badhope/sciflow" rel="noopener">GitCode</a> / <a href="https://gitee.com/badhope/sciflow" rel="noopener">Gitee</a> / <a href="https://github.com/badhope/sciflow" rel="noopener">GitHub</a></p>
+  </div>
+</section>
+
 <section id="quickstart">
   <div class="wrap">
     <div class="sec-head">
@@ -451,12 +491,11 @@ cp apps/server/.env.example apps/server/.env
       </div>
       <div>
         <div class="step-label"><span class="step-num">3</span>构建并运行</div>
-        <pre class="code">pnpm --filter @sciflow/server build
-<span class="c"># 终端 A：后端 :3000</span>
-node apps/server/dist/apps/server/src/main.js
-<span class="c"># 终端 B：前端 :5173</span>
-pnpm --filter @sciflow/web dev
-<span class="c"># 浏览器打开 http://localhost:5173</span></pre>
+        <pre class="code">pnpm build
+<span class="c"># 单进程同时提供 API 与网页界面（:3000）</span>
+pnpm start
+<span class="c"># 浏览器打开 http://localhost:3000</span>
+<span class="c"># 开发态需要热更新时：pnpm dev（web :5173 + server :3000）</span></pre>
       </div>
     </div>
   </div>
