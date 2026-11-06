@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.7.0
 
@@ -68,7 +68,7 @@ jobs:
           ls -la release-artifacts
 
       - name: 上传 artifact（每次运行都可下载）
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sciflow-windows-installer
           path: release-artifacts/
