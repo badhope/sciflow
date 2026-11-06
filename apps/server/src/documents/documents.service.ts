@@ -15,6 +15,7 @@ import { ReferencesService } from '../references/references.service';
 import { splitTailBlock } from '../pipeline/tail-blocks';
 import { parseAuthors as parseAuthorArr, surnameOf } from '../common/authors';
 import { parseQualityStandard, type QualityStandardKey } from '../common/quality-standards';
+import { extractSections, replaceSectionBody, restoreSection as restoreSectionText, sectionDiff, type SectionDiffEntry } from './section-restore';
 
 /** 读全局评审标准（app_setting quality_standard；非法值 fail-closed 回落 standard） */
 function readQualityStandard(): QualityStandardKey {
@@ -117,6 +118,60 @@ export class DocumentsService {
   /** versions JSON 历史元素：支持 name + commitMessage（纯 JSON 内嵌，无需额外 DDL） */
   private parseVersions(existing: { versions: string | null }): { version: number; content: string; updatedAt: number; name?: string; commitMessage?: string }[] {
     return parseJson<{ version: number; content: string; updatedAt: number; name?: string; commitMessage?: string }[]>(existing.versions, []);
+  }
+
+  /**
+   * 按评审意见定向重写指定章节（评审闭环的执行环节，路线图 #1）。
+   * 只改命中的那一节，其余章节逐字保留；改前自动快照，便于一键回退。
+   */
+  async reviseSectionFromReview(id: string, title: string, reviewPoints: string) {
+    const doc = this.get(id);
+    if (!title) throw new BadRequestException('请指定要修改的章节标题');
+    if (!reviewPoints || !reviewPoints.trim()) throw new BadRequestException('请提供要落实的评审意见');
+    const current = doc.content ?? '';
+    const target = extractSections(current).find((s) => s.title === title);
+    if (!target) throw new BadRequestException(`正文中没有找到章节「${title}」`);
+    const revisedRaw = await this.ai.reviseSection(title, target.body, reviewPoints);
+    // 模型偶尔会带回标题行：剥掉，避免标题重复
+    const revised = String(revisedRaw || '')
+      .trim()
+      .replace(/^#{1,6}\s+[^\n]*\n+/, '')
+      .trim();
+    if (!revised) throw new BadRequestException('模型未返回有效内容，请重试');
+    const next = replaceSectionBody(current, title, revised);
+    if (next === current) return { content: current, changed: false };
+    this.createSnapshot(id, `按评审意见修改「${title}」前的自动快照`);
+    db.update(documents).set({ content: next, updatedAt: Date.now() }).where(eq(documents.id, id)).run();
+    return { content: next, changed: true };
+  }
+
+  /** 段落级 diff：当前正文 vs 指定历史版本（缺 version 时对比最新一版） */
+  sectionDiff(id: string, version?: number) {
+    const doc = this.get(id);
+    const versions = this.parseVersions(doc);
+    if (!versions.length) return { version: null as number | null, sections: [] as SectionDiffEntry[] };
+    const target = typeof version === 'number'
+      ? versions.find((v) => v.version === version)
+      : versions[versions.length - 1];
+    if (!target) throw new BadRequestException(`未找到版本 v${version}`);
+    return { version: target.version, sections: sectionDiff(doc.content ?? '', target.content) };
+  }
+
+  /**
+   * 段落级恢复（路线图 #2）：只把指定标题那一节回滚到历史版本，其余章节保持当前内容。
+   * 恢复前自动快照当前全文——防止「恢复一节把整篇改坏」后无路可退。
+   */
+  restoreSection(id: string, version: number, title: string) {
+    const doc = this.get(id);
+    const target = this.parseVersions(doc).find((v) => v.version === version);
+    if (!target) throw new BadRequestException(`未找到版本 v${version}`);
+    if (!title) throw new BadRequestException('请指定要恢复的章节标题');
+    const current = doc.content ?? '';
+    const next = restoreSectionText(current, target.content, title);
+    if (next === current) return { content: current, changed: false };
+    this.createSnapshot(id, `恢复「${title}」到 v${version} 前的自动快照`);
+    db.update(documents).set({ content: next, updatedAt: Date.now() }).where(eq(documents.id, id)).run();
+    return { content: next, changed: true };
   }
 
   /**

@@ -2,6 +2,7 @@ import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, HttpCode
 import { DocumentsService } from './documents.service';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
+import { paginate } from '../common/paginate';
 
 @Controller('documents')
 export class DocumentsController {
@@ -11,15 +12,21 @@ export class DocumentsController {
   ) {}
 
   @Get()
-  list(@Query('projectId') projectId: string, @Req() req: { user?: AuthPayload }) {
+  list(
+    @Query('projectId') projectId: string,
+    @Req() req: { user?: AuthPayload },
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
     // 历史行为：不传 projectId 返回全部（本地/桌面单用户，用于全局搜索等）。
     // 企业模式必须显式指定项目，否则拒绝——避免一次请求拉走全库文档。
+    // 分页为可选：不带 limit/offset 时仍返回全量数组（旧客户端不受影响）。
     if (!projectId) {
       if (this.access.enforced) throw new BadRequestException('企业模式必须指定 projectId');
-      return this.documents.listAll();
+      return paginate(this.documents.listAll(), limit, offset);
     }
     this.access.assertProject(projectId, req.user);
-    return this.documents.list(projectId);
+    return paginate(this.documents.list(projectId), limit, offset);
   }
 
   @Get(':id')
@@ -70,6 +77,29 @@ export class DocumentsController {
   setVersionCommitMessage(@Param('id') id: string, @Param('version') version: number, @Body() body: { message: string }, @Req() req: { user?: AuthPayload }) {
     this.access.assertDocument(id, req.user);
     return this.documents.setVersionCommitMessage(id, Number(version), body.message || '');
+  }
+
+  /** 段落级 diff：当前正文 vs 历史版本，逐节标 unchanged/changed/added/removed */
+  @Get(':id/sections/diff')
+  sectionDiff(@Param('id') id: string, @Query('version') version: string | undefined, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
+    return this.documents.sectionDiff(id, version ? Number(version) : undefined);
+  }
+
+  /** 按评审意见定向重写指定章节（评审闭环执行；只改该节，改前自动快照） */
+  @Post(':id/sections/revise')
+  @HttpCode(HttpStatus.OK)
+  reviseSection(@Param('id') id: string, @Body() body: { title: string; reviewPoints: string }, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
+    return this.documents.reviseSectionFromReview(id, String(body.title || ''), String(body.reviewPoints || ''));
+  }
+
+  /** 段落级恢复：只回滚指定章节，其余章节保持当前内容（恢复前自动快照） */
+  @Post(':id/sections/restore')
+  @HttpCode(HttpStatus.OK)
+  restoreSection(@Param('id') id: string, @Body() body: { version: number; title: string }, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
+    return this.documents.restoreSection(id, Number(body.version), String(body.title || ''));
   }
 
   /** 创建手动版本快照（对标 git commit）：显式点保存当前内容快照 + commit message（幂等） */
