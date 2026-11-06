@@ -30,6 +30,8 @@ minimumReleaseAgeExclude:
   - '@typescript-eslint/visitor-keys@8.71.2'
   - typescript-eslint@8.71.2
   - '@aws-sdk/credential-provider-node@3.972.86'
+  - undici@8.12.4
+  - vite@8.3.6
 
 overrides:
   esbuild: ^0.25.0
@@ -77,11 +79,11 @@ overrides:
   body-parser: ^2.4.0
   multer: ^2.5.0
   # undici：多协议 AI SDK 共用 provider-utils，统一到含 TLS/重定向/编码修复的补丁线
-  undici: ^7.30.1
+  undici: ^8.12.4
   # zod：统一应用与 AI SDK 使用已修复的内存耗尽补丁
   zod: ^4.6.6
-  # Vite / happy-dom：前端工具链的 Windows 检查与 host-code 风险补丁
-  vite: ^6.4.4
+  # Vite / happy-dom：前端工具链的安全补丁线（vite 8 起为 rolldown 内核）
+  vite: ^8.3.6
   happy-dom: ^21.0.4
   # node-forge：promptfoo 的 jks-js 传递依赖，锁到当前已发布的安全版本
   node-forge: ^1.4.1

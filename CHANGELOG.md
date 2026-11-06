@@ -4,6 +4,32 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.14.0] - 2026-11-06
+
+破坏性依赖全量升级（用户明确授权），每一处 breaking change 都配套改造并验证，不留「升了但跑不起来」。
+
+### Changed
+
+- **mermaid 11 → 12.3.0**：v12 的 renderer 注册与配置模型有变；本仓用法（`initialize` + `render` + 主题变量）保持兼容，浏览器实测渲染出 `sf-mmd-1` SVG 且无错误提示，仍走懒加载分包（主入口 137KB 不含 mermaid）。
+- **vite 6 → 8.3.6**（rolldown 内核）+ **@vitejs/plugin-react 4 → 6.2.1**：v8 移除 esbuild 转译，`manualChunks` 只接受函数（对象形式直接构建失败），已改为函数式分包；构建耗时 18.7s → 1.79s。
+- **js-yaml 4 → 5.5.0**：v5 移除默认导出并把多文档流判为错误，`extensions.service` 改用命名导入 `load`，并对 frontmatter 内的 `---` 分隔做逐段合并兜底（18 条扩展测试通过）。
+- **p-limit 6 → 7.3.3 / p-retry 6 → 9.0.0**：均为 ESM-only；Node 24 可直接 require，服务端 CJS 产物运行验证通过。同步删除手写的 `p-retry` 类型 shim（此前它掩盖了真实类型）。
+- **undici 7 → 8.12.4**：出站守卫 `safeOutboundFetch` 行为测试通过。
+- **unpdf 1 → 2.1.0**：v2 砍掉 CJS 入口（纯 ESM），服务端改为动态 `import('unpdf')`；补本仓类型声明 `packages/retrieval/src/unpdf.d.ts`（只声明实际用到的 `extractText` 形状）。真实 PDF 上传实测 201 + 分块成功。
+- **移除未使用依赖**：`unpdf` 曾在 server 侧空挂（真正使用方是 packages/retrieval），已收敛为单一来源。
+
+### Fixed
+
+- **根目录缺少 tsconfig 导致 vite 8 / vitest 5 无法转译 NestJS 装饰器**：vite 8 用 oxc 转译，装饰器开关从「被转译文件向上查找的 tsconfig」读取；仓库根没有该文件时，任何带 `@Injectable()` 的文件一导入就抛 `SyntaxError: Invalid or unexpected token`（无行号，极难定位）。已补根 `tsconfig.json`（`experimentalDecorators` + `emitDecoratorMetadata`）。
+- **配置文件扩展名**：vite 8 要求 ESM 配置，`vite.config.ts`/`vitest.config.ts` → `.mts`（desktop 的测试脚本路径同步修正）。
+- **workspace 覆盖规则锁死旧版本**：`pnpm-workspace.yaml` 中 `vite: ^6.4.4` / `undici: ^7.30.1` 的 override 会压住新版本，已同步到 8.3.6 / 8.12.4。
+
+### Verified
+
+- server 471 / web 177 / desktop 5；typecheck 干净；lint 0；build 成功
+- 黑盒：回归 238-0-0、路由 96-0、验收 23-23、巡检 24-24、MCP 5-5
+- 真实链路：PDF 上传解析（unpdf 2 动态导入）、写作页 mermaid 12 渲染、前端单端口托管
+
 ## [1.13.0] - 2026-11-06
 
 把路线图里所有「Partial / Next」项全部做完，不留计划残留。

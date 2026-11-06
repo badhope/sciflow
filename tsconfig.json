@@ -1,0 +1,21 @@
+{
+  // 仓库根 tsconfig：仅供工具链（vite 8 / rolldown / oxc / vitest）在转译
+  // packages/* 与 apps/* 源码时解析编译选项。vite 8 会从「被转译文件」向上查找最近的
+  // tsconfig 读取 experimentalDecorators —— 根目录此前没有该文件，导致 NestJS 的
+  // @Injectable() 等 legacy 装饰器在测试/构建时抛 "SyntaxError: Invalid or unexpected token"。
+  // 类型检查仍走各子包自己的 tsconfig（pnpm -r typecheck），这里不参与类型判断。
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "useDefineForClassFields": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["packages/*/src/**/*", "apps/*/src/**/*"]
+}
