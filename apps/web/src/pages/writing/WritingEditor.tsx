@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, Check, Eye, FileText, Loader2, Pencil } from 'lucide-react';
+import { AlertCircle, Check, Eye, FileText, Loader2, Pencil, Undo2, Redo2 } from 'lucide-react';
 import CodeMirror, { EditorView, type ReactCodeMirrorRef } from '@uiw/react-codemirror';
+import { redo, undo, undoDepth, redoDepth } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import type { Doc } from '../../types';
 import { Badge, Card } from '../../components/ui';
 import { SplitPane } from '../../components/SplitPane';
-import { registerWritingEditorHandle } from './editor-handle';
+import { getWritingEditorHandle, registerWritingEditorHandle } from './editor-handle';
 
 /**
  * WritingEditor — 中间编辑/预览主区。
@@ -71,6 +72,23 @@ export function WritingEditor({
         view.focus();
         view.dispatch({ selection: { anchor: pos } });
       },
+      undo: () => {
+        const view = cmRef.current?.view;
+        if (view) undo(view);
+      },
+      redo: () => {
+        const view = cmRef.current?.view;
+        if (view) redo(view);
+      },
+      // 只读查询历史深度：此前写成「调用 undo 看返回值」会真的撤销内容（禁用态检查即改稿）
+      canUndo: () => {
+        const view = cmRef.current?.view;
+        return view ? undoDepth(view.state) > 0 : false;
+      },
+      canRedo: () => {
+        const view = cmRef.current?.view;
+        return view ? redoDepth(view.state) > 0 : false;
+      },
     });
     return () => {
       registerWritingEditorHandle(null);
@@ -114,6 +132,27 @@ export function WritingEditor({
           <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 page-in shrink-0"><Check size={12} />已保存</span>
         ) : null}
         <Badge tone="blue">v{doc.version}</Badge>
+        {/* 撤销/重做：CodeMirror 自带历史，这里给出可见入口（通用应用标配，不必记快捷键） */}
+        {editorMode !== 'preview' && (
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button
+              className="flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800"
+              title="撤销（Ctrl/⌘+Z）"
+              aria-label="撤销"
+              onClick={() => getWritingEditorHandle()?.undo?.()}
+            >
+              <Undo2 size={12} />
+            </button>
+            <button
+              className="flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800"
+              title="重做（Ctrl/⌘+Shift+Z）"
+              aria-label="重做"
+              onClick={() => getWritingEditorHandle()?.redo?.()}
+            >
+              <Redo2 size={12} />
+            </button>
+          </div>
+        )}
         {/* Markdown 预览切换（编辑 / 预览 / 分栏，科研写作标配） */}
         <div className="flex items-center gap-0.5 ml-auto bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 shrink-0">
           {(['edit', 'split', 'preview'] as const).map((m) => (
