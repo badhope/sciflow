@@ -3,6 +3,7 @@ import { ReferencesService, PaperHit } from './references.service';
 import { ProjectAccessService } from '../common/project-access.service';
 import { ScholarSearchService } from '../research/scholar-search.service';
 import type { AuthPayload } from '../auth/auth.service';
+import { paginate } from '../common/paginate';
 
 @Controller('references')
 export class ReferencesController {
@@ -54,14 +55,20 @@ export class ReferencesController {
   }
 
   @Get()
-  list(@Query('projectId') projectId: string, @Req() req: { user?: AuthPayload }) {
-    // 企业模式必须显式指定项目（与 documents 一致），避免一次请求拉走全库文献
+  list(
+    @Query('projectId') projectId: string,
+    @Req() req: { user?: AuthPayload },
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    // 企业模式必须显式指定项目（与 documents 一致），避免一次请求拉走全库文献。
+    // 分页可选：不带 limit/offset 返回全量（旧客户端行为不变）。
     if (!projectId) {
       if (this.access.enforced) throw new BadRequestException('企业模式必须指定 projectId');
-      return this.references.list(projectId);
+      return paginate(this.references.list(projectId), limit, offset);
     }
     this.access.assertProject(projectId, req.user);
-    return this.references.list(projectId);
+    return paginate(this.references.list(projectId), limit, offset);
   }
 
   /** 系统综述·筛选队列列表（须声明在 :id 之前，避免 screen 被当成文献 id） */

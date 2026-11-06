@@ -37,7 +37,7 @@ decision not to build it.
 | Stage | Capability | Status | Notes |
 | --- | --- | --- | --- |
 | Topic | Topic validation and research plan | Shipped | Planner agent produces goals, sub-questions, search strategy, sections and risks |
-| Topic | Novelty pre-check | Partial | Uses academic sources when reachable; reports "unavailable" rather than guessing when offline |
+| Topic | Novelty pre-check | Shipped | Academic sources when reachable; when the library is unreachable or disabled it degrades to a deterministic local-evidence check (library overlap + topic specificity) and always labels the result as offline rather than guessing |
 | Literature | Online academic search | Shipped | OpenAlex, Crossref, arXiv in parallel, TTL cached, no API key required |
 | Literature | Web search fallback | Shipped | Keyless domestic provider with a reachability diagnostic |
 | Literature | Library management | Shipped | Import, fingerprint dedup, reading status machine, BibTeX and RIS exchange |
@@ -51,7 +51,7 @@ decision not to build it.
 | Writing | Section drafting with Agentic RAG | Shipped | Retrieves while writing; anchors map to references |
 | Writing | Contrarian outline variants | Shipped | Anti-homogenisation alternative narratives |
 | Writing | Polish, translate, paraphrase | Shipped | Tail blocks such as references and figures are protected from rewriting |
-| Writing | Version history and diff | Shipped | Named snapshots with per-version diff |
+| Writing | Version history and diff | Shipped | Named snapshots, per-version diff, per-section diff, and section-level restore (roll back one section without touching the rest) |
 | Writing | Export | Shipped | Markdown, DOCX, LaTeX, standalone HTML |
 | Citation | Anchor traceability | Shipped | Anchor to citation to reference, three levels |
 | Citation | Citation audit | Shipped | Seven classes including ghost anchors, orphans, duplicate DOI, metadata conflict |
@@ -65,16 +65,20 @@ decision not to build it.
 | Submission | Journal matching | Shipped | Matches against the local journal library with decision-time hints |
 | Submission | Cover letter generation | Shipped | Structured generation from the manuscript |
 | Submission | Submission tracking | Shipped | Append-only status events with a multi-state machine |
-| Submission | Review reply | Partial | Each reply now ships with a structured revision plan (category/severity/action) that can be linked into the pipeline's reflexion log via `taskId`; automatic re-execution of plan items is next |
+| Submission | Review reply | Shipped | Reply letter plus a structured revision plan (category/severity/action), linked into the pipeline's reflexion log via `taskId`; `POST /documents/:id/sections/revise` executes a plan item by rewriting only the named section (auto-snapshot first) |
 | Integration | MCP server and client | Shipped | Expose tools and resources; attach external MCP servers |
 | Integration | Headless CLI | Shipped | `sciflow run` produces a manuscript without the UI |
-| Integration | Desktop application | Partial | Packaging works; a Windows installer build requires a C++ toolchain |
+| Integration | Desktop application | Shipped | Packaging works locally with a C++ toolchain, and the `desktop-installer` CI workflow builds the Windows NSIS installer on a runner for anyone without one (v1.12.0 artifact verified green) |
 | Operations | Deep health probe | Shipped | `GET /api/health/deep` reports subsystem status |
 | Agent | Task list | Shipped | Model-maintained plan with progress summary; survives restart |
 | Agent | Context compaction | Shipped | Extraction-based digest once history passes the budget |
 | Agent | `@` context mentions | Shipped | Pull a reference, document or dataset into the current turn |
 | Agent | Tool approval | Shipped | Side-effecting tools pause with a readable reason |
 | Quality | Evidence chain view | Shipped | Question to traceable entry, with broken links named |
+| Quality | Structured quality feedback | Shipped | Each feedback line is mapped to a section, a severity (blocker/major/minor) and a dimension, then written into review comments so issues are actionable and locatable |
+| Quality | Untrusted-content defense | Shipped | External text is sanitized (invisible Unicode stripped, fence smuggling neutralized) and scanned for six injection signal classes before it reaches a prompt |
+| Operations | OTLP trace export | Shipped | Persisted traces export as OTLP/HTTP-JSON with `gen_ai.*` attributes to any collector; zero overhead when unset |
+| Operations | List pagination | Shipped | Documents and references accept optional `limit`/`offset`; requests without them keep the old full-list behaviour |
 
 ## Deliberate non-goals
 
@@ -90,18 +94,14 @@ decision not to build it.
 
 Ordered by value to a researcher, not by implementation ease.
 
-1. **Link review comments into the revision loop.** A review comment should
-   point at a paragraph, and the reply should close against that comment rather
-   than a pasted blob of text.
-2. **Paragraph-level version restore.** Diff and restore a single section
-   instead of a whole-document snapshot.
-3. **Structured quality feedback.** Split the audit narrative into actionable,
-   checkable issues tied to sections.
-4. **Reference and document pagination.** Both lists are unbounded today.
-5. **Dependency refresh.** p-limit 6 to 7 and citation-js plugin 0.8 to 0.9 need
-   a compatibility pass and a regression run before adoption.
-6. **Desktop installer CI.** Produce a signed Windows artifact on a runner that
-   has the C++ toolchain.
+1. **Paragraph-level anchor for review comments.** A review comment should be
+   pinned to a paragraph (not just a section), so the reply and the revision can
+   cite the exact sentence under dispute.
+2. **Plan-item execution queue.** Revision plans can be executed one section at
+   a time today; queueing a whole plan and running it unattended with per-item
+   diffs is the natural next step.
+3. **Full-text retrieval for PDFs beyond chunk boundaries.** Chunk-level RAG is
+   solid; cross-chunk reasoning over long method sections is the remaining gap.
 
 ## How this document is maintained
 
