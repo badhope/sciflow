@@ -23,7 +23,7 @@
     "test": "pnpm --filter @sciflow/server exec vitest run --config ../../apps/server/vitest.config.ts ../desktop/src"
   },
   "dependencies": {
-    "electron-updater": "^6.3.9"
+    "electron-updater": "^6.8.11"
   },
   "devDependencies": {
     "@types/node": "^24.9.0",
