@@ -65,6 +65,12 @@ jobs:
           find apps/desktop/release -maxdepth 1 -name "latest.yml" -print -exec cp {} release-artifacts/ \; || true
           find apps/desktop/release -maxdepth 1 -name "*.blockmap" -print -exec cp {} release-artifacts/ \; || true
           test -n "$(ls -A release-artifacts 2>/dev/null)" || { echo "::error::release-artifacts 为空，electron-builder 产物未生成"; exit 1; }
+          # 稳定命名副本：exe 文件名带版本号会随发版变化，官网/文档的直链会失效。
+          # 这里额外产出一个不带版本号的固定名，配合 GitHub 的
+          # /releases/latest/download/<固定名> 通道即可得到永久下载地址。
+          SRC_EXE=$(ls release-artifacts/SciFlow-Setup-*-x64.exe | head -1)
+          cp "$SRC_EXE" release-artifacts/SciFlow-Setup-x64.exe
+          echo "stable copy: SciFlow-Setup-x64.exe <- $(basename "$SRC_EXE")"
           ls -la release-artifacts
 
       - name: 上传 artifact（每次运行都可下载）

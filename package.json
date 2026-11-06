@@ -1,6 +1,6 @@
 {
   "name": "sciflow",
-  "version": "1.15.0",
+  "version": "1.15.1",
   "private": true,
   "description": "SciFlow - 本地优先的多智能体科研工作台：文献、写作、质量门与投稿辅助",
   "scripts": {

@@ -1,0 +1,66 @@
+# GitHub Pages 站点发布（官网）
+#
+# 背景：官网 `docs/index.html` 已通过 Pages（source = main:/docs）在线，但没有工作流时
+# 只能依赖 GitHub 的自动构建，无法保证「发版后站点里的版本号与下载链接同步更新」。
+# 本工作流做两件事：
+#   1) push 到 main 且 docs/ 变化时才部署（避免无意义构建）；
+#   2) 部署前把 index.html 里的版本占位替换成当前 tag/版本，保证官网永远指向最新安装包。
+#
+# 注意：若仓库 Settings → Pages 已设为 "Deploy from a branch"，需要改成 "GitHub Actions"
+# 才会走本工作流；否则两者会互相覆盖。仓库里有说明，见 docs/RELEASE.md。
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 读取当前版本（package.json 为唯一来源）
+        id: ver
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "官网将标注版本：v$VERSION"
+
+      - name: 同步版本号与下载链接到官网
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          FILE=docs/index.html
+          # 版本标注（页面里唯一一处「当前版本」）
+          sed -i -E "s#当前版本 <b>v[0-9]+\.[0-9]+\.[0-9]+</b>#当前版本 <b>v${V}</b>#g" "$FILE"
+          # 下载直链固定走 stable 名称（CI 会产出 SciFlow-Setup-x64.exe），无需随版本改变
+          grep -q "SciFlow-Setup-x64.exe" "$FILE" || echo "::warning::官网未引用稳定命名安装包，请检查下载区"
+
+      - name: 上传站点产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

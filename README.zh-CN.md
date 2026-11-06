@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![版本](https://img.shields.io/badge/version-1.15.0-black.svg)](CHANGELOG.md)
+[![版本](https://img.shields.io/badge/version-1.15.1-black.svg)](CHANGELOG.md)
 
 [English](README.md) · **简体中文**
 
@@ -177,7 +177,7 @@ packages/retrieval  向量与全文检索、MMR、嵌入
 
 ## 项目状态
 
-当前版本：**1.15.0**。完整历史见 [`CHANGELOG.md`](CHANGELOG.md)，后续规划见 [`docs/product-roadmap.md`](docs/product-roadmap.md)。
+当前版本：**1.15.1**。完整历史见 [`CHANGELOG.md`](CHANGELOG.md)，后续规划见 [`docs/product-roadmap.md`](docs/product-roadmap.md)。
 
 已知缺口：真实模型端到端需要你自己的 API Key；Docker 与 Playwright 套件在 CI 中执行，未在每台开发机上验证；Windows 安装包本机构建需要 C++ 工具链，或直接用 [`desktop-installer` CI 工作流](.github/workflows/desktop-installer.yml)（已验证全绿）。诚实的缺口追踪见 [`docs/ECOSYSTEM-AUDIT.md`](docs/ECOSYSTEM-AUDIT.md)。
 
