@@ -8,7 +8,6 @@ import { AiService } from '../../ai/src/ai.service';
 import { EmbeddingService } from './embedding.service';
 import { fingerprint } from '../../core/src/fingerprint';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
-import * as unpdf from 'unpdf';
 import { parseAuthors } from '../../core/src/authors';
 import { projectTo2D, blobToVector, downsampleIndices } from './projection';
 import { mmrSelect, normalizeScores } from './mmr';
@@ -128,8 +127,9 @@ export class KnowledgeService {
     let text = '';
     if (type === 'pdf') {
       try {
-        // unpdf（pdf.js 的 serverless 封装，替代停更的 pdf-parse）
-        const { extractText } = unpdf;
+        // unpdf 2 起只发 ESM（无 CJS 入口），本项目服务端产物是 CommonJS，
+        // 因此必须动态 import；模块级 import 会在 require 阶段直接抛 ERR_REQUIRE_ESM。
+        const { extractText } = await import('unpdf');
         const buf = new Uint8Array(Buffer.from(content, 'base64'));
         const parsed = await extractText(buf, { mergePages: true });
         text = parsed.text || '';
