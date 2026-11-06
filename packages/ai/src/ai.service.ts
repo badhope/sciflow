@@ -1,9 +1,10 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { db } from '../../db/src/database';
 import { appSettings } from '../../db/src/schema';
 import { eq } from 'drizzle-orm';
 import * as prompts from './prompts';
+import { sanitizeExternalContent, spotlightWrap } from './prompt-injection';
 import { AiTransportService, ChatMessage, ChatStreamOptions } from './ai-transport.service';
 import { safeOutboundFetch } from './safe-outbound';
 import { startMockGateway } from './mock-gateway';
@@ -50,12 +51,22 @@ export class AiService extends AiTransportService {
    * 零依赖的 mock OpenAI 兼容网关（见 mock-gateway.ts），让全链路可端到端跑通。
    */
   private readonly mockMode = process.env.AI_MOCK === '1';
+  private readonly injectionLogger = new Logger('AiService.injection');
 
   constructor() {
     super();
     if (this.mockMode) {
       this.switchToMockGateway();
     }
+  }
+
+  /** 外源文本入上下文前的统一入口：消毒 + 包裹 + 信号上报。 */
+  private sanitizeForPrompt(text: string, source: string, label: string): string {
+    const { text: cleaned, signals } = sanitizeExternalContent(text, source);
+    if (signals.length) {
+      this.injectionLogger.warn(`${source} 命中注入信号：${signals.map((s) => s.label).join('；')}`);
+    }
+    return spotlightWrap(label, cleaned);
   }
 
   /** mock 模式接管：覆盖传输层连接配置（依赖 transport 的 protected 成员，同类继承链内合法） */
@@ -345,7 +356,8 @@ ${text}` : prompts.TRANSLATE(text, targetLang);
   /** 文献综述 */
   async summarizeLiterature(topic: string, papers: string): Promise<string> {
     const custom = this.getCustomPrompt('summarizeLiterature');
-    const content = custom ? `${custom}\n\n研究主题：${topic}\n\n待综述文献列表（必须严格基于这些文献）：\n${papers}` : prompts.SUMMARIZE_LITERATURE(topic, papers);
+    const papersSafe = this.sanitizeForPrompt(papers, 'literature', '文献列表');
+    const content = custom ? `${custom}\n\n研究主题：${topic}\n\n待综述文献列表（必须严格基于这些文献）：\n${papersSafe}` : prompts.SUMMARIZE_LITERATURE(topic, papersSafe);
     return this.complete([{ role: 'user', content }], { temperature: 0.5, context: 'summarizeLiterature' });
   }
 
@@ -369,18 +381,19 @@ ${text}` : prompts.TRANSLATE(text, targetLang);
     return this.complete([{ role: 'user', content }], { temperature: 0.5, context: 'coverLetter' });
   }
 
-  /** 审稿回复 */
+  /** 审稿回复（审稿意见属外源文本，入上下文前消毒 + 包裹） */
   async replyReview(reviewComments: string, response: string): Promise<string> {
     const custom = this.getCustomPrompt('response_letter');
+    const commentsSafe = this.sanitizeForPrompt(reviewComments, 'review', '审稿意见');
     const content = custom
       ? `${custom}
 
 审稿意见：
-${reviewComments}
+${commentsSafe}
 
 作者回应要点：
 ${response}`
-      : prompts.REPLY_REVIEW(reviewComments, response);
+      : prompts.REPLY_REVIEW(commentsSafe, response);
     return this.complete([{ role: 'user', content }], { temperature: 0.5, context: 'replyReview' });
   }
 

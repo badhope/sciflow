@@ -59,6 +59,7 @@ export function SubmissionPage({ project }: { project: Project }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [output, setOutput] = useState('');
+  const [plan, setPlan] = useState<{ id: string; excerpt: string; category: string; severity: string; suggestedAction: string }[]>([]);
 
   // 期刊推荐（结构化匹配）
   const [title, setTitle] = useState('');
@@ -216,8 +217,8 @@ export function SubmissionPage({ project }: { project: Project }) {
     setWritingBack(c.id);
     setError('');
     try {
-      const text = await api.submission.replyReview(c.commentText, c.responseText || '');
-      setDraftReplies((m) => ({ ...m, [c.id]: text }));
+      const res = await api.submission.replyReview(c.commentText, c.responseText || '');
+      setDraftReplies((m) => ({ ...m, [c.id]: res.letter }));
     } catch (e: unknown) {
       setError(errMsg(e));
     } finally {
@@ -518,9 +519,29 @@ export function SubmissionPage({ project }: { project: Project }) {
             </div>
             <Textarea rows={6} placeholder="粘贴审稿意见原文（可包含多条）" value={reviewComments} onChange={(e) => setReviewComments(e.target.value)} />
             <Textarea rows={3} placeholder="你的初步回应想法（可选）" value={responseHint} onChange={(e) => setResponseHint(e.target.value)} />
-            <Button onClick={() => run(() => api.submission.replyReview(reviewComments, responseHint))} disabled={busy}>
+            <Button onClick={() => run(async () => {
+              const res = await api.submission.replyReview(reviewComments, responseHint);
+              setPlan(res.revisionPlan ?? []);
+              return res.letter;
+            })} disabled={busy}>
               {busy ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} 生成回复信
             </Button>
+            {plan.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">修改计划（评审意见回链，可直接作为修改任务的输入）</div>
+                {plan.map((item) => (
+                  <div key={item.id} className="text-xs rounded-md border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 space-y-0.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-mono text-slate-500">{item.id}</span>
+                      <span className={`rounded px-1.5 py-0.5 ${item.severity === 'major' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{item.severity}</span>
+                      <span className="rounded bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 px-1.5 py-0.5">{item.category}</span>
+                    </div>
+                    <div className="text-slate-700 dark:text-slate-200">{item.excerpt}</div>
+                    <div className="text-slate-500 dark:text-slate-400">→ {item.suggestedAction}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

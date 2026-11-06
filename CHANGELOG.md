@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.12.0] - 2026-11-06
+
+### Added
+
+- **外源内容消毒（间接提示注入防线）**：文献摘要、粘贴的审稿意见、网页检索结果进入模型上下文前统一走 `packages/ai/prompt-injection`——剥离零宽/双向控制字符、中和代码围栏走私（``` → '''），并确定性检测指令覆盖/角色劫持/系统提示词探取/工具诱导六类信号（中英双语，只报告不删除）；命中段落以一次性随机标记包裹（spotlighting/datamarking，OWASP LLM Prompt Injection Prevention Cheat Sheet 与 Microsoft 2025 业界实践）。接线三处：`summarizeLiterature`（流水线/文献/MCP 共用）、`replyReview`、chat 联网搜索上下文。17 条单测。
+- **OTel OTLP/JSON 轨迹导出**（生态缺口 #2 闭环）：`apps/server/src/agent/otel-export.ts` 纯映射层把已持久化的 `llm_call_log` / `agent_execution` 映射为 OTLP/JSON span（uint64 十进制字符串），属性遵循 OpenTelemetry GenAI 语义约定（`gen_ai.request.model`、`gen_ai.usage.*`、`gen_ai.agent.id`）；`OtelExportService` outbound-guard POST `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces`，未配置环境变量时零开销关闭。`POST /api/agent/otel/export` 手动触发。12 条单测。
+- **审稿意见闭环（生态缺口 #3 第一环）**：`buildRevisionPlan` 把审稿意见解析为逐条修改计划（类别 experiment/method/citation/writing/structure、严重度 major/minor、建议动作，确定性规则无 AI 调用）；`POST /api/submission/reply-review` 返回 `{ letter, revisionPlan, reflexionId }`，传 `taskId` 写入 `reflexion_log`（CycleResearcher 的 review→revision 循环在本仓的数据形态）。前端投稿页渲染修改计划。6 条单测。
+- **`.github/dependabot.yml`**：npm（pnpm lockfile）+ github-actions 双生态周更，electron 钉位忽略（44 的预编译镜像未同步）；ECOSYSTEM-AUDIT §5 的 dependabot 宣称自此有配置支撑。
+- **同类项目深度对标更新（2026-11-06）**：新增 OpenDraft、AI-Researcher(HKUDS)、AI Scientist-v2、CycleResearcher/CycleReviewer 等 4 个 2025-2026 项目，连同既有 10 项（GPT-Researcher、STORM/Co-STORM、DeerFlow、PaperQA2、local-deep-research、Feynman、OpenScholar、Onyx、Khoj、SurfSense、AutoGen）共 14 项，见 `docs/ECOSYSTEM-AUDIT.md` §4.1。
+
+### Fixed
+
+- **`pnpm build && pnpm start` 后打开 http://localhost:3000 此前是 404**：API 服务从不托管 web 产物，README 的 Quick start 是一纸空谈。现 server 在 `apps/web/dist` 存在时直接托管静态界面（express static + SPA 回退，复用已装 `@nestjs/platform-express`，零新依赖；`WEB_DIST` 可覆盖路径），产物不存在（headless/CLI/CI）时行为不变。已实测：单端口同时出界面与健康检查。
+- **「宣称 vs 事实」错账清理**：三份 README 的配置巡检结果虚标 25/25（巡检自 v1.5 起实际 24 项）→ 修正为实测值；`README.en.md` 为过期重复副本（真正英文版是 `README.md`），删除并修正中文 README 的语言切换链接；ECOSYSTEM-AUDIT §5「dependabot 周更」此前无配置支撑 → 补 `.github/dependabot.yml`。
+- **新模块全部 TDD 红灯先行**：先写 spec 确认 RED（模块缺失/断言失败），实现后 GREEN，测试断言行为而非实现细节。
+
 ## [Unreleased]
 
 ### Changed

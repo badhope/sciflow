@@ -82,6 +82,35 @@ async function bootstrap() {
   // 全局输入校验（轻量兜底，零新增依赖）：仅约束 @Body() 为 JSON 对象，不剥字段、不误伤现有端点
   app.useGlobalPipes(new InputValidationPipe());
   const port = envInt('PORT', 3000, { min: 1, max: 65535 });
+
+  // ---------- Web 静态托管：单端口开箱即用（README Quick start 的承诺） ----------
+  // pnpm build 后 apps/web/dist 存在时由本进程直接托管（express static + SPA 回退），
+  // `pnpm build && pnpm start` 即可在 http://localhost:3000 打开完整界面；
+  // 产物不存在（headless / CLI / CI）时静默跳过，与旧行为一致。开发态用 pnpm dev:web。
+  try {
+    const { existsSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const candidates = [
+      process.env.WEB_DIST,
+      resolve(process.cwd(), '../web/dist'),
+      resolve(process.cwd(), 'apps/web/dist'),
+      resolve(process.cwd(), '../../apps/web/dist'),
+    ].filter((p): p is string => Boolean(p));
+    const webDist = candidates.find((p) => existsSync(resolve(p, 'index.html')));
+    if (webDist) {
+      app.useStaticAssets(webDist);
+      const expressApp = app.getHttpAdapter().getInstance();
+      const indexHtml = resolve(webDist, 'index.html');
+      expressApp.get(/^(?!\/api).*/, (req: { path: string }, res: { sendFile: (p: string) => void }, next: () => void) => {
+        if (req.path.includes('.')) return next();
+        res.sendFile(indexHtml);
+      });
+      console.log(`[SciFlow] Web 界面已托管: http://localhost:${port}/ （静态目录 ${webDist}）`);
+    }
+  } catch {
+    /* 静态托管失败不阻塞 API 启动 */
+  }
+
   // 安全基线：单用户本地定位服务，只回环监听 127.0.0.1，不再对局域网暴露零鉴权 API。
   // 确需对外暴露时显式设置 HOST=0.0.0.0（默认安全，opt-in 暴露）。
   const host = process.env.HOST || '127.0.0.1';
