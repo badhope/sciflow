@@ -1,0 +1,23 @@
+# Dependabot 周更（ECOSYSTEM-AUDIT §5 宣称的落地配置；此前宣称无配置，属「宣称 vs 事实」错账）
+# pnpm 工作区由 npm ecosystem 覆盖（以 lockfile 识别）
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # electron 42.x 钉位：44 的 better-sqlite3 预编译镜像未同步（见 ECOSYSTEM-AUDIT §6.1）
+      - dependency-name: "electron"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3

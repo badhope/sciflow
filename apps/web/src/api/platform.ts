@@ -170,8 +170,8 @@ export const platform = {
       request<string>('/api/submission/journals', { method: 'POST', body: JSON.stringify({ title, abstract, field }) }),
     coverLetter: (title: string, abstract: string, journal: string) =>
       request<string>('/api/submission/cover-letter', { method: 'POST', body: JSON.stringify({ title, abstract, journal }) }),
-    replyReview: (reviewComments: string, response: string) =>
-      request<string>('/api/submission/reply-review', { method: 'POST', body: JSON.stringify({ reviewComments, response }) }),
+    replyReview: (reviewComments: string, response: string, taskId?: string) =>
+      request<{ letter: string; revisionPlan: { id: string; excerpt: string; category: string; severity: string; suggestedAction: string }[]; reflexionId: string | null }>('/api/submission/reply-review', { method: 'POST', body: JSON.stringify({ reviewComments, response, taskId }) }),
     /* —— 科研高级功能：期刊库 + 结构化匹配 —— */
     journalsMatch: (title: string, abstract: string) =>
       request<JournalMatchResult>('/api/submission/journals-match', { method: 'POST', body: JSON.stringify({ title, abstract }) }),

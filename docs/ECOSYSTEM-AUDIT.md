@@ -79,6 +79,26 @@ Onyx、Khoj、SurfSense、AutoGen。吸收原则：**只吸收与本仓定位（
 **结论**：12 个项目的核心设计里有 9 项已在本仓有同型实现，2 项登记为非目标（多 agent 协作、
 索引优先架构），2 项登记为缺口（注入检测、OTel 导出）——没有"看了介绍就算学过"的项。
 
+### 4.1 第二轮深度对标（2026-11-06，WebSearch 逐项核证）
+
+在 11-04 首轮 12 项基础上，本轮新增调研 4 个 2025-2026 项目（来源：arXiv / GitHub / 官方博客，
+检索日期 2026-11-06），共 16 项；本轮融合清单只收「与本仓定位一致 + 可落地」的项：
+
+| 来源项目 | 本轮学到什么 | 落地情况 |
+|---|---|---|
+| CycleResearcher/CycleReviewer (ICLR 2025, arXiv:2411.00816) | review→revision 循环要落到**数据形态**：审稿意见结构化为逐条修改项 | ✅ `buildRevisionPlan` + `reflexion_log` 回链（缺口 #3 第一环） |
+| AI Scientist-v2 (Sakana, arXiv:2504.08066) | VLM 图表评审回炉——需要视觉模型，超出当前范围 | ⚖️ 登记为非目标（无 VLM 依赖策略） |
+| AI-Researcher (HKUDS, arXiv:2505.18705) | 端到端 idea→实验→写作全自动；本仓定位是「人主导、AI 打磨」的科研工作台 | ⚖️ 定位不同，不采纳全自动写稿 |
+| OpenDraft (federicodeponte) | 19 个专职 agent 的分工编排 | ⚖️ 多 agent 编排维持非目标（§2 同理由） |
+| GPT-Researcher（第二轮复核） | criteria-based 结果校验 agent | ✅ 质量门七维确定性规则已覆盖 |
+| PaperQA2（第二轮复核） | 引用必须绑定原文段落 + 引用支持性验证 | ✅ 锚点→citation→reference 三级追溯已覆盖 |
+| STORM/Co-STORM（第二轮复核） | 视角驱动追问生成大纲 | ✅ 大纲先行 + 反共识变体同型 |
+| OpenTelemetry GenAI 语义约定（semconv-genai） | `gen_ai.*` 属性命名与 OTLP/JSON uint64 字符串线格式 | ✅ otel-export 模块按约定实现（缺口 #2 闭环） |
+| OWASP LLM Prompt Injection Cheat Sheet / Microsoft Spotlighting | 消毒=剥离+标记+报告，不是过滤删除 | ✅ prompt-injection 模块实现（缺口 #1 闭环） |
+
+**结论**：本轮 4 个新项目里 1 项落地（评审闭环数据形态）、3 项登记为非目标/定位外；
+两大缺口（注入消毒、OTel 导出）本轮全部闭环，缺口清单只剩 #3 的自动执行部分。
+
 ## 5. 企业级发布面
 
 | 项 | 状态 |
@@ -87,15 +107,20 @@ Onyx、Khoj、SurfSense、AutoGen。吸收原则：**只吸收与本仓定位（
 | Keep-a-Changelog | 每版归档，用户视角措辞 |
 | CI（lint/test/回归/巡检） | `.github/workflows` 已有；**桌面安装包 CI 本次新增** |
 | Windows exe 安装包 | 本机无 VS 工具链 → `desktop-installer.yml`：tag 触发 windows runner 构建 NSIS 安装包并附 Release，每次运行可下 artifact |
-| 五仓镜像 | gitcode / gitee / github×3，PR-受保护仓走 squash 合并（GitHub 会签名） |
-| 安全 | dependabot 周更、SECRET 扫描 workflow、出站守卫、审计表只追加 |
+| 五仓镜像 | gitcode / gitee / github-x33834 / github-morningstar / github-badhope，PR-受保护仓走 squash 合并（GitHub 会签名） |
+| 安全 | dependabot 周更（`.github/dependabot.yml`，2026-11-06 起有配置支撑）、SECRET 扫描 workflow、出站守卫、审计表只追加 |
 
 ## 6. 登记的缺口（诚实清单，按优先级）
 
-1. **提示注入专项检测**：外源网页/文献摘要进入上下文前无专门消毒层（概率中/影响高）。
-   方向：外源内容包裹 + 指令特征过滤，放 `packages/ai/prompt-augmentation` 旁。
-2. **OTel trace 导出**：自有轨迹已在库，缺标准导出（概率低/影响中）。方向：OTLP exporter 挂 agent-trace.service。
-3. **评审意见闭环 / 段落级恢复**：路线图既有项，维持 Partial 标注。
+1. **提示注入专项检测**：~~外源网页/文献摘要进入上下文前无专门消毒层~~ **已闭环（2026-11-06）**：
+   `packages/ai/prompt-injection`（剥离+中和+六类信号检测+spotlighting 包裹），接线
+   `summarizeLiterature` / `replyReview` / chat 联网上下文，17 条单测。
+2. **OTel trace 导出**：~~自有轨迹已在库，缺标准导出~~ **已闭环（2026-11-06）**：
+   `apps/server/src/agent/otel-export.ts` + `OtelExportService`，OTLP/HTTP-JSON + GenAI 语义属性，
+   `POST /api/agent/otel/export`，未配置 endpoint 时零开销关闭。12 条单测。
+3. **评审意见闭环 / 段落级恢复**：**第一环已落地（2026-11-06）**——回复信 + 结构化修改计划
+   （`buildRevisionPlan`）+ `reflexion_log` 回链（传 `taskId`）；自动执行修改任务（意见→自动重写
+   对应章节→质量门复检）仍是路线图 Partial 项，维持登记。
 
 ## 6.1 待核实项闭环（2026-11-04）
 

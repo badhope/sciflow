@@ -2,8 +2,9 @@
  * Agent 轨迹 API（GET /api/agent/runs + GET /api/agent/runs/:id + GET /api/agent/usage）
  */
 
-import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AgentTraceService } from './agent-trace.service';
+import { OtelExportService } from './otel-export.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
@@ -19,6 +20,7 @@ export class AgentTraceController {
   constructor(
     private readonly trace: AgentTraceService,
     private readonly access: ProjectAccessService,
+    private readonly otel: OtelExportService,
   ) {}
 
   /** 项目 Agent 执行历史列表 */
@@ -44,5 +46,11 @@ export class AgentTraceController {
     if (!projectId) return { error: 'projectId required' };
     this.access.assertProject(projectId, req?.user);
     return { trend: this.trace.tokenUsageTrend(projectId, days ? Number(days) : 14) };
+  }
+
+  /** OTLP/JSON 导出：把最近轨迹推到 OTEL_EXPORTER_OTLP_ENDPOINT（未配置时返回 disabled） */
+  @Post('otel/export')
+  exportOtel(@Body() body: { limit?: number }) {
+    return this.otel.exportTraces(body?.limit ? Math.min(Number(body.limit), 1000) : 200);
   }
 }

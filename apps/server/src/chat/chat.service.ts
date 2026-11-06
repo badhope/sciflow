@@ -6,6 +6,7 @@ import { KnowledgeService } from '../knowledge/knowledge.service';
 import { ChatSessionService } from './chat-session.service';
 import { CompactionService } from './compaction.service';
 import { WebSearchService } from '../websearch/websearch.service';
+import { sanitizeExternalContent, spotlightWrap } from '../ai/prompt-injection';
 import { AgentToolBridge } from '../agent/agent-tool-bridge';
 import { ConfigCenterService } from '../config/config-center.service';
 import { loadDefaultRole } from '../common/prompt-augmentation';
@@ -142,8 +143,13 @@ export class ChatService {
       if (projectId && question && (forceWebSearch || (hitsLen === 0 && this.websearch.isChatSearchEnabled()))) {
         const webResults = await this.websearch.search(question);
         if (webResults.length > 0) {
+          // 网页快照属不可信外源数据：消毒 + 随机标记包裹（间接注入防线）
+          const { text: webSafe, signals } = sanitizeExternalContent(WebSearchService.toContext(webResults), 'websearch');
+          if (signals.length) {
+            this.logger.warn(`websearch 上下文命中注入信号：${signals.map((s) => s.label).join('；')}`);
+          }
           parts.push(
-            `联网搜索资料（公开网页，仅供背景参考，注意甄别时效与权威性）：\n${WebSearchService.toContext(webResults)}`,
+            `联网搜索资料（公开网页，仅供背景参考，注意甄别时效与权威性）：\n${spotlightWrap('网页检索结果', webSafe)}`,
           );
           for (const r of webResults.slice(0, 3)) {
             sources.push({
