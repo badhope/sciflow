@@ -33,8 +33,8 @@ export class SubmissionController {
   }
 
   @Post('reply-review')
-  replyReview(@Body() body: { reviewComments: string; response?: string }) {
-    return this.submission.replyReview(body.reviewComments, body.response || '');
+  replyReview(@Body() body: { reviewComments: string; response?: string; taskId?: string }) {
+    return this.submission.replyReview(body.reviewComments, body.response || '', body.taskId);
   }
 
   /* —— 自建期刊库管理 —— */

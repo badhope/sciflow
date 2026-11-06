@@ -230,6 +230,9 @@ docker compose -f docker-compose.prod.yml up -d   # 生产配置
 | `DATABASE_PATH` | `apps/server/data/sciflow.db` | SQLite 路径 |
 | `SCHOLAR_SEARCH` | on | 学术检索（OpenAlex/Crossref/arXiv）总开关；`off` 后流水线新颖性预检/文献补充与文献页「学术库检索」同时关闭（也可用设置页 `scholar_search`）。`AI_MOCK=1` 时强制关闭 |
 | `AI_MOCK` | 0 | 1 = 进程内 mock 网关（CI / 无网环境） |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 无 | OTLP/HTTP-JSON 轨迹导出端点（如本地 collector `http://127.0.0.1:4318`，本地需配合 `ALLOW_PRIVATE_OUTBOUND=1`）；不配则零开销关闭 |
+| `OTEL_EXPORTER_OTLP_HEADERS` | 无 | 导出请求头（逗号分隔 key=value，如鉴权） |
+| `OTEL_SERVICE_NAME` | sciflow | OTLP 载荷的 service.name 属性 |
 
 环境变量是首层兜底；运行期在设置页改的（厂商切换、搜索 provider）落 `app_setting` 表，**运行期配置优先于环境变量**——调试「改了没生效」时先看设置页。
 
