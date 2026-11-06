@@ -26,6 +26,18 @@ import type { WebSearchConfig,
 import { request, setToken } from './core';
 
 /** platform 域 API（client.ts 按域拆分；barrel 统一导出于 ./client） */
+export interface AuditEntry {
+  id: string;
+  actor: string;
+  category: string;
+  action: string;
+  target: string;
+  detail: string;
+  allowed: number;
+  reason: string;
+  createdAt: number;
+}
+
 export const platform = {
   health: () => request<{ status: string; time: number; uptime: number; authMode: string; db: boolean; desktop: boolean; ai: { configured: boolean; model: string } }>('/api/health'),
 
@@ -75,6 +87,10 @@ export const platform = {
   },
   config: {
     snapshot: () => request<ConfigSnapshot>('/api/config'),
+    /** 配置/权限审计流水（谁在何时改了什么、被拒绝的操作及原因） */
+    auditLog: (limit = 100) => request<AuditEntry[]>(`/api/config/audit?limit=${limit}`),
+    /** Prometheus 文本指标（设置页用于健康面板 + 运维直接 scrape /api/metrics） */
+    metricsText: () => fetch('/api/metrics').then((r) => r.text()),
     setPermission: (mode: string) => request<PermissionInfo>('/api/config/permission', { method: 'POST', body: JSON.stringify({ mode }) }),
     listRoles: () => request<ConfigRole[]>('/api/config/roles'),
     createRole: (p: { name: string; systemPrompt?: string; isDefault?: boolean }) => request<ConfigRole[]>('/api/config/roles', { method: 'POST', body: JSON.stringify(p) }),

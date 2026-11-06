@@ -94,32 +94,70 @@ function onUnauthorized(): void {
   }
 }
 
-export async function request<T>(url: string, opts?: RequestInit): Promise<T> {
-  // 默认超时兜底（AI 网关限流/卡死时前端不无限等待）。AI 长任务由调用方传 signal 自行控制。
-  const timeoutMs = opts?.signal ? 0 : 60000;
+/** 幂等方法：网络层失败/5xx 可安全重试（POST 等非幂等请求绝不自动重发，避免重复写入） */
+const IDEMPOTENT = new Set(['GET', 'HEAD', 'OPTIONS']);
+/** 重试策略：仅网络层失败与 502/503/504（网关抖动）；退避 300ms → 900ms，最多 3 次尝试 */
+const RETRY_STATUS = new Set([502, 503, 504]);
+const MAX_ATTEMPTS = 3;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** 单次 fetch（含超时/取消），供 request 的重试循环复用 */
+async function fetchOnce(url: string, opts: RequestInit | undefined, timeoutMs: number): Promise<Response> {
   const ctrl = new AbortController();
   const timer = timeoutMs > 0 ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
   const token = getToken();
-  let res: Response;
   try {
-    res = await fetch(u(url), {
+    const res = await fetch(u(url), {
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(opts?.headers || {}),
       },
-      signal: opts?.signal ?? ctrl.signal,
       ...opts,
+      signal: opts?.signal ?? ctrl.signal,
     });
-  } catch (e: unknown) {
+    return res;
+  } finally {
     if (timer) clearTimeout(timer);
-    // 只在这里处理「没有拿到响应」：超时 / 断网 / 服务未启动
-    if (typeof e === 'object' && e !== null && 'name' in e && e.name === 'AbortError') {
-      throw new ApiError('请求超时（服务响应较慢），请稍后重试', 0, true);
-    }
-    throw new ApiError(NETWORK_ERROR, 0, true);
   }
-  if (timer) clearTimeout(timer);
+}
+
+export async function request<T>(url: string, opts?: RequestInit): Promise<T> {
+  // 默认超时兜底（AI 网关限流/卡死时前端不无限等待）。AI 长任务由调用方传 signal 自行控制。
+  const timeoutMs = opts?.signal ? 0 : 60000;
+  const method = (opts?.method || 'GET').toUpperCase();
+  const retriable = IDEMPOTENT.has(method) && !opts?.signal;
+
+  let res: Response;
+  let attempt = 0;
+  for (;;) {
+    attempt += 1;
+    try {
+      res = await fetchOnce(url, opts, timeoutMs);
+    } catch (e: unknown) {
+      const isAbort = typeof e === 'object' && e !== null && 'name' in e && e.name === 'AbortError';
+      if (isAbort && !retriable) throw new ApiError('请求已取消', 0, true);
+      if (isAbort) {
+        if (attempt < MAX_ATTEMPTS) { await sleep(300 * 3 ** (attempt - 1)); continue; }
+        throw new ApiError('请求超时（服务响应较慢），请稍后重试', 0, true);
+      }
+      // 断网/服务未启动：幂等请求退避重试，其余立即报错
+      if (retriable && attempt < MAX_ATTEMPTS) {
+        await sleep(300 * 3 ** (attempt - 1));
+        continue;
+      }
+      throw new ApiError(NETWORK_ERROR, 0, true);
+    }
+    // 网关抖动：幂等请求自动重试，用户不必手动刷新
+    if (retriable && RETRY_STATUS.has(res.status) && attempt < MAX_ATTEMPTS) {
+      await sleep(300 * 3 ** (attempt - 1));
+      continue;
+    }
+    break;
+  }
 
   if (!res.ok) {
     if (res.status === 401 && !url.startsWith('/api/auth/')) onUnauthorized();

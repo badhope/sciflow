@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![版本](https://img.shields.io/badge/version-1.14.0-black.svg)](CHANGELOG.md)
+[![版本](https://img.shields.io/badge/version-1.15.0-black.svg)](CHANGELOG.md)
 
 [English](README.md) · **简体中文**
 
@@ -62,6 +62,8 @@
 - **Agent harness**：模型维护的任务清单、上下文压缩、`@` 提及、工具审批、重复调用护栏（`AGENT_TOOL_REPEAT_LIMIT`）、模型降级链（`AI_MODEL_FALLBACK`）。
 - **外源内容防线**：文献摘要、粘贴的审稿意见、网页检索结果进入提示词前统一消毒——剥离零宽/双向控制字符、中和代码围栏走私，确定性检测指令覆盖/角色劫持/系统提示词探取/工具诱导（六类信号，中英双语），命中段落用一次性随机标记包裹（OWASP / spotlighting 实践）。
 - **审稿回复带修改计划**：回复信逐条回链——每条意见解析出类别、严重度与建议动作的结构化修改计划，传 `taskId` 可写入流水线的 `reflexion_log`，评审→修改从数据开始而不是从感觉开始。
+- **项目整包导出/导入**：一个项目的自包含 JSON（项目 + 16 张子表），换机器或交接时导入即用——id 全量重映射、外键跟随、同名自动加「（导入）」，端到端往返实测。
+- **运维面**：`GET /api/metrics` 输出 Prometheus text format 0.0.4（服务/数据库/内存/实体计数，全部 SQL COUNT 不做全表扫描）；设置页同源展示这些数字，并附配置与权限审计流水（可只看被拒绝项）。
 - **OTel 轨迹导出**：已持久化的轨迹（`llm_call_log`、`agent_execution`）以 OTLP/HTTP-JSON + `gen_ai.*` 语义属性导出到任意 collector（`OTEL_EXPORTER_OTLP_ENDPOINT`），未配置时零开销关闭。
 - **检索**：sqlite-vec + FTS5 trigram，RRF 融合、MMR 去冗余；嵌入走本地 GGUF 或厂商接口；学术检索直连 OpenAlex、Crossref、arXiv，带 TTL 缓存。
 - **模型自由**：OpenAI 兼容 / Anthropic / Gemini 三种协议，快慢双档路由；本地 Ollama 或本地 GGUF 模型与云厂商端点行为一致。
@@ -175,7 +177,7 @@ packages/retrieval  向量与全文检索、MMR、嵌入
 
 ## 项目状态
 
-当前版本：**1.14.0**。完整历史见 [`CHANGELOG.md`](CHANGELOG.md)，后续规划见 [`docs/product-roadmap.md`](docs/product-roadmap.md)。
+当前版本：**1.15.0**。完整历史见 [`CHANGELOG.md`](CHANGELOG.md)，后续规划见 [`docs/product-roadmap.md`](docs/product-roadmap.md)。
 
 已知缺口：真实模型端到端需要你自己的 API Key；Docker 与 Playwright 套件在 CI 中执行，未在每台开发机上验证；Windows 安装包本机构建需要 C++ 工具链，或直接用 [`desktop-installer` CI 工作流](.github/workflows/desktop-installer.yml)（已验证全绿）。诚实的缺口追踪见 [`docs/ECOSYSTEM-AUDIT.md`](docs/ECOSYSTEM-AUDIT.md)。
 

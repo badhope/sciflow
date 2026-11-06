@@ -23,6 +23,14 @@ export const writing = {
     update: (id: string, patch: Partial<Project>) =>
       request<Project>(`/api/projects/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
     remove: (id: string) => request<{ ok: boolean }>(`/api/projects/${id}`, { method: 'DELETE' }),
+    /** 项目全量导出（自包含 JSON）：迁移/归档/交接 */
+    exportBundle: (id: string, includeRuntime = false) =>
+      request<Record<string, unknown>>(`/api/projects/${id}/export${includeRuntime ? '?includeRuntime=1' : ''}`),
+    /** 项目导入：生成新 id，不覆盖既有项目；同名自动加「（导入）」 */
+    importBundle: (bundle: unknown) =>
+      request<{ projectId: string; name: string; stats: Record<string, number> }>('/api/projects/import', {
+        method: 'POST', body: JSON.stringify({ bundle }),
+      }),
   },
   documents: {
     list: (projectId: string) => request<Doc[]>(`/api/documents?projectId=${projectId}`),

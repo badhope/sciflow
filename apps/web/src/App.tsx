@@ -1,7 +1,9 @@
-import { Component, Suspense, lazy, useCallback, useContext, useEffect, useMemo, useState, createContext, type ReactNode } from 'react';
+import { Component, Suspense, lazy, useCallback, useContext, useEffect, useMemo, useRef, useState, createContext, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { HashRouter, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { PageErrorBoundary } from './components/PageErrorBoundary';
+import { Download, Upload } from 'lucide-react';
+import { ConnectionBanner } from './components/ConnectionBanner';
 import {
   BookOpen, Brain, Beaker, LayoutDashboard, Plus, Pencil, RefreshCw, Search, Send, Settings, Trash2, Workflow, BookMarked, ChevronRight, Command, Sun, Moon, Monitor, XCircle as XCircleIcon, Gauge, Library, LayoutGrid, Menu as MenuIcon,
 } from 'lucide-react';
@@ -244,6 +246,46 @@ function AppInner() {
     window.setTimeout(() => setToasts((s) => s.filter((t) => t.id !== id)), 2600);
   }, []);
 
+  // ---- 项目导出 / 导入（自包含 JSON 包）----
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const exportProject = useCallback(async (p: Project) => {
+    try {
+      const bundle = await api.projects.exportBundle(p.id);
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${p.name || 'project'}-sciflow-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast('success', `已导出项目「${p.name}」`);
+    } catch (e: unknown) {
+      toast('error', `导出失败：${errMsg(e)}`);
+    }
+  }, [toast]);
+
+  const importProjectFromFile = useCallback(async (file: File) => {
+    try {
+      const text = await file.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        toast('error', '文件不是合法 JSON，无法导入');
+        return;
+      }
+      const res = await api.projects.importBundle(parsed);
+      const total = Object.values(res.stats ?? {}).reduce((a, b) => a + b, 0);
+      toast('success', `已导入「${res.name}」（${total} 条记录）`);
+      await qc.invalidateQueries({ queryKey: ['projects'] });
+      selectProject(res.projectId);
+    } catch (e: unknown) {
+      toast('error', `导入失败：${errMsg(e)}`);
+    }
+  }, [toast, qc, selectProject]);
+
   // 路由化：pathname 决定当前视图（hash 路由，刷新/分享/深链不丢状态）；无效路径兜底工作台
   const rawView = (location.pathname.replace(/^\//, '') || 'workspace') as View;
   const view: View = VIEW_KEYS.includes(rawView) ? rawView : 'workspace';
@@ -401,6 +443,20 @@ function AppInner() {
       <ToastContext.Provider value={toast}>
         {/* 全局登录门：仅 AUTH_MODE=jwt 企业模式可见，本地/桌面模式零干扰 */}
         <AuthGate />
+        {/* 项目导入的隐藏文件选择器（点击侧栏上传按钮时触发） */}
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (f) void importProjectFromFile(f);
+          }}
+        />
+        {/* 断网 / 服务不可达提示（正常时零占位） */}
+        <ConnectionBanner />
         <div className="h-full text-slate-800 dark:text-slate-100">
           <AppShell
             sidebarWidth={224}
@@ -436,6 +492,8 @@ function AppInner() {
                 onNewProject={() => setShowNewProject(true)}
                 onRenameProject={(p) => { setRenaming(p); setRenameText(p.name); }}
                 onDeleteProject={setDeletingProject}
+                onExportProject={exportProject}
+                onImportProject={() => importInputRef.current?.click()}
                 aiReady={aiReady}
                 theme={theme}
                 themeMode={themeMode}
@@ -577,6 +635,8 @@ function SidebarContent({
   onNewProject,
   onRenameProject,
   onDeleteProject,
+  onExportProject,
+  onImportProject,
   aiReady,
   theme,
   themeMode,
@@ -595,6 +655,8 @@ function SidebarContent({
   onNewProject: () => void;
   onRenameProject: (p: Project) => void;
   onDeleteProject: (p: Project) => void;
+  onExportProject: (p: Project) => void;
+  onImportProject: () => void;
   aiReady: boolean | null;
   theme: 'light' | 'dark';
   themeMode: ThemeMode;
@@ -644,6 +706,9 @@ function SidebarContent({
             <button className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" title="刷新项目列表" onClick={onRefresh}>
               <RefreshCw size={12} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
             </button>
+            <button className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" title="导入项目（.json 项目包）" onClick={onImportProject}>
+              <Upload size={13} aria-hidden="true" />
+            </button>
             <button className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" title="新建项目" onClick={onNewProject}>
               <Plus size={13} aria-hidden="true" />
             </button>
@@ -668,6 +733,17 @@ function SidebarContent({
             <div className="flex items-center justify-between gap-1">
               <span className="truncate">{p.name}</span>
               <span className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                <button
+                  className="flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                  title="导出项目（自包含 JSON，可迁移/归档）"
+                  aria-label={`导出项目 ${p.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onExportProject(p);
+                  }}
+                >
+                  <Download size={12} aria-hidden="true" />
+                </button>
                 <button
                   className="flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
                   title="重命名项目"
@@ -968,7 +1044,26 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 
+/** 已知视图路径（与 VIEW_KEYS 对齐）：用于把裸路径 `/writing` 归一成 hash 路由 */
+const BARE_ROUTES = new Set(['workspace','dashboard','pipeline','writing','quality','literature','knowledge','experiments','submission','memory','settings']);
+
+/**
+ * 裸路径兼容：HashRouter 只认 `#/writing`，而用户/文档/收藏夹常写 `/writing`。
+ * 服务端托管会把它落到 index.html，此时 pathname 是 `/writing` 但 hash 为空 —— 表现为
+ * 「打开链接永远回到工作台」。这里在渲染前一次性改写为等价 hash（保留查询参数），
+ * 之后的导航全部走标准 hash 路由。
+ */
+function normalizeBareRoute(): void {
+  if (typeof window === 'undefined') return;
+  if (window.location.hash) return;
+  const seg = window.location.pathname.replace(/^\/+/, '').split('/')[0];
+  if (!BARE_ROUTES.has(seg)) return;
+  const rest = window.location.pathname.slice(seg.length + 1).replace(/^\/+/, '');
+  window.location.replace(`/#/${seg}${rest ? `/${rest}` : ''}${window.location.search}`);
+}
+
 export default function App() {
+  if (typeof window !== 'undefined') normalizeBareRoute();
   return (
     <HashRouter>
       <ErrorBoundary>
