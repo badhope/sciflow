@@ -3,8 +3,9 @@ import { eq, asc, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { db } from '../db/database';
-import { journals, submissions, submissionStatusEvents, SUBMISSION_STATUSES, projects } from '../db/schema';
+import { journals, submissions, submissionStatusEvents, SUBMISSION_STATUSES, projects, reflexionLogs } from '../db/schema';
 import { AiService } from '../ai/ai.service';
+import { buildRevisionPlan } from './revision-plan';
 
 /** 状态码校验：不在 13 个枚举内一律拒绝（zod refine） */
 const statusEnum = z.string().refine((s) => (SUBMISSION_STATUSES as readonly string[]).includes(s), '未知投稿状态');
@@ -56,12 +57,30 @@ export class SubmissionService {
     }
   }
 
-  /** 审稿意见回复（AI 生成失败时转可读异常，不暴露 stack） */
-  async replyReview(reviewComments: string, response = '') {
+  /** 审稿意见回复（AI 生成失败时转可读异常，不暴露 stack）。
+   *  评审闭环第一环：同时产出结构化修改计划；传 taskId 时把回链写入 reflexion_log。 */
+  async replyReview(reviewComments: string, response = '', taskId?: string) {
     if (!reviewComments) throw new BadRequestException('请粘贴审稿意见');
     try {
-      return await this.ai.replyReview(reviewComments, response);
-    } catch {
+      const revisionPlan = buildRevisionPlan(reviewComments);
+      const letter = await this.ai.replyReview(reviewComments, response);
+      let reflexionId: string | null = null;
+      if (taskId) {
+        const round = db.select().from(reflexionLogs).where(eq(reflexionLogs.taskId, taskId)).all().length + 1;
+        const id = randomUUID();
+        db.insert(reflexionLogs).values({
+          id,
+          taskId,
+          round,
+          note: `评审意见回链：${revisionPlan.length} 条修改计划`,
+          instructions: JSON.stringify(revisionPlan.map((r) => r.excerpt)),
+          createdAt: Date.now(),
+        }).run();
+        reflexionId = id;
+      }
+      return { letter, revisionPlan, reflexionId };
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
       throw new BadRequestException('回复信生成失败：AI 服务暂不可用，请稍后重试或检查模型配置');
     }
   }
