@@ -8,6 +8,7 @@ import { parseQualityStandard, type QualityStandardKey } from '../common/quality
 import { appSettings } from '../db/schema';
 import { AiService, ReviewResult } from '../ai/ai.service';
 import { parseJson } from '../common/json-guard';
+import { structureFeedback } from './quality-feedback';
 
 /** 7 维英文 key → 中文维度名（category 取最低分维度映射中文，差距 #7） */
 const DIM_CN: Record<string, string> = {
@@ -164,6 +165,9 @@ export class QualityService {
       }
     }
     const category = DIM_CN[minDim] || '综合';
+    // 结构化：每条反馈定位到章节 + 定级 + 识别维度（此前 sectionRef 恒为空，反馈没有落点）
+    const doc = db.select({ content: documents.content }).from(documents).where(eq(documents.id, documentId)).get();
+    const structured = structureFeedback(report.feedback || '', doc?.content || '');
     const existing = db
       .select()
       .from(reviewComments)
@@ -174,17 +178,19 @@ export class QualityService {
     }
     const now = Date.now();
     let created = 0;
-    for (const text of entries) {
+    for (let i = 0; i < entries.length; i += 1) {
+      const text = entries[i];
+      const meta = structured[i];
       db.insert(reviewComments)
         .values({
           id: randomUUID(),
           documentId,
           reviewer: 'AI 质量评审',
           commentText: text,
-          category,
+          category: meta?.dimension ? (DIM_CN[meta.dimension] || category) : category,
           status: 'open',
           responseText: '',
-          sectionRef: '',
+          sectionRef: meta?.section || '',
           createdAt: now,
           updatedAt: now,
         })
