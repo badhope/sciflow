@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![Version](https://img.shields.io/badge/version-1.12.0-black.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.13.0-black.svg)](CHANGELOG.md)
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -24,6 +24,11 @@
 | **Claims you can verify** | The verification table below is rerunnable on your machine. If a number is wrong, that's a bug — file it |
 
 ## Screenshots
+
+<!-- demo-video -->
+[<img src="docs/media/demo.mp4" alt="SciFlow demo: workspace, pipeline, quality, writing, literature, knowledge, experiments, dashboard and settings" width="100%">](docs/media/demo.mp4)
+
+*Recorded end-to-end against the shipped build (mock model endpoint, seeded demo data). Click to open the full video.*
 
 All screenshots are captured from the running application against a seeded demo database.
 
@@ -184,7 +189,7 @@ State chain: `Project → Document (versioned) → Citation → Reference`, with
 
 ## Project status
 
-Current release: **1.12.0**. See [`CHANGELOG.md`](CHANGELOG.md) for the full history and [`docs/product-roadmap.md`](docs/product-roadmap.md) for what is next.
+Current release: **1.13.0**. See [`CHANGELOG.md`](CHANGELOG.md) for the full history and [`docs/product-roadmap.md`](docs/product-roadmap.md) for what is next.
 
 Known gaps: real-model end-to-end runs require your own API key; Docker and Playwright suites run in CI but not on every contributor machine; Windows installer builds locally need a C++ toolchain **or** the [`desktop-installer` CI workflow](.github/workflows/desktop-installer.yml) (verified green). Honest-gap tracking lives in [`docs/ECOSYSTEM-AUDIT.md`](docs/ECOSYSTEM-AUDIT.md).
 

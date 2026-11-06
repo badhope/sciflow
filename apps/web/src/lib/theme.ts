@@ -14,13 +14,16 @@ export type ThemeStyle = 'sciflow' | 'academic' | 'paper' | 'minimal' | 'night' 
 const KEY_MODE = 'sciflow-theme';
 const KEY_STYLE = 'sciflow-theme-style';
 
+/** 产品默认亮色（用户显式选择后一律以存储值为准） */
+export const DEFAULT_THEME_MODE: ThemeMode = 'light';
+
 export function readStoredTheme(): ThemeMode {
-  if (typeof localStorage === 'undefined') return 'system';
+  if (typeof localStorage === 'undefined') return DEFAULT_THEME_MODE;
   try {
     const raw = localStorage.getItem(KEY_MODE);
     if (raw === 'light' || raw === 'dark' || raw === 'system') return raw;
   } catch { /* 隐私模式 */ }
-  return 'system';
+  return DEFAULT_THEME_MODE;
 }
 
 export function readStoredStyle(): ThemeStyle {

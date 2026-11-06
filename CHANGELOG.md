@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.13.0] - 2026-11-06
+
+把路线图里所有「Partial / Next」项全部做完，不留计划残留。
+
+### Added
+
+- **段落级版本恢复**：`extractSections` / `sectionDiff` / `restoreSection` / `replaceSectionBody` 纯函数层，`GET /api/documents/:id/sections/diff` 与 `POST /api/documents/:id/sections/restore`。版本对比弹窗新增「按章节恢复」面板，可只回滚某一节，恢复前自动快照全文。13 条单测。
+- **按评审意见执行修改（评审闭环最后一环）**：`POST /api/documents/:id/sections/revise` 只重写命中的那一节，保留其余章节与全部引用标记，改前自动快照；`REVISE_SECTION` 提示词明确禁止编造数据并要求标注「待补充」。前端版本面板新增「按意见修改」按钮。评审从「有计划的文本」变为「可执行的动作」。
+- **结构化质量反馈**：`structureFeedback` 把每条反馈映射到章节、严重度（blocker/major/minor）与维度，质量服务导出评审条目时写入 `sectionRef` 与对应维度（此前 `sectionRef` 恒为空）。7 条单测。
+- **新颖性预检离线降级**：学术库不可达或关闭时不再只回 `skipped`，改为基于本地文献池重叠度 + 选题特异性的确定性判断，结果永远标记 `basis: offline-fallback`，绝不假装联网查过。5 条单测。
+- **列表分页**：`paginate` 纯函数 + 文档/文献列表可选 `limit`/`offset`（上限 200），不带参数时行为完全不变。7 条单测。
+- **上传演示视频**：`docs/media/demo.mp4` 按当前构建重录（1026 KB，覆盖工作台/流水线/质量/写作/文献/知识库/实验/总览/深色设置），README 中英双语嵌入；修复录屏脚本切深色不生效的问题（改存储后需重载页面）。
+
+### Changed
+
+- **界面默认亮色**：首次进入不再跟随系统深色偏好而落到深色，`DEFAULT_THEME_MODE = 'light'`；用户显式选择 dark/system 后仍严格尊重存储值。启动内联脚本与 `readStoredTheme` 同步修改，2 条新单测锁定。
+- **依赖刷新**：`p-limit` 6 → 7.3.3（ESM-only 包在 CJS 构建下运行验证通过）、`@citation-js/*` 0.8 → 0.9.0（含 RIS 插件），全量 471 条服务端测试通过——路线图登记的「需兼容性验证」事项兑现为实际升级。
+
+### Fixed
+
+- 录屏脚本深色片段断言失败（App 会把主题写回 localStorage，仅改存储不重载不生效）。
+
 ## [1.12.0] - 2026-11-06
 
 ### Added

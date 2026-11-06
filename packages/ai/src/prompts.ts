@@ -138,6 +138,29 @@ ${integrityRule}
 ${nameMatchRule}`;
 };
 
+/**
+ * 按评审意见定向重写单节正文（评审闭环的执行环节）。
+ * 只重写给定小节，必须保留原有引用标记；不得引入新的事实/数据/文献编号。
+ */
+export const REVISE_SECTION = (sectionTitle: string, sectionBody: string, reviewPoints: string) => `
+你是一位学术论文作者，正在按同行评审意见修改论文中的**一个章节**。
+
+待修改章节：${sectionTitle}
+
+该章节当前正文：
+${sectionBody}
+
+需要落实的评审意见（逐条，必须全部回应）：
+${reviewPoints}
+
+修改要求：
+- 只重写上面这一节；不要输出标题行，不要增删其他章节
+- 逐条落实评审意见；无法仅凭现有内容满足的意见（例如需要新实验数据），在对应位置明确写出「（待补充：<具体缺口>）」，不要编造数据或结论
+- 保留原正文中的全部引用标记（[Ref:n] / [n] / (作者, 年)），不得改动编号或新增清单外编号
+- 不得虚构实验数据、性能指标或未发表的实验结果
+- 学术语气、术语全文一致，不使用口语化与宣传性措辞
+- 直接输出修改后的章节正文（Markdown），不要任何前后缀说明`;
+
 export const POLISH = (text: string, mode: string) => `
 你是一位学术语言编辑。请对下面的文本进行「${mode}」处理（mode 为 polish=学术润色 / reduce=降重改写）。
 

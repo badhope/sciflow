@@ -397,6 +397,16 @@ ${response}`
     return this.complete([{ role: 'user', content }], { temperature: 0.5, context: 'replyReview' });
   }
 
+  /** 按评审意见定向重写一节（评审意见与正文均为外源/用户输入，先进消毒层） */
+  async reviseSection(sectionTitle: string, sectionBody: string, reviewPoints: string): Promise<string> {
+    const pointsSafe = this.sanitizeForPrompt(reviewPoints, 'review', '评审意见');
+    const bodySafe = this.sanitizeForPrompt(sectionBody, 'document', '待修改章节');
+    return this.complete(
+      [{ role: 'user', content: prompts.REVISE_SECTION(sectionTitle, bodySafe, pointsSafe) }],
+      { temperature: 0.4, model: 'strong', context: 'reviseSection' },
+    );
+  }
+
   /** Elicit 式：文献结构化提取（字段统一字符串化） */
   async extractPaperTable(papers: string): Promise<{ ref: string; title: string; year: number; method: string; results: string; contribution: string; limitations: string }[]> {
     const custom = this.getCustomPrompt('extractPaperTable');
