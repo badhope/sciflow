@@ -4,6 +4,47 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.15.0] - 2026-11-06
+
+一轮「可验证性 + 体验补全」：先审计已有的东西是否真实接通，再补企业级与通用体验缺口。
+
+### Added
+
+- **Prometheus 指标端点 `GET /api/metrics`**：text exposition format 0.0.4，暴露服务状态、DB 延迟、
+  进程 uptime/内存、项目/文档/文献/知识块/模型调用/Agent 运行/质量报告计数。全部走 SQL COUNT，
+  不做全表扫描；单项查询失败只让该项缺席，不让端点 500。6 条格式契约测试。
+- **设置页「安全与审计」面板**：审计流水（谁在何时改了什么、被拒绝的操作与原因，支持「仅被拒绝」筛选）
+  + 运行指标卡片（每 30s 自动刷新）。此前只有 `/api/config/audit` 接口，用户看不到任何入口。
+- **项目全量导出 / 导入**：`GET /api/projects/:id/export` 生成自包含 JSON（项目 + 16 张子表），
+  `POST /api/projects/import` 以全新 id 导入（外键整体重映射、同名自动加「（导入）」、单行失败不中断）。
+  侧栏项目项新增导出按钮、列表头新增导入按钮。17 条纯逻辑测试 + 端到端往返实测（1 文档/5 文献/2 资料/
+  1 实验/1 投稿行数完全一致）。
+- **断网/服务不可达提示条**：两级信号（`navigator.onLine` + `/api/health` 探活），异常时顶部示警并可
+  「重新检查」，正常时零占位；服务恢复后自动降频巡检。
+- **API 客户端幂等重试**：GET/HEAD/OPTIONS 在网络层失败或 502/503/504 时按 300ms→900ms 退避重试
+  最多 3 次；POST 等非幂等请求永不自动重发（避免重复写入）。
+- **编辑器撤销/重做按钮**：CodeMirror 自带历史，此前只有快捷键没有可见入口；`canUndo` 用 `undoDepth`
+  只读查询（写成「调用 undo 看返回值」会真的改稿——已在实现时规避）。
+
+### Fixed
+
+- **裸路径路由失效**：`/writing`、`/settings` 等不带 `#` 的链接此前永远落回工作台（HashRouter 只认 hash，
+  服务端 SPA 回退把 `/writing` 交给前端后 pathname 被忽略）。现在渲染前一次性归一为等价 hash 并保留查询参数，
+  11 个页面裸路径实测全部正确跳转。
+- **回归脚本依赖「出厂默认状态」**：`27.11b` 断言质量档必须是 `standard`，在 seed 过演示数据的库上必红
+  （seed-demo 设 draft 让演示分数自洽）。改为断言「档位合法 + 及格线为合法整数」，脚本可在任意数据状态的库上运行。
+- **`Content-Disposition` 含中文导致 500**：项目名默认中文，HTTP 头只允许 ASCII，`setHeader` 直接抛
+  `ERR_INVALID_CHAR`。改为 RFC 5987 `filename*` 编码 + ASCII 兜底。
+
+### Verified
+
+- 契约审计：后端 158 条路由 vs 前端 144 条调用路径，逐个比对后**零断链、零孤儿**（19 条疑为未接线者
+  逐条核实均有真实 UI 入口）
+- 测试有效性：无 skipped/todo/空断言用例；变异测试抽检 2 例（破坏标题保留、diff 恒返回 unchanged）均被捕获
+- 门禁：server 494 / web 182 / desktop 5，lint 0，typecheck 干净，build 成功
+- 黑盒：回归 238-0-0、路由 96-0、验收 23-23、巡检 24-24、MCP 5-5
+- 浏览器走查：11 个页面（裸路径 + hash 路径各一轮）零错误边界、标题与内容正确
+
 ## [1.14.0] - 2026-11-06
 
 破坏性依赖全量升级（用户明确授权），每一处 breaking change 都配套改造并验证，不留「升了但跑不起来」。

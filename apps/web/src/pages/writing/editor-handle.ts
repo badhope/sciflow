@@ -11,6 +11,13 @@ export interface WritingEditorHandle {
   getCursor(): number | null;
   /** 聚焦并把光标放到指定位置 */
   setCursor(pos: number): void;
+  /** 撤销一步（编辑器未挂载时为空操作） */
+  undo?: () => void;
+  /** 重做一步（编辑器未挂载时为空操作） */
+  redo?: () => void;
+  /** 是否还能撤销/重做（用于按钮禁用态） */
+  canUndo?: () => boolean;
+  canRedo?: () => boolean;
 }
 
 let handle: WritingEditorHandle | null = null;
