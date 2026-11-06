@@ -11,7 +11,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { unzipSync, strFromU8 } from 'fflate';
-import yaml from 'js-yaml';
+import { load as loadYaml } from 'js-yaml';
 import { jsonrepair } from 'jsonrepair';
 import { sqlite } from '../db/database';
 import { AiService } from '../ai/ai.service';
@@ -71,7 +71,20 @@ export function parseFrontmatter(md: string): { meta: Record<string, unknown>; b
   const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   if (!m) return { meta: {}, body: md };
   try {
-    const meta = (yaml.load(m[1]) as Record<string, unknown>) || {};
+    // js-yaml 5：默认导出已移除，且 load() 拒绝多文档流——frontmatter 里出现 `---` 分隔的行
+    // （例如多行 description）会让整段解析失败。这里先按单文档尝试，失败再逐段合并。
+    const raw = m[1].trim();
+    let parsed: unknown;
+    try {
+      parsed = loadYaml(raw);
+    } catch {
+      const docs = raw.split(/^---$/m).map((d) => d.trim()).filter(Boolean);
+      parsed = docs.reduce<Record<string, unknown>>((acc, doc) => {
+        const part = loadYaml(doc);
+        return part && typeof part === 'object' ? { ...acc, ...(part as Record<string, unknown>) } : acc;
+      }, {});
+    }
+    const meta = (parsed as Record<string, unknown>) || {};
     return { meta: typeof meta === 'object' ? meta : {}, body: m[2] };
   } catch {
     return { meta: {}, body: md };

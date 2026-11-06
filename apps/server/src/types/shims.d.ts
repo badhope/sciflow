@@ -1,15 +1,3 @@
-declare module 'p-retry' {
-  interface Options {
-    retries?: number;
-    factor?: number;
-    minTimeout?: number;
-    maxTimeout?: number;
-    randomize?: boolean;
-    onFailedAttempt?: (error: { attemptNumber: number; retriesLeft: number; message: string; status?: number }) => void;
-  }
-  const pRetry: <T>(fn: () => Promise<T>, options?: Options) => Promise<T>;
-  export default pRetry;
-}
 declare module 'vitest' {
   export const describe: (name: string, fn: () => void) => void;
   export const it: (name: string, fn: () => void | Promise<void>) => void;
