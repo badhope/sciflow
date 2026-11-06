@@ -32,7 +32,13 @@ export default defineConfig({
     // 不依赖模块级可变状态（DB 已按进程隔离）。实测 40 个 spec 的 import 开销占 85% 时长，
     // 关掉隔离后总耗时下降约 40%，且不改变任何断言语义。
     isolate: false,
-    // 共享同一个 SQLite 文件的 spec 必须串行，否则 WAL 层并发写会随机 I/O error。
+    // 共享同一个 SQLite 文件的 spec 必须串行，否则 WAL 层并发写会随机 I/O 错误。
     fileParallelism: false,
+    // vite 8 / rolldown 用 oxc 转译 TS，装饰器开关读的是「被转译文件所属的 tsconfig」。
+    // vitest 默认 root 在仓库根时读不到 apps/server/tsconfig.json（那里才开了
+    // experimentalDecorators），导致任何带 @Injectable() 的文件导入即抛
+    // "SyntaxError: Invalid or unexpected token"（无行号）。这里显式指到本包 tsconfig。
+    root: __dirname,
+    tsconfig: path.join(__dirname, 'tsconfig.json'),
   },
 });

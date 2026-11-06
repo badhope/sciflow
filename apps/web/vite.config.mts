@@ -34,9 +34,11 @@ export default defineConfig({
     // 代码分割：React 框架与图标库拆为独立 vendor chunk，优化首屏与缓存
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ['react', 'react-dom', 'react-dom/client'],
-          ui: ['lucide-react'],
+        // vite 8（rolldown 内核）：manualChunks 只接受函数，不再支持对象形式
+        manualChunks(id: string) {
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) return 'react';
+          if (id.includes('node_modules/lucide-react')) return 'ui';
+          return undefined;
         },
       },
     },
