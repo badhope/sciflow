@@ -4,6 +4,82 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.15.2] - 2026-11-09
+
+一轮「隐形缺陷」专项排查：全部 10 处都是**不报错、不留日志、界面照常渲染**的静默错误——
+类型检查看不出来（运行时类型与声明不符）、既有测试覆盖不到（口径盲区）、肉眼也难发现
+（图形照样画出来、分数照样给出来）。每处都先写脚本实证复现、再修、再补回归测试。
+新增 29 条回归测试（523 条全绿）。
+
+### Fixed
+
+- **数字式参考文献表完全不被识别（误报硬伤，合规稿被封顶 40 分）**：`quality-audit` 解析文献条目
+  编号的正则里，`[1]` 分支有捕获组、`1.` / `1、` 分支**没有**——`m[1]` 恒为 `undefined`，
+  经 `Number(undefined ?? 0)` 变 0 后被 `.filter(n => n > 0)` 整批丢弃。GB/T 7714 数字式是国内
+  论文的主流样式，实测后果两条：纯数字式文献表 → 条目数恒为 0，「悬空锚点」红牌检查被静默跳过；
+  **混合样式**（`[1]` + `2.`）→ 只认出方括号那条，正文里的 `[2]` 被判成「引用锚点无对应文献条目」
+  → 误报硬伤，一篇完全合规的稿子总分被封顶到 40。修复后数字式分支用负向前瞻 `(?!\d)` 排除
+  `2.5 倍` 这类行首小数，同时兼容中文 `1、张三`（标点后无空格）的写法。
+- **知识库「语义地图」被压成一条直线**：PCA 求第二主成分的秩一压缩项写成
+  `(v₁ᵀx)·v₁·(v₁ᵀv₁)`，用 `v₁ᵀv₁ ≈ 1` 顶替了特征值 λ₁——**λ₁ 被整个丢掉**。正确形式是
+  `B = A − λ₁·v₁v₁ᵀ`；缺了 λ₁ 后 v₁ 方向上的特征值是 λ₁−1 而非 0，只要 `|λ₁−1| > λ₂`
+  （协方差特征值极少恰好为 1，实际几乎恒成立）第二次幂迭代照样收敛回 ±v₁。实测修复前
+  `|corr(x, y)| = 1.000000`，PC2 与 PC1 完全共线，二维聚簇结构是假的。这个 bug 尤其难发现：
+  散点图照常渲染、点照常铺开（只是全落在一条斜线上），不报错也不留日志。
+- **前端测试套件在 `NODE_ENV=production` 下 89 个用例全红**：报错是
+  `TypeError: React.act is not a function`，与真因毫无关系。真因是 React 的**生产构建不导出
+  `act`**（dev-only API），而 react 被 externalize 后原生 require、读的就是真实
+  `process.env.NODE_ENV`；@testing-library/react 拿不到 `React.act` 便回落到已废弃的
+  `ReactDOMTestUtils.act` 并最终抛错。之所以长期隐形：CI 的 runner 不预设 NODE_ENV，流水线一直
+  是绿的，只有 Docker 镜像或导出过该变量的 shell 里才会触发。现在在 `vitest.config.mts` 里把
+  NODE_ENV 钉死为 `test`（并在 `test-setup.ts` 兜底），结果不再依赖调用方环境。
+- **引用证据链静默残缺：写在标题行上的锚点丢失出处**：`scanCitationSpots` 的标题分支
+  `(#{1,6}\s+[^\n]+)` 里 `[^\n]+` 会一路吃到行尾，把同一行的引用锚点整个吞掉。于是
+  `## 结论 [Ref:3]` 这种形态下，`render()` 的编号走独立正则、照常给出 `[3]`，但 `poolSpot`
+  查不到该 idx → `backfillCitations` 拿到 `undefined` → citations 行的 `location` / `context`
+  落成空串。编号对、文献对，就是查不到这条引用出现在哪一节、上下文是什么——直接削弱
+  「引用三级可追溯」。标题分支改为在锚点前用负向前瞻停住。
+- **幽灵引用计数与它自己给出的证据对不上**：`citation-audit` 里 `ghost` 写成
+  `maxAnchor - resolvable`（最大编号 − 可解析条数），只有锚点连续时才等于真实越界数。
+  正文一断号（如 `[1][2][10]`）就把「断号」重复计成「幽灵」：3 个锚点算出 `ghost = 7`，
+  而同时下发的 `items` 只有 `[10]` 一条。更糟的是每个虚增幽灵按 −20 扣分，一处断号就能把
+  分数打到 0，而断号本身只该按黄牌（`anchor-gap`）处理。现在 `ghost` 与 `items` 同源。
+- **`parseTagsJson` 返回值运行时不是 `string[]`**：它直接返回 `parseJsonArray<string>` 的结果，
+  而后者只做 `x as T` 的**类型断言**、不做运行时转换。于是 `'[1,2]'` → `[1,2]`、`'[null]'` →
+  `[null]`，返回值在类型上是 `string[]`、运行时却是 number / null，并原样进入 `graph()` 等
+  API 响应；前端一调 `tag.trim()` / `tag.toLowerCase()` 就抛 TypeError。现在只保留可安全转成
+  字符串的标量，丢弃 null 与对象/数组并过滤空串（文档承诺的「等价于 parseStringList」由此成立）。
+- **tags 写入校验用长度启发式，脏数据可直接落库**：`references.update` 原先用
+  `parseTagsJson(x).length === 0 && x.trim().length > 2` 判非法 JSON，漏网两类输入——
+  `'{}'` / `'ab'`（长度 ≤ 2 → 直接放行落库）、`'[1,2]'`（解析出 2 个元素 → 放行，落库的是数字
+  数组）。改为新增的 `isJsonStringArray()` 做结构化校验，并落库归一化后的字符串数组，
+  读写口径一致。
+- **尾部块标题清单直接拼进 `new RegExp`**：`splitBodyForAudit` 未转义 `tailHeadings`。数组里
+  混入空串 → 交替分支变成 `(?:参考文献||图表)`，空分支可匹配任意位置，正文会从第一个换行处被
+  **整段截断**（审计对象瞬间变成空文）；标题含正则元字符（如自定义尾部块名 `附录(A)`）→
+  `new RegExp` 直接抛 SyntaxError，整个体检接口 500。现在逐条 trim + 过滤空串 + 转义；
+  对 `DEFAULT_TAIL` 而言转义是恒等变换，既有行为不变。
+- **纯谚文 / 纯假名标题的指纹退化为空串，去重静默失效**：`fingerprint` 的归一化字符类只认
+  ASCII 与 CJK 统一表意文字（`\u4e00-\u9fff`），遇到不含汉字的标题（`논문 제목`、
+  `かなのみのタイトル`）会把所有字符剥光 → 返回 `''`。5 处调用方一律 `if (fp)` 守卫，
+  于是这类文献的**项目内去重被静默跳过**：同一篇韩文/日文文献可被反复导入而不判重。
+  因为 `fingerprint` 已持久化在 `references.fingerprint` 列，主口径**保持不变**（否则历史行
+  与新算法对不上，反而造成更大范围漏判），只在主口径剥完为空时启用 Unicode 字母数字兜底——
+  含汉字/ASCII 的标题指纹逐字不变（已加断言），无需数据迁移。
+- **章节失衡证据点名错误的章节**：最大章占比按「去空白字符数」计算，挑最大章却按
+  `body.length`（含空白）挑。两个口径不一致时（章节空白密度不同即会发生），证据文案会指向
+  **另一章**——用户照着「『XX』独占 60% 正文」的提示去删改，动的却是错误的地方。现在统一用
+  同一份 `sectionCharsList`。
+
+### Tests
+
+- 新增 29 条回归测试，覆盖上述每一处缺陷（含「修复没有把检查一起关掉」的反向断言：
+  真正的悬空锚点仍须报出、行首小数不得被当成条目编号）。
+- 新建 `packages/core/src/json-guard.spec.ts`、`packages/core/src/fingerprint.spec.ts`
+  ——这两个模块此前**没有任何测试**，而它们被全项目共用。
+- 全量校验：server 523 + web 182 用例全绿；server / web `tsc --noEmit` 通过；`eslint .` 无告警；
+  `pnpm --filter @sciflow/server build` 通过。web 套件额外在 `NODE_ENV=production` 下复跑以锁定回归。
+
 ## [1.15.1] - 2026-11-06
 
 官网（GitHub Pages · `docs/index.html`）此前**没有任何下载入口**，也没有版本标注——用户打开官网

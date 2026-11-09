@@ -85,8 +85,23 @@ export interface CitationAuditReport {
 const DEFAULT_TAIL = ['参考文献', '引用文献', '图表', '研究资料', 'references'];
 
 /** 仅保留正文（剥掉尾部块），与 pipeline 的 tail-blocks 同口径 */
+/** 正则元字符转义：tailHeadings 是调用方传入的普通字符串，不能直接拼进 RegExp */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function splitBodyForAudit(content: string, tailHeadings: string[] = DEFAULT_TAIL): string {
-  const re = new RegExp(`\\n+#{1,3}\\s*(?:${tailHeadings.join('|')})(?=[\\s（(:：\\-—]|$)[^\\n]*`, 'gi');
+  /**
+   * 过滤空串 + 逐条转义。历史缺陷：`tailHeadings.join('|')` 被原样拼进 new RegExp，
+   *   - 数组里混入空串 → 交替分支变成 `(?:参考文献||图表)`，空分支可匹配任意位置，
+   *     正文会从第一个换行处被整段截断（审计对象瞬间变成空文）；
+   *   - 标题含正则元字符（如自定义尾部块名 `附录(A)`）→ new RegExp 直接抛 SyntaxError，
+   *     整个体检接口 500。
+   * 对 DEFAULT_TAIL 而言转义是恒等变换，既有行为不变。
+   */
+  const heads = (tailHeadings || []).map((h) => String(h ?? '').trim()).filter(Boolean).map(escapeRegExp);
+  if (!heads.length) return String(content || '');
+  const re = new RegExp(`\\n+#{1,3}\\s*(?:${heads.join('|')})(?=[\\s（(:：\\-—]|$)[^\\n]*`, 'gi');
   let cut = -1;
   for (const m of String(content || '').matchAll(re)) {
     const idx = m.index ?? -1;
@@ -148,7 +163,17 @@ export function auditCitations(input: CitationAuditInput): CitationAuditReport {
   const resolvable = resolvableRows.length;
 
   const maxAnchor = anchors.length ? anchors[anchors.length - 1] : 0;
-  const ghost = maxAnchor > resolvable ? maxAnchor - resolvable : 0;
+  /**
+   * 幽灵锚点 = 编号超出「已落库可解析引用数」的锚点，与下面 issues[].items **同源**。
+   *
+   * 历史缺陷：写成 `maxAnchor - resolvable`（最大编号 − 可解析条数）。只有当锚点是
+   * 1..maxAnchor 连续时两者才相等；一旦正文断号（如 [1][2][10]），该式把「断号」重复计成
+   * 「幽灵」：3 个锚点算出 ghost = 7，而同时下发的 items 只有 [10] 一条 —— 报告里的数字
+   * 与它自己给出的证据对不上。更糟的是每个虚增幽灵按 −20 扣分，一处断号就能把分数打到 0，
+   * 而断号本身只该按黄牌（anchor-gap）处理。
+   */
+  const ghostAnchors = anchors.filter((n) => n > resolvable);
+  const ghost = ghostAnchors.length;
 
   // 断号：1..maxAnchor 中正文未出现的编号
   const missingAnchors: number[] = [];
@@ -207,7 +232,7 @@ export function auditCitations(input: CitationAuditInput): CitationAuditReport {
       level: 'red',
       code: 'ghost-anchor',
       message: `红牌：${ghost} 个锚点编号超出已落库引用（幽灵引用），请重跑引用渲染或检查文献库`,
-      items: anchors.filter((n) => n > resolvable),
+      items: ghostAnchors,
     });
   }
   if (resolvable === 0 && anchors.length > 0) {

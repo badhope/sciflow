@@ -88,11 +88,24 @@ export function projectTo2D(vectors: ArrayLike<number>[]): ProjectedPoint[] {
 
   const pc1 = powerIterate(applyCov, dim, 1.0);
 
-  // 3) 第二个主成分：在「去掉 pc1 方向」的子空间里再做幂迭代
+  /**
+   * 3) 第二个主成分：对协方差算子做**秩一压缩（deflation）**后再幂迭代。
+   *
+   * 正确形式是 B = A − λ₁·v₁v₁ᵀ，其中 λ₁ = v₁ᵀAv₁（v₁ 已单位化，故 Rayleigh 商即特征值）。
+   *
+   * 历史缺陷：压缩项写成 `(v₁ᵀx)·v₁·(v₁ᵀv₁)` —— 用 v₁ᵀv₁ ≈ 1 顶替了 λ₁，**特征值被整个丢掉**。
+   * 于是 B 在 v₁ 方向上的特征值是 λ₁−1 而非 0；只要 |λ₁−1| > λ₂（协方差特征值极少恰好等于 1，
+   * 实际几乎恒成立），第二次幂迭代照样收敛回 ±v₁，PC2 与 PC1 完全共线。
+   *
+   * 实测：构造一个 x 方向方差远大于 y 方向的三维数据集，投影后 |corr(x, y)| = 1.000000 ——
+   * 知识库「语义地图」被压成一条直线，二维聚簇结构完全是假的。而这个 bug 肉眼极难发现：
+   * 散点图照常渲染、点照常铺开（只是全落在一条斜线上），不会报错也不会留日志。
+   */
+  const lambda1 = dot(pc1, applyCov(pc1));
   const applyDeflated = (x: number[]): number[] => {
     const proj = dot(x, pc1);
     const out = applyCov(x);
-    for (let d = 0; d < dim; d++) out[d] -= proj * pc1[d] * dot(pc1, pc1);
+    for (let d = 0; d < dim; d++) out[d] -= lambda1 * proj * pc1[d];
     return out;
   };
   const pc2 = powerIterate(applyDeflated, dim, 7.0);

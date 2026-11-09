@@ -1,4 +1,54 @@
 import { describe, expect, it } from 'vitest';
+
+/**
+ * 秩一压缩（deflation）回归。
+ *
+ * 缺陷：第二个主成分的压缩项写成 `(v₁ᵀx)·v₁·(v₁ᵀv₁)`，用 v₁ᵀv₁≈1 顶替了特征值 λ₁，
+ * 等于 B = A − v₁v₁ᵀ 而非 B = A − λ₁v₁v₁ᵀ。v₁ 方向上的特征值因此是 λ₁−1 而不是 0，
+ * 第二次幂迭代仍收敛回 ±v₁ → PC2 与 PC1 完全共线 → 语义地图塌成一条直线。
+ * 实测修复前 |corr(x,y)| = 1.000000。
+ */
+describe('projectTo2D 第二主成分正交性', () => {
+  const dataset = () => {
+    const out: number[][] = [];
+    for (let i = 0; i < 60; i++) {
+      const t = (i / 59) * 2 * Math.PI;
+      // x 方向方差远大于 y、z：λ₁ 明显不等于 1，正是触发旧缺陷的条件
+      out.push([10 * Math.cos(t) + 0.01 * i, 1.0 * Math.sin(t), 0.5 * Math.cos(2 * t)]);
+    }
+    return out;
+  };
+
+  const pearson = (xs: number[], ys: number[]) => {
+    const n = xs.length;
+    const mx = xs.reduce((a, b) => a + b, 0) / n;
+    const my = ys.reduce((a, b) => a + b, 0) / n;
+    let sxy = 0, sxx = 0, syy = 0;
+    for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; syy += (ys[i] - my) ** 2; }
+    return sxy / Math.sqrt(sxx * syy);
+  };
+
+  it('x/y 两轴不共线（语义地图真的展开成二维）', () => {
+    const pts = projectTo2D(dataset());
+    const r = Math.abs(pearson(pts.map((p) => p.x), pts.map((p) => p.y)));
+    expect(r).toBeLessThan(0.5);
+  });
+
+  it('y 轴有真实展开度，不是 x 的线性重标定', () => {
+    const pts = projectTo2D(dataset());
+    const ys = pts.map((p) => p.y);
+    // 归一化后 y 必然铺满 [0,1]；关键是中间值也要有分布，而不是只剩两端
+    const mid = ys.filter((v) => v > 0.2 && v < 0.8).length;
+    expect(mid).toBeGreaterThan(ys.length * 0.2);
+  });
+
+  it('同一输入两次投影结果完全一致（确定性契约未被破坏）', () => {
+    const a = projectTo2D(dataset());
+    const b = projectTo2D(dataset());
+    expect(a).toEqual(b);
+  });
+});
+
 import { projectTo2D, blobToVector, downsampleIndices } from './projection';
 
 /**

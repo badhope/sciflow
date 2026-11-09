@@ -132,3 +132,44 @@ describe('CitationRenderer', () => {
     expect(out).toContain('[文献99]');
   });
 });
+
+/**
+ * 标题行内锚点回归。
+ *
+ * 缺陷：scanCitationSpots 的标题分支用 `[^\n]+` 贪婪吃到行尾，把同行锚点整个吞掉，
+ * 导致 poolSpot 缺该 idx → backfillCitations 写入的 citations 行 location/context 为空串。
+ * render() 的编号走独立正则、不受影响，所以「编号对、文献对、就是没有出处」，静默残缺。
+ */
+describe('scanCitationSpots：标题行内的锚点不得被标题吞掉', () => {
+  const renderer = new CitationRenderer({} as never);
+
+  it('锚点写在标题行上时仍能取到 location 与 context', () => {
+    const content = '## 引言\n铺垫一句。\n\n## 结论 [Ref:1]\n收尾。\n\n## 讨论 [补充Ref:2]\n补充说明。';
+    const { poolSpot, suppSpot } = renderer.scanCitationSpots(content, 3, 3);
+    expect(poolSpot.get(0)?.location).toBe('结论');
+    expect(poolSpot.get(0)?.context).toContain('结论');
+    expect(suppSpot.get(1)?.location).toBe('讨论');
+  });
+
+  it('标题名不再把锚点文本当成自己的一部分', () => {
+    const { poolSpot } = renderer.scanCitationSpots('## 方法 [Ref:2] 与后续', 5, 0);
+    expect(poolSpot.get(1)?.location).toBe('方法');
+  });
+
+  it('普通行内锚点与多锚点行为不回归', () => {
+    const content = '## 引言\n如文献 [Ref:1] 与 [Ref:2] 所述。\n\n## 方法\n再次引用 [Ref:1]，并首引 [Ref:3]。';
+    const { poolSpot } = renderer.scanCitationSpots(content, 5, 0);
+    expect(poolSpot.get(0)?.location).toBe('引言');
+    expect(poolSpot.get(1)?.location).toBe('引言');
+    // 首次出现的位置优先（!poolSpot.has(idx) 语义保持不变）：[Ref:1] 在「方法」里再次出现不覆盖
+    expect(poolSpot.get(0)?.location).not.toBe('方法');
+    // 只在「方法」出现的锚点归属正确
+    expect(poolSpot.get(2)?.location).toBe('方法');
+    expect(poolSpot.size).toBe(3);
+  });
+
+  it('无标题时 location 为空串而非崩溃', () => {
+    const { poolSpot } = renderer.scanCitationSpots('正文 [Ref:1] 直接开始。', 2, 0);
+    expect(poolSpot.get(0)?.location).toBe('');
+  });
+});

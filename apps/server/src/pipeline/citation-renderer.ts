@@ -78,7 +78,18 @@ export class CitationRenderer {
   scanCitationSpots(content: string, poolSize: number, suppSize: number): CitationScanResult {
     const poolSpot = new Map<number, CitationSpot>();
     const suppSpot = new Map<number, CitationSpot>();
-    const tokenRe = /(#{1,6}\s+[^\n]+)|\[Ref:(\d+)\]|\[补充Ref:(\d+)\]/g;
+    /**
+     * 标题分支的正文必须**在锚点前停住**（`(?!(\[Ref:|\[补充Ref:))` 负向前瞻）。
+     *
+     * 历史缺陷：原写法 `(#{1,6}\s+[^\n]+)` 里的 `[^\n]+` 会一路吃到行尾，把同一行上的
+     * 引用锚点整个吞掉。于是「锚点写在标题行」这种形态（如 `## 结论 [Ref:3]`）下：
+     *   - render() 的两趟 replace 仍会给它编号成 [3]（走的是独立正则，不受影响）；
+     *   - 但 poolSpot 里查不到该 idx → backfillCitations 拿到 undefined →
+     *     citations 行的 location / context 落成空串。
+     * 结果是「引用三级可追溯」的证据链静默残缺：编号对、文献对，就是查不到这条引用
+     * 出现在哪一节、上下文是什么，而且不报错、不告警。
+     */
+    const tokenRe = /(#{1,6}\s+(?:(?!\[Ref:|\[补充Ref:)[^\n])+)|\[Ref:(\d+)\]|\[补充Ref:(\d+)\]/g;
     let m: RegExpExecArray | null;
     let section = '';
     while ((m = tokenRe.exec(content)) !== null) {

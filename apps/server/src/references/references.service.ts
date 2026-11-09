@@ -11,7 +11,7 @@ import { AiService } from '../ai/ai.service';
 import { buildCslEntries } from '../common/citation-csl';
 import { parseAuthors } from '../common/authors';
 import { fingerprint } from '../common/fingerprint';
-import { parseTagsJson, parseStringList } from '../common/json-guard';
+import { parseTagsJson, parseStringList, isJsonStringArray } from '../common/json-guard';
 
 /** Zod schemas for references input validation */
 const createSchema = z.object({
@@ -223,13 +223,21 @@ export class ReferencesService {
       set.readingStatus = validated.patch.readingStatus;
     }
     if (validated.patch.tags !== undefined) {
-      // tags 以 JSON 字符串落库；校验可解析
-      const parsed = parseTagsJson(validated.patch.tags);
-      if (parsed.length === 0 && validated.patch.tags.trim().length > 2) {
-        // 非空输入但解析为空 → 非法 JSON（parseTagsJson 内部已容错）
-        throw new BadRequestException('tags 必须是合法 JSON 数组字符串');
+      /**
+       * tags 以 JSON 字符串落库；写入前做**结构化**校验并落规范化结果。
+       *
+       * 历史缺陷：用 `parseTagsJson(x).length === 0 && x.trim().length > 2` 这种长度启发式判非法，
+       * 漏网两类脏输入：
+       *   - `'{}'` / `'ab'`（长度 ≤ 2 → 直接放行落库，读出来才是空数组，脏值一直躺在库里）；
+       *   - `'[1,2]'`（解析出 2 个元素 → 放行，落库的是数字数组；而读取端 tags 声明为 string[]，
+       *     运行时却是 number，前端 tag.trim() 即崩）。
+       * 现在统一走 isJsonStringArray，并把归一化后的字符串数组落库，保证读写口径一致。
+       */
+      const rawTags = validated.patch.tags.trim();
+      if (rawTags !== '' && !isJsonStringArray(rawTags)) {
+        throw new BadRequestException('tags 必须是字符串数组的 JSON（例如 ["机器学习","综述"]）');
       }
-      set.tags = validated.patch.tags;
+      set.tags = rawTags === '' ? '[]' : JSON.stringify(parseTagsJson(rawTags));
     }
     if (validated.patch.notes !== undefined) {
       set.notes = validated.patch.notes ?? '';

@@ -1,6 +1,6 @@
 {
   "name": "sciflow",
-  "version": "1.15.1",
+  "version": "1.15.2",
   "private": true,
   "description": "SciFlow - 从选题到可投稿稿件的科研工作台：确定性质量门、引用三级可追溯、可复现流水线",
   "scripts": {
