@@ -67,15 +67,26 @@ export const platform = {
     remove: (id: string) => request<{ ok: boolean }>(`/api/extensions/${id}`, { method: 'DELETE' }),
     resetBuiltin: () => request<{ restored: number }>('/api/extensions/reset-builtin', { method: 'POST' }),
     importRaw: (p: { filename?: string; content: string }) => request<import('../types').ExtensionImportResult>('/api/extensions/import', { method: 'POST', body: JSON.stringify(p) }),
-    upload: async (file: File) => {
+    /**
+     * 上传扩展资产。
+     *
+     * 此前是裸 `fetch('/api/extensions/upload', ...)`，绕过 `u()` 与整套 request() 基建：
+     *   - 桌面端页面从 `file://` 加载 → 相对路径解析成 `file:///api/...` → **上传必然失败**
+     *     （点了没反应）；
+     *   - 不带 Authorization → 企业 JWT 模式下 401；
+     *   - 没有错误转译 → 用户看到的是英文原文或裸 HTTP 状态码。
+     * 改走 request()：绝对地址、令牌、重试策略、中文错误转译一次到位。
+     * FormData 的 Content-Type 由 core.ts 识别并交给 fetch 生成（保住 multipart boundary）。
+     */
+    upload: (file: File) => {
       const fd = new FormData();
       fd.append('file', file);
-      const res = await fetch('/api/extensions/upload', { method: 'POST', body: fd });
-      const text = await res.text();
-      let json: unknown = null;
-      try { json = JSON.parse(text); } catch { /* 非 JSON */ }
-      if (!res.ok) throw new Error((json as { message?: string })?.message || `上传失败（HTTP ${res.status}）`);
-      return json as import('../types').ExtensionImportResult;
+      // 大 bundle 上传可能超过 60s；显式 signal 关掉 core.ts 的默认兜底（与 generate 同处理）
+      return request<import('../types').ExtensionImportResult>('/api/extensions/upload', {
+        method: 'POST',
+        body: fd,
+        signal: AbortSignal.timeout(300_000),
+      });
     },
     // AI 生成可能耗时 1-3 分钟：显式传 signal 关闭默认 60s 兜底（core.ts 有 signal 时不加超时）
     generate: (kind: string, brief: string) => request<{ draft: Record<string, unknown>; raw: string }>('/api/extensions/generate', {
@@ -89,8 +100,13 @@ export const platform = {
     snapshot: () => request<ConfigSnapshot>('/api/config'),
     /** 配置/权限审计流水（谁在何时改了什么、被拒绝的操作及原因） */
     auditLog: (limit = 100) => request<AuditEntry[]>(`/api/config/audit?limit=${limit}`),
-    /** Prometheus 文本指标（设置页用于健康面板 + 运维直接 scrape /api/metrics） */
-    metricsText: () => fetch('/api/metrics').then((r) => r.text()),
+    /**
+     * Prometheus 文本指标（设置页用于健康面板 + 运维直接 scrape /api/metrics）。
+     * 同样改走 request()：修掉桌面端相对路径失效、缺 Authorization，
+     * 以及此前**不检查 res.ok** —— 5xx/401 的错误响应体会被当成指标文本直接渲染进面板。
+     * request() 对 text/plain 响应按文本原样返回，语义不变。
+     */
+    metricsText: () => request<string>('/api/metrics'),
     setPermission: (mode: string) => request<PermissionInfo>('/api/config/permission', { method: 'POST', body: JSON.stringify({ mode }) }),
     listRoles: () => request<ConfigRole[]>('/api/config/roles'),
     createRole: (p: { name: string; systemPrompt?: string; isDefault?: boolean }) => request<ConfigRole[]>('/api/config/roles', { method: 'POST', body: JSON.stringify(p) }),

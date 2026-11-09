@@ -104,24 +104,97 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** 单次 fetch（含超时/取消），供 request 的重试循环复用 */
+/** 统一的 Authorization 头（getToken 内部已吞掉 localStorage 异常） */
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/**
+ * 把调用方的 HeadersInit 应用到 Headers 上；值为 null/undefined 表示**删除**该默认头。
+ * 用 Headers 而不是普通对象：HTTP 头名大小写不敏感，Headers 天然处理
+ * （普通对象里 `Content-Type` 与 `content-type` 会同时存在，最终发出重复头）。
+ */
+function applyHeaders(headers: Headers, init: HeadersInit | undefined): void {
+  if (!init) return;
+  const put = (k: string, v: unknown) => {
+    if (v === undefined || v === null) headers.delete(k);
+    else headers.set(k, String(v));
+  };
+  if (init instanceof Headers) {
+    init.forEach((v, k) => put(k, v));
+    return;
+  }
+  if (Array.isArray(init)) {
+    for (const entry of init) put(String(entry[0]), entry[1]);
+    return;
+  }
+  for (const [k, v] of Object.entries(init as Record<string, unknown>)) put(k, v);
+}
+
+/**
+ * body 是否自带 Content-Type。FormData 的 multipart 头含 **boundary**，
+ * 只能由 fetch 自己生成；手写 `application/json` 会让后端 Multer 解析不到 file 字段。
+ */
+function bodySetsOwnContentType(body: BodyInit | null | undefined): boolean {
+  if (!body) return false;
+  if (typeof FormData !== 'undefined' && body instanceof FormData) return true;
+  if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) return true;
+  if (typeof Blob !== 'undefined' && body instanceof Blob) return true;
+  return false;
+}
+
+/**
+ * 单次 fetch（含超时/取消），供 request 的重试循环复用。
+ *
+ * 头部合并缺陷（已修）：原写法是
+ * `{ headers: {默认头 + 调用方头}, ...opts, signal }` —— `...opts` 在 `headers` **之后**展开，
+ * 只要调用方传了 `opts.headers`，整个合并结果（含 `Content-Type` 与 `Authorization`）
+ * 就会被**整体覆盖**而不是逐项合并。表现为「加了个自定义头就 401」，且因为当时
+ * 还没有调用方传 headers，长期潜伏。现在先铺开 opts，再单独合成 headers，调用方逐项优先。
+ */
 async function fetchOnce(url: string, opts: RequestInit | undefined, timeoutMs: number): Promise<Response> {
   const ctrl = new AbortController();
   const timer = timeoutMs > 0 ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
   const token = getToken();
+  const { headers: callerHeaders, ...rest } = opts ?? {};
+  const headers = new Headers();
+  if (!bodySetsOwnContentType(rest.body)) headers.set('Content-Type', 'application/json');
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  applyHeaders(headers, callerHeaders);
   try {
     const res = await fetch(u(url), {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(opts?.headers || {}),
-      },
-      ...opts,
-      signal: opts?.signal ?? ctrl.signal,
+      ...rest,
+      headers,
+      signal: rest.signal ?? ctrl.signal,
     });
     return res;
   } finally {
     if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * 服务健康探活（ConnectionBanner 用）。
+ *
+ * 必须走 `u()`：桌面端页面从 `file://` 加载，裸相对路径 `/api/health` 会解析成
+ * `file:///api/health` → 探活永远失败 → 「服务不可达」提示条**永久误报且无法消除**，
+ * 而内嵌的本地服务其实一直好好跑着。
+ *
+ * 不走 request()：那条路径对 GET 有 3 次退避重试，而探活本身就在 10-60s 的定时器里跑，
+ * 再叠重试会把「服务刚恢复」的判定拖慢好几秒。
+ * 任何异常（断网 / CORS / 超时）都收敛成 false，绝不冒泡到定时器回调。
+ */
+export async function probeServerHealth(timeoutMs = 8_000): Promise<boolean> {
+  try {
+    const res = await fetch(u('/api/health'), {
+      cache: 'no-store',
+      headers: authHeaders(),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }
 
@@ -240,6 +313,9 @@ export function streamChat(opts: {
   })
     .then(async (res) => {
       if (!res.ok || !res.body) {
+        // 与 request() 同口径：令牌过期时清 token 并通知全局登录门，
+        // 否则企业 JWT 模式下聊天只会报一句错误，用户被困在失效会话里出不来。
+        if (res.status === 401) onUnauthorized();
         let raw: unknown;
         try {
           const data = await res.json();

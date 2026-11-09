@@ -44,10 +44,19 @@ export function useSplitDrag(opts: { initial: number; min: number; max: number; 
     document.body.style.cursor = 'col-resize';
   }, [commit, invert, width]);
 
+  /**
+   * 键盘调宽必须与指针拖拽**同语义**。
+   *
+   * 缺陷：onPointerDown 里 `delta = (startX - evX) * (invert ? -1 : 1)` 尊重 invert，
+   * 而这里写死「ArrowLeft → +24 / ArrowRight → −24」，完全忽略 invert。
+   * 于是 invert=true 时鼠标往左拖是变窄、按左方向键却是变宽——同一个分隔条上
+   * 两种输入方式方向相反，键盘（可访问性）操作会朝用户预期的反方向走。
+   */
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowLeft') { e.preventDefault(); commit(width + 24); }
-    if (e.key === 'ArrowRight') { e.preventDefault(); commit(width - 24); }
-  }, [commit, width]);
+    const step = 24 * (invert ? -1 : 1);
+    if (e.key === 'ArrowLeft') { e.preventDefault(); commit(width + step); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); commit(width - step); }
+  }, [commit, invert, width]);
 
   return { width, commit, onPointerDown, onKeyDown };
 }

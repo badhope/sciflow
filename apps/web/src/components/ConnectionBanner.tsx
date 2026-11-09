@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { WifiOff, RefreshCw } from 'lucide-react';
+import { probeServerHealth } from '../api/core';
 
 /**
  * 连接状态提示条。
@@ -15,14 +16,13 @@ export function ConnectionBanner() {
   const [serverDown, setServerDown] = useState(false);
   const [checking, setChecking] = useState(false);
 
-  const probe = async (): Promise<boolean> => {
-    try {
-      const res = await fetch('/api/health', { cache: 'no-store' });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  };
+  // 探活改用 core.ts 的 probeServerHealth()（模块级稳定引用，直接在下面两处调用）。
+  //
+  // 此前这里是裸 `fetch('/api/health')`：桌面端页面从 `file://` 加载，相对路径会解析成
+  // `file:///api/health`，探活**永远失败** → 「服务不可达」提示条永久挂着且无法消除，
+  // 而内嵌本地服务其实完全正常。v1.15.1 起 Windows 安装包已是官网首推下载方式，
+  // 桌面用户是主要受众，这个误报的影响面比浏览器端大得多。
+  // 统一实现同时补上了 Authorization 头（企业 JWT 模式下探活不再 401）与超时。
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -46,7 +46,7 @@ export function ConnectionBanner() {
         timer = window.setTimeout(tick, 20_000);
         return;
       }
-      const ok = await probe();
+      const ok = await probeServerHealth();
       if (cancelled) return;
       setServerDown(!ok);
       // 服务正常时降到 60s 一次（只是巡检），异常时 10s 快速确认恢复
@@ -77,7 +77,7 @@ export function ConnectionBanner() {
         disabled={checking}
         onClick={async () => {
           setChecking(true);
-          const ok = await probe();
+          const ok = await probeServerHealth();
           setServerDown(!ok);
           setOffline(typeof navigator !== 'undefined' && navigator.onLine === false);
           setChecking(false);

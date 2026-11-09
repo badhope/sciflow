@@ -4,6 +4,105 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.15.3] - 2026-11-09
+
+接 v1.15.2 的第二轮排查，重点转向**桌面端（Electron）适配**、**出站安全**与**检索质量**三块。
+本轮 9 处全部按 TDD 走：先写失败测试并确认失败原因正确，再实现修复，最后跑全量回归。
+新增 50 条测试（server 558 + web 197 全绿）。
+
+### Fixed
+
+#### 桌面端适配（v1.15.1 起 Windows 安装包已是官网首推下载方式，影响面最大）
+
+- **三处裸 `fetch('/api/...')` 绕过 `u()`，在桌面端必然失败**：`core.ts` 的 `u()` 就是为
+  「页面从 `file://` 加载、需要拼上 preload 注入的 `apiBase`」而存在的，但
+  `extensions.upload`、`config.metricsText`、`ConnectionBanner` 的探活三处写的是相对路径。
+  浏览器里能用（所以一直没暴露），桌面端会解析成 `file:///api/...`：
+  - **`ConnectionBanner` 探活永远失败 → 「服务不可达」提示条永久挂着且无法消除**，
+    而内嵌的本地服务其实完全正常。这是本轮用户可感知最严重的一处；
+  - 扩展中心「上传」按钮点了没反应；
+  - 设置页运维指标面板空白。
+  三处同时都**不带 Authorization** → 企业 JWT 模式下即使地址对了也会 401。
+  现在统一走 `request()` / 新增的 `probeServerHealth()`。
+- **`request()` 里调用方 headers 会整体覆盖默认头**：`fetchOnce` 的对象字面量写成
+  `{ headers: {默认头 + 调用方头}, ...opts, signal }` —— `...opts` 在 `headers` **之后**展开，
+  因此只要调用方传了 `opts.headers`，合并结果（含 `Content-Type` 与 `Authorization: Bearer`）
+  就被**整体替换**而非逐项合并。表现为「加了个自定义头就 401」。因为此前尚无调用方传 headers，
+  长期潜伏；而修好上传/指标正需要这个能力。改为先铺 `opts`、再单独合成 `Headers`
+  （用 `Headers` 而非普通对象：HTTP 头名大小写不敏感，普通对象会让
+  `Content-Type` 与 `content-type` 同时存在、最终发出重复头），并支持传 `null`/`undefined` 显式删头。
+- **FormData 上传被强塞 `Content-Type: application/json`**：multipart 的头必须由 fetch 自己
+  生成（含 **boundary**），手写会让后端 Multer 解析不到 `file` 字段。`core.ts` 现在识别
+  FormData / Blob / URLSearchParams 并让出 Content-Type。
+- **`config.metricsText` 不检查 `res.ok`**：5xx / 401 的错误响应体会被**当成 Prometheus 指标文本**
+  直接渲染进运维面板（看起来像「指标全没了」而不是「请求失败」）。改走 `request()` 后
+  非 2xx 会抛带中文文案的 `ApiError`。
+- **`streamChat` 缺 401 处理**：`request()` 在 401 时会清 token 并派发 `sciflow:unauthorized`
+  让 AuthGate 重新开门，但 SSE 这条路没有。企业 JWT 模式下令牌过期时，聊天只会报一句错误，
+  用户被困在失效会话里出不来。现在与 `request()` 同口径。
+
+#### 出站安全（SSRF 纵深防御）
+
+- **`ip-policy` 只认 IPv4-mapped 一种翻译前缀，其余 IPv4-in-IPv6 形态全部漏判**：
+  原 `unmapV4` 用正则匹配 `^::ffff:(...)` 这类**固定字面形态**，覆盖不到另外三类
+  RFC 保留前缀。实测修复前以下地址都被判为「可放行」：
+  - `::ffff:0:7f00:1`（SIIT / IPv4-translated，RFC 6052 §2.2）= **127.0.0.1**
+  - `64:ff9b::a9fe:a9fe`（NAT64 知名前缀，RFC 6052 §2.1）= **169.254.169.254**
+  - `::7f00:1`（IPv4-compatible，已废弃形态）= **127.0.0.1**
+
+  即内网地址与**云元数据地址**可以借翻译形态绕过黑名单。现在改为把 IPv6 展开成
+  定长 8 组再做前缀比较，一次覆盖四类前缀（含 RFC 8215 的 `64:ff9b:1::/48` 本地形态）。
+  关键约束：**只还原内嵌 IPv4 再走既有裁决，不是「整个前缀一律封」**——
+  `::ffff:0:808:808`（= 8.8.8.8）这类公网地址必须继续放行，已加断言锁定。
+
+#### 检索质量
+
+- **中英混合问题的中文部分被配额整段饿死**：`buildTrigramQuery` 先塞全部拉丁词、再塞 CJK
+  三元组，最后 `slice(0, 24)` 从头截断。拉丁词一旦达到 24 个，中文三元组一个都留不下 →
+  检索退化成「只搜英文」，bm25 排序也看不到中文那一半。用户看到的是「知识库里明明有这段
+  中文却搜不到」，且日志无任何异常。改为两路**交错**取词，配额上限 24 不变（查询体积不放大）。
+- **纯假名 / 纯谚文问题直接掉到 LIKE 全表兜底**：CJK 段正则写死 `[一-鿿]`
+  （仅 CJK 统一表意文字），非汉字文字一个 token 都构造不出来 → 返回空串 → trigram 索引
+  形同虚设（与 v1.15.2 修的 `fingerprint` 是**同一个字符类盲区**）。改用 Unicode Script 属性，
+  覆盖汉字（含扩展区）+ 平假名 + 片假名 + 谚文。同时明确保留 trigram 的固有下限：
+  连续段不足 3 字符时仍返回空串走 LIKE（FTS5 trigram 索引本身无法匹配 <3 字符的串，
+  这是正确行为而非缺陷，已加断言说明）。
+- **本地嵌入并发闸门：上限写死 + 手写忙轮询**：`maxInflight = 4` 是硬编码，而本项目所有其它
+  并发旋钮都走 `envInt`（`AI_DRAFT_CONCURRENCY`、`AI_RPM_CAP`）——2 核容器里 4 路本地推理
+  互相抢线程反而更慢，用户却只能改源码。实现上是 `while (inflight >= max) await setTimeout(5)`
+  的忙轮询信号量：一次 500 块的批量上传会瞬间创建 500 个 async 闭包，其中 496 个各自每 5ms
+  空转一次（约 **10 万次定时器回调**），且唤醒顺序由定时器注册顺序决定、无 FIFO 公平性。
+  改为 `EMBEDDING_CONCURRENCY`（默认 4，夹取 1-32，非法值回落默认而非产生 NaN 闸门）+ p-limit，
+  与 `ai-transport` 里既已确立的「p-limit（成熟库替代手写实现）」约定对齐。
+
+#### 可访问性
+
+- **`useSplitDrag` 键盘方向忽略 `invert`**：`onPointerDown` 里
+  `delta = (startX - evX) * (invert ? -1 : 1)` 尊重 `invert`，而 `onKeyDown` 写死
+  「ArrowLeft → +24 / ArrowRight → −24」。于是 `invert: true` 时鼠标往左拖是**变窄**、
+  按左方向键却是**变宽**——同一个分隔条上两种输入方式方向相反，键盘（可访问性）操作
+  会朝用户预期的反方向走。当前唯一调用方未传 `invert`，属潜伏缺陷，已修并加断言。
+
+### Tests
+
+- 新增 50 条测试，全部先确认为 RED（失败原因与预期一致）再实现修复：
+  - `apps/web/src/api/desktop-baseurl.test.ts`（11 条）：用 msw 在 node 环境下注入
+    `window.sciflowDesktop.apiBase`，直接断言请求打到**绝对地址**、带上 Authorization、
+    FormData 的 Content-Type 是 `multipart/form-data`、非 2xx 必须报错。
+    修复前的失败信息就是 `TypeError: Failed to parse URL from /api/extensions/upload`
+    —— 正是桌面端 `file:///api/...` 的等价证据。
+  - `packages/core/src/ip-policy.spec.ts`（15 条）：四类翻译前缀 × 内网/公网/元数据地址，
+    含「翻译前缀里包裹公网 IPv4 必须放行」的反向断言，防止一刀切封整个前缀。
+  - `packages/retrieval/src/embedding-concurrency.spec.ts`（10 条）：用假 GGUF + 注入的
+    可控延迟上下文观测**真实并发峰值**，覆盖显式配置 / 默认值 / 非法值回落 / 越界夹取 /
+    单条失败只降级该位 / 200 块无饥饿。
+  - `packages/retrieval/src/trigram-query.spec.ts`（11 条）：配额饿死、假名谚文覆盖，
+    以及 5 条既有行为非回归断言（FTS5 语法合法性、元字符清理、去重、3 字下限）。
+  - `apps/web/src/lib/split-drag.test.tsx`（5 条）：`invert` 两种取值下键盘与指针方向一致。
+- 全量门禁：server 558 + web 197 用例全绿；server / web `tsc --noEmit` 通过；`eslint .` 无告警；
+  `pnpm --filter @sciflow/server build` 通过；web 套件继续在 `NODE_ENV=production` 下复跑
+  （锁定 v1.15.2 修的 React.act 回归）。
+
 ## [1.15.2] - 2026-11-09
 
 一轮「隐形缺陷」专项排查：全部 10 处都是**不报错、不留日志、界面照常渲染**的静默错误——

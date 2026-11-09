@@ -326,16 +326,47 @@ export class KnowledgeService {
     }
   }
 
-  /** 查询 → FTS5 trigram MATCH 表达式（OR 连接 3-gram 与拉丁词；不可构造时返回空串） */
+  /**
+   * 查询 → FTS5 trigram MATCH 表达式（OR 连接 3-gram 与拉丁词；不可构造时返回空串）。
+   *
+   * 两处修正：
+   *
+   * 1）**配额饿死**：原实现把拉丁词全部塞在 `parts` 前面、CJK 三元组接在后面，
+   *    最后 `[...new Set(parts)].slice(0, 24)` 从头截断。中英混合问题里只要拉丁词
+   *    达到 24 个，中文三元组就被**整段截掉** → 检索退化成「只搜英文」，
+   *    问题里的中文那一半完全没参与召回，bm25 排序也看不到它们。
+   *    用户看到的是「知识库里明明有这段中文却搜不到」，日志无任何异常。
+   *    改为两路**交错**取词，保证各自都有配额；上限 24 不变（查询体积不放大）。
+   *
+   * 2）**文字系统覆盖**：CJK 段正则原写死 `[一-鿿]`（仅 CJK 统一表意文字），
+   *    纯假名 / 纯谚文的问题一个 token 都构造不出来 → 返回空串 → 直接掉到 LIKE
+   *    全表兜底，trigram 索引形同虚设（与 fingerprint 曾犯的是同一个字符类盲区）。
+   *    改用 Unicode Script 属性，覆盖汉字（含扩展区）+ 平假名 + 片假名 + 谚文。
+   */
   static buildTrigramQuery(question: string): string {
     const q = (question || '').replace(/[(){}"@#:^~\\]/g, ' ');
-    const parts: string[] = [];
-    for (const w of q.match(/[A-Za-z0-9][A-Za-z0-9_-]{2,}/g) || []) parts.push(w);
-    for (const run of q.match(/[一-鿿]{3,}/g) || []) {
-      for (let i = 0; i + 3 <= run.length; i++) parts.push(run.slice(i, i + 3));
+    const latin = [...new Set(q.match(/[A-Za-z0-9][A-Za-z0-9_-]{2,}/g) || [])];
+    const cjk: string[] = [];
+    for (const run of q.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]{3,}/gu) || []) {
+      for (let i = 0; i + 3 <= run.length; i++) cjk.push(run.slice(i, i + 3));
     }
-    const uniq = [...new Set(parts)].slice(0, 24);
-    return uniq.map((t) => `"${t}"`).join(' OR ');
+    const MAX_TOKENS = 24;
+    const merged: string[] = [];
+    const seen = new Set<string>();
+    const push = (t: string) => {
+      if (seen.has(t)) return;
+      seen.add(t);
+      merged.push(t);
+    };
+    const rounds = Math.max(latin.length, cjk.length);
+    for (let i = 0; i < rounds && merged.length < MAX_TOKENS; i++) {
+      if (i < latin.length) push(latin[i]!);
+      if (i < cjk.length) push(cjk[i]!);
+    }
+    return merged
+      .slice(0, MAX_TOKENS)
+      .map((t) => `"${t}"`)
+      .join(' OR ');
   }
 
   /** LIKE 兜底检索（FTS5 不可用或查询语法错误时的终极兜底） */
