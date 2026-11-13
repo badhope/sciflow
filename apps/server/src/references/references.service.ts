@@ -111,21 +111,34 @@ export class ReferencesService {
     }
   }
 
-  /** 本地文献库检索（标题/作者/摘要模糊匹配，已移除国外在线源，零外部网络依赖） */
+  /**
+   * 本地文献库检索（标题/作者/摘要模糊匹配，零外部网络依赖）。
+   *
+   * 多词查询按 token OR 匹配、再按命中数排序，而不是整串 LIKE：
+   * 整串匹配时「heterophilic graph residual」永远命中不了只含其中两个词的论文，
+   * 表现为「库里明明有相关文献却检索 0 条」（Agent 工具与写作页都会踩到）。
+   */
   search(query: string, limit = 8, projectId?: string): PaperHit[] {
     const q = query.trim();
     if (!q) return [];
+    const cap = Math.max(1, Math.min(limit, 200));
+    const tokens = [...new Set(q.split(/\s+/).map((t) => t.trim()).filter((t) => t.length >= 2))].slice(0, 8);
+    const terms = tokens.length ? tokens : [q];
     // LIKE 通配符转义：用户输入中的 % _ \ 按字面匹配（防 % 全命中）
-    const esc = q.replace(/[\\%_]/g, (c) => `\\${c}`);
-    const q2 = `%${esc}%`;
-    const cond = sql`${references.title} LIKE ${q2} ESCAPE '\\' OR COALESCE(${references.authors}, '') LIKE ${q2} ESCAPE '\\' OR COALESCE(${references.abstract}, '') LIKE ${q2} ESCAPE '\\'`;
+    const esc = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+    const condFor = (t: string) => {
+      const p = `%${esc(t)}%`;
+      return sql`${references.title} LIKE ${p} ESCAPE '\\' OR COALESCE(${references.authors}, '') LIKE ${p} ESCAPE '\\' OR COALESCE(${references.abstract}, '') LIKE ${p} ESCAPE '\\'`;
+    };
+    const cond = sql.join(terms.map(condFor), sql` OR `);
     const rows = db
       .select()
       .from(references)
       .where(projectId ? sql`${references.projectId} = ${projectId} AND (${cond})` : cond)
-      .limit(Math.max(1, Math.min(limit, 200))) // SQL 级截断：不再全量取回后内存切片
+      // 候选池放宽到 4 倍再精排；SQL 级截断，不再全量取回后内存切片
+      .limit(cap * 4)
       .all();
-    return rows.map((r) => ({
+    const hits = rows.map((r) => ({
       id: r.id,
       title: r.title,
       authors: parseAuthors(r.authors),
@@ -137,6 +150,24 @@ export class ReferencesService {
       source: 'manual' as const,
       citationCount: r.citationCount ?? 0,
     }));
+    if (terms.length === 1) return hits.slice(0, cap);
+    // 精排：标题命中权重 2，作者/摘要命中权重 1；同分按引用数
+    return hits
+      .map((h) => {
+        const title = h.title.toLowerCase();
+        const rest = `${h.authors.join(' ')} ${h.abstract}`.toLowerCase();
+        let score = 0;
+        for (const t of terms) {
+          const low = t.toLowerCase();
+          if (title.includes(low)) score += 2;
+          else if (rest.includes(low)) score += 1;
+        }
+        return { h, score };
+      })
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || b.h.citationCount - a.h.citationCount)
+      .slice(0, cap)
+      .map((x) => x.h);
   }
 
   list(projectId: string) {

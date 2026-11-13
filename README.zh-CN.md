@@ -70,7 +70,7 @@ docker compose -f docker-compose.prod.yml up --build
 
 | 检查项 | 命令 | 结果 |
 |---|---|---|
-| 服务端单测/集成 | `pnpm --filter @sciflow/server test` | 82 文件，647 项 |
+| 服务端单测/集成 | `pnpm --filter @sciflow/server test` | 84 文件，660 项 |
 | 前端单测 | `pnpm --filter @sciflow/web test` | 29 文件，201 项 |
 | 桌面端单测 | `pnpm --filter @sciflow/desktop test` | 1 文件，5 项 |
 | 类型 / 构建 | `pnpm -r typecheck` · `pnpm -r build` | 通过 |

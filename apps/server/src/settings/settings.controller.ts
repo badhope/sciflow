@@ -2,6 +2,7 @@ import { Controller, Get, Post, Delete, Body, Param, UseGuards } from '@nestjs/c
 import { SettingsService } from './settings.service';
 import { ProjectAccessService } from '../common/project-access.service';
 import { AdminGuard } from '../auth/admin.guard';
+import { AgentPolicyService, AGENT_ACCESS_MODES } from '../agent/agent-policy.service';
 
 /**
  * 设置 API（模型厂商 / Key / 连接测试 / 环境自检）。
@@ -19,7 +20,23 @@ export class SettingsController {
   constructor(
     private readonly settings: SettingsService,
     private readonly access: ProjectAccessService,
+    private readonly agentPolicy: AgentPolicyService,
   ) {}
+
+  /**
+   * Agent 权限档（只读/工作区/最大权限）。
+   * 独立端点而不是塞进 settings：它是「AI 能动什么」的安全边界，
+   * 需要单独展示、单独审计、单独在 UI 上确认。
+   */
+  @Get('agent-access')
+  getAgentAccess() {
+    return { mode: this.agentPolicy.mode(), modes: AGENT_ACCESS_MODES };
+  }
+
+  @Post('agent-access')
+  setAgentAccess(@Body() body: { mode?: string }) {
+    return { mode: this.agentPolicy.setMode(body?.mode), modes: AGENT_ACCESS_MODES };
+  }
 
   /** 应用配置总览（AI 配置/模型列表/环境/数据源） */
   @Get()

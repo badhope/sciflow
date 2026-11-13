@@ -157,6 +157,14 @@ export const platform = {
     getPersona: () => request<PersonaConfig>(`/api/settings/persona`),
     savePersona: (p: { name?: string; systemPrompt?: string; skills?: PersonaSkill[] }) =>
       request<{ ok: boolean } & PersonaConfig>(`/api/settings/persona`, { method: 'POST', body: JSON.stringify(p) }),
+    /** Agent 权限档：AI 能读什么、能改什么（默认 workspace，不碰系统配置） */
+    getAgentAccess: () =>
+      request<{ mode: string; modes: { value: string; label: string; description: string }[] }>(`/api/settings/agent-access`),
+    setAgentAccess: (mode: string) =>
+      request<{ mode: string; modes: { value: string; label: string; description: string }[] }>(`/api/settings/agent-access`, {
+        method: 'POST',
+        body: JSON.stringify({ mode }),
+      }),
   },
   webSearchConfig: {
     get: () => request<WebSearchConfig>('/api/web/config'),

@@ -70,7 +70,7 @@ Every number below comes from a command run on the current tree (2026-11-13).
 
 | Check | Command | Result |
 |---|---|---|
-| Server unit/integration | `pnpm --filter @sciflow/server test` | 82 files, 647 tests |
+| Server unit/integration | `pnpm --filter @sciflow/server test` | 84 files, 660 tests |
 | Web unit | `pnpm --filter @sciflow/web test` | 29 files, 201 tests |
 | Desktop unit | `pnpm --filter @sciflow/desktop test` | 1 file, 5 tests |
 | Types / build | `pnpm -r typecheck` · `pnpm -r build` | clean |

@@ -12,6 +12,7 @@ import { eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { envInt } from '../common/env';
 import { profileAllowsTool, resolveAgentToolProfile } from './agent-tool-profiles';
+import { AgentPolicyService } from './agent-policy.service';
 import type { AuthPayload } from '../auth/auth.service';
 
 /**
@@ -64,6 +65,7 @@ export class AgentToolBridge {
     private readonly trace?: AgentTraceService,
     private readonly taskList?: TaskListService,
     private readonly approvals?: ApprovalService,
+    private readonly policy?: AgentPolicyService,
   ) {}
 
   /** 技能→工具前缀映射：设置页停用某技能后，对应工具不再暴露给模型（技能真实生效，非仅展示） */
@@ -126,6 +128,7 @@ export class AgentToolBridge {
     for (const t of this.mcp.list()) {
       if (!allow.has(t.name)) continue;
       if (!profileAllowsTool(profile, t.name)) continue;
+      if (this.policy && !this.policy.canUse(t.name)) continue;
       if (!this.allowedBySkills(t.name, skills)) continue;
       // 无项目上下文时不暴露「必须带 projectId」的工具：避免模型编造 projectId 跨项目取数
       const required = Array.isArray(t.inputSchema?.required) ? (t.inputSchema.required as string[]) : [];
@@ -139,6 +142,11 @@ export class AgentToolBridge {
           callCount += 1;
           if (callCount > MAX_TOOL_CALLS) {
             return { error: `工具调用次数已达上限（${MAX_TOOL_CALLS} 次），请直接基于已有信息回答` };
+          }
+          // 权限档二次校验：buildToolSet 已过滤，但设置可能在会话中途被改；
+          // 执行侧必须再判一次，避免“先暴露后降档”绕过。
+          if (this.policy && !this.policy.canUse(t.name)) {
+            return { error: this.policy.denyReason(t.name) };
           }
           // 项目作用域：凡是 schema 里声明了 projectId 的工具，一律用当前会话的项目覆盖
           const schemaProps = (t.inputSchema?.properties ?? {}) as Record<string, unknown>;
