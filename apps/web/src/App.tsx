@@ -99,8 +99,8 @@ const VIEW_LABELS: Record<View, string> = {
  */
 const NAV_GROUPS: { label: string; hint: string; defaultCollapsed?: boolean; items: { key: View; label: string; icon: typeof LayoutDashboard }[] }[] = [
   {
-    label: '研究立项',
-    hint: '定题与可行性',
+    label: '立项与选题',
+    hint: '确定要研究什么',
     items: [
       { key: 'workspace', label: VIEW_LABELS.workspace, icon: LayoutDashboard },
       { key: 'dashboard', label: VIEW_LABELS.dashboard, icon: LayoutGrid },
@@ -108,16 +108,17 @@ const NAV_GROUPS: { label: string; hint: string; defaultCollapsed?: boolean; ite
     ],
   },
   {
-    label: '证据与资料',
-    hint: '文献、知识库',
+    label: '读文献与做实验',
+    hint: '找证据、跑验证',
     items: [
       { key: 'literature', label: VIEW_LABELS.literature, icon: Library },
       { key: 'knowledge', label: VIEW_LABELS.knowledge, icon: BookMarked },
+      { key: 'experiments', label: VIEW_LABELS.experiments, icon: Beaker },
     ],
   },
   {
-    label: '写作与质量',
-    hint: '流水线、起草、评分',
+    label: '写稿与过检',
+    hint: '成稿、查质量',
     items: [
       { key: 'pipeline', label: VIEW_LABELS.pipeline, icon: Workflow },
       { key: 'writing', label: VIEW_LABELS.writing, icon: BookOpen },
@@ -126,14 +127,26 @@ const NAV_GROUPS: { label: string; hint: string; defaultCollapsed?: boolean; ite
   },
   {
     label: '投稿与复盘',
-    hint: '选刊、跟踪、复盘',
+    hint: '送出去、留存经验',
+    defaultCollapsed: true,
     items: [
       { key: 'submission', label: VIEW_LABELS.submission, icon: Send },
-      { key: 'experiments', label: VIEW_LABELS.experiments, icon: Beaker },
       { key: 'memory', label: VIEW_LABELS.memory, icon: Brain },
     ],
   },
 ];
+
+/**
+ * 一级导航的「当前阶段」判定：侧栏只高亮当前阶段所属分组，
+ * 让用户随时知道自己处在科研生命周期的哪一段，而不是面对 12 个平级按钮。
+ */
+const VIEW_STAGE: Record<View, number> = {
+  workspace: 0, dashboard: 0, programs: 0,
+  literature: 1, knowledge: 1, experiments: 1,
+  pipeline: 2, writing: 2, quality: 2,
+  submission: 3, memory: 3,
+  settings: -1,
+};
 
 
 /** 页面级留白：全屏型页面（写作/工作台）自己管内边距，列表型页面统一留白 */
@@ -677,7 +690,14 @@ function SidebarContent({
       {/* 导航：短视口下自身滚动，避免把项目列表挤到不可点击 */}
       <nav className="shrink-0 max-h-[46vh] overflow-y-auto" aria-label="功能导航">
         {NAV_GROUPS.map((g, gi) => (
-          <ShellNavGroup key={g.label} label={g.label} hint={g.hint} step={gi + 1} defaultCollapsed={g.defaultCollapsed}>
+          <ShellNavGroup
+            key={g.label}
+            label={g.label}
+            hint={g.hint}
+            step={gi + 1}
+            defaultCollapsed={g.defaultCollapsed}
+            activeStage={VIEW_STAGE[view] === gi}
+          >
             {g.items.map((n) => {
               const Icon = n.icon;
               return (

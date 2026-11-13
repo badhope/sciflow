@@ -47,6 +47,12 @@ test('侧栏 12 个入口逐个点击并渲染', async ({ page }) => {
   // 设置入口独立渲染在分组导航之后，因此用整个 aside 定位，而不是 nav[aria-label=功能导航]
   const nav = page.locator('aside');
 
+  // 阶段分组默认折叠最后一段（投稿与复盘）：按真实用户路径先展开所有折叠分组
+  const collapsed = nav.locator('button[aria-expanded="false"]');
+  for (let i = 0, n = await collapsed.count(); i < n; i++) {
+    await collapsed.nth(i).click({ timeout: 3000 }).catch(() => undefined);
+  }
+
   for (const label of VIEWS) {
     const item = nav.getByText(label, { exact: true }).first();
     await expect(item, `侧栏缺少入口：${label}`).toBeVisible({ timeout: 15_000 });
