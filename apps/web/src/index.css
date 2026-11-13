@@ -1001,6 +1001,17 @@ kbd {
   transition: background-color 0.12s ease;
 }
 .shell-nav-group__label:hover { background: color-mix(in srgb, var(--muted-foreground) 8%, transparent); }
+/* 当前阶段：左侧一条强调线，让「我在流程哪一段」一眼可见（不是只高亮单个按钮） */
+.shell-nav-group.is-active-stage { position: relative; }
+.shell-nav-group.is-active-stage::before {
+  content: '';
+  position: absolute;
+  left: 2px; top: 10px; bottom: 4px;
+  width: 2px; border-radius: 2px;
+  background: var(--brand-500);
+  opacity: 0.75;
+}
+.shell-nav-group.is-active-stage > .shell-nav-group__label { color: var(--foreground); }
 .shell-nav-item {
   display: flex; align-items: center; gap: 10px;
   width: 100%;

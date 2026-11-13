@@ -113,17 +113,24 @@ export function ShellNavGroup({
   step,
   children,
   defaultCollapsed = false,
+  activeStage = false,
 }: {
   label: string;
   hint?: string;
   step?: number;
   children: ReactNode;
   defaultCollapsed?: boolean;
+  /** 当前视图属于该阶段：自动展开并给出阶段高亮，让用户知道自己在流程哪一段 */
+  activeStage?: boolean;
 }) {
   const [open, setOpen] = useState(!defaultCollapsed);
   const count = Children.count(children);
+  // 切到该阶段的页面时确保分组可见（用户从命令面板/深链进入时不会看到收起的分组）
+  useEffect(() => {
+    if (activeStage) setOpen(true);
+  }, [activeStage]);
   return (
-    <div className="shell-nav-group">
+    <div className={`shell-nav-group ${activeStage ? 'is-active-stage' : ''}`}>
       <button
         type="button"
         className="shell-nav-group__label w-full text-left"
