@@ -482,7 +482,7 @@ export class ExtensionsService {
   }
 
   private projectSkill(row: ExtensionRow, manifest: Record<string, unknown>, enabled: boolean): void {
-    const stored = this.readJson<{ id: string; key: string; name: string; description: string; enabled: number; builtin: number }[]>('skills', []);
+    const stored = this.readJson<{ id: string; key: string; name: string; description: string; instructions?: string; enabled: number; builtin: number }[]>('skills', []);
     // 必须保留内置 4 项技能（AgentToolBridge 用它们的 key 裁剪工具；缺失会被当作全部关闭）
     const skills = [...stored];
     for (const b of SettingsService.BUILTIN_SKILLS) {
@@ -494,6 +494,8 @@ export class ExtensionsService {
       key: row.key,
       name: row.name,
       description: (row.description || row.name).slice(0, 200),
+      // 技能正文必须随投影保存：只存 description 会让「启用技能」变成启用一个标签。
+      instructions: String(manifest.instructions || '').trim().slice(0, 8000),
       enabled: enabled ? 1 : 0,
       builtin: row.source.startsWith('builtin') ? 1 : 0,
     };

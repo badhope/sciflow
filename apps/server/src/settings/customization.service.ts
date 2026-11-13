@@ -134,9 +134,11 @@ export class CustomizationService {
 
   setPipelineSettings(patch: { researchDepth?: number; tokenBudget?: number; retrievalRerank?: boolean; webSearch?: boolean; qualityStandard?: string }) {
     const upsert = (key: string, value: string) => {
-      const existing = db.select().from(appSettings).where(eq(appSettings.key, key)).get();
-      if (existing) db.update(appSettings).set({ value }).where(eq(appSettings.key, key)).run();
-      else db.insert(appSettings).values({ key, value }).run();
+      // 单条 upsert：替代 SELECT→UPDATE/INSERT，消除并发下的竞态
+      db.insert(appSettings)
+        .values({ key, value })
+        .onConflictDoUpdate({ target: appSettings.key, set: { value } })
+        .run();
     };
     if (patch.researchDepth !== undefined) {
       const n = Math.floor(Number(patch.researchDepth));
@@ -192,8 +194,11 @@ export class CustomizationService {
     const existing = db.select().from(appSettings).where(eq(appSettings.key, 'quality_weights')).get();
     let merged = parseJson<Record<string, number>>(existing?.value, {});
     merged = { ...merged, ...weights };
-    if (existing) db.update(appSettings).set({ value: JSON.stringify(merged) }).where(eq(appSettings.key, 'quality_weights')).run();
-    else db.insert(appSettings).values({ key: 'quality_weights', value: JSON.stringify(merged) }).run();
+    const mergedValue = JSON.stringify(merged);
+    db.insert(appSettings)
+      .values({ key: 'quality_weights', value: mergedValue })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value: mergedValue } })
+      .run();
     return this.listQualityWeights();
   }
 
@@ -206,9 +211,10 @@ export class CustomizationService {
 
   setJudgmentMode(mode: string) {
     if (!['auto', 'rule_first', 'llm_first', 'rule_only'].includes(mode)) throw new BadRequestException('非法判断模式');
-    const existing = db.select().from(appSettings).where(eq(appSettings.key, 'judgment_mode')).get();
-    if (existing) db.update(appSettings).set({ value: mode }).where(eq(appSettings.key, 'judgment_mode')).run();
-    else db.insert(appSettings).values({ key: 'judgment_mode', value: mode }).run();
+    db.insert(appSettings)
+      .values({ key: 'judgment_mode', value: mode })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value: mode } })
+      .run();
     return { mode };
   }
 
@@ -251,17 +257,14 @@ export class CustomizationService {
     const tool = this.listTools().find((t) => t.key === toolKey);
     if (!tool) throw new BadRequestException(`未知工具 ${toolKey}`);
     if (!body.prompt?.trim()) throw new BadRequestException('提示词不能为空');
-    const existing = db.select().from(customPrompts).where(eq(customPrompts.toolKey, toolKey)).get();
-    if (existing) {
-      db.update(customPrompts)
-        .set({ prompt: body.prompt, enabled: body.enabled ?? 1, updatedAt: Date.now() })
-        .where(eq(customPrompts.toolKey, toolKey))
-        .run();
-    } else {
-      db.insert(customPrompts)
-        .values({ id: randomUUID(), toolKey, toolLabel: tool.label, prompt: body.prompt, enabled: body.enabled ?? 1, updatedAt: Date.now() })
-        .run();
-    }
+    const now = Date.now();
+    db.insert(customPrompts)
+      .values({ id: randomUUID(), toolKey, toolLabel: tool.label, prompt: body.prompt, enabled: body.enabled ?? 1, updatedAt: now })
+      .onConflictDoUpdate({
+        target: customPrompts.toolKey,
+        set: { toolLabel: tool.label, prompt: body.prompt, enabled: body.enabled ?? 1, updatedAt: now },
+      })
+      .run();
     return this.listPrompts();
   }
 

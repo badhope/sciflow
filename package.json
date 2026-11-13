@@ -2,7 +2,7 @@
   "name": "sciflow",
   "version": "1.15.3",
   "private": true,
-  "description": "SciFlow - 从选题到可投稿稿件的科研工作台：确定性质量门、引用三级可追溯、可复现流水线",
+  "description": "SciFlow - 本地优先的自主科研平台：多智能体研究循环（人工或 AI 专家审批）+ 确定性质量门 + 引用三级可追溯 + 可复现稿件流水线",
   "scripts": {
     "dev": "concurrently -n server,web -c blue,green \"pnpm --filter @sciflow/server dev\" \"pnpm --filter @sciflow/web dev\"",
     "dev:server": "pnpm --filter @sciflow/server dev",

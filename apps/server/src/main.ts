@@ -1,7 +1,17 @@
 import 'dotenv/config';
+import dns from 'node:dns';
 import { loadServerEnv } from './common/server-env';
 
 loadServerEnv();
+
+// 双栈网络下 Node 默认可能优先 IPv6；部分模型/文献网关只有 IPv4 可达，
+// 会导致 fetch 超时而 IPv4 实际可用。默认 ipv4first，可用 DNS_RESULT_ORDER=verbatim 恢复。
+try {
+  const order = (process.env.DNS_RESULT_ORDER || 'ipv4first').toLowerCase();
+  dns.setDefaultResultOrder(order === 'verbatim' ? 'verbatim' : 'ipv4first');
+} catch {
+  /* 旧 Node 不支持时保持运行时默认 */
+}
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';

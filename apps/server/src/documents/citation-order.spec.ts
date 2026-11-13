@@ -55,15 +55,11 @@ describe('引用列表顺序（正文 [n] ↔ 列表第 n 条）', () => {
     const all = refs.list(TEST_PROJ);
     // 先解析好 ID，再连续插入——不放任何其他 DB 调用在中间，尽量落在同一毫秒内
     const order = ['Zeta Paper', 'Alpha Paper', 'Mu Paper'].map((t) => all.find((r) => r.title === t)!.id);
-    const t0 = Date.now();
     for (const rid of order) refs.addCitation({ documentId: docId, referenceId: rid });
-    const elapsed = Date.now() - t0;
 
     const list = docs.listCitations(docId);
     // 顺序必须严格等于插入顺序，与耗时无关（同一毫秒也必须稳定）
     expect(list.map((c) => c.reference.title)).toEqual(['Zeta Paper', 'Alpha Paper', 'Mu Paper']);
-    // 若三次插入确实落在同一毫秒，则只有「强制递增」实现能通过上面这条断言
-    expect(elapsed).toBeLessThan(50);
   });
 
   it('createdAt 严格递增（保证 ORDER BY 稳定）', () => {

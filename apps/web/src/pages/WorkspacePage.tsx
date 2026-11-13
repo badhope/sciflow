@@ -27,7 +27,7 @@ import {
   type ChatSession,
 } from './chat/chat-sessions';
 import type { ChatSource, Doc, IntentResult, KnowledgeDoc, Outline, PipelineTask, Project } from '../types';
-import { Badge, Button, ConfirmDialog, Empty, ErrorBox, Input, Modal } from '../components/ui';
+import { Badge, Button, ConfirmDialog, Empty, ErrorBox, Input, Modal, downloadText } from '../components/ui';
 import { WritingPreview } from './writing/WritingPreview';
 
 /**
@@ -433,15 +433,7 @@ export function WorkspacePage({
         }
       }
     }
-    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `科研问答快照-${new Date().toISOString().slice(0, 10)}.md`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    downloadText(`科研问答快照-${new Date().toISOString().slice(0, 10)}.md`, lines.join('\n'), 'text/markdown;charset=utf-8');
   };
 
   // ── 会话管理 ─────────────────────────────────────────────

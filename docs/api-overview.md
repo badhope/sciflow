@@ -198,6 +198,8 @@ NotebookLM 式本地知识库：上传资料 → 分块 → BM25+向量混合检
 | POST | `/api/chat` | 一次性问答（JSON 返回完整答案） |
 | POST | `/api/chat/stream` | **SSE 流式问答** |
 
+两个入口在传入 `projectId` 且 Agent 工具开启时都会注入工具集（同一套 `AgentToolBridge`、同样的步数上限与轨迹落库）；非流式入口返回完整答案，不返回工具增量。
+
 **SSE 协议**（`POST /api/chat/stream`）：
 - 响应头 `Content-Type: text/event-stream`。
 - 正文前先推一条 RAG 来源事件：`data: {"sources": [...]}\n\n`（无命中则不发）。

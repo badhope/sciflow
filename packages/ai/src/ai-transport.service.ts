@@ -541,9 +541,74 @@ ${augmentation}` };
       this.logLlmCall({ caller, model, promptTokens: tokens.prompt, completionTokens: tokens.completion, latencyMs: Date.now() - t0, success: true });
       return object;
     }).catch((err) => {
-      this.logLlmCall({ caller, model, promptTokens: 0, completionTokens: 0, latencyMs: Date.now() - t0, success: false, error: err?.message });
-      throw new HttpException(`AI 结构化输出失败: ${String(err?.message || err).slice(0, 200)}`, HttpStatus.BAD_GATEWAY);
+      const detail = AiTransportService.describeError(err);
+      this.logLlmCall({ caller, model, promptTokens: 0, completionTokens: 0, latencyMs: Date.now() - t0, success: false, error: detail });
+      throw new HttpException(`AI 结构化输出失败: ${detail}`.slice(0, 600), HttpStatus.BAD_GATEWAY);
     });
+  }
+
+  /**
+   * 把 AI SDK / 上游返回的异常压成一句人话。
+   *
+   * 为什么需要：AI SDK v7 的 generateObject 失败时抛的对象**没有 message**，
+   * 直接 String(err) 会得到「[object Object]」——线上排障时等于零信息。
+   * 这里按优先级取：message → text → responseBody → cause → name。
+   */
+  private static describeError(err: unknown): string {
+    if (typeof err === 'string') return err.slice(0, 400);
+    if (!err || typeof err !== 'object') return `未知错误(${String(err)})`;
+    const e = err as Record<string, any>;
+    const parts: string[] = [];
+    if (e.name && e.name !== 'Error') parts.push(String(e.name));
+    for (const key of ['message', 'text', 'responseBody', 'cause', 'data', 'statusCode']) {
+      const v = e[key];
+      if (v === undefined || v === null || v === '') continue;
+      const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+      parts.push(s.slice(0, 400));
+      if (key === 'message' || key === 'text') break;
+    }
+    // 兜底：AI SDK 抛的异常对象可能没有任何可识别字段，打印结构本身以便定位
+    const own = Object.getOwnPropertyNames(e);
+    parts.push(`keys=[${own.join(',')}]`);
+    try {
+      parts.push(JSON.stringify(e).slice(0, 300));
+    } catch {
+      /* 循环引用等无法序列化的情况忽略 */
+    }
+    const out = parts.join(' | ').trim();
+    return out || '未知错误';
+  }
+
+  /** 非流式工具补全：generateText 跑完整工具循环，返回最终文本（供 /api/chat 非流式入口） */
+  async completeWithTools(messages: ChatMessage[], opts: CompleteOptions = {}): Promise<string> {
+    if (!opts.tools || !this.toolCalling) return this.complete(messages, opts);
+    this.assertConfigured();
+    const t0 = Date.now();
+    const model = this.resolveModel(opts);
+    const caller = opts.context || 'general';
+    try {
+      return await this.limit(async () => {
+        const { instructions, rest } = this.splitSystemMessages(this.withConfigAugmentation(messages, caller));
+        const r = await generateText({
+          model: this.buildModel(model, opts.signal),
+          temperature: opts.temperature ?? 0.7,
+          maxOutputTokens: opts.maxTokens ?? this.defaultMaxOutput(),
+          abortSignal: AiTransportService.withTimeout(opts.signal, AiTransportService.requestTimeoutMs() * Math.max(1, opts.maxSteps ?? 1)),
+          instructions,
+          messages: rest,
+          tools: opts.tools,
+          stopWhen: stepCountIs(opts.maxSteps && opts.maxSteps > 1 ? opts.maxSteps : 1),
+        });
+        const usage = r.usage;
+        const pt = usage?.inputTokens ?? 0;
+        const ct = usage?.outputTokens ?? 0;
+        this.logLlmCall({ caller, model, promptTokens: pt, completionTokens: ct, latencyMs: Date.now() - t0, success: true });
+        return r.text ?? '';
+      });
+    } catch (err: any) {
+      this.logLlmCall({ caller, model, promptTokens: 0, completionTokens: 0, latencyMs: Date.now() - t0, success: false, error: err?.message });
+      throw new HttpException(`AI 工具调用失败: ${String(err?.message || err).slice(0, 300)}`, HttpStatus.BAD_GATEWAY);
+    }
   }
 
   /**

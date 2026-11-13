@@ -68,9 +68,23 @@ export const citations = sqliteTable('citation', {
 export const qualityReports = sqliteTable('quality_report', {
   id: text('id').primaryKey(),
   documentId: text('document_id').notNull(),
+  /** 兼容字段：门禁分（新写入=客观分；历史行可能是 LLM 分） */
   totalScore: integer('total_score').notNull(),
+  /** 兼容字段：LLM 七维分（历史行） */
   scores: text('scores').notNull(), // JSON: {literature,logic,citation,language,novelty,figures,format}
   feedback: text('feedback').default(''), // 改进建议
+  /** 确定性客观检查分（门禁用） */
+  objectiveScore: integer('objective_score'),
+  /** 客观检查维度明细 JSON */
+  objectiveDimensions: text('objective_dimensions').default('[]'),
+  /** LLM 七维总分（参考，不参与门禁） */
+  llmScore: integer('llm_score'),
+  /** LLM 七维分项 JSON */
+  llmScores: text('llm_scores').default('{}'),
+  /** 专家审核分（暂未接入 UI，预留给人工复核） */
+  expertScore: integer('expert_score'),
+  /** unreviewed | in_review | approved | rejected */
+  expertStatus: text('expert_status').default('unreviewed'),
   createdAt: integer('created_at').notNull(),
 });
 
@@ -485,6 +499,160 @@ export const researchDesigns = sqliteTable('research_design', {
 });
 
 export type ResearchDesign = typeof researchDesigns.$inferSelect;
+
+/**
+ * 自主科研项目（Research Program）：科研对象模型的顶层容器。
+ * 与 project 的关系：project 是资源/权限容器，program 是一次具体研究计划；
+ * 一个 project 可以有多个 program（不同课题/不同轮次）。
+ */
+export const researchPrograms = sqliteTable('research_program', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  title: text('title').notNull(),
+  goal: text('goal').default(''),
+  domain: text('domain').default(''),
+  /** L0—L5；默认 L2（受监督执行），与产品决策一致 */
+  autonomyLevel: text('autonomy_level').default('L2'),
+  /** draft | active | paused | completed | archived */
+  status: text('status').default('draft'),
+  /** JSON：预算/截止/数据/伦理/工具等约束 */
+  constraints: text('constraints').default('{}'),
+  /** JSON：成功标准数组 */
+  successCriteria: text('success_criteria').default('[]'),
+  createdBy: text('created_by').default(''),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type ResearchProgram = typeof researchPrograms.$inferSelect;
+
+/** 研究循环：一个 program 内的多轮迭代（可暂停/恢复/终止） */
+export const researchCycles = sqliteTable('research_cycle', {
+  id: text('id').primaryKey(),
+  programId: text('program_id').notNull(),
+  seq: integer('seq').notNull(),
+  /** intake|question|landscape|gap|hypotheses|protocol|feasibility|execute|analyze|red_team|revise|synthesize|reproduce|report|retrospective|stopped|blocked */
+  state: text('state').default('intake'),
+  objective: text('objective').default(''),
+  summary: text('summary').default(''),
+  /** JSON：本轮模型/算力/时长预算与实际消耗 */
+  budget: text('budget').default('{}'),
+  startedAt: integer('started_at'),
+  endedAt: integer('ended_at'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type ResearchCycle = typeof researchCycles.$inferSelect;
+
+/** 研究问题：一个 program 可以有多个问题；可归属某轮 cycle */
+export const researchQuestions = sqliteTable('research_question', {
+  id: text('id').primaryKey(),
+  programId: text('program_id').notNull(),
+  cycleId: text('cycle_id'),
+  question: text('question').notNull(),
+  scope: text('scope').default(''),
+  /** open | active | answered | abandoned */
+  status: text('status').default('open'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type ResearchQuestion = typeof researchQuestions.$inferSelect;
+
+/** 可证伪假设：绑定研究问题，保留 rationale/predictions */
+export const researchHypotheses = sqliteTable('research_hypothesis', {
+  id: text('id').primaryKey(),
+  programId: text('program_id').notNull(),
+  questionId: text('question_id').notNull(),
+  statement: text('statement').notNull(),
+  rationale: text('rationale').default(''),
+  /** JSON：预测数组（可检验的预期结果） */
+  predictions: text('predictions').default('[]'),
+  /** proposed | testing | supported | refuted | inconclusive | abandoned */
+  status: text('status').default('proposed'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type ResearchHypothesis = typeof researchHypotheses.$inferSelect;
+
+/** 研究协议：假设的可执行方案版本（变量/对照/统计计划/审批） */
+export const researchProtocols = sqliteTable('research_protocol', {
+  id: text('id').primaryKey(),
+  programId: text('program_id').notNull(),
+  hypothesisId: text('hypothesis_id').notNull(),
+  version: integer('version').default(1),
+  /** JSON：变量/对照/样本/统计/执行步骤 */
+  design: text('design').default('{}'),
+  /** draft | approved | running | completed | abandoned */
+  status: text('status').default('draft'),
+  approvedBy: text('approved_by').default(''),
+  approvedAt: integer('approved_at'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type ResearchProtocol = typeof researchProtocols.$inferSelect;
+
+/** 研究结论/主张：绑定 Program/Cycle/Protocol，带置信度与状态 */
+export const researchClaims = sqliteTable('research_claim', {
+  id: text('id').primaryKey(),
+  programId: text('program_id').notNull(),
+  cycleId: text('cycle_id'),
+  protocolId: text('protocol_id'),
+  statement: text('statement').notNull(),
+  /** 0-100；表示当前证据下的置信度，不等同于统计显著性 */
+  confidence: integer('confidence').default(50),
+  /** draft | supported | refuted | inconclusive | accepted | rejected */
+  status: text('status').default('draft'),
+  scope: text('scope').default(''),
+  createdBy: text('created_by').default(''),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type ResearchClaim = typeof researchClaims.$inferSelect;
+
+/** 证据：支持/反驳/不确定某条 claim；可指向文献、实验、数据集、外部来源或 AI */
+export const researchEvidence = sqliteTable('research_evidence', {
+  id: text('id').primaryKey(),
+  programId: text('program_id').notNull(),
+  claimId: text('claim_id').notNull(),
+  /** literature | experiment | dataset | external | ai */
+  sourceType: text('source_type').notNull(),
+  sourceId: text('source_id').default(''),
+  quote: text('quote').default(''),
+  /** supports | refutes | uncertain */
+  stance: text('stance').default('supports'),
+  /** 1-5，人工/规则评估的证据强度 */
+  strength: integer('strength').default(3),
+  verified: integer('verified').default(0),
+  createdBy: text('created_by').default(''),
+  createdAt: integer('created_at').notNull(),
+});
+
+export type ResearchEvidence = typeof researchEvidence.$inferSelect;
+
+/** 研究运行：一次协议执行的研究级清单（可关联底层 experiment） */
+export const researchRuns = sqliteTable('research_run', {
+  id: text('id').primaryKey(),
+  programId: text('program_id').notNull(),
+  cycleId: text('cycle_id'),
+  protocolId: text('protocol_id'),
+  experimentId: text('experiment_id').default(''),
+  /** pending | running | completed | failed | timeout | cancelled */
+  status: text('status').default('pending'),
+  /** JSON：环境/代码/数据/参数/产物/复现信息 */
+  manifest: text('manifest').default('{}'),
+  summary: text('summary').default(''),
+  startedAt: integer('started_at'),
+  endedAt: integer('ended_at'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type ResearchRun = typeof researchRuns.$inferSelect;
 
 /** 用户（企业认证 · AUTH_MODE=jwt 时启用；本地/桌面模式 AUTH_MODE=none 不强制登录） */
 export const users = sqliteTable('user', {

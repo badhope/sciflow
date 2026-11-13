@@ -105,6 +105,12 @@ CREATE TABLE IF NOT EXISTS quality_report (
   total_score INTEGER NOT NULL,
   scores TEXT NOT NULL,
   feedback TEXT DEFAULT '',
+  objective_score INTEGER,
+  objective_dimensions TEXT DEFAULT '[]',
+  llm_score INTEGER,
+  llm_scores TEXT DEFAULT '{}',
+  expert_score INTEGER,
+  expert_status TEXT DEFAULT 'unreviewed',
   created_at INTEGER NOT NULL
 );
 
@@ -419,6 +425,131 @@ CREATE TABLE IF NOT EXISTS research_design (
 );
 CREATE INDEX IF NOT EXISTS idx_research_design_project ON research_design(project_id);
 
+-- 自主科研对象：Research Program / Cycle / Question / Hypothesis / Protocol
+CREATE TABLE IF NOT EXISTS research_program (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  goal TEXT DEFAULT '',
+  domain TEXT DEFAULT '',
+  autonomy_level TEXT DEFAULT 'L2',
+  status TEXT DEFAULT 'draft',
+  constraints TEXT DEFAULT '{}',
+  success_criteria TEXT DEFAULT '[]',
+  created_by TEXT DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_research_program_project ON research_program(project_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS research_cycle (
+  id TEXT PRIMARY KEY,
+  program_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  state TEXT DEFAULT 'intake',
+  objective TEXT DEFAULT '',
+  summary TEXT DEFAULT '',
+  budget TEXT DEFAULT '{}',
+  started_at INTEGER,
+  ended_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_research_cycle_program ON research_cycle(program_id, seq);
+
+CREATE TABLE IF NOT EXISTS research_question (
+  id TEXT PRIMARY KEY,
+  program_id TEXT NOT NULL,
+  cycle_id TEXT,
+  question TEXT NOT NULL,
+  scope TEXT DEFAULT '',
+  status TEXT DEFAULT 'open',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_research_question_program ON research_question(program_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS research_hypothesis (
+  id TEXT PRIMARY KEY,
+  program_id TEXT NOT NULL,
+  question_id TEXT NOT NULL,
+  statement TEXT NOT NULL,
+  rationale TEXT DEFAULT '',
+  predictions TEXT DEFAULT '[]',
+  status TEXT DEFAULT 'proposed',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_research_hypothesis_question ON research_hypothesis(question_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_research_hypothesis_program ON research_hypothesis(program_id);
+
+CREATE TABLE IF NOT EXISTS research_protocol (
+  id TEXT PRIMARY KEY,
+  program_id TEXT NOT NULL,
+  hypothesis_id TEXT NOT NULL,
+  version INTEGER DEFAULT 1,
+  design TEXT DEFAULT '{}',
+  status TEXT DEFAULT 'draft',
+  approved_by TEXT DEFAULT '',
+  approved_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_research_protocol_hypothesis ON research_protocol(hypothesis_id, version DESC);
+CREATE INDEX IF NOT EXISTS idx_research_protocol_program ON research_protocol(program_id);
+
+-- 阶段 2B：Claim / Evidence / Run
+CREATE TABLE IF NOT EXISTS research_claim (
+  id TEXT PRIMARY KEY,
+  program_id TEXT NOT NULL,
+  cycle_id TEXT,
+  protocol_id TEXT,
+  statement TEXT NOT NULL,
+  confidence INTEGER DEFAULT 50,
+  status TEXT DEFAULT 'draft',
+  scope TEXT DEFAULT '',
+  created_by TEXT DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_research_claim_program ON research_claim(program_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_research_claim_cycle ON research_claim(cycle_id);
+CREATE INDEX IF NOT EXISTS idx_research_claim_protocol ON research_claim(protocol_id);
+
+CREATE TABLE IF NOT EXISTS research_evidence (
+  id TEXT PRIMARY KEY,
+  program_id TEXT NOT NULL,
+  claim_id TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  source_id TEXT DEFAULT '',
+  quote TEXT DEFAULT '',
+  stance TEXT DEFAULT 'supports',
+  strength INTEGER DEFAULT 3,
+  verified INTEGER DEFAULT 0,
+  created_by TEXT DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_research_evidence_claim ON research_evidence(claim_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_research_evidence_program ON research_evidence(program_id);
+
+CREATE TABLE IF NOT EXISTS research_run (
+  id TEXT PRIMARY KEY,
+  program_id TEXT NOT NULL,
+  cycle_id TEXT,
+  protocol_id TEXT,
+  experiment_id TEXT DEFAULT '',
+  status TEXT DEFAULT 'pending',
+  manifest TEXT DEFAULT '{}',
+  summary TEXT DEFAULT '',
+  started_at INTEGER,
+  ended_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_research_run_program ON research_run(program_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_research_run_cycle ON research_run(cycle_id);
+CREATE INDEX IF NOT EXISTS idx_research_run_protocol ON research_run(protocol_id);
+
 -- 投稿流程状态跟踪：投稿记录 + 状态历史流水
 CREATE TABLE IF NOT EXISTS submission (
   id TEXT PRIMARY KEY,
@@ -629,6 +760,13 @@ ensureColumn('model_provider', 'context_window', 'INTEGER DEFAULT 0');
 ensureColumn('model_provider', 'max_output', 'INTEGER DEFAULT 0');
 ensureColumn('model_provider', 'tool_calling', 'INTEGER DEFAULT 1');
 ensureColumn('model_provider', 'models', "TEXT DEFAULT '[]'");
+// 质量报告来源拆分：客观门禁分 / LLM 参考分 / 专家审核预留
+ensureColumn('quality_report', 'objective_score', 'INTEGER');
+ensureColumn('quality_report', 'objective_dimensions', "TEXT DEFAULT '[]'");
+ensureColumn('quality_report', 'llm_score', 'INTEGER');
+ensureColumn('quality_report', 'llm_scores', "TEXT DEFAULT '{}'");
+ensureColumn('quality_report', 'expert_score', 'INTEGER');
+ensureColumn('quality_report', 'expert_status', "TEXT DEFAULT 'unreviewed'");
 // 配置中心 v1.3：钩子唯一性（同名同事件同类型只允许一条，防重复注入）+ 审计只追加（触发器兜底）
 try {
   sqlite.exec('CREATE UNIQUE INDEX IF NOT EXISTS ux_config_hook_name_event_type ON config_hook(name, event, type)');

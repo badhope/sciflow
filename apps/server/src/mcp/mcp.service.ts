@@ -12,6 +12,8 @@ import { KnowledgeService } from '../knowledge/knowledge.service';
 import { APP_VERSION } from '../common/version';
 import { ConfigCenterService } from '../config/config-center.service';
 import { ExtensionsService, assetKey } from '../extensions/extensions.service';
+import { ProjectAccessService } from '../common/project-access.service';
+import type { AuthPayload } from '../auth/auth.service';
 
 /** MCP 工具定义（符合 Model Context Protocol 2026 的 Tool 结构：name/description/inputSchema） */
 interface McpTool {
@@ -56,6 +58,7 @@ export class McpService {
     private readonly knowledge: KnowledgeService,
     private readonly config: ConfigCenterService,
     private readonly extensions: ExtensionsService,
+    private readonly access: ProjectAccessService,
   ) {
     this.tools = [
       {
@@ -66,13 +69,18 @@ export class McpService {
           properties: {
             query: { type: 'string', description: '检索关键词，如 "graph neural network drug discovery"' },
             limit: { type: 'number', default: 8 },
+            projectId: { type: 'string', description: '项目 ID；企业模式下必填，用于限定检索范围' },
           },
           required: ['query'],
         },
         handler: async (args) => {
           const missing = noProjectHint(args, ['query']);
           if (missing) return { error: missing };
-          return this.references.search(String(args.query), Number(args.limit) || 8);
+          return this.references.search(
+            String(args.query),
+            Number(args.limit) || 8,
+            args.projectId ? String(args.projectId) : undefined,
+          );
         },
       },
       {
@@ -403,48 +411,48 @@ export class McpService {
   }
 
   // ---------- Guardrails：工具调用参数 schema 校验（OWASP MCP 安全基线——工具执行层授权，防畸形参数反复补工） ----------
+  /**
+   * JSON Schema → Zod：Zod 4 原生 fromJSONSchema，支持嵌套对象/数组/enum/default。
+   * 此前手写转换器只映射顶层类型，嵌套参数实际未校验；改为标准转换后单一来源。
+   */
   private buildArgSchema(schema: Record<string, any>): z.ZodType {
-    const props = schema?.properties || {};
-    const required = Array.isArray(schema?.required) ? schema.required : [];
-    const shape: Record<string, z.ZodTypeAny> = {};
-    for (const [key, p] of Object.entries(props) as [string, any][]) {
-      let s: z.ZodTypeAny;
-      switch (p?.type) {
-        case 'number':
-          s = z.number();
-          break;
-        case 'integer':
-          s = z.number().int();
-          break;
-        case 'boolean':
-          s = z.boolean();
-          break;
-        case 'array':
-          s = z.array(z.any());
-          break;
-        case 'object':
-          s = z.record(z.string(), z.any());
-          break;
-        default:
-          s = z.string();
-      }
-      if (Array.isArray(p?.enum) && p.enum.length) {
-        s = z.enum(p.enum as [string, ...string[]]);
-      }
-      if (!required.includes(key)) {
-        s = s.optional().default(p?.default);
-      }
-      shape[key] = s;
-    }
-    return z.object(shape).strip();
+    return z.fromJSONSchema(schema as never) as z.ZodType;
   }
 
-  /** 调用工具（MCP tools/call 语义）：先过参数 schema 校验（guardrail），再执行 */
-  async call(name: string, args: Record<string, any> = {}) {
+  /**
+   * 工具级授权：企业模式下按工具触及的资源做项目/管理员校验。
+   * 本地模式保持零登录体验（ProjectAccessService.enforced=false 时直接放行）。
+   */
+  private assertToolAccess(name: string, args: Record<string, any>, user?: AuthPayload) {
+    if (!this.access.enforced) return;
+    if (name === 'literature.search') {
+      const projectId = String(args?.projectId || '');
+      if (!projectId) {
+        throw new HttpException('企业模式下 literature.search 需要 projectId', HttpStatus.BAD_REQUEST);
+      }
+      this.access.assertProject(projectId, user);
+      return;
+    }
+    if (name === 'knowledge.query') {
+      this.access.assertProject(String(args?.projectId || ''), user);
+      return;
+    }
+    if (name.startsWith('config.')) {
+      this.access.assertAdmin(user);
+      return;
+    }
+    if (name === 'extension.create' || name === 'extension.toggle' || name === 'extension.generate') {
+      this.access.assertAdmin(user);
+    }
+  }
+
+  /** 调用工具（MCP tools/call 语义）：先过授权与参数 schema 校验（guardrail），再执行 */
+  async call(name: string, args: Record<string, any> = {}, user?: AuthPayload) {
     const tool = this.tools.find((t) => t.name === name);
     if (!tool) {
       throw new HttpException(`MCP 工具不存在: ${name}`, HttpStatus.NOT_FOUND);
     }
+    this.assertToolAccess(name, args, user);
     // Guardrail ①：参数类型/必填校验——畸形参数在工具执行层直接拒绝（不进入 AI 链路）
     const schema = this.buildArgSchema(tool.inputSchema);
     const parsed = schema.safeParse(args || {});
@@ -475,7 +483,7 @@ export class McpService {
    * 工具清单一处定义（this.tools），REST 端点与 MCP 协议端点共用同一实现，
    * 避免"自造协议"与真协议双维护。
    */
-  buildSdkServer(): Server {
+  buildSdkServer(user?: AuthPayload): Server {
     const server = new Server(
       { name: 'sciflow', version: APP_VERSION },
       { capabilities: { tools: {}, resources: {} } },
@@ -488,17 +496,24 @@ export class McpService {
       })),
     }));
     server.setRequestHandler(CallToolRequestSchema, async (req) => {
-      const r = await this.call(req.params.name, (req.params.arguments || {}) as Record<string, any>);
-      return {
-        content: r.content as { type: 'text'; text: string }[],
-        isError: r.isError,
-      };
+      try {
+        const r = await this.call(req.params.name, (req.params.arguments || {}) as Record<string, any>, user);
+        return {
+          content: r.content as { type: 'text'; text: string }[],
+          isError: r.isError,
+        };
+      } catch (e: any) {
+        return {
+          content: [{ type: 'text' as const, text: e?.message || String(e) }],
+          isError: true,
+        };
+      }
     });
     // M-8.2 资源暴露：documents/references 只读清单，Claude Desktop 等客户端可直接引用
     server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: this.listResourceDescriptors() }));
     server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({ resourceTemplates: MCP_RESOURCE_TEMPLATES }));
     server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
-      const text = this.readResourceText(String(req.params.uri || ''));
+      const text = this.readResourceText(String(req.params.uri || ''), user);
       return { contents: [{ uri: req.params.uri, mimeType: 'application/json', text }] };
     });
     return server;
@@ -511,11 +526,13 @@ export class McpService {
     ];
   }
 
-  /** 读取资源内容；URI 不合法或 projectId 不存在时抛参数错误 */
-  private readResourceText(uri: string): string {
+  /** 读取资源内容；URI 不合法或 projectId 不存在/无权时抛错（企业模式按 owner 过滤） */
+  private readResourceText(uri: string, user?: AuthPayload): string {
     if (uri === 'sciflow://projects') {
       const rows = sqlite.prepare('SELECT id, name, status, created_at AS createdAt FROM project ORDER BY created_at').all() as { id: string; name: string; status: string; createdAt: number }[];
-      const withCounts = rows.map((r) => {
+      const allowed = this.access.accessibleProjectIds(user);
+      const visible = allowed === null ? rows : rows.filter((r) => allowed.includes(r.id));
+      const withCounts = visible.map((r) => {
         const docs = (sqlite.prepare('SELECT COUNT(*) AS c FROM document WHERE project_id = ?').get(r.id) as { c: number }).c;
         const refs = (sqlite.prepare('SELECT COUNT(*) AS c FROM reference WHERE project_id = ?').get(r.id) as { c: number }).c;
         return { ...r, documentCount: Number(docs), referenceCount: Number(refs) };
@@ -525,8 +542,7 @@ export class McpService {
     const m = uri.match(/^sciflow:\/\/project\/([^/]+)\/(documents|references)$/);
     if (!m) throw new HttpException(`未知资源 URI：${uri}`, HttpStatus.BAD_REQUEST);
     const [, projectId, kind] = m;
-    const project = sqlite.prepare('SELECT id FROM project WHERE id = ?').get(projectId);
-    if (!project) throw new HttpException(`项目不存在：${projectId}`, HttpStatus.NOT_FOUND);
+    this.access.assertProject(projectId, user);
     if (kind === 'documents') {
       const rows = sqlite.prepare('SELECT id, title, status, version, updated_at AS updatedAt FROM document WHERE project_id = ? ORDER BY updated_at DESC').all(projectId);
       return JSON.stringify(rows, null, 2);
@@ -546,7 +562,7 @@ export class McpService {
    * 官方 SDK 客户端：Streamable HTTP 连接外部 MCP 服务器（带超时与关闭收尾）。
    * v0.4 起外部互通走真 MCP 协议（原自造 GET /tools + POST /call 已删除）。
    */
-  private async withExternalClient<T>(url: string, timeoutMs: number, fn: (client: Client) => Promise<T>): Promise<T> {
+  private async withExternalClient<T>(url: string, timeoutMs: number, fn: (client: Client, timeoutMs: number) => Promise<T>): Promise<T> {
     const base = String(url || '').replace(/\/$/, '');
     if (!/^https?:\/\//.test(base)) throw new HttpException('URL 需以 http(s):// 开头', HttpStatus.BAD_REQUEST);
     // SSRF 防护：外部 MCP 地址由用户输入，必须拒绝内网/元数据地址
@@ -557,15 +573,11 @@ export class McpService {
     }
     const client = new Client({ name: 'sciflow', version: APP_VERSION });
     const transport = new StreamableHTTPClientTransport(new URL(base));
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<never>((_r, rej) => {
-      timer = setTimeout(() => rej(new Error(`连接超时（${timeoutMs}ms）`)), timeoutMs);
-    });
     try {
-      await Promise.race([client.connect(transport), timeout]);
-      return await Promise.race([fn(client), timeout]);
+      // SDK 原生超时：可取消在途请求，异常为 McpError(RequestTimeout)
+      await client.connect(transport, { timeout: timeoutMs });
+      return await fn(client, timeoutMs);
     } finally {
-      if (timer) clearTimeout(timer);
       try { await client.close(); } catch { /* 关闭失败不影响结果 */ }
     }
   }
@@ -573,8 +585,8 @@ export class McpService {
   /** 探测外部服务器工具清单（MCP tools/list，Streamable HTTP） */
   async discoverExternal(url: string) {
     try {
-      return await this.withExternalClient(url, 15_000, async (client) => {
-        const r = await client.listTools();
+      return await this.withExternalClient(url, 15_000, async (client, timeoutMs) => {
+        const r = await client.listTools(undefined, { timeout: timeoutMs });
         const tools = (r.tools || []).map((t) => ({ name: t.name, description: t.description || '' }));
         if (!tools.length) throw new HttpException('该服务器未提供任何 MCP 工具', HttpStatus.BAD_GATEWAY);
         return { tools };
@@ -587,12 +599,12 @@ export class McpService {
 
   /** 调用外部服务器工具（MCP tools/call，Streamable HTTP） */
   async callExternal(serverId: string, name: string, args: Record<string, any>) {
-    const row = sqlite.prepare('SELECT * FROM mcp_server WHERE id = ?').get(serverId) as { url?: string } | undefined;
-    if (!row?.url) throw new HttpException('外部 MCP 服务器不存在', HttpStatus.NOT_FOUND);
+    const row = sqlite.prepare('SELECT * FROM mcp_server WHERE id = ? AND enabled = 1').get(serverId) as { url?: string } | undefined;
+    if (!row?.url) throw new HttpException('外部 MCP 服务器不存在或已禁用', HttpStatus.NOT_FOUND);
     let data: unknown;
     try {
-      data = await this.withExternalClient(row.url, 60_000, async (client) => {
-        const r = await client.callTool({ name, arguments: args || {} });
+      data = await this.withExternalClient(row.url, 60_000, async (client, timeoutMs) => {
+        const r = await client.callTool({ name, arguments: args || {} }, undefined, { timeout: timeoutMs });
         return { content: r.content, isError: r.isError === true };
       });
     } catch (e: any) {

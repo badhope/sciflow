@@ -314,22 +314,15 @@ export class WebSearchService {
     const url = `https://www.so.com/s?q=${encodeURIComponent(q)}&pn=1`;
     const guard = await checkOutboundUrl(url, { allowPrivate: allowPrivateOutbound() });
     if (!guard.ok) throw new Error(`出站地址被拒绝：${guard.reason}`);
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 10_000);
-    let html: string;
-    try {
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        },
-        signal: ctrl.signal,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      html = await res.text();
-    } finally {
-      clearTimeout(timeout);
-    }
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const html = await res.text();
     const results = parseSo360Html(html, WebSearchService.MAX_RESULTS);
     return results;
   }
@@ -341,15 +334,9 @@ export class WebSearchService {
     // 本地自建 SearXNG（127.0.0.1:8080）是主流用法，因此只需显式开关放行私有网段。
     const guard = await checkOutboundUrl(url, { allowPrivate: allowPrivateOutbound() });
     if (!guard.ok) throw new Error(`出站地址被拒绝：${guard.reason}`);
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 10_000);
-    try {
-      const res = await fetch(url, { ...init, signal: ctrl.signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    } finally {
-      clearTimeout(timeout);
-    }
+    const res = await fetch(url, { ...init, signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
   }
 
   private cacheGet(q: string): SearchResult[] | null {

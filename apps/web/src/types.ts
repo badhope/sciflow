@@ -11,6 +11,120 @@ export interface Project {
   templates?: string;
 }
 
+/** 自主科研对象（阶段 2） */
+export interface ResearchProgram {
+  id: string;
+  projectId: string;
+  title: string;
+  goal: string;
+  domain: string;
+  autonomyLevel: string;
+  status: string;
+  constraints: Record<string, unknown>;
+  successCriteria: unknown[];
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ResearchCycle {
+  id: string;
+  programId: string;
+  seq: number;
+  state: string;
+  objective: string;
+  summary: string;
+  budget: Record<string, unknown>;
+  startedAt: number | null;
+  endedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ResearchQuestion {
+  id: string;
+  programId: string;
+  cycleId: string | null;
+  question: string;
+  scope: string;
+  status: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ResearchProgramDetail extends ResearchProgram {
+  cycles: ResearchCycle[];
+  questions: ResearchQuestion[];
+}
+
+export interface ResearchHypothesis {
+  id: string;
+  programId: string;
+  questionId: string;
+  statement: string;
+  rationale: string;
+  predictions: unknown[];
+  status: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ResearchProtocol {
+  id: string;
+  programId: string;
+  hypothesisId: string;
+  version: number;
+  design: Record<string, unknown>;
+  status: string;
+  approvedBy: string;
+  approvedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ResearchEvidence {
+  id: string;
+  programId: string;
+  claimId: string;
+  sourceType: string;
+  sourceId: string;
+  quote: string;
+  stance: string;
+  strength: number;
+  verified: number;
+  createdBy: string;
+  createdAt: number;
+}
+
+export interface ResearchClaim {
+  id: string;
+  programId: string;
+  cycleId: string | null;
+  protocolId: string | null;
+  statement: string;
+  confidence: number;
+  status: string;
+  scope: string;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ResearchRun {
+  id: string;
+  programId: string;
+  cycleId: string | null;
+  protocolId: string | null;
+  experimentId: string;
+  status: string;
+  manifest: Record<string, unknown>;
+  summary: string;
+  startedAt: number | null;
+  endedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Doc {
   id: string;
   projectId: string;
@@ -118,9 +232,23 @@ export interface DocVersionEntry {
 export interface QualityReport {
   id: string;
   documentId: string;
+  /** 兼容字段：门禁分（新报告=客观分；拆分前的历史行=LLM 分） */
   totalScore: number;
   /** 原始 JSON 字符串（/api/quality 列表）或已解析对象（/api/quality/latest 等）——取值统一走 jsonText */
   scores: string | Record<string, number>;
+  /** 确定性客观检查分（门禁口径；拆分前的历史行为 null） */
+  objectiveScore?: number | null;
+  /** 客观检查维度明细 */
+  objectiveDimensions?: string | ObjectiveQualityDimension[];
+  /** LLM 参考总分（不参与门禁；历史行回填为当时的 totalScore） */
+  llmScore?: number | null;
+  /** LLM 七维分项 */
+  llmScores?: string | Record<string, number>;
+  /** 专家审核分（预留） */
+  expertScore?: number | null;
+  expertStatus?: string;
+  /** split=客观/LLM 已分列；llm-legacy=拆分前老数据（只有 LLM 分） */
+  scoreSource?: 'split' | 'llm-legacy';
   feedback: string;
   createdAt: number;
 }
@@ -155,6 +283,8 @@ export interface ProjectQualityOverviewItem {
   hardFails: string[];
   llmScore: number | null;
   llmScoredAt: number | null;
+  /** 当前评审标准的及格线（draft 70 / conference 78 / standard 80 / strict 85） */
+  passScore: number;
   passed: boolean;
 }
 

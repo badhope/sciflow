@@ -8,12 +8,14 @@ import { CompactionService } from './compaction.service';
 import { WebSearchService } from '../websearch/websearch.service';
 import { sanitizeExternalContent, spotlightWrap } from '../ai/prompt-injection';
 import { AgentToolBridge } from '../agent/agent-tool-bridge';
+import { resolveAgentToolProfile } from '../agent/agent-tool-profiles';
 import { ConfigCenterService } from '../config/config-center.service';
 import { loadDefaultRole } from '../common/prompt-augmentation';
 import { AgentTraceService } from '../agent/agent-trace.service';
 import { db } from '../db/database';
 import { projects, appSettings } from '../db/schema';
 import { envInt } from '../common/env';
+import type { AuthPayload } from '../auth/auth.service';
 
 /** RAG 来源（随 SSE 首事件下发给前端）
  *  向后兼容：旧字段 docName/score 保留；chunkText/chunkSeq/referenceId/referenceTitle 为本轮新增附加字段，
@@ -53,6 +55,8 @@ interface ChatRuntimeOptions {
   signal?: AbortSignal;
   /** 本轮强制联网搜索（输入区「联网」开关） */
   webSearch?: boolean;
+  /** 当前请求主体：企业模式下必须透传到 MCP 工具层做项目归属校验 */
+  user?: AuthPayload;
 }
 
 /** RAG 注入到模型的每块片段上限（字符）。320 太短导致上下文贫瘠（审计 H3）；默认 800，可经环境变量调整 */
@@ -179,16 +183,25 @@ export class ChatService {
       // 旧版 system_prompt（persona 面板）保留兼容，仅当角色库无默认角色时使用。
       const role = loadDefaultRole();
       const sys = role?.systemPrompt?.trim() ? role.systemPrompt : read('system_prompt');
-      let skills: { name: string; description: string; enabled: number }[] = [];
+      let skills: { name: string; description: string; instructions?: string; enabled: number }[] = [];
       try {
         skills = JSON.parse(read('skills') || '[]');
       } catch {
         skills = [];
       }
       if (!Array.isArray(skills)) skills = [];
+      // 技能正文真正注入（此前只注入一句 description，启用技能等于启用标签）：
+      // 单条截断 1200 字、总量 8000 字，避免 30 个技能把系统提示撑爆。
+      let budget = 8000;
       const desc = skills
         .filter((s) => s.enabled !== 0 && s.description)
-        .map((s) => `- ${s.name}：${s.description}`)
+        .map((s) => {
+          const body = String(s.instructions || '').trim();
+          if (!body || budget <= 0) return `- ${s.name}：${s.description}`;
+          const take = body.slice(0, Math.min(1200, budget));
+          budget -= take.length;
+          return `- ${s.name}：${s.description}\n  执行说明：${take}`;
+        })
         .join('\n');
       return { systemPrompt: sys.trim() || undefined, skillsDesc: desc || undefined };
     } catch {
@@ -201,7 +214,7 @@ export class ChatService {
     history: ChatMessage[] = [],
     projectId?: string,
     docContext?: string,
-    opts: Pick<ChatRuntimeOptions, 'model' | 'webSearch'> = {},
+    opts: Pick<ChatRuntimeOptions, 'model' | 'webSearch' | 'user'> = {},
   ) {
     // 非流式入口同样执行 chat:before 钩子（block 在此拦截；prompt_inject 由 AI 层注入）
     const before = await this.config.runEventHooks('chat:before', { text: message, projectId }, 'chat');
@@ -210,11 +223,35 @@ export class ChatService {
     const compacted = this.compaction.compact(history);
     const effectiveHistory = compacted.messages;
     const { context, sources } = await this.contextFor(projectId, message, docContext, effectiveHistory.length, opts.webSearch === true);
+
+    // 与 /chat/stream 对齐：非流式入口也注入 Agent 工具并记录轨迹
+    const useTools = this.tools.isEnabled();
+    let runId: string | undefined;
+    if (useTools && projectId) {
+      try {
+        runId = this.trace.startRun({ projectId, source: 'chat', input: message, model: opts.model || this.ai.config.model });
+      } catch {
+        runId = undefined;
+      }
+    }
+    const toolSet = useTools ? this.tools.buildToolSet(projectId, runId, { user: opts.user }) : undefined;
+    const toolNames = toolSet ? Object.keys(toolSet) : [];
+    this.logger.log(`[agent] non-stream useTools=${useTools} tools=${toolNames.length} profile=${resolveAgentToolProfile().id}${runId ? ` run=${runId.slice(0, 8)}` : ''}`);
+
+    const chatOpts: ChatStreamOptions = {
+      modelName: opts.model,
+      ...(toolSet && toolNames.length ? { tools: toolSet, maxSteps: 12 } : {}),
+    };
     const persona = this.personaConfig();
     const fullContext = persona.skillsDesc ? `${context}\n\n【可用技能】\n${persona.skillsDesc}\n（回答需要时可利用对应技能获取事实依据）` : context;
     const answerText = fullContext
-      ? await this.ai.chatWithContext(message, effectiveHistory, fullContext, { modelName: opts.model }, persona.systemPrompt)
-      : await this.ai.chat(message, effectiveHistory, { modelName: opts.model }, persona.systemPrompt);
+      ? await this.ai.chatWithToolsContext(message, effectiveHistory, fullContext, chatOpts, persona.systemPrompt)
+      : await this.ai.chatWithTools(message, effectiveHistory, chatOpts, persona.systemPrompt);
+    if (runId) {
+      try {
+        this.trace.finishRun(runId, { status: 'done', outputSummary: `chat 工具会话（${toolNames.length} 个工具可用）` });
+      } catch { /* 轨迹收尾失败不影响对话 */ }
+    }
     return { answer: answerText, sources };
   }
 
@@ -253,9 +290,9 @@ export class ChatService {
           runId = undefined;
         }
       }
-      const toolSet = useTools ? this.tools.buildToolSet(projectId, runId) : undefined;
+      const toolSet = useTools ? this.tools.buildToolSet(projectId, runId, { user: opts.user }) : undefined;
       const toolNames = toolSet ? Object.keys(toolSet) : [];
-      this.logger.log(`[agent] useTools=${useTools} tools=${toolNames.length}${runId ? ` run=${runId.slice(0, 8)}` : ''}`);
+      this.logger.log(`[agent] useTools=${useTools} tools=${toolNames.length} profile=${resolveAgentToolProfile().id}${runId ? ` run=${runId.slice(0, 8)}` : ''}`);
       const streamOpts: ChatStreamOptions = {
         modelName: opts.model,
         enableThinking: opts.enableThinking,

@@ -1,9 +1,9 @@
 import type { ChatSource } from '../types';
+import { errorMessage } from '../lib/errors';
+import { createParser } from 'eventsource-parser';
 
-/** Narrow unknown error to readable message */
-export function extractErrMsg(e: unknown): string {
-  return typeof e === 'object' && e !== null && 'message' in e && typeof e.message === 'string' ? e.message : String(e);
-}
+/** Narrow unknown error to readable message（兼容旧导出名） */
+export { errorMessage as extractErrMsg };
 
 /**
  * API base（桌面端适配）：
@@ -327,21 +327,22 @@ export function streamChat(opts: {
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
       let reasoning = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          const t = line.trim();
-          if (!t.startsWith('data:')) continue;
-          const payload = t.slice(5).trim();
-          if (!payload) continue;
+      // SSE 解析交给 eventsource-parser：手写 split('\n') 会漏掉 CRLF 流与多行 data: 事件
+      // （多行事件被拆成多个坏行后静默丢弃，表现为「流卡住但没报错」）。
+      let finished = false;
+      const finishOnce = () => {
+        if (finished) return;
+        finished = true;
+        finish();
+      };
+      const parser = createParser({
+        onEvent: (ev) => {
+          if (finished) return;
+          const payload = (ev.data ?? '').trim();
+          if (!payload) return;
           if (payload === '[DONE]') {
-            finish();
+            finishOnce();
             return;
           }
           let json: Record<string, unknown>;
@@ -349,21 +350,22 @@ export function streamChat(opts: {
             json = JSON.parse(payload) as Record<string, unknown>;
           } catch {
             // 坏行（网络截断/非 JSON 事件）：跳过，不中断整个流
-            continue;
+            return;
           }
           // 服务端显式错误事件：终止并上报（这是真错误，不是坏行）
           if (typeof json.error === 'string' && json.error) {
             opts.onError?.(friendlyError(json.error));
             opts.onDone?.(full);
+            finished = true;
             return;
           }
           if (json.sources) {
             opts.onSources?.(json.sources as unknown as ChatSource[]);
-            continue;
+            return;
           }
           if (json.usage) {
             opts.onUsage?.(json.usage as unknown as { prompt_tokens: number; completion_tokens: number; total_tokens: number });
-            continue;
+            return;
           }
           // Agent 工具调用：模型决定检索文献/查知识库时下发，供 UI 展示进度
           if (Array.isArray(json.tool_calls)) {
@@ -371,7 +373,7 @@ export function streamChat(opts: {
               const name = raw?.function?.name;
               if (name) opts.onToolCall?.({ id: raw.id, name, arguments: raw.function?.arguments ?? '{}' });
             }
-            continue;
+            return;
           }
           if (typeof json.delta === 'string') {
             full += json.delta;
@@ -381,9 +383,15 @@ export function streamChat(opts: {
             reasoning += json.reasoning;
             opts.onReasoning?.(reasoning);
           }
-        }
+        },
+      });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (finished) break;
+        parser.feed(decoder.decode(value, { stream: true }));
       }
-      finish();
+      finishOnce();
     })
     .catch((e: unknown) => {
       // 用户主动停止：保留已收文本，正常收尾（不报错）
@@ -396,7 +404,7 @@ export function streamChat(opts: {
         opts.onError?.(e.message);
         return;
       }
-      opts.onError?.(friendlyError(extractErrMsg(e)));
+      opts.onError?.(friendlyError(errorMessage(e)));
     });
   return () => ctrl.abort();
 }

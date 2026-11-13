@@ -2,7 +2,8 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { randomUUID } from 'node:crypto';
 import { AiService } from '../ai/ai.service';
 import { normalizeApiKey } from '../ai/ai-transport.service';
-import { DB_PATH, sqlite, vecLoaded } from '../db/database';
+import { DB_PATH, db, sqlite, vecLoaded } from '../db/database';
+import { mcpServers } from '../db/schema';
 import { encryptSecret, decryptSecret } from '../common/secret-crypto';
 import { allowPrivateOutbound, checkOutboundUrl } from '../common/outbound-guard';
 import { fetchModelCatalog, normalizeProtocol, type DiscoveredModel } from '../common/model-catalog';
@@ -338,12 +339,14 @@ export class SettingsService {
   saveMcpServer(body: { id?: string; name: string; url: string; enabled?: number }) {
     if (!body?.name?.trim() || !body?.url?.trim()) throw new BadRequestException('名称与 URL 不能为空');
     if (!/^https?:\/\//.test(body.url.trim())) throw new BadRequestException('URL 需以 http(s):// 开头');
-    if (body.id) {
-      sqlite.prepare('UPDATE mcp_server SET name=?, url=?, enabled=? WHERE id=?').run(body.name.trim(), body.url.trim().replace(/\/$/, ''), body.enabled === 0 ? 0 : 1, body.id);
-      return { ok: true, id: body.id };
-    }
-    const id = randomUUID();
-    sqlite.prepare('INSERT INTO mcp_server (id, name, url, enabled, created_at) VALUES (?,?,?,?,?)').run(id, body.name.trim(), body.url.trim().replace(/\/$/, ''), body.enabled === 0 ? 0 : 1, Date.now());
+    const id = body.id || randomUUID();
+    const name = body.name.trim();
+    const url = body.url.trim().replace(/\/$/, '');
+    const enabled = body.enabled === 0 ? 0 : 1;
+    db.insert(mcpServers)
+      .values({ id, name, url, enabled, createdAt: Date.now() })
+      .onConflictDoUpdate({ target: mcpServers.id, set: { name, url, enabled } })
+      .run();
     return { ok: true, id };
   }
 

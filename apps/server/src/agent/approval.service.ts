@@ -15,7 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
 import { toolApprovals } from '../db/schema';
 
-export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'consumed';
 
 export interface ApprovalView {
   id: string;
@@ -35,10 +35,41 @@ const DEFAULT_ASK_PREFIXES = [
   'document.', // 改文档正文
   'project.', // 改项目结构
   'config.', // 改全局配置
+  'extension.', // 改扩展/技能
 ];
+
+/**
+ * 只读工具豁免：这些名字虽然落在上面的前缀里，但只读不写。
+ * 不豁免会把「读配置」也变成逐次人工审批，工具链直接被点击地狱拖死。
+ */
+const READ_ONLY_TOOLS = new Set([
+  'config.snapshot',
+  'config.preview',
+  'extension.list',
+]);
 
 /** 待确认请求的超时：超时视为拒绝，避免模型无限等待 */
 const PENDING_TTL_MS = 10 * 60 * 1000;
+
+/** 稳定序列化：键排序后比较，避免模型改写参数键序导致审批匹配失效 */
+function stableJson(value: unknown): string {
+  const stable = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(stable);
+    if (v && typeof v === 'object') {
+      return Object.fromEntries(
+        Object.entries(v as Record<string, unknown>)
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+          .map(([k, val]) => [k, stable(val)]),
+      );
+    }
+    return v;
+  };
+  try {
+    return JSON.stringify(stable(typeof value === 'string' ? JSON.parse(value) : value));
+  } catch {
+    return String(value);
+  }
+}
 
 @Injectable()
 export class ApprovalService {
@@ -49,6 +80,7 @@ export class ApprovalService {
   /** 该工具是否需要用户批准 */
   needsApproval(toolName: string): boolean {
     if (this.alwaysAllow.has(toolName)) return false;
+    if (READ_ONLY_TOOLS.has(toolName)) return false;
     return DEFAULT_ASK_PREFIXES.some((prefix) => toolName.startsWith(prefix));
   }
 
@@ -107,6 +139,39 @@ export class ApprovalService {
   get(id: string): ApprovalView | null {
     const row = db.select().from(toolApprovals).where(eq(toolApprovals.id, id)).get();
     return row ? this.toView(row) : null;
+  }
+
+  /**
+   * 找出与本次调用匹配的已批准记录。
+   *
+   * 匹配键 = 工具名 + 项目 + run + 参数（稳定序列化）。
+   * 只按工具名匹配会让「批准 A 参数、实际跑 B 参数」绕过审批，因此参数必须一起比对。
+   */
+  findApproved(input: {
+    toolName: string;
+    args: unknown;
+    projectId?: string | null;
+    runId?: string | null;
+  }): ApprovalView | null {
+    this.expireStale();
+    const wantedArgs = stableJson(input.args);
+    const rows = db.select().from(toolApprovals).where(eq(toolApprovals.status, 'approved')).all();
+    const hit = rows.find(
+      (r) =>
+        r.toolName === input.toolName &&
+        (r.projectId ?? null) === (input.projectId ?? null) &&
+        (r.runId ?? null) === (input.runId ?? null) &&
+        stableJson(r.args) === wantedArgs,
+    );
+    return hit ? this.toView(hit) : null;
+  }
+
+  /** 消费一次批准：一次批准只允许执行一次，防止同一批准被重复利用 */
+  consume(id: string): void {
+    db.update(toolApprovals)
+      .set({ status: 'consumed', decidedAt: Date.now() })
+      .where(eq(toolApprovals.id, id))
+      .run();
   }
 
   /** 把超时未处理的标记为 expired，避免界面长期挂着过期请求 */

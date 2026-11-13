@@ -12,6 +12,8 @@ import {
   reviewComments,
   agentExecutions,
   qualityReports,
+  agentTasks,
+  toolApprovals,
 } from '../db/schema';
 import { ProjectAccessService } from '../common/project-access.service';
 
@@ -41,6 +43,10 @@ describe('ProjectAccessService 子资源归属（v1.8）', () => {
   let commentA: string;
   let runA: string;
   let reportA: string;
+  let taskA: string;
+  let taskGlobal: string;
+  let approvalA: string;
+  let approvalGlobal: string;
 
   beforeEach(() => {
     process.env.AUTH_MODE = 'jwt';
@@ -56,6 +62,10 @@ describe('ProjectAccessService 子资源归属（v1.8）', () => {
     commentA = randomUUID();
     runA = randomUUID();
     reportA = randomUUID();
+    taskA = randomUUID();
+    taskGlobal = randomUUID();
+    approvalA = randomUUID();
+    approvalGlobal = randomUUID();
 
     db.insert(projects).values({ id: pidA, name: 'Alice 项目', description: '', ownerId: 'user-alice', createdAt: now, updatedAt: now }).run();
     db.insert(projects).values({ id: pidB, name: 'Bob 项目', description: '', ownerId: 'user-bob', createdAt: now, updatedAt: now }).run();
@@ -68,6 +78,10 @@ describe('ProjectAccessService 子资源归属（v1.8）', () => {
     db.insert(reviewComments).values({ id: commentA, documentId: docA, reviewer: 'R1', commentText: '意见', status: 'open', createdAt: now, updatedAt: now }).run();
     db.insert(agentExecutions).values({ id: runA, projectId: pidA, source: 'pipeline', input: '主题', status: 'done', createdAt: now }).run();
     db.insert(qualityReports).values({ id: reportA, documentId: docA, totalScore: 80, scores: '{}', feedback: 'ok', createdAt: now }).run();
+    db.insert(agentTasks).values({ id: taskA, projectId: pidA, content: 'Alice 的任务', status: 'pending', priority: 'medium', seq: 0, createdAt: now, updatedAt: now }).run();
+    db.insert(agentTasks).values({ id: taskGlobal, projectId: null, content: '全局任务', status: 'pending', priority: 'medium', seq: 0, createdAt: now, updatedAt: now }).run();
+    db.insert(toolApprovals).values({ id: approvalA, projectId: pidA, toolName: 'experiment.run', args: '{}', reason: '测试', status: 'pending', createdAt: now }).run();
+    db.insert(toolApprovals).values({ id: approvalGlobal, projectId: null, toolName: 'config.preview', args: '{}', reason: '测试', status: 'pending', createdAt: now }).run();
   });
 
   afterEach(() => {
@@ -117,6 +131,35 @@ describe('ProjectAccessService 子资源归属（v1.8）', () => {
     const svc = new ProjectAccessService();
     expect(() => svc.assertQualityReport(reportA, bob)).toThrow(NotFoundException);
     expect(svc.assertQualityReport(reportA, alice).id).toBe(reportA);
+  });
+
+  it('Agent 任务：项目任务非 owner 404；全局任务企业模式仅 admin', () => {
+    const svc = new ProjectAccessService();
+    expect(() => svc.assertAgentTask(taskA, bob)).toThrow(NotFoundException);
+    expect(svc.assertAgentTask(taskA, alice).id).toBe(taskA);
+    expect(() => svc.assertAgentTask(taskGlobal, alice)).toThrow(/仅管理员/);
+    expect(svc.assertAgentTask(taskGlobal, boss).id).toBe(taskGlobal);
+  });
+
+  it('工具审批：项目审批非 owner 404；全局审批企业模式仅 admin', () => {
+    const svc = new ProjectAccessService();
+    expect(() => svc.assertToolApproval(approvalA, bob)).toThrow(NotFoundException);
+    expect(svc.assertToolApproval(approvalA, alice).id).toBe(approvalA);
+    expect(() => svc.assertToolApproval(approvalGlobal, alice)).toThrow(/仅管理员/);
+    expect(svc.assertToolApproval(approvalGlobal, boss).id).toBe(approvalGlobal);
+  });
+
+  it('accessibleProjectIds：企业模式只返回 owner 项目；本地模式返回 null', () => {
+    const svc = new ProjectAccessService();
+    const aliceIds = svc.accessibleProjectIds(alice);
+    expect(aliceIds).toContain(pidA);
+    expect(aliceIds).not.toContain(pidB);
+    const bobIds = svc.accessibleProjectIds(bob);
+    expect(bobIds).toContain(pidB);
+    expect(bobIds).not.toContain(pidA);
+    expect(svc.accessibleProjectIds(undefined)).toEqual([]);
+    process.env.AUTH_MODE = 'none';
+    expect(svc.accessibleProjectIds(alice)).toBeNull();
   });
 
   it('不存在的 id 一律 404（不泄露存在性）', () => {

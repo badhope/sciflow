@@ -6,6 +6,7 @@ import remarkRehype from "remark-rehype";
 import rehypeStringify from "rehype-stringify";
 import type { Options as RemarkRehypeOptions } from "remark-rehype";
 import type { Content, Root, Text, PhrasingContent } from "mdast";
+import { downloadText } from '../components/ui';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    DocExporter — Markdown → LaTeX / HTML via remark AST pipeline.
@@ -397,12 +398,7 @@ export function DocExporter({ doc, content, onExportFull, onExportWord, aiBusy }
   const hasContent = Boolean(content?.trim());
 
   const download = (text: string, ext: string, mime: string) => {
-    const url = URL.createObjectURL(new Blob([text], { type: mime }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = safeName(title, ext);
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadText(safeName(title, ext), text, mime);
   };
 
   const exportLatex = () => {

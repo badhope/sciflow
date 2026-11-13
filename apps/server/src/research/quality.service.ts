@@ -35,7 +35,39 @@ function readQualityStandard(): QualityStandardKey {
 export class QualityService {
   constructor(private readonly ai: AiService) {}
 
-  /** 对文档执行 7 维质量评分并落库（借鉴 ARS 0-100 质量关卡） */
+  /**
+   * 报告行 → API DTO。
+   *
+   * 拆分前的老行只有 totalScore（LLM 分）+ scores（LLM 七维），objectiveScore/llmScore 均为 null；
+   * 直接用新字段会让老历史显示「LLM 分 0」。这里按行形态显式回填并标 scoreSource，
+   * 前端据此区分「门禁客观分」与「LLM 参考分」，不把两者混成一个总分。
+   */
+  private toDto(row: typeof qualityReports.$inferSelect) {
+    const legacy = row.objectiveScore == null && row.llmScore == null;
+    const scores = parseJson<Record<string, number>>(row.scores, {});
+    const llmScores = parseJson<Record<string, number>>(row.llmScores ?? '{}', {});
+    return {
+      ...row,
+      /** 兼容字段：始终是 LLM 七维（老前端也按这个字段画雷达图） */
+      scores,
+      objectiveDimensions: parseJson<unknown[]>(row.objectiveDimensions ?? '[]', []),
+      /** 新行读 llm_scores；老行只有 scores（那时 scores 存的就是 LLM 七维） */
+      llmScores: Object.keys(llmScores).length ? llmScores : scores,
+      /** 老行没有拆分，totalScore 本身就是 LLM 分 */
+      llmScore: row.llmScore ?? (legacy ? row.totalScore : null),
+      objectiveScore: row.objectiveScore ?? null,
+      scoreSource: legacy ? ('llm-legacy' as const) : ('split' as const),
+    };
+  }
+
+  /**
+   * 对文档执行 7 维质量评分并落库。
+   *
+   * 一次评审同时产出两套分，写在同一行但字段分离：
+   *  - 客观分（objective_*）：确定性规则引擎，是门禁/验收口径
+   *  - LLM 分（llm_*）：模型参考分，会漂移，只用于改进建议与趋势
+   * 兼容字段 total_score 写客观分（与流水线门禁一致），scores 继续写 LLM 七维供旧客户端使用。
+   */
   async review(documentId: string, title: string, content: string) {
     if (!documentId?.trim()) throw new BadRequestException('documentId 必填');
     const doc = db.select({ id: documents.id }).from(documents).where(eq(documents.id, documentId)).get();
@@ -44,25 +76,33 @@ export class QualityService {
       throw new BadRequestException('文档内容过短，暂无法评分（至少 50 字）');
     }
     const result: ReviewResult & { totalScore: number } = await this.ai.reviewPaper(title, content);
+    const citationCount = db.select().from(citations).where(eq(citations.documentId, documentId)).all().length;
+    const objective = checkPaperQuality(content, { citationCount, standard: readQualityStandard() });
     const row = {
       id: randomUUID(),
       documentId,
-      totalScore: result.totalScore,
+      totalScore: objective.totalScore,
       scores: JSON.stringify(result.scores),
       feedback: result.feedback,
+      objectiveScore: objective.totalScore,
+      objectiveDimensions: JSON.stringify(objective.dimensions),
+      llmScore: result.totalScore,
+      llmScores: JSON.stringify(result.scores),
+      expertScore: null,
+      expertStatus: 'unreviewed',
       createdAt: Date.now(),
     };
     db.insert(qualityReports).values(row).run();
-    return row;
+    return this.toDto(row as typeof qualityReports.$inferSelect);
   }
 
   /** 某文档的历史评分（可对比） */
   /** 全量评分历史（仅本地单用户模式；企业模式由 controller 拒绝） */
   historyAll() {
-    return db.select().from(qualityReports).orderBy(desc(qualityReports.createdAt));
+    return db.select().from(qualityReports).orderBy(desc(qualityReports.createdAt)).all().map((r) => this.toDto(r));
   }
   history(documentId: string) {
-    return db.select().from(qualityReports).where(eq(qualityReports.documentId, documentId)).orderBy(desc(qualityReports.createdAt));
+    return db.select().from(qualityReports).where(eq(qualityReports.documentId, documentId)).orderBy(desc(qualityReports.createdAt)).all().map((r) => this.toDto(r));
   }
 
   /** 某文档最新一次评分（写作页侧边栏/写作现场展示用）；无记录返回 null，不 404 */
@@ -75,7 +115,7 @@ export class QualityService {
       .orderBy(desc(qualityReports.createdAt))
       .get();
     if (!row) return null;
-    return { ...row, scores: parseJson<Record<string, number>>(row.scores, {}) };
+    return this.toDto(row);
   }
 
   /**
@@ -94,6 +134,9 @@ export class QualityService {
     const items = rows.map((doc) => {
       const citationCount = (db.select().from(citations).where(eq(citations.documentId, doc.id)).all() || []).length;
       const report = checkPaperQuality(String(doc.content || ''), { citationCount, standard: readQualityStandard() });
+      // 及格线必须与用户选择的评审标准一致（draft 70 / conference 78 / standard 80 / strict 85），
+      // 不能在总览里写死 80，否则会和流水线门禁、质量页给出相反结论。
+      const passScore = report.standard?.passScore ?? 80;
       const latestLlm = db
         .select()
         .from(qualityReports)
@@ -110,9 +153,10 @@ export class QualityService {
         fingerprint: report.fingerprint,
         hardFailCount: report.hardFails.length,
         hardFails: report.hardFails.slice(0, 3),
-        llmScore: latestLlm?.totalScore ?? null,
+        llmScore: latestLlm?.llmScore ?? latestLlm?.totalScore ?? null,
         llmScoredAt: latestLlm?.createdAt ?? null,
-        passed: report.totalScore >= 80,
+        passScore,
+        passed: report.totalScore >= passScore,
       };
     });
     items.sort((a, b) => a.objectiveScore - b.objectiveScore || b.updatedAt - a.updatedAt);
@@ -129,7 +173,7 @@ export class QualityService {
   get(id: string) {
     const row = db.select().from(qualityReports).where(eq(qualityReports.id, id)).get();
     if (!row) throw new NotFoundException('评分报告不存在');
-    return { ...row, scores: parseJson<Record<string, number>>(row.scores, {}) };
+    return this.toDto(row);
   }
 
   // ---------- 差距 #7：质量 feedback 结构化进 review_comment ----------

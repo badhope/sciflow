@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { sql, eq, and, desc } from 'drizzle-orm';
+import { sql, eq, and, desc, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { Cite } from '@citation-js/core';
 import '@citation-js/plugin-bibtex';
@@ -83,10 +83,8 @@ export class ReferencesService {
     const doi = (ref.doi || '').trim();
     if (!doi) throw new BadRequestException('该文献没有 DOI，无法核验；请先补充 DOI 或改用 BibTeX 导入');
     const url = `https://api.crossref.org/works/${encodeURIComponent(doi)}`;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
     try {
-      const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'SciFlow/0.4 (mailto:user@local)' } });
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { 'User-Agent': 'SciFlow/0.4 (mailto:user@local)' } });
       if (!res.ok) {
         return { ok: false, status: res.status, reason: res.status === 404 ? 'Crossref 无此 DOI（DOI 本身可能是幻觉）' : `Crossref ${res.status}` };
       }
@@ -108,10 +106,8 @@ export class ReferencesService {
       sqlite.prepare('UPDATE citation SET verified=1 WHERE reference_id=?').run(id);
       return { ok: true, doi, title: title || ref.title, year: issued, venue: venue || ref.venue, source: 'crossref' };
     } catch (e: unknown) {
-      const reason = e instanceof Error && e.name === 'AbortError' ? 'Crossref 超时（8s）' : `网络失败：${e instanceof Error ? e.message : String(e)}`;
+      const reason = e instanceof Error && (e.name === 'AbortError' || e.name === 'TimeoutError') ? 'Crossref 超时（8s）' : `网络失败：${e instanceof Error ? e.message : String(e)}`;
       return { ok: false, reason };
-    } finally {
-      clearTimeout(timer);
     }
   }
 
@@ -498,7 +494,7 @@ export class ReferencesService {
       ? db
           .select()
           .from(extractionValues)
-          .where(sql`${extractionValues.fieldId} IN (${sql.join(fieldIds.map((id) => sql`${id}`), sql`, `)})`)
+          .where(inArray(extractionValues.fieldId, fieldIds))
           .all()
       : [];
     const rows = refs.map((r) => {
@@ -555,7 +551,7 @@ export class ReferencesService {
       const citeRows = db
         .select()
         .from(citations)
-        .where(sql`${citations.documentId} IN (${sql.join(docIds.map((id) => sql`${id}`), sql`, `)})`)
+        .where(inArray(citations.documentId, docIds))
         .all();
       const byDoc = new Map<string, Set<string>>();
       for (const c of citeRows) {
