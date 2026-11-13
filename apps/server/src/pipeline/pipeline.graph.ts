@@ -67,7 +67,7 @@ export interface PipelineGraphDeps {
    * 新颖性预检（v1.7）：用学术库检索同主题近期工作，给出「重叠度 + 相似工作 + 改题建议」。
    * 只读（不写文献库、不消耗 LLM token），失败由实现方返回 skipped 结果。
    */
-  noveltyCheck(topic: string): Promise<{
+  noveltyCheck(topic: string, projectId?: string): Promise<{
     skipped?: boolean;
     overlap: number;
     similar: { title: string; year: number | null; venue: string; doi: string }[];
@@ -127,7 +127,7 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
       await deps.notify(s.taskId, 'novelty-check', 'running');
       let result: Awaited<ReturnType<PipelineGraphDeps['noveltyCheck']>>;
       try {
-        result = await deps.noveltyCheck(s.task.topic);
+        result = await deps.noveltyCheck(s.task.topic, s.task.projectId);
       } catch (e: any) {
         deps.logger.warn(`新颖性预检失败（已忽略，不阻断流水线）: ${e?.message || e}`);
         await deps.notify(s.taskId, 'novelty-check', 'done', '预检不可用（学术检索失败，已跳过）');
@@ -346,7 +346,11 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
         writeDocumentContent(docId, finalContent, retry === 0 ? '流水线首轮起草' : `流水线第 ${retry} 轮回炉`);
 
         if (!deps.stepEnabled('quality-gate')) {
-          report = { totalScore: 85, feedback: '质量门已禁用，跳过评分' };
+          // 质量门被用户关闭：不评分、不落库。
+          // 历史缺陷：这里曾写死 totalScore=85 并入库，等于伪造一条通过所有标准的评分记录；
+          // 现在显式标记 skipped，下游据此跳过质量报告写入与分数展示。
+          deps.logger.log('[质量门] 已被用户禁用：跳过评分，不写入质量报告');
+          report = { totalScore: 0, feedback: '质量门已禁用，本轮未评分', skipped: true };
           break;
         }
         const latest = db.select().from(documents).where(eq(documents.id, docId)).get();
@@ -415,6 +419,7 @@ ${refAppendix}` : ''}`;
         report = { totalScore: effectiveScore, feedback: `${reviewResult.feedback}${objectiveNote}` };
         deps.logger.log(`[质量门] 采用客观分 ${effectiveScore}（LLM 参考 ${reviewResult.totalScore}，指纹 ${objective.fingerprint}）`);
         // 质量报告落库（每轮评分一行；GET /api/quality?documentId 历史可查）
+        // 客观分与 LLM 分字段分离：total_score 写门禁分（客观），llm_* 只作参考，避免两套分混在同一列。
         db.insert(qualityReports)
           .values({
             id: randomUUID(),
@@ -422,6 +427,11 @@ ${refAppendix}` : ''}`;
             totalScore: report.totalScore,
             scores: JSON.stringify(reviewResult.scores ?? {}),
             feedback: report.feedback,
+            objectiveScore: objective.totalScore,
+            objectiveDimensions: JSON.stringify(objective.dimensions),
+            llmScore: reviewResult.totalScore,
+            llmScores: JSON.stringify(reviewResult.scores ?? {}),
+            expertStatus: 'unreviewed',
             createdAt: Date.now(),
           })
           .run();
@@ -440,6 +450,10 @@ ${refAppendix}` : ''}`;
         }
         break;
       }
+      if (report.skipped) {
+        await deps.notify(s.taskId, 'quality-gate', 'skipped', '质量门已禁用，本轮未评分');
+        return { report };
+      }
       if (best.score >= 0 && best.content && (report?.totalScore ?? 0) < best.score) {
         writeDocumentContent(docId, best.content, `采用最高分轮次 ${best.score} 分`);
         deps.logger.log(`[质量门] 采用最高分轮次 ${best.score} 分（末轮 ${report?.totalScore ?? '-'} 分）`);
@@ -449,6 +463,11 @@ ${refAppendix}` : ''}`;
       return { report };
     })
     .addNode('polish', async (s: PipelineGraphState) => {
+      if (!deps.stepEnabled('polish')) {
+        // 用户关闭润色：不调模型、不写 polish_record，直接沿用当前正文（开关必须真的省钱）
+        await deps.notify(s.taskId, 'polish', 'skipped', '用户已禁用润色定稿');
+        return {};
+      }
       await deps.notify(s.taskId, 'polish', 'running');
       const docId = s.documentId!;
       const finalDoc = db.select().from(documents).where(eq(documents.id, docId)).get();
@@ -472,6 +491,10 @@ ${refAppendix}` : ''}`;
       return {};
     })
     .addNode('citation-format', async (s: PipelineGraphState) => {
+      if (!deps.stepEnabled('citation-format')) {
+        await deps.notify(s.taskId, 'citation-format', 'skipped', '用户已禁用引用格式定稿');
+        return {};
+      }
       await deps.notify(s.taskId, 'citation-format', 'running');
       // 引用已在 quality-gate 渲染进正文；此处仅推进文档状态
       db.update(documents).set({ status: 'formatted', updatedAt: Date.now() }).where(eq(documents.id, s.documentId!)).run();
@@ -494,7 +517,7 @@ ${refAppendix}` : ''}`;
       }
       try {
         const finalMem = db.select().from(documents).where(eq(documents.id, docId)).get();
-        const mem = await deps.ai.extractEpisodic(s.task.projectId, finalMem?.title || s.task.topic, finalMem?.outline || '[]', s.report?.totalScore ?? 80);
+        const mem = await deps.ai.extractEpisodic(s.task.projectId, finalMem?.title || s.task.topic, finalMem?.outline || '[]', s.report?.skipped ? 80 : (s.report?.totalScore ?? 80));
         if (mem.content) {
           db.insert(memoryLogs)
             .values({ id: randomUUID(), type: 'episodic', projectId: s.task.projectId, content: mem.content, keywords: JSON.stringify(mem.keywords), createdAt: Date.now() })

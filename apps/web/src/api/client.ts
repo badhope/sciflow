@@ -5,17 +5,22 @@
  *  - research.ts references / knowledge / research / quality / judgment / customization
  *  - platform.ts auth / settings / usage / mcp / mcpExternal / experiments / submission
  *  - agent.ts    Agent 执行追踪（executions / getRun / usageTrend）
+ *  - programs.ts 自主科研对象（programs / cycles / questions / claims / runs）
  * 对外 API 形状与拆分前完全一致（现有 import 不受影响）。
  */
 import { writing } from './writing';
 import { research } from './research';
 import { platform } from './platform';
 import { agent } from './agent';
+import { programs } from './programs';
+import { researchCycles } from './research-cycles';
 
 export const api = {
   ...writing,
   ...research,
   ...platform,
   agent,
+  programs,
+  researchCycles,
 };
 export { streamChat, getToken, setToken } from './core';

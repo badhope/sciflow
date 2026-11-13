@@ -54,7 +54,7 @@ export class ChatController {
   async answer(@Body() body: ChatRequestBody, @Req() req: { user?: AuthPayload }) {
     // v1.8：带 projectId 时必须校验归属 —— 否则企业模式可用他人项目上下文做 RAG 问答
     if (body.projectId) this.access.assertProject(body.projectId, req.user);
-    return this.chat.answer(body.message, body.history || [], body.projectId, body.docContext, { model: body.model });
+    return this.chat.answer(body.message, body.history || [], body.projectId, body.docContext, { model: body.model, user: req.user });
   }
 
   /** SSE 流式问答 */
@@ -90,7 +90,7 @@ export class ChatController {
     try {
       const { stream, sources } = await this.chat.stream(
         body.message, body.history || [], body.projectId, body.docContext,
-        { model: body.model, enableThinking: body.enableThinking, signal: ac.signal, webSearch: body.webSearch },
+        { model: body.model, enableThinking: body.enableThinking, signal: ac.signal, webSearch: body.webSearch, user: req.user },
       );
       // 正文流开始前先推送 RAG 来源（无命中则不发送）
       if (sources.length && !closed) {

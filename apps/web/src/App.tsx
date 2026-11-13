@@ -5,7 +5,7 @@ import { PageErrorBoundary } from './components/PageErrorBoundary';
 import { Download, Upload } from 'lucide-react';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import {
-  BookOpen, Brain, Beaker, LayoutDashboard, Plus, Pencil, RefreshCw, Search, Send, Settings, Trash2, Workflow, BookMarked, ChevronRight, Command, Sun, Moon, Monitor, XCircle as XCircleIcon, Gauge, Library, LayoutGrid, Menu as MenuIcon,
+  BookOpen, Brain, Beaker, LayoutDashboard, Plus, Pencil, RefreshCw, Search, Send, Settings, Trash2, Workflow, BookMarked, ChevronRight, Command, Sun, Moon, Monitor, XCircle as XCircleIcon, Gauge, Library, LayoutGrid, Menu as MenuIcon, Target,
 } from 'lucide-react';
 import { api } from './api/client';
 import { isNetworkError } from './api/core';
@@ -18,9 +18,10 @@ import { BrandLockup } from './components/BrandMark';
 import { StageBar } from './components/StageBar';
 import { buildCommands, filterCommands } from './lib/commands';
 import { useHotkeys } from './lib/hotkeys';
-import { Button, Input, Modal, Spinner, ErrorBox, ToastViewport, ConfirmDialog, type ToastItem, type ToastKind } from './components/ui';
+import { Button, Input, Modal, Spinner, ErrorBox, ToastViewport, ConfirmDialog, downloadText, type ToastItem, type ToastKind } from './components/ui';
 // 路由级代码分割：所有页面懒加载（首屏只加载当前视图，大厂 SPA 标准）
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const ResearchProgramsPage = lazy(() => import('./pages/ResearchProgramsPage').then((m) => ({ default: m.ResearchProgramsPage })));
 const WritingPage = lazy(() => import('./pages/WritingPage').then((m) => ({ default: m.WritingPage })));
 const LiteraturePage = lazy(() => import('./pages/LiteraturePage').then((m) => ({ default: m.LiteraturePage })));
 const PipelinePage = lazy(() => import('./pages/PipelinePage').then((m) => ({ default: m.PipelinePage })));
@@ -53,6 +54,7 @@ const SuspensePage = ({ children, name = '页面' }: { children: ReactNode; name
 export type View =
   | 'workspace'
   | 'dashboard'
+  | 'programs'
   | 'writing'
   | 'literature'
   | 'experiments'
@@ -67,12 +69,13 @@ export type View =
 /** 平台修饰键显示文案（Windows 上不显示 ⌘） */
 const MOD_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 
-const VIEW_KEYS: readonly View[] = ['workspace', 'dashboard', 'writing', 'literature', 'experiments', 'pipeline', 'quality', 'submission', 'knowledge', 'memory', 'settings'];
+const VIEW_KEYS: readonly View[] = ['workspace', 'dashboard', 'programs', 'writing', 'literature', 'experiments', 'pipeline', 'quality', 'submission', 'knowledge', 'memory', 'settings'];
 
 /** 功能导航分组（大厂式：按工作流分组，设置独立收纳到底部） */
 const VIEW_LABELS: Record<View, string> = {
   workspace: '工作台',
   dashboard: '项目总览',
+  programs: '研究计划',
   writing: '论文写作',
   literature: '文献调研',
   experiments: '实验记录',
@@ -101,6 +104,7 @@ const NAV_GROUPS: { label: string; hint: string; defaultCollapsed?: boolean; ite
     items: [
       { key: 'workspace', label: VIEW_LABELS.workspace, icon: LayoutDashboard },
       { key: 'dashboard', label: VIEW_LABELS.dashboard, icon: LayoutGrid },
+      { key: 'programs', label: VIEW_LABELS.programs, icon: Target },
     ],
   },
   {
@@ -162,6 +166,8 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
   settings: () => <PageErrorBoundary pageName="设置"><SuspensePage name="设置"><SettingsPage /></SuspensePage></PageErrorBoundary>,
   dashboard: ({ project, onNavigate, openDoc }) =>
     project ? <PageErrorBoundary pageName="工作台"><SuspensePage name="项目总览"><DashboardPage project={project} onNavigate={onNavigate} openDoc={openDoc} /></SuspensePage></PageErrorBoundary> : null,
+  programs: ({ project }) =>
+    project ? <PageErrorBoundary pageName="研究计划"><SuspensePage name="研究计划"><ResearchProgramsPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null,
   writing: ({ project, initialDocId }) =>
     project ? <PageErrorBoundary pageName="论文写作"><SuspensePage name="论文写作"><WritingPage key={project.id} project={project} initialDocId={initialDocId} /></SuspensePage></PageErrorBoundary> : null,
   literature: ({ project }) => (project ? <PageErrorBoundary pageName="文献调研"><SuspensePage name="文献调研"><LiteraturePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
@@ -251,15 +257,11 @@ function AppInner() {
   const exportProject = useCallback(async (p: Project) => {
     try {
       const bundle = await api.projects.exportBundle(p.id);
-      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${p.name || 'project'}-sciflow-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      downloadText(
+        `${p.name || 'project'}-sciflow-${new Date().toISOString().slice(0, 10)}.json`,
+        JSON.stringify(bundle, null, 2),
+        'application/json',
+      );
       toast('success', `已导出项目「${p.name}」`);
     } catch (e: unknown) {
       toast('error', `导出失败：${errMsg(e)}`);
@@ -672,8 +674,8 @@ function SidebarContent({
         <BrandLockup />
       </div>
 
-      {/* 导航 */}
-      <nav className="shrink-0" aria-label="功能导航">
+      {/* 导航：短视口下自身滚动，避免把项目列表挤到不可点击 */}
+      <nav className="shrink-0 max-h-[46vh] overflow-y-auto" aria-label="功能导航">
         {NAV_GROUPS.map((g, gi) => (
           <ShellNavGroup key={g.label} label={g.label} hint={g.hint} step={gi + 1} defaultCollapsed={g.defaultCollapsed}>
             {g.items.map((n) => {

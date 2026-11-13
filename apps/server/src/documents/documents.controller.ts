@@ -107,7 +107,8 @@ export class DocumentsController {
   @HttpCode(HttpStatus.OK)
   createSnapshot(@Param('id') id: string, @Body() body: { commitMessage?: string }, @Req() req: { user?: AuthPayload }) {
     this.access.assertDocument(id, req.user);
-    return { versions: this.documents.createSnapshot(id, body.commitMessage) };
+    // 直接返回 { created, version, total, versions }：前端 toast 读 version/total
+    return this.documents.createSnapshot(id, body.commitMessage);
   }
 
   @Delete(':id')

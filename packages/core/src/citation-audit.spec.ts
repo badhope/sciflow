@@ -70,6 +70,39 @@ describe('auditCitations', () => {
     expect(r.score).toBeLessThan(100);
   });
 
+  /**
+   * ghost 计数回归。
+   * 缺陷：ghost 曾写成 `maxAnchor - resolvable`，正文一断号就把「断号」重复计成「幽灵」——
+   * 数字与它自己下发的 items 对不上，且每个虚增幽灵按 −20 扣分，一处断号即可把分数打到 0。
+   */
+  it('稀疏锚点：ghost 与 items 同源，断号交给黄牌而不是叠加幽灵红牌', () => {
+    const r = auditCitations({
+      content: '正文 [1][2] 与 [10]',
+      citations: [cit('c1', 'r1'), cit('c2', 'r2'), cit('c3', 'r3')],
+      references: [ref('r1'), ref('r2'), ref('r3')],
+    });
+    expect(r.anchorTotal).toBe(3);
+    // 可解析 3 条，真正越界的只有 [10]
+    expect(r.ghost).toBe(1);
+    expect(r.details.find((d) => d.code === 'ghost-anchor')?.items).toEqual([10]);
+    expect(r.missingAnchors).toEqual([3, 4, 5, 6, 7, 8, 9]);
+    // 旧实现 ghost=7 → −140 → 0 分；断号只该按黄牌处理
+    expect(r.score).toBeGreaterThan(40);
+  });
+
+  it('尾部块标题含正则元字符时不抛异常，且不会误截正文', () => {
+    // 旧实现把 tailHeadings 原样拼进 new RegExp：'附录(A)' 会让构造直接抛 SyntaxError
+    const content = '正文 [1] 与 [2]。\n\n## 附录(A)\n[9] 不该计入';
+    expect(() => extractAnchorNumbers(content, ['附录(A)'])).not.toThrow();
+    expect(extractAnchorNumbers(content, ['附录(A)'])).toEqual([1, 2]);
+  });
+
+  it('尾部块标题清单里混入空串时，正文不被整段截断', () => {
+    // 旧实现下空分支可匹配任意位置 → cut 落在第一个换行处 → 正文锚点全丢
+    const content = '第一段 [1]。\n\n第二段 [2]。\n\n## 参考文献\n[9] x';
+    expect(extractAnchorNumbers(content, ['', '参考文献'])).toEqual([1, 2]);
+  });
+
   it('锚点断号：正文 [1][3] → missingAnchors=[2]', () => {
     const r = auditCitations({
       content: '正文 [1] 和 [3]',

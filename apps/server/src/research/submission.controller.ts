@@ -81,6 +81,7 @@ export class SubmissionController {
       journalId: body.journalId || '',
       journalName: body.journalName,
       documentId: body.documentId || '',
+      title: body.title || '',
       submittedAt: body.submittedAt || undefined,
       currentStatus: body.currentStatus || 'submitted',
       note: body.note || '',

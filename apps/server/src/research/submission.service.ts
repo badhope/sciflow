@@ -3,7 +3,7 @@ import { eq, asc, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { db } from '../db/database';
-import { journals, submissions, submissionStatusEvents, SUBMISSION_STATUSES, projects, reflexionLogs } from '../db/schema';
+import { journals, submissions, submissionStatusEvents, SUBMISSION_STATUSES, projects, reflexionLogs, documents } from '../db/schema';
 import { AiService } from '../ai/ai.service';
 import { buildRevisionPlan } from './revision-plan';
 
@@ -221,7 +221,7 @@ export class SubmissionService {
   }
 
   /** L1 登记投稿：创建记录并写入首条状态事件（可选：转投串联 previousSubmissionId / 修回截止日 revisionDeadline） */
-  createTrack(body: { projectId: string; journalId?: string; journalName: string; documentId?: string; submittedAt?: number; currentStatus?: string; note?: string; previousSubmissionId?: string; revisionDeadline?: number | null }) {
+  createTrack(body: { projectId: string; journalId?: string; journalName: string; documentId?: string; title?: string; submittedAt?: number; currentStatus?: string; note?: string; previousSubmissionId?: string; revisionDeadline?: number | null }) {
     if (!body.projectId?.trim()) throw new BadRequestException('projectId 必填');
     if (!body.journalName?.trim()) throw new BadRequestException('期刊名必填');
     const project = db.select({ id: projects.id }).from(projects).where(eq(projects.id, body.projectId.trim())).get();
@@ -234,6 +234,14 @@ export class SubmissionService {
     const now = Date.now();
     const submittedAt = body.submittedAt || now;
     const id = randomUUID();
+    /**
+     * 标题来源优先级：显式传入 > 关联文档标题 > 空串。
+     * 历史实现恒写空串，导致驾驶舱「超期投稿」永远渲染成 "期刊 · "（尾随空标题）。
+     */
+    const docTitle = body.documentId
+      ? (db.select({ title: documents.title }).from(documents).where(eq(documents.id, body.documentId)).get()?.title ?? '')
+      : '';
+    const title = String(body.title || docTitle || '').trim().slice(0, 500);
     db.insert(submissions)
       .values({
         id,
@@ -241,7 +249,7 @@ export class SubmissionService {
         documentId: body.documentId || '',
         journalId: body.journalId || '',
         journalName: body.journalName.trim(),
-        title: '',
+        title,
         submittedAt,
         currentStatus: status,
         statusUpdatedAt: now,

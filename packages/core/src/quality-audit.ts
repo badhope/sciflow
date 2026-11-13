@@ -231,7 +231,22 @@ export function checkPaperQuality(
   const sentences = sentenceCount(body);
   const citationNumbers = [...body.matchAll(/\[(\d{1,3})\]/g)].map((m) => Number(m[1]));
   const uniqueCitations = new Set(citationNumbers);
-  const refEntries = [...refBlock.matchAll(/^\s*(?:\[(\d{1,3})\]|\d{1,3}[.、])/gm)].map((m) => Number(m[1] ?? 0)).filter((n) => n > 0);
+  /**
+   * 参考文献条目编号：同时支持 `[1]` 与 `1.` / `1、` / `1)` 两类编号样式。
+   *
+   * 历史缺陷：第二个分支 `\d{1,3}[.、]` **没有捕获组**，`m[1]` 恒为 undefined →
+   * `Number(undefined ?? 0)` = 0 → 被 `.filter(n => n > 0)` 整批丢弃。数字式（GB/T 7714，
+   * 国内论文的主流样式）因此**完全不被识别**，实测后果两条：
+   *   - 纯数字式文献表 → refEntries 恒为 0 → 「悬空锚点」红牌检查被静默跳过，
+   *     统计口径里的文献条目数也上报为 0；
+   *   - 混合样式文献表（`[1]` + `2.`）→ 只解析出方括号那一条 → 正文里的 [2] 被判成
+   *     「引用锚点无对应文献条目」→ **误报硬伤**，一篇完全合规的稿子总分被封顶到 40。
+   * 数字式分支用**负向前瞻 `(?!\d)`** 而非「必须跟空白」来排除 `2.5 倍` 这类行首小数——
+   * 中文样式常写成 `1、张三`（标点后紧跟作者名、没有空格），要求空白会把这一整类再次漏掉。
+   */
+  const refEntries = [...refBlock.matchAll(/^\s*(?:\[(\d{1,3})\]|(\d{1,3})\s*[.、．)）](?!\d))/gm)]
+    .map((m) => Number(m[1] ?? m[2] ?? 0))
+    .filter((n) => n > 0);
 
   // 空文/过短：直接硬伤（不允许「结构 17 分」这种空文得分的假绿灯）
   if (chars === 0) hardFails.push('正文为空');
@@ -458,7 +473,14 @@ export function checkPaperQuality(
   if (sections.length >= 2 && maxSectionShare > std.maxSectionShare) {
     const sub = Math.min(10, Math.round(((maxSectionShare - std.maxSectionShare) / Math.max(0.05, 1 - std.maxSectionShare)) * 10));
     densityScore -= sub;
-    const biggest = sections.reduce((m, s) => (s.body.length > m.body.length ? s : m), sections[0]);
+    /**
+     * 与 maxSectionShare **同口径**（去空白字符数）挑出最大章。
+     * 历史缺陷：占比按 `body.replace(/\s/g,'').length` 算，挑最大章却按 `body.length`（含空白）算。
+     * 两个口径不一致时（章节空白密度不同即会发生），证据文案会点名**错误的章节**——
+     * 用户照着「『XX』独占 60% 正文」的提示去删改，动的却是另一章。
+     */
+    const biggestIdx = sectionCharsList.reduce((bi, len, i) => (len > sectionCharsList[bi] ? i : bi), 0);
+    const biggest = sections[biggestIdx];
     densityEvidence.push(`章节失衡：「${biggest.title}」独占 ${(maxSectionShare * 100).toFixed(0)}% 正文（${std.label}上限 ${(std.maxSectionShare * 100).toFixed(0)}%），其余章节疑似凑数`);
   } else {
     densityEvidence.push(`章节均衡（最大章占比 ${(maxSectionShare * 100).toFixed(0)}%，符合 ${std.label} ≤${(std.maxSectionShare * 100).toFixed(0)}%）`);

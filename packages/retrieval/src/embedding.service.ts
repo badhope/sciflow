@@ -1,4 +1,6 @@
 import { Injectable, OnModuleInit, Logger, Optional, Inject } from '@nestjs/common';
+import pLimit from 'p-limit';
+import { envInt } from '../../core/src/env';
 import { EMBEDDING_DIM, hasLocalModel, localModelPath, resolveEmbeddingBackend, toVectorBlob, type EmbeddingBackend } from './embedding-config';
 
 /**
@@ -44,9 +46,20 @@ export class EmbeddingService implements OnModuleInit {
   private localLoad: Promise<void> | null = null;
   private localFailed = false;
   private backend: EmbeddingBackend = 'none';
-  /** 并发闸门：本地推理是 CPU 密集型，限制并发反而更快（避免线程争抢抖动） */
-  private inflight = 0;
-  private readonly maxInflight = 4;
+  /**
+   * 并发闸门：本地推理是 CPU 密集型，限制并发反而更快（避免线程争抢抖动）。
+   *
+   * 两处修正：
+   *  1. 上限改为 `EMBEDDING_CONCURRENCY` 可配（默认 4，夹取 1-32）。此前写死 4，
+   *     而本项目所有其它并发/限流旋钮都走 envInt（AI_DRAFT_CONCURRENCY、AI_RPM_CAP）；
+   *     2 核容器里 4 路本地推理会互相抢线程反而更慢，用户却只能改源码。
+   *  2. 手写 5ms 忙轮询信号量换成 p-limit（与 ai-transport 的既定约定一致）。
+   *     旧实现一次 500 块的批量上传会瞬间创建 500 个 async 闭包，其中 496 个各自
+   *     每 5ms 空转一次（约 10 万次定时器回调），且唤醒顺序由定时器注册顺序决定、
+   *     没有 FIFO 公平性；p-limit 是排队制，零轮询。
+   */
+  private readonly maxInflight = envInt('EMBEDDING_CONCURRENCY', 4, { min: 1, max: 32 });
+  private readonly limit = pLimit(this.maxInflight);
 
   constructor(@Optional() @Inject(REMOTE_EMBEDDER) private readonly remote?: RemoteEmbedder) {}
 
@@ -156,23 +169,18 @@ export class EmbeddingService implements OnModuleInit {
       await this.loadLocal();
       if (!this.local) return new Array(input.length).fill(null);
       const out: (Buffer | null)[] = new Array(input.length).fill(null);
-      // 信号量式并发：全局最多 maxInflight 个同时推理（跨请求共享计数）
-      const acquire = async (): Promise<void> => {
-        while (this.inflight >= this.maxInflight) await new Promise((r) => setTimeout(r, 5));
-        this.inflight += 1;
-      };
+      // 并发上限 maxInflight（实例级共享：跨请求的批量上传共用同一个闸门）
       await Promise.all(
-        input.map(async (text, idx) => {
-          await acquire();
-          try {
-            const emb = await this.local!.ctx.getEmbeddingFor(text);
-            out[idx] = toVectorBlob(emb?.vector);
-          } catch {
-            out[idx] = null;
-          } finally {
-            this.inflight -= 1;
-          }
-        }),
+        input.map((text, idx) =>
+          this.limit(async () => {
+            try {
+              const emb = await this.local!.ctx.getEmbeddingFor(text);
+              out[idx] = toVectorBlob(emb?.vector);
+            } catch {
+              out[idx] = null;
+            }
+          }),
+        ),
       );
       return out;
     }

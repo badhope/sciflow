@@ -11,6 +11,8 @@ import { appSettings, llmCallLogs } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { envInt } from '../common/env';
+import { profileAllowsTool, resolveAgentToolProfile } from './agent-tool-profiles';
+import type { AuthPayload } from '../auth/auth.service';
 
 /**
  * Agent 工具桥：把 SciFlow 的 MCP 工具（科研能力 + 配置中心）暴露给模型，形成真正的 tool-calling 链路。
@@ -104,15 +106,18 @@ export class AgentToolBridge {
    * 关键约束：
    *  - **项目作用域**：projectId 由调用方注入并覆盖模型入参，避免模型瞎填导致跨项目检索；
    *  - **计数隔离**：调用上限放在闭包里，并发对话互不影响（此前是单例字段，A 的 reset 会重置 B）；
-   *  - **超时可控**：每次调用独立超时，结束后清理定时器。
+   *  - **超时可控**：每次调用独立超时，结束后清理定时器；
+   *  - **工具作用域**：opts.profile 收窄暴露面（默认 full，等价既有行为），见 agent-tool-profiles.ts；
+   *  - **主体透传**：opts.user 必须传给 MCP 层，否则企业模式下每个工具都过不了项目归属校验。
    */
-  buildToolSet(projectId?: string, runId?: string): ToolSet {
+  buildToolSet(projectId?: string, runId?: string, opts?: { profile?: string; user?: AuthPayload }): ToolSet {
     const allow = new Set(
       (process.env.AGENT_TOOLS_ALLOW || 'literature.search,literature.summarize,knowledge.query,outline.generate,writing.polish,writing.translate,writing.review,references.extract,references.evidence,chat.answer,config.snapshot,config.set_permission,config.upsert_role,config.upsert_constraint,config.delete_constraint,config.upsert_hook,config.apply_preset,config.preview,extension.list,extension.create,extension.toggle,extension.generate')
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean),
     );
+    const profile = resolveAgentToolProfile(opts?.profile);
     let callCount = 0;
     // 重复调用护栏：键 → 已出现次数（每次请求独立闭包，并发会话互不影响）
     const repeatCounts = new Map<string, number>();
@@ -120,6 +125,7 @@ export class AgentToolBridge {
     const skills = this.enabledSkillKeys();
     for (const t of this.mcp.list()) {
       if (!allow.has(t.name)) continue;
+      if (!profileAllowsTool(profile, t.name)) continue;
       if (!this.allowedBySkills(t.name, skills)) continue;
       // 无项目上下文时不暴露「必须带 projectId」的工具：避免模型编造 projectId 跨项目取数
       const required = Array.isArray(t.inputSchema?.required) ? (t.inputSchema.required as string[]) : [];
@@ -146,7 +152,24 @@ export class AgentToolBridge {
               error: `该工具与相同参数已重复调用 ${seen - 1} 次（上限 ${TOOL_REPEAT_LIMIT}），结果不会变化。请换不同参数、改用其他工具，或直接基于已有信息回答`,
             };
           }
-          return this.invoke(t.name, scoped, runId);
+          // 审批闸：有副作用的工具必须命中一条「已批准且参数一致」的记录才执行。
+          // 否则模型只要绕开 request_approval 直接调工具，审批就形同虚设。
+          if (this.approvals?.needsApproval(t.name)) {
+            const approved = this.approvals.findApproved({
+              toolName: t.name,
+              args: scoped,
+              projectId: projectId ?? null,
+              runId: runId ?? null,
+            });
+            if (!approved) {
+              return {
+                error: `工具 ${t.name} 需要用户批准后才能执行。请先调用 request_approval（toolName="${t.name}"，args 与此处一致），等待用户在界面批准后再调用本工具。`,
+              };
+            }
+            // 一次批准只执行一次：先消费，失败需重新申请（宁可多问一次，不可复用授权）
+            this.approvals.consume(approved.id);
+          }
+          return this.invoke(t.name, scoped, runId, opts?.user);
         },
       });
     }
@@ -196,25 +219,50 @@ export class AgentToolBridge {
           required: ['toolName', 'reason'],
         }),
         execute: async (args: { toolName: string; reason: string; args?: Record<string, unknown> }) => {
-          if (!this.approvals!.needsApproval(args.toolName)) {
+          const canonical = this.canonicalToolName(args.toolName);
+          if (!this.approvals!.needsApproval(canonical)) {
             return { required: false, message: '该工具无需审批，可直接执行' };
           }
+          // 与执行闸使用同一套作用域参数，保证「批准什么就执行什么」
+          const scopedArgs = this.scopeArgs(canonical, args.args ?? {}, projectId);
           const record = this.approvals!.request({
-            toolName: args.toolName,
-            args: args.args ?? {},
+            toolName: canonical,
+            args: scopedArgs,
             reason: args.reason,
             projectId: projectId ?? null,
             runId: runId ?? null,
           });
-          return { required: true, approvalId: record.id, status: record.status, message: '已提交审批，等待用户确认' };
+          return {
+            required: true,
+            approvalId: record.id,
+            status: record.status,
+            toolName: canonical,
+            args: scopedArgs,
+            message: '已提交审批。用户在界面批准后，请用相同工具与参数再次调用；未批准前该工具会被拒绝。',
+          };
         },
       });
     }
     return set;
   }
 
+  /** 模型可能传 "config.snapshot" 或安全名 "config_snapshot"；统一回规范名 */
+  private canonicalToolName(name: string): string {
+    const raw = String(name || '').trim();
+    if (!raw) return raw;
+    const tools = this.mcp.list();
+    return tools.find((t) => t.name === raw)?.name ?? tools.find((t) => t.name.replace(/\./g, '_') === raw)?.name ?? raw;
+  }
+
+  /** 与执行时一致的项目作用域参数（request_approval 与真正执行必须看到同一份 args） */
+  private scopeArgs(toolName: string, args: Record<string, unknown>, projectId?: string): Record<string, unknown> {
+    const tool = this.mcp.list().find((t) => t.name === toolName);
+    const props = (tool?.inputSchema?.properties ?? {}) as Record<string, unknown>;
+    return projectId && 'projectId' in props ? { ...args, projectId } : args;
+  }
+
   /** 执行一次工具调用（带超时、轨迹落库） */
-  private async invoke(name: string, args: Record<string, unknown>, runId?: string): Promise<unknown> {
+  private async invoke(name: string, args: Record<string, unknown>, runId?: string, user?: AuthPayload): Promise<unknown> {
     const t0 = Date.now();
     let ok = true;
     let error: string | undefined;
@@ -222,7 +270,7 @@ export class AgentToolBridge {
     try {
       // AbortSignal.timeout 自带清理，不会像 setTimeout 那样留下悬挂定时器
       result = await Promise.race([
-        this.mcp.call(name, args),
+        this.mcp.call(name, args, user),
         new Promise((_, reject) => {
           const timer = setTimeout(() => reject(new Error(`工具超时（${TOOL_TIMEOUT_MS}ms）`)), TOOL_TIMEOUT_MS);
           timer.unref?.();

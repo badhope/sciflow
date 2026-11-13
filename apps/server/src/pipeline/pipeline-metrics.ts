@@ -2,6 +2,10 @@
  * 流水线与指标口径的纯函数（集中放置，便于单测锁定语义）。
  */
 
+import { tokenizeForMatch } from '../common/text';
+
+export { tokenizeForMatch };
+
 /**
  * 知识库检索分归一化。
  *
@@ -39,15 +43,6 @@ export function normalizeAgentDate(ts: number): string {
  *
  * token 规则与 ScholarSearchService 的相关性门禁一致：拉丁词 ≥2 字符 + 中文二元组。
  */
-export function tokenizeForMatch(text: string): string[] {
-  const low = (text || '').toLowerCase();
-  const out: string[] = [];
-  for (const m of low.matchAll(/[a-z][a-z0-9_-]{1,}/g)) out.push(m[0]);
-  const cn = low.replace(/[^一-龥]/g, '');
-  for (let i = 0; i < cn.length - 1; i++) out.push(cn.slice(i, i + 2));
-  return out;
-}
-
 export function noveltyOverlap(topic: string, titles: string[]): number {
   const topicTokens = new Set(tokenizeForMatch(topic));
   if (!topicTokens.size || !titles.length) return 0;

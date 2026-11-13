@@ -1,8 +1,8 @@
 {
   "name": "sciflow",
-  "version": "1.15.1",
+  "version": "1.15.3",
   "private": true,
-  "description": "SciFlow - 本地优先的多智能体科研工作台：文献、写作、质量门与投稿辅助",
+  "description": "SciFlow - 本地优先的自主科研平台：多智能体研究循环（人工或 AI 专家审批）+ 确定性质量门 + 引用三级可追溯 + 可复现稿件流水线",
   "scripts": {
     "dev": "concurrently -n server,web -c blue,green \"pnpm --filter @sciflow/server dev\" \"pnpm --filter @sciflow/web dev\"",
     "dev:server": "pnpm --filter @sciflow/server dev",
@@ -40,5 +40,10 @@
     "prettier": "^3.9.10",
     "promptfoo": "^0.125.1",
     "typescript-eslint": "^8.71.2"
+  },
+  "homepage": "https://badhope.github.io/sciflow/",
+  "repository": {
+    "type": "git",
+    "url": "https://gitcode.com/badhope/sciflow.git"
   }
 }

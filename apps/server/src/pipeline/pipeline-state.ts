@@ -29,6 +29,8 @@ export interface Outline {
 export interface QualityReport {
   totalScore: number;
   feedback: string;
+  /** true = 用户禁用了质量门，本轮没有真实评分（不得当作 0 分或及格分落库/展示） */
+  skipped?: boolean;
 }
 
 export interface ResearchPlan {

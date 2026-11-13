@@ -7,6 +7,17 @@ import { ToastContext } from '../App';
 import { HBar, LineChart, ProgressRing } from '../components/charts';
 import { QUALITY_DIMS } from './qualityDims';
 
+/** LLM 参考分：新报告读 llmScore；拆分前老数据回落到 totalScore（那时 totalScore 存的就是 LLM 分） */
+function llmScoreOf(r: QualityReport): number {
+  return typeof r.llmScore === 'number' ? r.llmScore : r.totalScore;
+}
+
+/** 雷达图/维度条用的 LLM 分项：优先 llmScores，老数据回落 scores */
+function llmScoresOf(r: QualityReport): Record<string, number> {
+  const explicit = r.llmScores ? jsonText<Record<string, number>>(r.llmScores, {}) : {};
+  return Object.keys(explicit).length ? explicit : jsonText<Record<string, number>>(r.scores, {});
+}
+
 /** 自绘 SVG 雷达图（替代 ECharts，去掉 ~200KB 打包体积） */
 function Radar({ scores, compare }: { scores: Record<string, number>; compare?: Record<string, number> | null }) {
   const W = 300, H = 250, CX = W / 2, CY = 112, R = 82;
@@ -169,7 +180,7 @@ export function QualityPage({ project }: { project: Project }) {
         .history(docId)
         .then((h) => {
           setHistory(h);
-          if (h.length) setSelectedHist({ ...h[0], scoresObj: jsonText<Record<string, number>>(h[0].scores, {}) });
+          if (h.length) setSelectedHist({ ...h[0], scoresObj: llmScoresOf(h[0]) });
         })
         .catch(() => setHistory([]));
   }, [docId]);
@@ -181,7 +192,7 @@ export function QualityPage({ project }: { project: Project }) {
     setError('');
     try {
       const r = await api.quality.review(doc.id, doc.title, doc.content);
-      const full = { ...r, scoresObj: jsonText<Record<string, number>>(r.scores, {}) };
+      const full = { ...r, scoresObj: llmScoresOf(r) };
       setReport(full);
       setSelectedHist(full);
       setHistory(await api.quality.history(doc.id));
@@ -308,7 +319,7 @@ export function QualityPage({ project }: { project: Project }) {
           <ShieldCheck size={16} className="text-teal-600 dark:text-teal-300" aria-hidden="true" />
           <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">客观检查器（确定性）</span>
           {objective && (
-            <Badge tone={objective.report.totalScore >= 80 ? 'green' : objective.report.totalScore >= 60 ? 'amber' : 'red'}>
+            <Badge tone={objective.report.totalScore >= (objective.report.standard?.passScore ?? 80) ? 'green' : objective.report.totalScore >= 60 ? 'amber' : 'red'}>
               {objective.report.totalScore}/100
             </Badge>
           )}
@@ -431,29 +442,29 @@ export function QualityPage({ project }: { project: Project }) {
         <div className="grid lg:grid-cols-2 gap-4">
           <Card className="p-4">
             <div className="flex items-center gap-3 mb-2">
-              <ProgressRing value={current.totalScore} size={54} thickness={6} />
+              <ProgressRing value={llmScoreOf(current)} size={54} thickness={6} />
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">当前评分</div>
-                <div className="text-[11px] text-slate-400 dark:text-slate-500">{new Date(current.createdAt).toLocaleString()}</div>
+                <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">LLM 参考评分</div>
+                <div className="text-[11px] text-slate-400 dark:text-slate-500">{new Date(current.createdAt).toLocaleString()} · 不参与门禁</div>
               </div>
               <div className="ml-auto">
-                <Badge tone={current.totalScore >= 80 ? 'green' : current.totalScore >= 60 ? 'amber' : 'red'}>
-                  总分 {current.totalScore}/100
+                <Badge tone={llmScoreOf(current) >= 80 ? 'green' : llmScoreOf(current) >= 60 ? 'amber' : 'red'}>
+                  LLM {llmScoreOf(current)}/100
                 </Badge>
               </div>
             </div>
             <Radar
               scores={current.scoresObj}
-              compare={compareReport ? jsonText<Record<string, number>>(compareReport.scores, {}) : null}
+              compare={compareReport ? llmScoresOf(compareReport) : null}
             />
             {compareReport && (
               <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-400 dark:text-slate-500">
                 <span className="flex items-center gap-1">
-                  <span className="inline-block h-0.5 w-3" style={{ background: 'var(--brand-500)' }} /> 当前 {current.totalScore}
+                  <span className="inline-block h-0.5 w-3" style={{ background: 'var(--brand-500)' }} /> 当前 {llmScoreOf(current)}
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="inline-block h-0.5 w-3 border-t border-dashed" style={{ borderColor: 'var(--muted-foreground)' }} />
-                  对比 {compareReport.totalScore}（{new Date(compareReport.createdAt).toLocaleDateString()}）
+                  对比 {llmScoreOf(compareReport)}（{new Date(compareReport.createdAt).toLocaleDateString()}）
                 </span>
               </div>
             )}
@@ -488,15 +499,15 @@ export function QualityPage({ project }: { project: Project }) {
             </div>
             {history.length > 1 && (
               <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">总分趋势（点击数据点可对比）</div>
+                <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">LLM 参考分趋势（点击数据点可对比）</div>
                 <LineChart
                   points={[...history]
                     .reverse()
-                    .map((h) => ({ label: `${new Date(h.createdAt).getMonth() + 1}/${new Date(h.createdAt).getDate()}`, value: h.totalScore }))}
+                    .map((h) => ({ label: `${new Date(h.createdAt).getMonth() + 1}/${new Date(h.createdAt).getDate()}`, value: llmScoreOf(h) }))}
                   height={130}
                   onPointClick={(i) => {
                     const h = [...history].reverse()[i];
-                    if (h) setSelectedHist({ ...h, scoresObj: jsonText<Record<string, number>>(h.scores, {}) });
+                    if (h) setSelectedHist({ ...h, scoresObj: llmScoresOf(h) });
                   }}
                 />
                 <div className="mt-2 space-y-1">
@@ -506,9 +517,9 @@ export function QualityPage({ project }: { project: Project }) {
                       className={`w-full text-left text-xs rounded px-2 py-1.5 border ${
                         selectedHist?.id === h.id ? 'border-teal-400 bg-teal-50 dark:bg-teal-500/10' : 'border-slate-100 dark:border-slate-800 hover:border-teal-300'
                       }`}
-                      onClick={() => setSelectedHist({ ...h, scoresObj: jsonText<Record<string, number>>(h.scores, {}) })}
+                      onClick={() => setSelectedHist({ ...h, scoresObj: llmScoresOf(h) })}
                     >
-                      {new Date(h.createdAt).toLocaleString()} · 总分 {h.totalScore}
+                      {new Date(h.createdAt).toLocaleString()} · LLM 参考 {llmScoreOf(h)}
                     </button>
                   ))}
                 </div>

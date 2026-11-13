@@ -151,7 +151,8 @@ export class DashboardService {
       .select({
         id: documents.id,
         title: documents.title,
-        score: qualityReports.totalScore,
+        // 门禁口径：新报告取客观分；拆分前的历史行只有 total_score（当时存的是 LLM 分）
+        score: sql<number>`COALESCE(quality_report.objective_score, quality_report.total_score)`,
         date: qualityReports.createdAt,
       })
       .from(documents)

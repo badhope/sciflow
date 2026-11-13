@@ -1,0 +1,78 @@
+{
+  "id": "focus-aaai-2022",
+  "title": "[Re] FOCUS: Flexible Optimizable Counterfactual Explanations for Tree Ensembles",
+  "domain": "Explainable AI / Tree Ensembles",
+  "paper": {
+    "title": "FOCUS: Flexible Optimizable Counterfactual Explanations for Tree Ensembles",
+    "authors": ["Ana Lucic", "Harrie Oosterhuis", "Hinda Haned", "Maarten de Rijke"],
+    "year": 2022,
+    "venue": "AAAI 2022",
+    "doi": "10.1609/aaai.v36i5.20488",
+    "url": "https://arxiv.org/abs/1911.12199"
+  },
+  "reproduction": {
+    "title": "[Re] FOCUS: Flexible Optimizable Counterfactual Explanations for Tree Ensembles",
+    "authors": ["Klemen Vovk", "et al."],
+    "venue": "ReScience C",
+    "repo": "https://github.com/kyosek/focus-reproducibility",
+    "commit": "714a1e8901022d824b77d08dd6f372d1328fc170",
+    "license": "none specified (local research use only; do not redistribute)",
+    "language": "Python"
+  },
+  "python": "3.12",
+  "dependencies": [
+    "tensorflow-cpu==2.16.2",
+    "pandas==2.2.3",
+    "scikit-learn==1.5.2",
+    "matplotlib==3.9.2",
+    "seaborn==0.13.2"
+  ],
+  "hardware": {
+    "cpuOnly": true,
+    "notes": "TensorFlow CPU; HELOC dataset and retrained decision tree are bundled; 1000 optimization iterations."
+  },
+  "commands": [
+    {
+      "name": "HELOC-DT-Euclidean",
+      "args": [
+        "{python}",
+        "src/main.py",
+        "dt",
+        "1000",
+        "10.0",
+        "1.0",
+        "0.01",
+        "0.001",
+        "adam",
+        "cf_heloc_data_test",
+        "euclidean"
+      ],
+      "outputs": [
+        "results/euclidean/cf_heloc_data_test/dt/perturbs_adam_sigma10.0_temp1.0_dweight0.01_lr0.001_cf_stats.txt",
+        "cfe_dt_cf_heloc_data_train.csv"
+      ]
+    }
+  ],
+  "metrics": [
+    {
+      "name": "unchanged_ever",
+      "artifact": "results/euclidean/cf_heloc_data_test/dt/perturbs_adam_sigma10.0_temp1.0_dweight0.01_lr0.001_cf_stats.txt",
+      "jsonPath": "unchanged_ever",
+      "expected": 0,
+      "tolerance": 0
+    },
+    {
+      "name": "mean_dist",
+      "artifact": "results/euclidean/cf_heloc_data_test/dt/perturbs_adam_sigma10.0_temp1.0_dweight0.01_lr0.001_cf_stats.txt",
+      "jsonPath": "mean_dist",
+      "expected": 0.133,
+      "tolerance": 0.02
+    }
+  ],
+  "reproductionCriteria": [
+    "HELOC + Decision Tree + Euclidean 的 mean_dist 与论文 Table 1 的 0.133 相差不超过 0.02",
+    "所有实例均生成反事实（unchanged_ever = 0）",
+    "重复运行产物与指标一致"
+  ],
+  "notes": "Table 1 of the original paper reports FOCUS dmean=0.133 for HELOC/DT/Euclidean. The reproduction repo README uses key=value examples that do not match its positional argparse; this case uses the actual positional CLI. License is not declared by the reproduction repo, so this case is for local evaluation only."
+}

@@ -7,7 +7,7 @@ import { api } from '../../api/client';
 import type {
   ConfigConstraint, ConfigHook, ConfigRole, ConfigSnapshot, PermissionMode,
 } from '../../types';
-import { Badge, Button, Card, Input, SectionTitle, Select, Textarea, errMsg } from '../../components/ui';
+import { Badge, Button, Card, Input, SectionTitle, Select, Textarea, errMsg, downloadText } from '../../components/ui';
 import { ExtensionQuickAdd } from './ExtensionCenter';
 
 /**
@@ -143,12 +143,11 @@ export function ConfigCenterSettings() {
         <div className="flex flex-wrap gap-1.5">
           <Button variant="outline" size="sm" onClick={() => void run('export', async () => {
             const bundle = await api.config.exportBundle();
-            const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `sciflow-config-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(a.href);
+            downloadText(
+              `sciflow-config-${new Date().toISOString().slice(0, 10)}.json`,
+              JSON.stringify(bundle, null, 2),
+              'application/json',
+            );
           }, '配置包已导出')}>
             <Save size={12} /> 导出 JSON
           </Button>

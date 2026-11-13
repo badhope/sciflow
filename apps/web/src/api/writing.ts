@@ -87,9 +87,9 @@ export const writing = {
     /** 版本命名（PATCH versions JSON 内嵌 name，幂等覆盖；version 不存在/被历史上限淘汰返回 400），返回更新后的 versions 数组 */
     setVersionName: (id: string, version: number, name: string) =>
       request<DocVersionEntry[]>(`/api/documents/${id}/version-name`, { method: 'PATCH', body: JSON.stringify({ version, name }) }),
-    /** 手动创建版本快照（内容与当前一致时后端幂等跳过）；commitMessage 可选，写入快照的提交说明 */
+    /** 手动创建版本快照（内容与当前一致时后端幂等跳过）；返回 created/version/total 供 toast 展示 */
     createSnapshot: (id: string, commitMessage?: string) =>
-      request<{ version: number; total: number }>(`/api/documents/${id}/snapshot`, {
+      request<{ created: boolean; version: number | null; total: number; versions: DocVersionEntry[] }>(`/api/documents/${id}/snapshot`, {
         method: 'POST',
         body: JSON.stringify({ commitMessage }),
       }),

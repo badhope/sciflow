@@ -4,6 +4,181 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.15.3] - 2026-11-09
+
+接 v1.15.2 的第二轮排查，重点转向**桌面端（Electron）适配**、**出站安全**与**检索质量**三块。
+本轮 10 处全部按 TDD 走：先写失败测试并确认失败原因正确，再实现修复，最后跑全量回归。
+新增 50 条测试（server 558 + web 197 全绿）。
+
+### Fixed
+
+#### 桌面端适配（v1.15.1 起 Windows 安装包已是官网首推下载方式，影响面最大）
+
+- **三处裸 `fetch('/api/...')` 绕过 `u()`，在桌面端必然失败**：`core.ts` 的 `u()` 就是为
+  「页面从 `file://` 加载、需要拼上 preload 注入的 `apiBase`」而存在的，但
+  `extensions.upload`、`config.metricsText`、`ConnectionBanner` 的探活三处写的是相对路径。
+  浏览器里能用（所以一直没暴露），桌面端会解析成 `file:///api/...`：
+  - **`ConnectionBanner` 探活永远失败 → 「服务不可达」提示条永久挂着且无法消除**，
+    而内嵌的本地服务其实完全正常。这是本轮用户可感知最严重的一处；
+  - 扩展中心「上传」按钮点了没反应；
+  - 设置页运维指标面板空白。
+  三处同时都**不带 Authorization** → 企业 JWT 模式下即使地址对了也会 401。
+  现在统一走 `request()` / 新增的 `probeServerHealth()`。
+- **`request()` 里调用方 headers 会整体覆盖默认头**：`fetchOnce` 的对象字面量写成
+  `{ headers: {默认头 + 调用方头}, ...opts, signal }` —— `...opts` 在 `headers` **之后**展开，
+  因此只要调用方传了 `opts.headers`，合并结果（含 `Content-Type` 与 `Authorization: Bearer`）
+  就被**整体替换**而非逐项合并。表现为「加了个自定义头就 401」。因为此前尚无调用方传 headers，
+  长期潜伏；而修好上传/指标正需要这个能力。改为先铺 `opts`、再单独合成 `Headers`
+  （用 `Headers` 而非普通对象：HTTP 头名大小写不敏感，普通对象会让
+  `Content-Type` 与 `content-type` 同时存在、最终发出重复头），并支持传 `null`/`undefined` 显式删头。
+- **FormData 上传被强塞 `Content-Type: application/json`**：multipart 的头必须由 fetch 自己
+  生成（含 **boundary**），手写会让后端 Multer 解析不到 `file` 字段。`core.ts` 现在识别
+  FormData / Blob / URLSearchParams 并让出 Content-Type。
+- **`config.metricsText` 不检查 `res.ok`**：5xx / 401 的错误响应体会被**当成 Prometheus 指标文本**
+  直接渲染进运维面板（看起来像「指标全没了」而不是「请求失败」）。改走 `request()` 后
+  非 2xx 会抛带中文文案的 `ApiError`。
+- **`streamChat` 缺 401 处理**：`request()` 在 401 时会清 token 并派发 `sciflow:unauthorized`
+  让 AuthGate 重新开门，但 SSE 这条路没有。企业 JWT 模式下令牌过期时，聊天只会报一句错误，
+  用户被困在失效会话里出不来。现在与 `request()` 同口径。
+
+#### 出站安全（SSRF 纵深防御）
+
+- **`ip-policy` 只认 IPv4-mapped 一种翻译前缀，其余 IPv4-in-IPv6 形态全部漏判**：
+  原 `unmapV4` 用正则匹配 `^::ffff:(...)` 这类**固定字面形态**，覆盖不到另外三类
+  RFC 保留前缀。实测修复前以下地址都被判为「可放行」：
+  - `::ffff:0:7f00:1`（SIIT / IPv4-translated，RFC 6052 §2.2）= **127.0.0.1**
+  - `64:ff9b::a9fe:a9fe`（NAT64 知名前缀，RFC 6052 §2.1）= **169.254.169.254**
+  - `::7f00:1`（IPv4-compatible，已废弃形态）= **127.0.0.1**
+
+  即内网地址与**云元数据地址**可以借翻译形态绕过黑名单。现在改为把 IPv6 展开成
+  定长 8 组再做前缀比较，一次覆盖四类前缀（含 RFC 8215 的 `64:ff9b:1::/48` 本地形态）。
+  关键约束：**只还原内嵌 IPv4 再走既有裁决，不是「整个前缀一律封」**——
+  `::ffff:0:808:808`（= 8.8.8.8）这类公网地址必须继续放行，已加断言锁定。
+
+#### 检索质量
+
+- **中英混合问题的中文部分被配额整段饿死**：`buildTrigramQuery` 先塞全部拉丁词、再塞 CJK
+  三元组，最后 `slice(0, 24)` 从头截断。拉丁词一旦达到 24 个，中文三元组一个都留不下 →
+  检索退化成「只搜英文」，bm25 排序也看不到中文那一半。用户看到的是「知识库里明明有这段
+  中文却搜不到」，且日志无任何异常。改为两路**交错**取词，配额上限 24 不变（查询体积不放大）。
+- **纯假名 / 纯谚文问题直接掉到 LIKE 全表兜底**：CJK 段正则写死 `[一-鿿]`
+  （仅 CJK 统一表意文字），非汉字文字一个 token 都构造不出来 → 返回空串 → trigram 索引
+  形同虚设（与 v1.15.2 修的 `fingerprint` 是**同一个字符类盲区**）。改用 Unicode Script 属性，
+  覆盖汉字（含扩展区）+ 平假名 + 片假名 + 谚文。同时明确保留 trigram 的固有下限：
+  连续段不足 3 字符时仍返回空串走 LIKE（FTS5 trigram 索引本身无法匹配 <3 字符的串，
+  这是正确行为而非缺陷，已加断言说明）。
+- **本地嵌入并发闸门：上限写死 + 手写忙轮询**：`maxInflight = 4` 是硬编码，而本项目所有其它
+  并发旋钮都走 `envInt`（`AI_DRAFT_CONCURRENCY`、`AI_RPM_CAP`）——2 核容器里 4 路本地推理
+  互相抢线程反而更慢，用户却只能改源码。实现上是 `while (inflight >= max) await setTimeout(5)`
+  的忙轮询信号量：一次 500 块的批量上传会瞬间创建 500 个 async 闭包，其中 496 个各自每 5ms
+  空转一次（约 **10 万次定时器回调**），且唤醒顺序由定时器注册顺序决定、无 FIFO 公平性。
+  改为 `EMBEDDING_CONCURRENCY`（默认 4，夹取 1-32，非法值回落默认而非产生 NaN 闸门）+ p-limit，
+  与 `ai-transport` 里既已确立的「p-limit（成熟库替代手写实现）」约定对齐。
+
+#### 可访问性
+
+- **`useSplitDrag` 键盘方向忽略 `invert`**：`onPointerDown` 里
+  `delta = (startX - evX) * (invert ? -1 : 1)` 尊重 `invert`，而 `onKeyDown` 写死
+  「ArrowLeft → +24 / ArrowRight → −24」。于是 `invert: true` 时鼠标往左拖是**变窄**、
+  按左方向键却是**变宽**——同一个分隔条上两种输入方式方向相反，键盘（可访问性）操作
+  会朝用户预期的反方向走。当前唯一调用方未传 `invert`，属潜伏缺陷，已修并加断言。
+
+### Tests
+
+- 新增 50 条测试，全部先确认为 RED（失败原因与预期一致）再实现修复：
+  - `apps/web/src/api/desktop-baseurl.test.ts`（11 条）：用 msw 在 node 环境下注入
+    `window.sciflowDesktop.apiBase`，直接断言请求打到**绝对地址**、带上 Authorization、
+    FormData 的 Content-Type 是 `multipart/form-data`、非 2xx 必须报错。
+    修复前的失败信息就是 `TypeError: Failed to parse URL from /api/extensions/upload`
+    —— 正是桌面端 `file:///api/...` 的等价证据。
+  - `packages/core/src/ip-policy.spec.ts`（15 条）：四类翻译前缀 × 内网/公网/元数据地址，
+    含「翻译前缀里包裹公网 IPv4 必须放行」的反向断言，防止一刀切封整个前缀。
+  - `packages/retrieval/src/embedding-concurrency.spec.ts`（10 条）：用假 GGUF + 注入的
+    可控延迟上下文观测**真实并发峰值**，覆盖显式配置 / 默认值 / 非法值回落 / 越界夹取 /
+    单条失败只降级该位 / 200 块无饥饿。
+  - `packages/retrieval/src/trigram-query.spec.ts`（11 条）：配额饿死、假名谚文覆盖，
+    以及 5 条既有行为非回归断言（FTS5 语法合法性、元字符清理、去重、3 字下限）。
+  - `apps/web/src/lib/split-drag.test.tsx`（5 条）：`invert` 两种取值下键盘与指针方向一致。
+- 全量门禁：server 558 + web 197 用例全绿；server / web `tsc --noEmit` 通过；`eslint .` 无告警；
+  `pnpm --filter @sciflow/server build` 通过；web 套件继续在 `NODE_ENV=production` 下复跑
+  （锁定 v1.15.2 修的 React.act 回归）。
+
+## [1.15.2] - 2026-11-09
+
+一轮「隐形缺陷」专项排查：全部 10 处都是**不报错、不留日志、界面照常渲染**的静默错误——
+类型检查看不出来（运行时类型与声明不符）、既有测试覆盖不到（口径盲区）、肉眼也难发现
+（图形照样画出来、分数照样给出来）。每处都先写脚本实证复现、再修、再补回归测试。
+新增 29 条回归测试（523 条全绿）。
+
+### Fixed
+
+- **数字式参考文献表完全不被识别（误报硬伤，合规稿被封顶 40 分）**：`quality-audit` 解析文献条目
+  编号的正则里，`[1]` 分支有捕获组、`1.` / `1、` 分支**没有**——`m[1]` 恒为 `undefined`，
+  经 `Number(undefined ?? 0)` 变 0 后被 `.filter(n => n > 0)` 整批丢弃。GB/T 7714 数字式是国内
+  论文的主流样式，实测后果两条：纯数字式文献表 → 条目数恒为 0，「悬空锚点」红牌检查被静默跳过；
+  **混合样式**（`[1]` + `2.`）→ 只认出方括号那条，正文里的 `[2]` 被判成「引用锚点无对应文献条目」
+  → 误报硬伤，一篇完全合规的稿子总分被封顶到 40。修复后数字式分支用负向前瞻 `(?!\d)` 排除
+  `2.5 倍` 这类行首小数，同时兼容中文 `1、张三`（标点后无空格）的写法。
+- **知识库「语义地图」被压成一条直线**：PCA 求第二主成分的秩一压缩项写成
+  `(v₁ᵀx)·v₁·(v₁ᵀv₁)`，用 `v₁ᵀv₁ ≈ 1` 顶替了特征值 λ₁——**λ₁ 被整个丢掉**。正确形式是
+  `B = A − λ₁·v₁v₁ᵀ`；缺了 λ₁ 后 v₁ 方向上的特征值是 λ₁−1 而非 0，只要 `|λ₁−1| > λ₂`
+  （协方差特征值极少恰好为 1，实际几乎恒成立）第二次幂迭代照样收敛回 ±v₁。实测修复前
+  `|corr(x, y)| = 1.000000`，PC2 与 PC1 完全共线，二维聚簇结构是假的。这个 bug 尤其难发现：
+  散点图照常渲染、点照常铺开（只是全落在一条斜线上），不报错也不留日志。
+- **前端测试套件在 `NODE_ENV=production` 下 89 个用例全红**：报错是
+  `TypeError: React.act is not a function`，与真因毫无关系。真因是 React 的**生产构建不导出
+  `act`**（dev-only API），而 react 被 externalize 后原生 require、读的就是真实
+  `process.env.NODE_ENV`；@testing-library/react 拿不到 `React.act` 便回落到已废弃的
+  `ReactDOMTestUtils.act` 并最终抛错。之所以长期隐形：CI 的 runner 不预设 NODE_ENV，流水线一直
+  是绿的，只有 Docker 镜像或导出过该变量的 shell 里才会触发。现在在 `vitest.config.mts` 里把
+  NODE_ENV 钉死为 `test`（并在 `test-setup.ts` 兜底），结果不再依赖调用方环境。
+- **引用证据链静默残缺：写在标题行上的锚点丢失出处**：`scanCitationSpots` 的标题分支
+  `(#{1,6}\s+[^\n]+)` 里 `[^\n]+` 会一路吃到行尾，把同一行的引用锚点整个吞掉。于是
+  `## 结论 [Ref:3]` 这种形态下，`render()` 的编号走独立正则、照常给出 `[3]`，但 `poolSpot`
+  查不到该 idx → `backfillCitations` 拿到 `undefined` → citations 行的 `location` / `context`
+  落成空串。编号对、文献对，就是查不到这条引用出现在哪一节、上下文是什么——直接削弱
+  「引用三级可追溯」。标题分支改为在锚点前用负向前瞻停住。
+- **幽灵引用计数与它自己给出的证据对不上**：`citation-audit` 里 `ghost` 写成
+  `maxAnchor - resolvable`（最大编号 − 可解析条数），只有锚点连续时才等于真实越界数。
+  正文一断号（如 `[1][2][10]`）就把「断号」重复计成「幽灵」：3 个锚点算出 `ghost = 7`，
+  而同时下发的 `items` 只有 `[10]` 一条。更糟的是每个虚增幽灵按 −20 扣分，一处断号就能把
+  分数打到 0，而断号本身只该按黄牌（`anchor-gap`）处理。现在 `ghost` 与 `items` 同源。
+- **`parseTagsJson` 返回值运行时不是 `string[]`**：它直接返回 `parseJsonArray<string>` 的结果，
+  而后者只做 `x as T` 的**类型断言**、不做运行时转换。于是 `'[1,2]'` → `[1,2]`、`'[null]'` →
+  `[null]`，返回值在类型上是 `string[]`、运行时却是 number / null，并原样进入 `graph()` 等
+  API 响应；前端一调 `tag.trim()` / `tag.toLowerCase()` 就抛 TypeError。现在只保留可安全转成
+  字符串的标量，丢弃 null 与对象/数组并过滤空串（文档承诺的「等价于 parseStringList」由此成立）。
+- **tags 写入校验用长度启发式，脏数据可直接落库**：`references.update` 原先用
+  `parseTagsJson(x).length === 0 && x.trim().length > 2` 判非法 JSON，漏网两类输入——
+  `'{}'` / `'ab'`（长度 ≤ 2 → 直接放行落库）、`'[1,2]'`（解析出 2 个元素 → 放行，落库的是数字
+  数组）。改为新增的 `isJsonStringArray()` 做结构化校验，并落库归一化后的字符串数组，
+  读写口径一致。
+- **尾部块标题清单直接拼进 `new RegExp`**：`splitBodyForAudit` 未转义 `tailHeadings`。数组里
+  混入空串 → 交替分支变成 `(?:参考文献||图表)`，空分支可匹配任意位置，正文会从第一个换行处被
+  **整段截断**（审计对象瞬间变成空文）；标题含正则元字符（如自定义尾部块名 `附录(A)`）→
+  `new RegExp` 直接抛 SyntaxError，整个体检接口 500。现在逐条 trim + 过滤空串 + 转义；
+  对 `DEFAULT_TAIL` 而言转义是恒等变换，既有行为不变。
+- **纯谚文 / 纯假名标题的指纹退化为空串，去重静默失效**：`fingerprint` 的归一化字符类只认
+  ASCII 与 CJK 统一表意文字（`\u4e00-\u9fff`），遇到不含汉字的标题（`논문 제목`、
+  `かなのみのタイトル`）会把所有字符剥光 → 返回 `''`。5 处调用方一律 `if (fp)` 守卫，
+  于是这类文献的**项目内去重被静默跳过**：同一篇韩文/日文文献可被反复导入而不判重。
+  因为 `fingerprint` 已持久化在 `references.fingerprint` 列，主口径**保持不变**（否则历史行
+  与新算法对不上，反而造成更大范围漏判），只在主口径剥完为空时启用 Unicode 字母数字兜底——
+  含汉字/ASCII 的标题指纹逐字不变（已加断言），无需数据迁移。
+- **章节失衡证据点名错误的章节**：最大章占比按「去空白字符数」计算，挑最大章却按
+  `body.length`（含空白）挑。两个口径不一致时（章节空白密度不同即会发生），证据文案会指向
+  **另一章**——用户照着「『XX』独占 60% 正文」的提示去删改，动的却是错误的地方。现在统一用
+  同一份 `sectionCharsList`。
+
+### Tests
+
+- 新增 29 条回归测试，覆盖上述每一处缺陷（含「修复没有把检查一起关掉」的反向断言：
+  真正的悬空锚点仍须报出、行首小数不得被当成条目编号）。
+- 新建 `packages/core/src/json-guard.spec.ts`、`packages/core/src/fingerprint.spec.ts`
+  ——这两个模块此前**没有任何测试**，而它们被全项目共用。
+- 全量校验：server 523 + web 182 用例全绿；server / web `tsc --noEmit` 通过；`eslint .` 无告警；
+  `pnpm --filter @sciflow/server build` 通过。web 套件额外在 `NODE_ENV=production` 下复跑以锁定回归。
+
 ## [1.15.1] - 2026-11-06
 
 官网（GitHub Pages · `docs/index.html`）此前**没有任何下载入口**，也没有版本标注——用户打开官网

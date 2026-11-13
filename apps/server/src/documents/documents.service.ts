@@ -13,7 +13,7 @@ import { Document, Packer, Paragraph, HeadingLevel, AlignmentType } from 'docx';
 import { AiService } from '../ai/ai.service';
 import { ReferencesService } from '../references/references.service';
 import { splitTailBlock } from '../pipeline/tail-blocks';
-import { parseAuthors as parseAuthorArr, surnameOf } from '../common/authors';
+import { parseAuthors as parseAuthorArr } from '../common/authors';
 import { parseQualityStandard, type QualityStandardKey } from '../common/quality-standards';
 import { extractSections, replaceSectionBody, restoreSection as restoreSectionText, sectionDiff, type SectionDiffEntry } from './section-restore';
 
@@ -27,7 +27,7 @@ function readQualityStandard(): QualityStandardKey {
   }
 }
 import { parseJson } from '../common/json-guard';
-import { toCslAuthors } from '../common/citation-csl';
+import { toCslAuthors, buildCslEntry, cslSurname } from '../common/citation-csl';
 
 const MAX_VERSIONS = 20;
 const EMPTY_OUTLINE: { title: string; sections: { title: string; subsections: string[] }[] } = { title: '', sections: [] };
@@ -205,12 +205,21 @@ export class DocumentsService {
    *  - commitMessage 为空时自动生成时间戳兜底
    *  - 返回更新后的 versions 数组
    */
+  /**
+   * 手动创建版本快照（对标 git commit）。
+   *
+   * 返回值语义（前端契约）：
+   *  - created=true：真正写入了一条快照，version 是新快照号，total 是写入后的版本总数；
+   *  - created=false：内容与最新快照一致，幂等跳过，version 是最新快照号（可能为 null），total 不变。
+   */
   createSnapshot(id: string, commitMessage?: string) {
     const existing = this.get(id);
     const versions = parseJson<{ version: number; content: string; updatedAt: number; name?: string; commitMessage?: string }[]>(existing.versions, []);
     // 与最新快照内容对比：相同则跳过（幂等）
     const latest = versions[versions.length - 1];
-    if (latest && latest.content === existing.content) return versions;
+    if (latest && latest.content === existing.content) {
+      return { created: false, version: latest.version, total: versions.length, versions };
+    }
     const msg = commitMessage?.trim() || `手动快照 · ${new Date().toLocaleString('zh-CN')}`;
     // 快照号取「历史最大版本号 + 1」：直接复用 baseVersion 会与 update 自动快照产生同号重复（历史缺陷）
     const nextVersion = versions.reduce((m, v) => Math.max(m, v.version), 0) + 1;
@@ -218,7 +227,7 @@ export class DocumentsService {
     versions.push(entry);
     const trimmed = versions.slice(-MAX_VERSIONS);
     db.update(documents).set({ versions: JSON.stringify(trimmed), updatedAt: Date.now() }).where(eq(documents.id, id)).run();
-    return trimmed;
+    return { created: true, version: nextVersion, total: trimmed.length, versions: trimmed };
   }
 
   /** 为某个历史版本写入/覆盖 commit message（PATCH /api/documents/:id/versions/:version/commit-message） */
@@ -275,7 +284,7 @@ export class DocumentsService {
     // 著者-年样式：解析每条 citation 的第一作者姓 / 年
     const meta = refs.map((ref) => {
       const arr = parseAuthorArr(ref.authors);
-      const surname = arr.length ? surnameOf(arr[0]) : '佚名';
+      const surname = arr.length ? cslSurname(arr[0]) : '佚名';
       const year = ref.year ? String(ref.year) : 'n.d.';
       return { ref, surname, year };
     });
@@ -492,7 +501,7 @@ export class DocumentsService {
     return { markdown: lines.join('\n'), filename: `${doc.title.replace(/[\\/:*?"<>|]/g, '_')}.md` };
   }
 
-  /** Markdown 纯文本化（docx 段落用）：去 #、**、链接、列表符 */
+  /** Markdown 纯文本化（docx 段落用）：去 #、**、链接、列表符；表格转成可读行而非删掉竖线 */
   private mdToPlain(md: string): string {
     return md
       .replace(/!\[.*?\]\(.*?\)/g, '')
@@ -504,7 +513,11 @@ export class DocumentsService {
       .replace(/\*([^*]+)\*/g, '$1')
       .replace(/`([^`]+)`/g, '$1')
       .replace(/~~([^~]+)~~/g, '$1')
-      .replace(/[|>]+\s?/gm, '')
+      // 表格分隔行（|---|---|）整行丢弃；数据行把单元格用「 / 」连接。
+      // 历史实现用 /[|>]+/ 全局删竖线：表格单元格被粘成一串，正文里的 | 也会被误删。
+      .replace(/^\s*\|?[\s:|-]+\|[\s:|-]*$/gm, '')
+      .replace(/^\s*\|(.+)\|\s*$/gm, (_m, cells: string) => cells.split('|').map((c) => c.trim()).filter(Boolean).join(' / '))
+      .replace(/^\s*>\s?/gm, '')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
   }
@@ -626,9 +639,10 @@ export class DocumentsService {
     // 否则会把「没有内嵌参考文献块」误判成硬伤（实测踩到）。
     const citationCount = (db.select().from(citations).where(eq(citations.documentId, id)).all() || []).length;
     const report = checkPaperQuality(content, { citationCount, standard: readQualityStandard() });
-    // 附带历史 LLM 评分，便于对照「机械分」与「模型分」的漂移
+    // 附带历史 LLM 评分，便于对照「机械分」与「模型分」的漂移。
+    // 新行 total_score 已是客观分：必须读 llm_score/llm_scores，老行回落到 total_score/scores。
     const history = db.select().from(qualityReports).where(eq(qualityReports.documentId, id)).all()
-      .map((r) => ({ totalScore: r.totalScore, createdAt: r.createdAt, scores: r.scores }));
+      .map((r) => ({ totalScore: r.llmScore ?? r.totalScore, createdAt: r.createdAt, scores: r.llmScores && r.llmScores !== '{}' ? r.llmScores : r.scores }));
     return { documentId: id, title: doc.title, report, llmHistory: history.slice(-5) };
   }
 }
@@ -647,19 +661,6 @@ const CSL_TEMPLATE_MAP: Record<string, string> = {
   acs: 'american-chemical-society',
 };
 
-/** citation-js Cite 对象构建（从 citation row 构建 CSL-JSON 条目） */
-function buildCiteEntry(row: { reference: { id: string; title: string; authors: string | null; year: number | null; venue: string | null; doi: string | null } }) {
-  return {
-    id: row.reference.id,
-    type: 'article-journal' as const,
-    title: row.reference.title,
-    author: toCslAuthors(row.reference.authors),
-    issued: row.reference.year ? { 'date-parts': [[row.reference.year]] } : undefined,
-    'container-title': row.reference.venue || undefined,
-    DOI: row.reference.doi || undefined,
-  };
-}
-
 /**
  * 用 citation-js CSL 引擎渲染参考文献列表（替代手写的 formatCitation + formatRefEntry8）。
  * BibTeX 直接用 citation-js bibtex 输出。
@@ -668,7 +669,7 @@ export function renderCitationsAsBibliography(
   rows: { reference: { id: string; title: string; authors: string | null; year: number | null; venue: string | null; doi: string | null } }[],
   format: string,
 ): string[] {
-  const entries = rows.map(buildCiteEntry);
+  const entries = rows.map((row) => buildCslEntry(row.reference));
   const cite = new Cite(entries);
 
   // bibtex 走 citation-js 原生输出（标准 LaTeX 合规）

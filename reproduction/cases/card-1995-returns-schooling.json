@@ -1,0 +1,59 @@
+{
+  "id": "card-1995-returns-schooling",
+  "title": "Card (1995) 教育回报率复现：OLS 与大学邻近工具变量",
+  "domain": "Labor Economics / Returns to Schooling",
+  "paper": {
+    "title": "Using Geographic Variation in College Proximity to Estimate the Return to Schooling",
+    "authors": ["David Card"],
+    "year": 1995,
+    "venue": "Aspects of Labour Market Behaviour / NBER Working Paper 4483",
+    "url": "https://www.nber.org/papers/w4483"
+  },
+  "reproduction": {
+    "type": "independent reimplementation",
+    "code": "reproduction/cases/card-1995/analysis.py",
+    "data": "wooldridge package dataset `card` (based on Card 1995)",
+    "license": "case code MIT; data attribution to Wooldridge/Card",
+    "language": "Python"
+  },
+  "python": "3.12",
+  "lockFile": "card-1995.lock.txt",
+  "dependencies": [
+    "wooldridge==0.5.0",
+    "statsmodels==0.15.0",
+    "pandas==3.1.1",
+    "numpy==2.5.4"
+  ],
+  "hardware": {
+    "cpuOnly": true,
+    "notes": "OLS/2SLS on 3,010 observations; seconds on CPU; no external download beyond the Python packages."
+  },
+  "variants": [
+    {
+      "id": "naive",
+      "label": "仅教育年限（遗漏经验/地区/种族控制）",
+      "spec": "naive",
+      "metrics": [
+        { "name": "ols_educ", "jsonPath": "ols_educ", "expected": 0.074, "tolerance": 0.01 },
+        { "name": "nobs", "jsonPath": "nobs", "expected": 3010, "tolerance": 0 }
+      ]
+    },
+    {
+      "id": "controlled",
+      "label": "加入经验/地区/种族控制，并以 nearc4 为工具变量",
+      "spec": "controlled",
+      "metrics": [
+        { "name": "ols_educ", "jsonPath": "ols_educ", "expected": 0.074, "tolerance": 0.01 },
+        { "name": "iv_educ", "jsonPath": "iv_educ", "expected": 0.132, "tolerance": 0.03 },
+        { "name": "nobs", "jsonPath": "nobs", "expected": 3010, "tolerance": 0 }
+      ]
+    }
+  ],
+  "reproductionCriteria": [
+    "控制变量 OLS 的 educ 系数接近 Card (1995) 的约 0.074（±0.01）",
+    "以 nearc4 为工具变量的 2SLS educ 系数接近约 0.132（±0.03）",
+    "样本量 3,010",
+    "naive 设定应被 Critic 判定为不达标，促使 PI 修订协议"
+  ],
+  "notes": "这是独立重实现，不是作者原代码；数据由 wooldridge 包提供。naive 轮故意使用遗漏控制变量的设定，用于验证多轮循环的 Critic→PI 修订机制。"
+}

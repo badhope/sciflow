@@ -106,6 +106,27 @@
 
 ---
 
+## §2.26 v1.16 自主研究循环契约（2026-11-12，阶段 3+）
+
+自主科研循环（`apps/server/src/research-cycle/`）把「AI 自己迭代科研」落成可验收的工程行为。以下契约后续不得回退：
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **编排只在图里**：研究循环是 LangGraph `StateGraph`（`plan → gate → execute → evaluate → decide`），带**回边**（decide → plan）与三类终止条件（轮次上限 / token 预算 / 停滞判定）。禁止在 service 或仓库外脚本里再写一套闭环编排 | `research-cycle/research-cycle.graph.ts` | `research-cycle.graph.spec.ts` 13 条（回边/终止/门禁/降级逐条锁） |
+| 2 | **L2 门禁是硬边界**：协议未 approved 不允许执行实验。L2 用 `interrupt()` 挂起（checkpoint 落 SQLite），驾驶舱批准后 `Command({resume})` 续跑；L3+ 才自动批准（等级取 `research_program.autonomy_level`，不写在代码里） | `research-cycle.graph.ts` gate 节点 · `programs/research-records.service.ts` `createRun` 双重校验 | `research-cycle.graph.spec.ts` 门禁 3 条 + `programs-access.spec.ts` |
+| 3 | **三个角色都是 LLM 智能体**（PI / 实验者 / 评审）：PI 与评审用 `generateObject` + zod 结构化输出，禁止手写 JSON 抠取；实验者只产出单段 Python 代码，走纯文本补全 + 确定性清洗（实测 JSON schema 模式会让弱模型退化成一整行 import 清单），再由 `sanitizePythonCode` 剥围栏。PI 与评审走 `strong` 模型档，实验者走 `fast` 档 | `research-cycle/agents/{pi,experimenter,critic}.agent.ts` | agent schema/sanitize 单测 + 真实模型验收 |
+| 4 | **智能体失败要降级不能崩循环**：PI 连续失败 → `stopReason=agent_error` 体面终止（保留已落库结论）；实验者/评审出错 → 失败运行 + `inconclusive`，下一轮照常继续；实验脚本报错或**零输出/只有 import** → 把错误回灌给实验者做**修复轮**（最多 1 次）。评审结论必须有逐字引用输出的证据，`supported/refuted` 无对应证据或置信度为 0 时强制降级 `inconclusive` | `research-cycle.graph.ts` plan/execute/evaluate 节点 · `agents/critic.agent.ts` | `research-cycle.graph.spec.ts`（agent_error/质量闸）· `critic.agent.spec.ts` 6 条 · 真实模型验收 |
+| 5 | **模型输出只做确定性清洗**：代码围栏、语言标记等格式噪声由服务端清洗（`sanitizePythonCode`），不消耗模型重试 | `agents/experimenter.agent.ts` | `experimenter.agent.spec.ts` 8 条 |
+| 6 | **跑题必须可检测**：PI 方案与原问题的 bigram 重合度 < 0.3 记告警；评审额外产出 `topicAligned`，跑题时在下一轮反馈里明确要求回到原问题（闭环自纠偏） | `research-cycle.graph.ts` `topicOverlap` · `agents/critic.agent.ts` | `research-cycle.graph.spec.ts` 重合度 1 条 |
+| 7 | **真源在库**：图状态只是运行时数据，全部科研对象落 `research_*` 表；循环结束后清理 checkpoint（与主流水线一致） | `research-cycle.service.ts` `clearCheckpoint` | 服务测试 + 真实运行核对 |
+| 8 | **工具作用域只收窄不放宽**：最终工具集 = `AGENT_TOOLS_ALLOW` ∩ 技能开关 ∩ profile；默认 profile = `full`（与既有行为一致，不做静默能力削减），窄 profile 由 `AGENT_TOOLS_PROFILE` 指定 | `agent/agent-tool-profiles.ts` | `agent-tool-profiles.spec.ts` 6 条 |
+| 9 | **门禁模式用户可选**：`approvalMode=human`（默认）走人工 interrupt；`approvalMode=ai` 为全自动，由**独立 AI 专家**审批，不挂起人工。专家驳回→`approval_rejected`；专家不可用/自相矛盾→`agent_error`/驳回（fail-closed，绝不默认放行）。模式随 cycle 预算落库 | `research-cycle.graph.ts` gate · `agents/expert.agent.ts` · `ResearchCycleRunner.tsx` | `research-cycle.graph.spec.ts` 全自动 3 条 + `expert.agent.spec.ts` 4 条 + UI 模式切换 1 条 |
+| 10 | **文献线索接入 PI/评审**：首轮用 `ScholarSearchService`（OpenAlex/Crossref/arXiv）检索 6 条，标题/年份/载体/DOI 注入 PI 与 Critic 提示词，修订轮复用；检索失败降级为空、不阻塞循环；线索随协议 `design.literature` 落库可核对，摘要不进状态/提示词 | `research-cycle.graph.ts` plan · `research-cycle.service.ts` · `agents/{pi,critic}.agent.ts` | `research-cycle.graph.spec.ts` 文献 2 条 |
+
+**工具成本实测（写这张表的依据）**：同一 chat 入口，不带工具 `prompt_tokens≈1.9k`，带 24 个工具 `≈10.0–10.9k`（`llm_call_log` 实测），工具循环每步重复付费。profile 是**控制面**（模型能做什么）兼**成本面**（每步少付多少），两者同一机制。
+
+---
+
 ## §2.16 v1.2 模型接入契约（2026-10-26）
 
 设置页从「手填模型名」升级为「地址 + Key → 自动发现 → 自动匹配能力」。以下契约后续不得回退：
@@ -419,6 +440,14 @@ CI 同步：`ci.yml` 增加 lint 步骤、web 测试步骤、`full_regression.py
 2. **保留 `agent_execution`/`agent_step`**（schema.ts:409,434）：作为 chat/tool 来源的 Agent 轨迹（AgentTraceService 已写完整，需接线：注入 chat.service、experiments 等）。
 3. **流水线可观测性**：LangGraph checkpointer 自管 checkpoint 表；pipeline 轨迹 = checkpointer 状态 + llmCallLogs。`pipeline_task.steps` JSON 列改为由 graph state 投影生成（保持前端契约不变，PipelinePage 无需重写）。
 4. 其余表不动（documents/references/citations/knowledge/submissions 等全部保留）。
+5. **自主科研对象（8 张新表，2026-11-12 阶段 2A/2B）**：`research_program` → `research_cycle` → `research_question` → `research_hypothesis` → `research_protocol` → `research_run` → `research_claim` → `research_evidence`。
+   关系与不变式：
+   - 所有实体冗余 `program_id`，便于授权与按项目聚合查询；
+   - 状态机取值集中在服务层校验（`programs.service.ts` 的 `CYCLE_STATES` / `PROTOCOL_STATUS` / `RUN_STATUS` 等），避免脏状态写库；
+   - 版本/审批**只追加不覆盖**：Protocol 新版本 = 新行；
+   - `research_cycle.state` 新增 `awaiting_approval`（自主研究循环在协议审批门禁处挂起）。
+   详见 `packages/db/src/schema.ts` 与 `apps/server/src/programs/`。
+6. **质量报告分数来源拆分（2026-11-12）**：`quality_report` 新增 `objective_score` / `objective_dimensions` / `llm_score` / `llm_scores` / `expert_score` / `expert_status`，旧的 `total_score` / `scores` 保留兼容；旧库由 `ensureColumn` 自动迁移，旧行按 `scoreSource=llm-legacy` 回填 LLM 分。
 
 ## 4. 模块结构变更（server）
 
@@ -440,6 +469,33 @@ apps/server/src/
 
 前端：`App.tsx` 拆壳（声明式路由 + React Query Provider）；`client.ts` 按域拆 `api/*.ts`（P4 起由 openapi-typescript 生成类型）；各页数据获取迁 React Query；`WritingEditor` 换 CodeMirror。
 
+### 4.1 自主科研与研究循环（2026-11-12 阶段 2/3+）
+
+```
+apps/server/src/
+├── programs/                 # 自主科研对象（阶段 2A/2B）
+│   ├── programs.service.ts           # Program/Cycle/Question/Hypothesis/Protocol
+│   ├── research-records.service.ts   # Claim/Evidence/Run
+│   └── programs.controller.ts / research-records.controller.ts
+├── research-cycle/           # 自主研究循环（阶段 3+）：LangGraph 编排
+│   ├── research-cycle-state.ts       # 图状态（Annotation）
+│   ├── research-cycle.graph.ts       # plan→gate→execute→evaluate→decide（带回边）
+│   ├── research-cycle.service.ts     # 门面：start/resume/status/list + checkpoint 清理
+│   ├── research-cycle.controller.ts  # REST：/api/research-cycles/*
+│   └── agents/
+│       ├── pi.agent.ts               # PI：问题→假设→协议（strong 档）
+│       ├── experimenter.agent.ts     # 实验者：协议→Python 脚本（fast 档）
+│       └── critic.agent.ts           # 评审：输出→结论/证据/是否跑题（strong 档）
+└── agent/
+    └── agent-tool-profiles.ts        # 工具作用域（只收窄不放宽）
+
+apps/web/src/
+├── api/research-cycles.ts            # 研究循环 API 客户端
+└── pages/programs/ResearchCycleRunner.tsx  # 驾驶舱面板：发起/轮询/审批/恢复
+```
+
+> 落地说明：编排代码放在 `research-cycle/` 独立目录（与 `pipeline/` 平级）——两者是**不同**的图：主流水线是单次 DAG（产出稿件），研究循环是带回边的多轮图（产出结论）。它们共享 LangGraph 与 SQLite checkpoint，但不共享状态或节点。
+
 ## 5. 分阶段实施（每阶段完成即回写本文档）
 
 | Phase | 内容 | 验收门 |
@@ -452,6 +508,20 @@ apps/server/src/
 | **P5 质量工程** ✅ 主体完成 2026-10-13 | ① 回归入 CI + final_acceptance 矩阵（21 项）② **promptfoo**：`evals/promptfooconfig.yaml` 离线评估集（指向 mock 网关，实测 **2 passed / 0 failed**）+ `pnpm eval:prompts` ③ **Playwright**：`e2e/workspace-smoke.spec.ts` 真机冒烟（headless chromium 实测 **1 passed**，验证默认视图与导航 IA）+ CI `e2e-and-evals` job。✅ autoevals、sigma.js 均已在后续轮次落地（见 §8 终局） | final_acceptance **21/21**；回归 **161/0/0**；promptfoo 2/2；Playwright 1/1 |
 
 顺序依赖：P0→P1→P2 必须串行（同一模块）；P4 可与 P2/P3 并行。
+
+### 5.2 自主科研平台阶段线（2026-11-11 → 12）
+
+上游 P0–P5 是「把既有工作台做扎实」；本阶段线是**把工作台变成自主科研平台**，两条线并行不互斥。
+
+| 阶段 | 内容 | 验收门 |
+|---|---|---|
+| 阶段 0 隔离环境 ✅ | 仓库/依赖/缓存/数据/日志全部落在 `D:\sciflow-research`；项目内 pnpm 11.7.0；better-sqlite3 用既有 VS2022 编译 | 基线测试 558/197 通过；见 `reports/ENVIRONMENT_BASELINE.md` |
+| 阶段 1 安全 ✅ | MCP/Agent 项目归属授权、工具 zod 校验与超时、设置 upsert | 负向授权测试通过；见 `reports/PHASE1_SECURITY_REPORT.md` |
+| 阶段 2A/2B 科研对象 ✅ | 8 张 `research_*` 表 + 服务 + API + 授权；L2 门禁（协议未批准不建 Run） | server 587 测试；见 `PHASE2A/B` 报告 |
+| 阶段 2C/2D 驾驶舱 ✅ | 研究计划页 `#/programs`：假设/协议审批、结论/证据、运行创建与状态推进 | 浏览器 DOM 验收；见 `PHASE2C/2D` 报告 |
+| 阶段 3 复现 ✅ | Plass–Stone 1983 确定性复现（2 遍 × 2 输入，4 产物哈希一致）+ Card 1995 经济学两轮循环 | 见 `PHASE3_*` 报告 |
+| 阶段 3+ 真实模型 ✅ | Agnes 接入；非流式 chat 工具注入修复；质量报告 objective/llm/expert 分数拆分 | server 589 / web 197；见 `LIVE_MODEL_TEST_REPORT.md` |
+| **阶段 4 自主研究循环 ✅ 2026-11-12** | LangGraph 带回边的多轮循环（PI/实验者/评审 三个 LLM 智能体）+ L2 审批门禁 + 预算/停滞终止 + 驾驶舱面板 + 工具作用域 | server **77 文件 / 617 测试**、web 28/197、lint 0 errors、两侧 build 通过；**真实模型端到端 2 轮 → 结论 supported**（见 `reports/PHASE4_RESEARCH_CYCLE_REPORT.md`） |
 
 ### 5.1 P0 完成快照（2026-10-13，commit 基线 3c601d1 之上）
 
@@ -512,6 +582,16 @@ apps/server/src/
 5. 完成任何影响架构的改动 → 回写本文档（§0 基线、§2 地图、§4 结构图、§5 进度）。
 
 ## 8. 待办快照
+
+### 自主科研平台待办（2026-11-12）
+
+- [x] 阶段 4：自主研究循环（LangGraph 回边 + 三个 LLM 智能体 + L2 门禁 + 预算/停滞终止）——真实模型验收通过
+- [ ] **PI 角色换强模型**：当前只有 `agnes-3.0-flash` 一个模型，实测它做 PI 会跑题（问题里的「5% 离群点」被当成 `p=0.05`）。代码已按 strong/fast 路由，接入第二个强模型即生效
+- [ ] **沙箱解释器固化**：实验沙箱需要 numpy/scipy/pandas；本机已建 `D:\sciflow-research\data\sandbox-venv` 并通过 `SANDBOX_PYTHON` 接入，安装流程需写进部署文档
+- [ ] 工具作用域默认策略定档：`AGENT_TOOLS_PROFILE` 默认 `full`（不削减能力）；若要默认收窄以省 token，需先定「哪些工具在对话里本来就用不到」的证据
+- [ ] 循环的文献检索接入：PI/评审目前靠模型内部知识，下一轮要把 `literature.search` 工具按角色作用域接进循环
+- [ ] 截图能力恢复后补桌面/移动/暗色最终图；JWT 多用户浏览器 E2E
+- [ ] 规则驱动的复现 harness（`reproduction/*.mjs`）降级为「执行器」，编排职责全部归图
 
 ### P0 前置项（2026-10-13 全部核销 ✅）
 

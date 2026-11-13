@@ -315,7 +315,11 @@ export function WritingToolsPanel(props: WritingToolsPanelProps) {
       <section>
         <div className={`${SEC} flex items-center gap-1`}>
           <Gauge size={12} className="text-teal-600" aria-hidden="true" /> 质量评分
-          {qualityReport && <span className="text-[11px] text-slate-400">LLM 总分 {qualityReport.totalScore}</span>}
+          {qualityReport && (
+            <span className="text-[11px] text-slate-400">
+              LLM 参考 {typeof qualityReport.llmScore === 'number' ? qualityReport.llmScore : qualityReport.totalScore}
+            </span>
+          )}
         </div>
         {!qualityReport ? (
           <div className="text-xs text-slate-400">暂无 LLM 评分，可到「质量评分」页运行 7 维评分。</div>
@@ -329,7 +333,7 @@ export function WritingToolsPanel(props: WritingToolsPanelProps) {
             <span className="flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
               <ShieldCheck size={12} className="text-teal-600" aria-hidden="true" /> 客观检查器
               {objectiveReport && (
-                <span className={objectiveReport.totalScore >= 80 ? 'text-green-600' : objectiveReport.totalScore >= 60 ? 'text-amber-600' : 'text-red-600'}>
+                <span className={objectiveReport.totalScore >= (objectiveReport.standard?.passScore ?? 80) ? 'text-green-600' : objectiveReport.totalScore >= 60 ? 'text-amber-600' : 'text-red-600'}>
                   {objectiveReport.totalScore}/100
                 </span>
               )}

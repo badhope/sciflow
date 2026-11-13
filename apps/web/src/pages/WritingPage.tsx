@@ -1,5 +1,4 @@
-import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronRight, FileText, ListTree, Loader2, Plus, Sparkles, Trash2,
 } from 'lucide-react';
@@ -27,7 +26,6 @@ const WritingPreview = lazy(() => import('./writing/WritingPreview').then((m) =>
 import { OUTLINE_TEMPLATES } from './writing/outline-templates';
 import { WritingCitations } from './writing/WritingCitations';
 import { WritingToolsPanel } from './writing/WritingToolsPanel';
-import { formatRefEntry } from './writing/citeStyles';
 
 /** 底部 Tab 定义（写作页次要面板的收纳位置） */
 const WRITING_TABS = [
@@ -274,10 +272,12 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
       .filter((c) => c.value > 0);
   }, [content]);
 
-  const qualityScores = useMemo(
-    () => (qualityReport ? jsonText<Record<string, number>>(qualityReport.scores, {}) : {}),
-    [qualityReport],
-  );
+  const qualityScores = useMemo(() => {
+    if (!qualityReport) return {};
+    // 新报告把 LLM 七维放在 llmScores；拆分前老数据只有 scores
+    const explicit = qualityReport.llmScores ? jsonText<Record<string, number>>(qualityReport.llmScores, {}) : {};
+    return Object.keys(explicit).length ? explicit : jsonText<Record<string, number>>(qualityReport.scores, {});
+  }, [qualityReport]);
 
   /** 运行客观检查器：显式按钮触发；同一正文多次运行分数与指纹必然一致 */
   const runObjectiveAudit = useCallback(async () => {
@@ -337,7 +337,7 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
       // 重新拉取文档以刷新 versions 快照列表
       const fresh = await api.documents.get(docId);
       setDoc(fresh);
-      toast('success', `已创建快照 v${res.version}（共 ${res.total} 个版本）`);
+      toast('success', res.created ? `已创建快照 v${res.version}（共 ${res.total} 个版本）` : `内容未变化，未新增快照（当前共 ${res.total} 个版本）`);
     } catch (e: unknown) {
       toast('error', `创建快照失败：${errMsg(e)}`);
     } finally {
@@ -493,37 +493,42 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
 
   /* ============ 引用管理 ============ */
 
-  const buildExportedList = useCallback(
-    (format: string): string[] =>
-      citations.map((c, i) =>
-        formatRefEntry(
-          { title: c.reference.title, authors: c.reference.authors, year: c.reference.year, venue: c.reference.venue, doi: c.reference.doi },
-          format,
-          i + 1,
-        ),
-      ),
-    [citations],
+  /**
+   * 参考文献列表统一由服务端 citation-js CSL 渲染。
+   * 前端曾自实现 8 种样式（citeStyles.ts），与导出/投稿用的 CSL 引擎不是同一套规则，
+   * 同一条文献在预览与 .docx 里会出现不同作者名/标点。现在预览、导出、投稿同源。
+   */
+  const loadExportedList = useCallback(
+    async (format: string): Promise<string[]> => {
+      if (!docId) return [];
+      return api.documents.exportCitations(docId, format);
+    },
+    [docId],
   );
 
-  // 参考文献列表（派生）：非 bibtex 且已有引用时由当前 citations 直接计算；bibtex 走异步导出落 setExported
-  const exportedDerived = useMemo(
-    () => (exportFormat !== 'bibtex' && citations.length > 0 ? buildExportedList(exportFormat) : null),
-    [citations, exportFormat, buildExportedList],
-  );
-  const effectiveExported = exportedDerived ?? exported;
+  // 引用或格式变化时刷新列表（异步；bibtex 也走同一个端点）
+  useEffect(() => {
+    let cancelled = false;
+    if (!docId || citations.length === 0) {
+      setExported([]);
+      return;
+    }
+    loadExportedList(exportFormat)
+      .then((list) => { if (!cancelled) setExported(list); })
+      .catch(() => { if (!cancelled) setExported([]); });
+    return () => { cancelled = true; };
+  }, [docId, citations, exportFormat, loadExportedList]);
+
+  const effectiveExported = exported;
 
   const exportRefs = async (format: string) => {
     setExportFormat(format);
     setError('');
-    if (format === 'bibtex') {
-      try {
-        setExported(await api.documents.exportCitations(docId!, 'bibtex'));
-      } catch (e: unknown) {
-        setError(errMsg(e));
-      }
-      return;
+    try {
+      setExported(await loadExportedList(format));
+    } catch (e: unknown) {
+      setError(errMsg(e));
     }
-    setExported(buildExportedList(format));
   };
 
   const insertCitationAnchor = async (referenceId: string) => {

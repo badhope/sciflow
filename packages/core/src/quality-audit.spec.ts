@@ -73,6 +73,59 @@ describe('checkPaperQuality 确定性', () => {
   });
 });
 
+/**
+ * 参考文献条目编号解析回归。
+ *
+ * 缺陷：`refEntries` 的正则第二个分支 `\d{1,3}[.、]` 没有捕获组，`m[1]` 恒为 undefined →
+ * 整批被 `.filter(n => n > 0)` 丢弃。数字式（GB/T 7714，国内论文主流样式）因此完全不被识别：
+ *   - 纯数字式 → 条目数上报为 0，悬空锚点红牌检查被静默跳过；
+ *   - 混合样式（`[1]` + `2.`）→ 只认出方括号那条，正文 [2] 被误判成悬空锚点 →
+ *     **误报硬伤**，合规稿子总分被封顶到 40。
+ */
+describe('参考文献条目编号解析（[1] 与 1. 两类样式）', () => {
+  // 正文必须超过 500 字符，否则会先撞上「正文过短」这条**致命**硬伤（总分直接封顶为 0），
+  // 把本用例真正要测的「悬空锚点误报」完全遮住。
+  const PAD = '本节用于补足正文字数，使检查器不触发「正文过短（最低 500 字符）」这条致命硬伤，从而让断言只针对参考文献条目编号的解析口径本身。'.repeat(2);
+  const SECTIONS = `## 引言\n引言正文 [1]。${PAD}\n\n## 方法\n方法正文 [2]。${PAD}\n\n## 结果\n结果正文 [3]。${PAD}\n\n## 讨论\n讨论正文 [1][2]。${PAD}\n\n## 结论\n结论正文 [3]。${PAD}\n\n`;
+  const REFS = {
+    bracket: '[1] Zhang A. Title one[J]. Journal, 2020.\n[2] Li B. Title two[C]. Conf, 2021.\n[3] Wang C. Title three[J]. Journal, 2022.\n',
+    numeric: '1. Zhang A. Title one[J]. Journal, 2020.\n2. Li B. Title two[C]. Conf, 2021.\n3. Wang C. Title three[J]. Journal, 2022.\n',
+    mixed: '[1] Zhang A. Title one[J]. Journal, 2020.\n2. Li B. Title two[C]. Conf, 2021.\n[3] Wang C. Title three[J]. Journal, 2022.\n',
+    cjk: '1、张三. 标题一[J]. 期刊, 2020.\n2、李四. 标题二[C]. 会议, 2021.\n3、王五. 标题三[J]. 期刊, 2022.\n',
+  };
+  const opts = { standard: 'draft' as const, minChars: 200 };
+  const dangling = (r: { hardFails: string[] }) => r.hardFails.some((f) => f.includes('无对应文献条目'));
+
+  it('数字式（1. / 1、）与方括号式解析出同样多的条目', () => {
+    for (const [name, refs] of Object.entries(REFS)) {
+      const r = checkPaperQuality(`${SECTIONS}\n## 参考文献\n${refs}`, opts);
+      expect(r.stats.referenceEntries, `${name} 样式`).toBe(3);
+      expect(dangling(r), `${name} 样式不应误报悬空锚点`).toBe(false);
+    }
+  });
+
+  it('混合样式不再误报「引用锚点无对应文献条目」硬伤', () => {
+    const mixed = checkPaperQuality(`${SECTIONS}\n## 参考文献\n${REFS.mixed}`, opts);
+    expect(dangling(mixed)).toBe(false);
+    // 误报硬伤会把总分封顶到 40；修复后不应触发封顶
+    expect(mixed.totalScore).toBeGreaterThan(40);
+  });
+
+  it('真正的悬空锚点仍然要报（修复没有把检查一起关掉）', () => {
+    const text = `${SECTIONS}\n额外引用 [9]。\n\n## 参考文献\n${REFS.numeric}`;
+    const r = checkPaperQuality(text, opts);
+    expect(r.stats.referenceEntries).toBe(3);
+    expect(dangling(r)).toBe(true);
+    expect(r.hardFails.some((f) => f.includes('9'))).toBe(true);
+  });
+
+  it('行首小数不会被误判成条目编号', () => {
+    const text = `${SECTIONS}\n## 参考文献\n${REFS.numeric}2.5 倍提升的补充说明行\n`;
+    const r = checkPaperQuality(text, opts);
+    expect(r.stats.referenceEntries).toBe(3);
+  });
+});
+
 describe('checkPaperQuality 硬伤与扣分', () => {
   it('占位符 → 硬伤且总分封顶 40', () => {
     const r = checkPaperQuality(GOOD_PAPER.replace('本文提出一种残差聚合方案以缓解该问题。', '（待补）'));

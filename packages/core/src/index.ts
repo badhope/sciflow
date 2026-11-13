@@ -1,4 +1,5 @@
 export * from './json-guard';
+export * from './text';
 export * from './authors';
 export * from './fingerprint';
 export * from './pipeline-steps';

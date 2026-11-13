@@ -8,6 +8,7 @@ import { pipelineTasks, documents, pipelineConfigs, appSettings, projects, llmCa
 import { AiService } from '../ai/ai.service';
 import { ReferencesService, PaperHit } from '../references/references.service';
 import { parseJson, parseStringList } from '../common/json-guard';
+import { tokenizeForMatch } from '../common/text';
 import { PIPELINE_UI_STEPS, PIPELINE_STEP_KEYS } from '../common/pipeline-steps';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { CitationRenderer } from './citation-renderer';
@@ -196,7 +197,7 @@ export class PipelineService implements OnModuleInit {
       stepEnabled: (key) => this.stepEnabled(key),
       researchDepth: () => this.researchDepth(),
       readSetting: (key) => this.readSetting(key),
-      noveltyCheck: (topic) => this.noveltyCheck(topic),
+      noveltyCheck: (topic, projectId) => this.noveltyCheck(topic, projectId),
       logger: this.logger,
     };
     this.graph = buildPipelineGraph(deps);
@@ -466,7 +467,7 @@ export class PipelineService implements OnModuleInit {
    *  - 不写库：预检结果只进步骤输出与（高重叠时）产物研究说明，避免污染参考文献池。
    *  - 只取近 8 年：科研选题撞车主要发生在近期工作，老论文不影响新颖性判断。
    */
-  private async noveltyCheck(topic: string): Promise<{
+  private async noveltyCheck(topic: string, projectId?: string): Promise<{
     skipped?: boolean;
     offline?: boolean;
     basis?: string;
@@ -477,7 +478,7 @@ export class PipelineService implements OnModuleInit {
   }> {
     if (!this.scholar.isEnabled((k) => this.readSetting(k))) {
       // 学术检索关闭：不再沉默返回 skipped，改用本地库证据做确定性降级判断
-      const localTitles = this.readLocalTitlesForNovelty();
+      const localTitles = this.readLocalTitlesForNovelty(projectId);
       const fb = noveltyFallback({ topic, localTitles });
       return { ...fb, similar: [] };
     }
@@ -486,7 +487,7 @@ export class PipelineService implements OnModuleInit {
       hits = await this.scholar.search([topic], 8);
     } catch {
       // 学术库不可达（离线/被墙/超时）：同样降级到本地证据，绝不假装查过
-      const fb = noveltyFallback({ topic, localTitles: this.readLocalTitlesForNovelty() });
+      const fb = noveltyFallback({ topic, localTitles: this.readLocalTitlesForNovelty(projectId) });
       return { ...fb, similar: [] };
     }
     if (!hits.length) {
@@ -510,9 +511,17 @@ export class PipelineService implements OnModuleInit {
   }
 
   /** 本地库标题池（项目文献 + 知识库文档名）：新颖性离线降级的证据来源 */
-  private readLocalTitlesForNovelty(): string[] {
+  /**
+   * 离线降级用的本地标题池。
+   *
+   * 必须按项目过滤：历史实现读全库 references，导致 A 项目的文献压低 B 项目的新颖性评分，
+   * 企业模式下还构成跨项目数据泄露。
+   */
+  private readLocalTitlesForNovelty(projectId?: string): string[] {
     try {
-      const rows = db.select({ title: references.title }).from(references).all();
+      const rows = projectId
+        ? db.select({ title: references.title }).from(references).where(eq(references.projectId, projectId)).all()
+        : db.select({ title: references.title }).from(references).all();
       return rows.map((r) => r.title || '').filter(Boolean);
     } catch {
       return [];
@@ -582,20 +591,11 @@ export class PipelineService implements OnModuleInit {
   }
 
   // ─── 辅助方法：跨库检索增强 ────────────────────────────────────
-  private static tokenize(text: string): string[] {
-    const t = (text || '').toLowerCase();
-    const toks: string[] = [];
-    for (const m of t.matchAll(/[a-z][a-z0-9_-]{1,}/g)) toks.push(m[0]);
-    const cn = t.replace(/[^一-龥]/g, '');
-    for (let i = 0; i < cn.length - 1; i++) toks.push(cn.slice(i, i + 2));
-    return toks;
-  }
-
   private static scoreLibraryHit(query: string, hit: PaperHit): number {
-    const qt = new Set(PipelineService.tokenize(query));
+    const qt = new Set(tokenizeForMatch(query));
     if (qt.size === 0) return 0.5;
-    const titleT = PipelineService.tokenize(hit.title);
-    const abT = PipelineService.tokenize(hit.abstract || '');
+    const titleT = tokenizeForMatch(hit.title);
+    const abT = tokenizeForMatch(hit.abstract || '');
     let hitCount = 0, titleHits = 0;
     for (const t of qt) { if (titleT.includes(t)) { hitCount++; titleHits++; } else if (abT.includes(t)) hitCount++; }
     const ratio = hitCount / qt.size;
@@ -700,10 +700,10 @@ export class PipelineService implements OnModuleInit {
   private refsForDraft(projectId: string, topic?: string, keywords?: string[]) {
     const all = this.references.list(projectId);
     const meta = all.filter((r) => { const a = parseStringList(r.authors); return a.length > 0 && !!r.year; });
-    const termSet = new Set(PipelineService.tokenize([topic || '', ...(keywords || [])].filter(Boolean).join(' ')));
+    const termSet = new Set(tokenizeForMatch([topic || '', ...(keywords || [])].filter(Boolean).join(' ')));
     const relevance = (r: { title?: string | null; abstract?: string | null; venue?: string | null }): number => {
       if (!termSet.size) return 0;
-      const hay = new Set(PipelineService.tokenize(`${r.title || ''} ${r.abstract || ''} ${r.venue || ''}`));
+      const hay = new Set(tokenizeForMatch(`${r.title || ''} ${r.abstract || ''} ${r.venue || ''}`));
       let hit = 0;
       for (const t of termSet) if (hay.has(t)) hit += 1;
       return hit / termSet.size;

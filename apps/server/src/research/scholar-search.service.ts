@@ -11,9 +11,11 @@
  *  - 只写元数据（标题/作者/年份/期刊/DOI/摘要），不下载全文，不伪造字段。
  */
 import { Injectable, Logger } from '@nestjs/common';
+import { XMLParser } from 'fast-xml-parser';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/database';
 import { appSettings } from '../db/schema';
+import { tokenizeForMatch } from '../common/text';
 
 export interface ScholarHit {
   title: string;
@@ -25,6 +27,16 @@ export interface ScholarHit {
   abstract: string;
   source: string;
   citationCount: number;
+}
+
+/** arXiv Atom 条目（removeNSPrefix 后标签为 title/author/name/published/doi/id/summary） */
+interface AtomEntry {
+  title?: unknown;
+  author?: { name?: unknown } | { name?: unknown }[];
+  published?: unknown;
+  doi?: unknown;
+  id?: unknown;
+  summary?: unknown;
 }
 
 const UA = 'SciFlow/1.4 (+https://github.com/badhope/sciflow)';
@@ -42,26 +54,35 @@ function normTitle(t: string): string {
   return t.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/g, ' ').trim();
 }
 
-/** 相关性分词：拉丁词（≥2 字符）+ 中文二元组。与 PipelineService.tokenize 同规则（避免跨模块循环依赖，本地实现） */
-function relevanceTokens(text: string): string[] {
-  const t = (text || '').toLowerCase();
-  const toks: string[] = [];
-  for (const m of t.matchAll(/[a-z][a-z0-9_-]{1,}/g)) toks.push(m[0]);
-  const cn = t.replace(/[^一-龥]/g, '');
-  for (let i = 0; i < cn.length - 1; i++) toks.push(cn.slice(i, i + 2));
-  return toks;
-}
-
 /**
  * 命中与检索词的相关度：统计「不同 token」的命中数（标题命中权重 ×2）。
  * 实测教训：OpenAlex `sort=cited_by_count:desc` 会把「heterophilic」命中生物学
  * （heterophilic adhesion）之类的高被引离题论文顶到最前，污染整池参考文献；
  * 所以必须按相关度过滤+排序，引用数只作同分排序。
  */
+/**
+ * 中文通用二元组：只表达「这是一篇论文」而不表达领域。
+ * 不过滤会让「…对…的影响/实验研究」这类医学/护理标题凭两个泛化词混进任何主题的文献池
+ * （实测：图神经网络选题的新颖性预检返回子痫前期与宫颈癌护理论文）。
+ */
+const GENERIC_CN_BIGRAMS = new Set([
+  '影响', '实验', '研究', '分析', '方法', '结果', '基于', '中的', '一个', '本文', '我们',
+  '以及', '通过', '进行', '不同', '可以', '这个', '这些', '问题', '系统', '数据', '模型',
+  '训练', '性能', '提高', '降低', '作用', '机制', '关系', '应用', '设计', '实现', '评估',
+  '比较', '验证', '发现', '表明', '提出', '构建', '生成', '处理', '学习', '综述', '讨论',
+  '结论', '背景', '现状', '发展', '趋势', '挑战', '展望', '方面', '角度', '层面', '过程',
+  '方式', '内容', '指标', '特征', '结构', '功能', '效果', '患者', '术后', '临床', '治疗',
+]);
+
+/** 去掉只表达「论文体裁」的中文二元组，保留领域词 */
+function meaningfulTokens(text: string): string[] {
+  return tokenizeForMatch(text).filter((t) => !(t.length === 2 && GENERIC_CN_BIGRAMS.has(t)));
+}
+
 function relevanceOf(hit: ScholarHit, termSet: Set<string>): { titleHits: number; absHits: number } {
   if (!termSet.size) return { titleHits: 0, absHits: 0 };
-  const titleT = new Set(relevanceTokens(hit.title));
-  const absT = new Set(relevanceTokens(hit.abstract));
+  const titleT = new Set(meaningfulTokens(hit.title));
+  const absT = new Set(meaningfulTokens(hit.abstract));
   let titleHits = 0;
   let absHits = 0;
   for (const t of termSet) {
@@ -81,7 +102,7 @@ function relevanceOf(hit: ScholarHit, termSet: Set<string>): { titleHits: number
  * （heterophilic graph）」；跨域论文只命中一个泛化词组。
  */
 function groupCoverage(hit: ScholarHit, groups: Set<string>[]): number {
-  const titleT = new Set([...relevanceTokens(hit.title), ...relevanceTokens(hit.abstract)]);
+  const titleT = new Set([...meaningfulTokens(hit.title), ...meaningfulTokens(hit.abstract)]);
   let covered = 0;
   for (const g of groups) {
     let any = false;
@@ -168,31 +189,38 @@ async function searchCrossref(query: string, limit: number): Promise<ScholarHit[
   return out;
 }
 
-/** arXiv：预印本（Atom XML，手工轻解析——只有这一个非 JSON 源） */
+/** arXiv：预印本（Atom XML，用 fast-xml-parser 解析；正则切 XML 在命名空间/CDATA/转义上不可靠） */
 async function searchArxiv(query: string, limit: number): Promise<ScholarHit[]> {
   const url = `http://export.arxiv.org/api/query?search_query=${encodeURIComponent(`all:${query}`)}&max_results=${limit}`;
   const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(15_000) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const xml = await res.text();
-  const entries = xml.split('<entry>').slice(1);
+  const parser = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true, trimValues: true, textNodeName: '#text' });
+  const doc = parser.parse(xml) as { feed?: { entry?: AtomEntry | AtomEntry[] } };
+  const rawEntries = doc.feed?.entry;
+  if (!rawEntries) return [];
+  const entries = Array.isArray(rawEntries) ? rawEntries : [rawEntries];
+  const text = (v: unknown): string => {
+    if (v == null) return '';
+    if (typeof v === 'string' || typeof v === 'number') return String(v);
+    if (typeof v === 'object' && '#text' in (v as Record<string, unknown>)) return String((v as Record<string, unknown>)['#text'] ?? '');
+    return '';
+  };
   const out: ScholarHit[] = [];
   for (const e of entries) {
-    const pick = (tag: string): string => {
-      const m = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`).exec(e);
-      return m ? m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim() : '';
-    };
-    const title = pick('title');
+    const title = text(e.title).replace(/\s+/g, ' ').trim();
     if (!title) continue;
-    const authors = [...e.matchAll(/<name>([^<]+)<\/name>/g)].map((m) => m[1].trim()).slice(0, 8);
-    const published = pick('published');
+    const rawAuthors = e.author == null ? [] : Array.isArray(e.author) ? e.author : [e.author];
+    const authors = rawAuthors.map((a) => text(a.name).trim()).filter(Boolean).slice(0, 8);
+    const published = text(e.published);
     out.push({
       title,
       authors,
       year: published ? Number(published.slice(0, 4)) || null : null,
       venue: 'arXiv',
-      doi: pick('arxiv:doi'),
-      url: pick('id'),
-      abstract: pick('summary').slice(0, 2000),
+      doi: text(e.doi),
+      url: text(e.id),
+      abstract: text(e.summary).replace(/\s+/g, ' ').trim().slice(0, 2000),
       source: 'arxiv',
       citationCount: 0,
     });
@@ -249,11 +277,11 @@ export class ScholarSearchService {
     const cached = this.cache.get(cacheKey);
     if (cached && now - cached.at < ttl) return cached.value;
 
-    const termSet = new Set(relevanceTokens(queries.join(' ')));
+    const termSet = new Set(meaningfulTokens(queries.join(' ')));
     // 检索词分组：按每条 query 各自成组（"heterophilic graph" / "node classification" / "residual aggregation"）。
     // 一条相关论文通常能同时命中多组；只命中一组泛化词的多半是跨域论文。
     const domainGroups = queries
-      .map((q) => new Set(relevanceTokens(q)))
+      .map((q) => new Set(meaningfulTokens(q)))
       .filter((g) => g.size > 0);
     const seen = new Map<string, ScholarHit>();
     // 三个源 × 每个关键词**并行**（原实现按 query 串行：4 关键词 × 3 源 = 12 次串行往返）

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Download, FileJson, Loader2, Plus, RefreshCw, Sparkles, Trash2, Upload, Wand2 } from 'lucide-react';
 import { api } from '../../api/client';
 import type { ExtensionAsset, ExtensionKind, ExtensionKindsResponse } from '../../types';
-import { Badge, Button, Card, Input, Textarea, errMsg } from '../../components/ui';
+import { Badge, Button, Card, Input, Textarea, errMsg, downloadText } from '../../components/ui';
 
 /**
  * 扩展中心（v1.4）：skill / mcp / role / constraint / hook / prompt 六类资产。
@@ -77,12 +77,11 @@ export function ExtensionCenter({ defaultKind }: { defaultKind?: ExtensionKind }
           </Button>
           <Button variant="outline" size="sm" disabled={busy === 'export'} onClick={() => void run('export', async () => {
             const bundle = await api.extensions.exportBundle();
-            const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `sciflow-extensions-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(a.href);
+            downloadText(
+              `sciflow-extensions-${new Date().toISOString().slice(0, 10)}.json`,
+              JSON.stringify(bundle, null, 2),
+              'application/json',
+            );
           }, '扩展包已导出（不含私有工具）')}>
             <Download size={12} /> 导出
           </Button>

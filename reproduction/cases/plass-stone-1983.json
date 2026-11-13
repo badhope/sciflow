@@ -1,0 +1,65 @@
+{
+  "id": "plass-stone-1983",
+  "title": "[Re] Curve-Fitting with Piecewise Parametric Cubics",
+  "domain": "Computer Graphics",
+  "paper": {
+    "title": "Curve-fitting with piecewise parametric cubics",
+    "authors": ["Michael Plass", "Maureen Stone"],
+    "year": 1983,
+    "venue": "SIGGRAPH 1983 / ACM SIGGRAPH Computer Graphics 17(3)",
+    "doi": "10.1145/800059.801153",
+    "url": "https://doi.org/10.1145/800059.801153"
+  },
+  "reproduction": {
+    "title": "[Re] Curve-Fitting with Piecewise Parametric Cubics",
+    "authors": ["Daniel Perazzo", "Davi Guimarães Nunes Sena Castro", "Luiz Velho", "Luiz Henrique de Figueiredo"],
+    "venue": "ReScience C",
+    "repo": "https://github.com/danperazzo/plass_reproduction",
+    "commit": "d19b930a02274aa45ea547c71d0039e4722c1c7a",
+    "license": "MIT",
+    "language": "Python"
+  },
+  "python": "3.12",
+  "lockFile": "plass-stone-1983.lock.txt",
+  "dependencies": ["numpy==1.26.4", "matplotlib", "tqdm"],
+  "hardware": {
+    "cpuOnly": true,
+    "notes": "NumPy/Matplotlib only; no GPU, no network after clone/install."
+  },
+  "commands": [
+    {
+      "name": "S-trace",
+      "args": [
+        "{python}",
+        "draw_single_image.py",
+        "--input_file",
+        "examples/S-trace.txt",
+        "--output_file",
+        "outputs_svg/S_svg.png",
+        "--output_bezier",
+        "outputs/saved_bezier_S.txt"
+      ],
+      "outputs": ["outputs_svg/S_svg.png", "outputs/saved_bezier_S.txt"]
+    },
+    {
+      "name": "C",
+      "args": [
+        "{python}",
+        "draw_single_image.py",
+        "--input_file",
+        "examples/C.txt",
+        "--output_file",
+        "outputs_svg/C_txt.png",
+        "--output_bezier",
+        "outputs/saved_bezier_C.txt"
+      ],
+      "outputs": ["outputs_svg/C_txt.png", "outputs/saved_bezier_C.txt"]
+    }
+  ],
+  "reproductionCriteria": [
+    "两个输入均成功生成 PNG 与 Bézier 参数文件",
+    "同一命令重复运行，产物 SHA-256 一致",
+    "manifest 记录 commit、Python 版本、依赖 freeze、命令、耗时与产物哈希"
+  ],
+  "notes": "原仓库没有量化指标；首版以“产物齐全 + 重复运行哈希一致”作为可复现判据。图像为 300dpi PNG，文本为 Bézier 控制点参数。NumPy 必须锁 1.x：仓库使用 np.cross 的二维向量用法，NumPy 2.x 已移除此行为。"
+}

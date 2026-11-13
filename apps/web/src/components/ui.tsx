@@ -1,6 +1,9 @@
 import { forwardRef, ReactNode, useEffect, useId, useRef } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Info, Loader2, Sparkles, X, XCircle } from 'lucide-react';
 import { EmptyDocuments, EmptySearch, EmptyChat, EmptyKnowledge, EmptyPipeline } from './illustrations';
+import { errorMessage } from '../lib/errors';
+
+export { errorMessage as errMsg };
 
 const ILLUSTRATIONS = {
   documents: EmptyDocuments,
@@ -219,16 +222,18 @@ export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttrib
   },
 );
 
-export function Select({ options, value, onChange, className = '' }: {
+export function Select({ options, value, onChange, className = '', ariaLabel }: {
   options: { value: string; label: string; disabled?: boolean }[];
   value: string;
   onChange: (v: string) => void;
   className?: string;
+  ariaLabel?: string;
 }) {
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      aria-label={ariaLabel}
       className={`rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-900 outline-none transition-all duration-150 focus:border-teal-500 hover:border-slate-400 dark:hover:border-slate-600 ${className}`}
     >
       {options.map((o) => (
@@ -366,17 +371,6 @@ export function Modal({ open, title, children, onClose, width = 'max-w-2xl' }: {
       </div>
     </div>
   );
-}
-
-/** Type guard: narrow unknown to { message: string } */
-function isErrorWithMessage(e: unknown): e is { message: string } {
-  return typeof e === 'object' && e !== null && 'message' in e && typeof e.message === 'string';
-}
-
-/** 统一错误提取：后端 Nest 错误（message）与前端 Error 统一取可读信息 */
-export function errMsg(e: unknown): string {
-  if (isErrorWithMessage(e)) return e.message;
-  return String(e);
 }
 
 /** 可折叠卡片（渐进披露）：默认折叠只显示标题+摘要，点击展开内容 */

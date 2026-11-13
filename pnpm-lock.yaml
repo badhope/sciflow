@@ -106,6 +106,9 @@ importers:
       '@citation-js/core':
         specifier: ^0.9.0
         version: 0.9.0
+      '@citation-js/name':
+        specifier: 0.4.2
+        version: 0.4.2
       '@citation-js/plugin-bibtex':
         specifier: ^0.9.0
         version: 0.9.0(@citation-js/core@0.9.0)
@@ -169,6 +172,12 @@ importers:
       drizzle-orm:
         specifier: ^0.45.3
         version: 0.45.3(@libsql/client@0.18.0)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)(pg@8.23.1)
+      eventsource-parser:
+        specifier: 1.1.2
+        version: 1.1.2
+      fast-xml-parser:
+        specifier: 5.11.2
+        version: 5.11.2
       fflate:
         specifier: 0.8.3
         version: 0.8.3
@@ -263,6 +272,9 @@ importers:
       diff:
         specifier: ^8.0.4
         version: 8.0.4
+      eventsource-parser:
+        specifier: 3.1.1
+        version: 3.1.1
       graphology:
         specifier: ^0.26.0
         version: 0.26.0(graphology-types@0.24.8)
@@ -2377,6 +2389,9 @@ packages:
   '@smithy/core@3.35.2':
     resolution: {integrity: sha512-ejTukBuP/Pg3t9N8Ux+0zKsXeHWm7p6W3HbXFOyltKasSxZwCFmvTut7kBdZSCF3m9y1bXXyVu6p2xuMFcsTyQ==}
     engines: {node: '>=18.0.0'}
+    deprecated: |-
+      Deprecated due to a bug in custom logger data redaction. Upgrade to the latest version. If you used a custom logger with this
+        version, review your logs and rotate any credentials or other secrets. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/credential-provider-imds@4.5.2':
     resolution: {integrity: sha512-A9uSdn72ozbRUSit0eib0TW7nXuNPlaeM0zcGkJ+nE6tFcSDbnmtwoxbTCFBukVQcszDAyvsd7+rTduPTXpygg==}
@@ -8267,7 +8282,7 @@ snapshots:
       '@babel/helpers': 7.29.10
       '@babel/parser': 7.29.9
       '@babel/template': 7.29.7
-      '@babel/traverse': 7.29.10
+      '@babel/traverse': 7.29.10(supports-color@10.2.2)
       '@babel/types': 7.29.8
       '@jridgewell/remapping': 2.3.5
       convert-source-map: 2.0.0
@@ -8298,7 +8313,7 @@ snapshots:
 
   '@babel/helper-module-imports@7.29.7':
     dependencies:
-      '@babel/traverse': 7.29.10
+      '@babel/traverse': 7.29.10(supports-color@10.2.2)
       '@babel/types': 7.29.8
     transitivePeerDependencies:
       - supports-color
@@ -8308,7 +8323,7 @@ snapshots:
       '@babel/core': 7.29.7(supports-color@10.2.2)
       '@babel/helper-module-imports': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
-      '@babel/traverse': 7.29.10
+      '@babel/traverse': 7.29.10(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -8335,7 +8350,7 @@ snapshots:
       '@babel/parser': 7.29.9
       '@babel/types': 7.29.8
 
-  '@babel/traverse@7.29.10':
+  '@babel/traverse@7.29.10(supports-color@10.2.2)':
     dependencies:
       '@babel/code-frame': 7.29.7
       '@babel/generator': 7.29.8
@@ -11831,8 +11846,7 @@ snapshots:
 
   events@3.3.0: {}
 
-  eventsource-parser@1.1.2:
-    optional: true
+  eventsource-parser@1.1.2: {}
 
   eventsource-parser@3.1.1: {}
 

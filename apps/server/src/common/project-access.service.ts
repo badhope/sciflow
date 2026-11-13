@@ -14,6 +14,16 @@ import {
   reviewComments,
   agentExecutions,
   qualityReports,
+  agentTasks,
+  toolApprovals,
+  researchPrograms,
+  researchCycles,
+  researchQuestions,
+  researchHypotheses,
+  researchProtocols,
+  researchClaims,
+  researchEvidence,
+  researchRuns,
 } from '../db/schema';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -71,6 +81,40 @@ export class ProjectAccessService {
     if (String(user?.role || '') !== 'admin') {
       throw new ForbiddenException('该操作会修改实例级全局配置，仅管理员可执行');
     }
+  }
+
+  /**
+   * 当前用户可访问的项目 id 集合。
+   * 本地模式返回 null（不限制，保持零登录体验）；企业模式返回 owner 匹配的项目。
+   */
+  accessibleProjectIds(user?: AuthPayload): string[] | null {
+    if (!this.enforced) return null;
+    const me = this.ownerOf(user);
+    if (!me) return [];
+    return db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.ownerId, me))
+      .all()
+      .map((r) => r.id);
+  }
+
+  /** 断言 Agent 任务可访问；无项目归属的全局任务企业模式仅 admin 可见 */
+  assertAgentTask(taskId: string, user?: AuthPayload) {
+    const row = db.select().from(agentTasks).where(eq(agentTasks.id, taskId)).get();
+    if (!row) throw new NotFoundException('任务不存在');
+    if (row.projectId) this.assertProject(row.projectId, user);
+    else if (this.enforced) this.assertAdmin(user);
+    return row;
+  }
+
+  /** 断言工具审批可访问；无项目归属的全局审批企业模式仅 admin 可见 */
+  assertToolApproval(approvalId: string, user?: AuthPayload) {
+    const row = db.select().from(toolApprovals).where(eq(toolApprovals.id, approvalId)).get();
+    if (!row) throw new NotFoundException('审批记录不存在');
+    if (row.projectId) this.assertProject(row.projectId, user);
+    else if (this.enforced) this.assertAdmin(user);
+    return row;
   }
 
   /** 断言文档可访问（经由其 project 归属），返回文档行 */
@@ -145,6 +189,70 @@ export class ProjectAccessService {
     const row = db.select().from(researchDesigns).where(eq(researchDesigns.id, designId)).get();
     if (!row) throw new NotFoundException('实验设计稿不存在');
     this.assertProject(row.projectId, user);
+    return row;
+  }
+
+  /** 断言自主科研项目可访问 */
+  assertResearchProgram(programId: string, user?: AuthPayload) {
+    const row = db.select().from(researchPrograms).where(eq(researchPrograms.id, programId)).get();
+    if (!row) throw new NotFoundException('研究项目不存在');
+    this.assertProject(row.projectId, user);
+    return row;
+  }
+
+  /** 断言研究循环可访问（经由 program → project） */
+  assertResearchCycle(cycleId: string, user?: AuthPayload) {
+    const row = db.select().from(researchCycles).where(eq(researchCycles.id, cycleId)).get();
+    if (!row) throw new NotFoundException('研究循环不存在');
+    this.assertResearchProgram(row.programId, user);
+    return row;
+  }
+
+  /** 断言研究问题可访问（经由 program → project） */
+  assertResearchQuestion(questionId: string, user?: AuthPayload) {
+    const row = db.select().from(researchQuestions).where(eq(researchQuestions.id, questionId)).get();
+    if (!row) throw new NotFoundException('研究问题不存在');
+    this.assertResearchProgram(row.programId, user);
+    return row;
+  }
+
+  /** 断言研究假设可访问（经由 program → project） */
+  assertResearchHypothesis(hypothesisId: string, user?: AuthPayload) {
+    const row = db.select().from(researchHypotheses).where(eq(researchHypotheses.id, hypothesisId)).get();
+    if (!row) throw new NotFoundException('研究假设不存在');
+    this.assertResearchProgram(row.programId, user);
+    return row;
+  }
+
+  /** 断言研究协议可访问（经由 program → project） */
+  assertResearchProtocol(protocolId: string, user?: AuthPayload) {
+    const row = db.select().from(researchProtocols).where(eq(researchProtocols.id, protocolId)).get();
+    if (!row) throw new NotFoundException('研究协议不存在');
+    this.assertResearchProgram(row.programId, user);
+    return row;
+  }
+
+  /** 断言研究结论可访问（经由 program → project） */
+  assertResearchClaim(claimId: string, user?: AuthPayload) {
+    const row = db.select().from(researchClaims).where(eq(researchClaims.id, claimId)).get();
+    if (!row) throw new NotFoundException('研究结论不存在');
+    this.assertResearchProgram(row.programId, user);
+    return row;
+  }
+
+  /** 断言证据可访问（经由 claim → program → project） */
+  assertResearchEvidence(evidenceId: string, user?: AuthPayload) {
+    const row = db.select().from(researchEvidence).where(eq(researchEvidence.id, evidenceId)).get();
+    if (!row) throw new NotFoundException('研究证据不存在');
+    this.assertResearchClaim(row.claimId, user);
+    return row;
+  }
+
+  /** 断言研究运行可访问（经由 program → project） */
+  assertResearchRun(runId: string, user?: AuthPayload) {
+    const row = db.select().from(researchRuns).where(eq(researchRuns.id, runId)).get();
+    if (!row) throw new NotFoundException('研究运行不存在');
+    this.assertResearchProgram(row.programId, user);
     return row;
   }
 
