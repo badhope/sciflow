@@ -393,7 +393,13 @@ export function CollapsibleCard({
 }) {
   return (
     <Card className="p-5 mt-4">
-      <button className="w-full flex items-center justify-between text-left" onClick={onToggle}>
+      <button
+        type="button"
+        className="w-full flex items-center justify-between text-left"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-label={`${open ? '折叠' : '展开'} ${title}`}
+      >
         <span className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           {icon}
           {title}

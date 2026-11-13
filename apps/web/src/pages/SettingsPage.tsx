@@ -16,6 +16,7 @@ import { PersonaSettings } from './settings/PersonaSettings';
 import { ConfigCenterSettings } from './settings/ConfigCenterSettings';
 import { ExtensionCenter, ExtensionQuickAdd } from './settings/ExtensionCenter';
 import { AppearanceSettings } from './settings/AppearanceSettings';
+import { AgentAccessSettings } from './settings/AgentAccessSettings';
 import { useAuthRole } from '../lib/use-auth-role';
 import { Lock } from 'lucide-react';
 
@@ -479,6 +480,7 @@ function SettingsLayout() {
   const sections = useMemo(() => [
     { id: 'settings-appearance', label: '外观与主题' },
     { id: 'settings-ai', label: 'AI 服务' },
+    { id: 'settings-agent-access', label: 'AI 权限档' },
     { id: 'settings-extensions', label: '扩展中心' },
     { id: 'settings-config', label: '配置中心' },
     { id: 'settings-persona', label: '角色与技能' },
@@ -616,14 +618,17 @@ function SettingsLayout() {
         )}
       </Card>
 
+      {/* Agent 权限档：AI 能读什么、能改什么（默认不碰系统配置） */}
+      <div id="settings-agent-access"><AgentAccessSettings /></div>
+
       {/* 扩展中心：内置社区开源资产 + SciFlow 私有优势工具（默认全启用） */}
-      <div id="settings-extensions"><ExtensionCenter /></div>
+      <div><ExtensionCenter /></div>
 
       {/* 配置中心：角色库 / 约束工程 / 钩子 / 权限 / 预设 / 审计 */}
-      <div id="settings-config"><ConfigCenterSettings /></div>
+      <div><ConfigCenterSettings /></div>
 
       {/* 角色与技能（persona + skills） */}
-      <div id="settings-persona"><PersonaSettings /></div>
+      <div><PersonaSettings /></div>
 
       {/* Usage Stats */}
       <div id="settings-usage"><UsageStats /></div>
@@ -738,11 +743,11 @@ function SettingsLayout() {
       <div id="settings-mcp"><McpToolList /></div>
 
       {/* ===== 自定义中心（默认折叠 · 渐进披露） ===== */}
-      <div id="settings-custom" />
-      <IntentEditor />
-      <PromptEditor />
+      <div id="settings-custom" className="space-y-3">
+        <IntentEditor />      <PromptEditor />
       <PipelineEditor />
-      <QualityWeightsEditor />
+        <QualityWeightsEditor />
+      </div>
     </div>
   );
 }
