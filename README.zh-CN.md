@@ -20,6 +20,7 @@
 | **确定性质量门** | 七个维度由规则计分并带稳定指纹，同一文本必然同分。门禁分是验收标准，LLM 分只作参考；低于阈值触发定向回炉，不靠重抽。 |
 | **引用可追溯** | 正文每个 `[n]` 锚点都能追到 citation 行，再追到 reference 行；幽灵锚点、孤儿条目、断号、重复 DOI 按编号报告。文献池为空时，起草直接禁止引用标记。 |
 | **证据而非文风** | 结论落库时带 stance、强度与实验 stdout 的逐字引用；评审没有对应的 supports 证据就不能判 supported。 |
+| **长篇写作** | 书 → 卷 → 章，逐章生成。每章独立落库、已完成不覆盖、失败可重试；跨章一致性靠压缩摘要传递，因此篇幅不受上下文窗口限制。 |
 | **稿件流水线** | 选题验证 → 文献调研 → 大纲门禁 → 分章起草 → 质量门 → 润色 → 引用格式化。每步写检查点，重启可续跑。 |
 | **检索有依据** | SQLite FTS5 + sqlite-vec，RRF 融合与 MMR；OpenAlex / Crossref / arXiv 检索带相关性门禁与 TTL 缓存。文献只作为研究循环的背景输入，不作为编造引用的素材。 |
 | **开放接入** | MCP 服务端与客户端、OpenAI 兼容 / Anthropic / Gemini 协议、本地 Ollama 或 GGUF、桌面端、无界面 CLI、共享部署用 JWT 模式。 |
@@ -70,12 +71,14 @@ docker compose -f docker-compose.prod.yml up --build
 
 | 检查项 | 命令 | 结果 |
 |---|---|---|
-| 服务端单测/集成 | `pnpm --filter @sciflow/server test` | 84 文件，660 项 |
+| 服务端单测/集成 | `pnpm --filter @sciflow/server test` | 86 文件，670 项 |
 | 前端单测 | `pnpm --filter @sciflow/web test` | 29 文件，201 项 |
 | 桌面端单测 | `pnpm --filter @sciflow/desktop test` | 1 文件，5 项 |
 | 类型 / 构建 | `pnpm -r typecheck` · `pnpm -r build` | 通过 |
+| 长篇真实生成 | `POST /api/longform/books/:id/write` | 2 章 / 1,254 字 / 摘要衔接 |
 | 浏览器 UI 巡检 | `npx playwright test e2e/ui-sweep.spec.ts` | 4 项通过 |
 | 设置页交互 | `npx playwright test e2e/settings-interaction.spec.ts` | 2 项通过 |
+| 长篇写作 E2E | `npx playwright test e2e/longform.spec.ts` | 1 项通过 |
 | AI 权限档 | `pnpm --filter @sciflow/server test -- agent-policy` | 7 项通过 |
 | 真实模型稿件产出 | pipeline API，2026-11-13 | 20 篇文献、10,834 字、18 锚点、0 幽灵、客观 97 |
 | 真实模型研究循环 | cycle `50a629be` | supported/90，5 条 verified 证据 |
@@ -108,7 +111,7 @@ flowchart LR
 | `packages/db` | Schema · 迁移 · 密钥加密 |
 | `packages/retrieval` | 向量与全文检索 · RRF · MMR · 嵌入 |
 
-科研数据链：`ResearchProgram → ResearchCycle → ResearchQuestion → ResearchHypothesis → ResearchProtocol → ResearchRun → ResearchClaim → ResearchEvidence`。稿件链：`Project → Document（多版本）→ Citation → Reference`。
+沙箱运行时：Python / Node / shell 三种脚本走同一套隔离执行器（超时、内存上限、输出截断）。科研数据链：`ResearchProgram → ResearchCycle → ResearchQuestion → ResearchHypothesis → ResearchProtocol → ResearchRun → ResearchClaim → ResearchEvidence`。稿件链：`Project → Document（多版本）→ Citation → Reference`。
 
 ## 配置
 

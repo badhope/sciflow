@@ -18,6 +18,7 @@ import { MemoryModule } from './memory/memory.module';
 import { ResearchModule } from './research/research.module';
 import { ProgramsModule } from './programs/programs.module';
 import { ResearchCycleModule } from './research-cycle/research-cycle.module';
+import { LongformModule } from './longform/longform.module';
 import { JudgmentModule } from './judgment/judgment.module';
 import { CustomizationModule } from './settings/customization.module';
 import { ConfigModule } from './config/config.module';
@@ -59,6 +60,7 @@ import { HttpExceptionFilter } from './common/http-exception.filter';
     ResearchModule,
     ProgramsModule,
     ResearchCycleModule,
+    LongformModule,
     JudgmentModule,
     CustomizationModule,
     ConfigModule,

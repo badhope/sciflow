@@ -474,7 +474,9 @@ export const experiments = sqliteTable('experiment', {
   projectId: text('project_id').notNull(),
   documentId: text('document_id'), // 可空：关联到具体论文草稿
   goal: text('goal').default(''), // 实验目的/假设
-  code: text('code').notNull(), // 用户提交的 python 源码
+  code: text('code').notNull(), // 用户提交的源码
+  /** 运行时：python（默认）| node | shell。老行默认 python */
+  runtime: text('runtime').default('python'),
   stdout: text('stdout').default(''), // 截断后标准输出（≤64KB）
   stderr: text('stderr').default(''), // 截断后标准错误（≤64KB）
   stdoutTruncated: integer('stdout_truncated').default(0),
@@ -653,6 +655,67 @@ export const researchRuns = sqliteTable('research_run', {
 });
 
 export type ResearchRun = typeof researchRuns.$inferSelect;
+
+/**
+ * 长篇写作（百万字级）：book → volume → chapter。
+ *
+ * 与 document 的区别：document 是「一篇稿件」，一次生成完；
+ * longform 是「一本书」，按章增量生成、每章独立落库、靠摘要维持跨章一致性，
+ * 因此必须单独建表，不能塞进 document.content。
+ */
+export const longformBooks = sqliteTable('longform_book', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  title: text('title').notNull(),
+  /** 核心设定/世界观（每章生成时都带，防止跑偏） */
+  premise: text('premise').default(''),
+  /** 文风要求（可选） */
+  styleHint: text('style_hint').default(''),
+  /** 单章目标字数（中文按汉字计） */
+  targetCharsPerChapter: integer('target_chars_per_chapter').default(3000),
+  /** planning | writing | completed | paused */
+  status: text('status').default('planning'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type LongformBook = typeof longformBooks.$inferSelect;
+
+export const longformVolumes = sqliteTable('longform_volume', {
+  id: text('id').primaryKey(),
+  bookId: text('book_id').notNull(),
+  seq: integer('seq').notNull(),
+  title: text('title').notNull(),
+  goal: text('goal').default(''),
+  createdAt: integer('created_at').notNull(),
+});
+
+export type LongformVolume = typeof longformVolumes.$inferSelect;
+
+export const longformChapters = sqliteTable('longform_chapter', {
+  id: text('id').primaryKey(),
+  bookId: text('book_id').notNull(),
+  volumeId: text('volume_id').notNull(),
+  seq: integer('seq').notNull(),
+  title: text('title').notNull(),
+  /** 本章要推进什么 */
+  goal: text('goal').default(''),
+  /** JSON：关键情节点 */
+  beats: text('beats').default('[]'),
+  /** JSON：出场实体（人物/组织），供一致性检查 */
+  entities: text('entities').default('[]'),
+  content: text('content').default(''),
+  /** 1-2 句前情摘要（后续章节只读摘要，不读全文） */
+  summary: text('summary').default(''),
+  chars: integer('chars').default(0),
+  /** pending | writing | done | failed */
+  status: text('status').default('pending'),
+  error: text('error').default(''),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type LongformChapter = typeof longformChapters.$inferSelect;
 
 /** 用户（企业认证 · AUTH_MODE=jwt 时启用；本地/桌面模式 AUTH_MODE=none 不强制登录） */
 export const users = sqliteTable('user', {

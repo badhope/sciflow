@@ -105,6 +105,39 @@ interface RouteRule {
 const ROUTE_TABLE: RouteRule[] = [
   // 0) 连接测试
   { matches: (p) => p.includes('请只回复两个字：正常'), respond: () => '正常' },
+  // 0.5) 长篇写作：章节计划（结构化输出）。必须早于通用大纲规则匹配。
+  {
+    matches: (p) => p.includes('长篇小说的结构编辑') || (p.includes('请输出正好') && p.includes('章')),
+    respond: (p) => {
+      const want = Number(/正好\s*(\d+)\s*章/.exec(p)?.[1] || /需要拆成\s*(\d+)\s*章/.exec(p)?.[1] || 3);
+      const n = Math.max(1, Math.min(200, Number.isFinite(want) ? want : 3));
+      return j({
+        chapters: Array.from({ length: n }, (_, i) => ({
+          title: `第${i + 1}章 章节标题`,
+          goal: `推进第 ${i + 1} 个剧情目标`,
+          beats: ['开场情境', '冲突升级', '悬念收束'],
+          entities: ['主角'],
+        })),
+      });
+    },
+  },
+  // 0.6) 长篇写作：章节正文（纯文本，3 段不重复）
+  {
+    matches: (p) => p.includes('长篇小说的执笔作者'),
+    respond: (p) => {
+      const title = /【本章】(.+)/.exec(p)?.[1]?.trim() || '本章';
+      return [
+        `${title}。雾从港口漫上来，铁皮屋顶滴着水，主角把档案袋按在胸口，听见自己的心跳压过雨声。`,
+        `他沿着锈蚀的楼梯往下走，每一级都在提醒他：这份记录不该存在。走廊尽头的灯忽明忽暗，像有人在替他数着剩下的时间。`,
+        `门开的时候，里面没有他等的人，只有一张被翻乱的地图和一行新写的字。他记住了那行字，然后把它撕下来放进口袋。`,
+      ].join('\n\n');
+    },
+  },
+  // 0.7) 长篇写作：章节摘要
+  {
+    matches: (p) => p.includes('把给定章节正文压成 1-2 句前情摘要'),
+    respond: () => '主角在港口档案室找到被篡改的记录，发现线索指向地下仓库，但联系人未出现。',
+  },
   // 1) Planner 研究计划
   { matches: (p) => p.includes('科研规划专家') && p.includes('researchQuestions'), respond: () => j({ objective: '围绕给定主题完成一篇系统性综述，覆盖方法演进、代表工作与应用前景。', researchQuestions: ['该主题的核心方法演进脉络是什么？', '代表性模型/工作有哪些共性与差异？', '在目标场景下的应用价值与局限如何？'], searchStrategy: { keywords: ['graph neural network', '图神经网络', '消息传递', 'node classification'], minPapers: 8, depth: 'overview' }, draftingPlan: { sections: ['引言', '相关工作', '方法', '结果与讨论', '结论'], wordCount: 5000 }, risks: ['公开文献时效性不足', '跨领域术语口径差异'] }) },
   // 1.5) F2 反共识大纲变体（必须在大纲规则之前匹配：prompt 同样包含「设计论文大纲」与 "sections"）

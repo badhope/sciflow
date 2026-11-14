@@ -402,6 +402,7 @@ CREATE TABLE IF NOT EXISTS experiment (
   document_id TEXT,
   goal TEXT DEFAULT '',
   code TEXT NOT NULL,
+  runtime TEXT DEFAULT 'python',
   stdout TEXT DEFAULT '',
   stderr TEXT DEFAULT '',
   stdout_truncated INTEGER DEFAULT 0,
@@ -549,6 +550,50 @@ CREATE TABLE IF NOT EXISTS research_run (
 CREATE INDEX IF NOT EXISTS idx_research_run_program ON research_run(program_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_research_run_cycle ON research_run(cycle_id);
 CREATE INDEX IF NOT EXISTS idx_research_run_protocol ON research_run(protocol_id);
+
+-- 长篇写作：书 / 卷 / 章（按章增量生成，靠摘要维持跨章一致性）
+CREATE TABLE IF NOT EXISTS longform_book (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  premise TEXT DEFAULT '',
+  style_hint TEXT DEFAULT '',
+  target_chars_per_chapter INTEGER DEFAULT 3000,
+  status TEXT DEFAULT 'planning',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_longform_book_project ON longform_book(project_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS longform_volume (
+  id TEXT PRIMARY KEY,
+  book_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  goal TEXT DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_longform_volume_book ON longform_volume(book_id, seq);
+
+CREATE TABLE IF NOT EXISTS longform_chapter (
+  id TEXT PRIMARY KEY,
+  book_id TEXT NOT NULL,
+  volume_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  goal TEXT DEFAULT '',
+  beats TEXT DEFAULT '[]',
+  entities TEXT DEFAULT '[]',
+  content TEXT DEFAULT '',
+  summary TEXT DEFAULT '',
+  chars INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'pending',
+  error TEXT DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_longform_chapter_book ON longform_chapter(book_id, seq);
+CREATE INDEX IF NOT EXISTS idx_longform_chapter_status ON longform_chapter(book_id, status);
 
 -- 投稿流程状态跟踪：投稿记录 + 状态历史流水
 CREATE TABLE IF NOT EXISTS submission (
@@ -754,6 +799,8 @@ ensureColumn('llm_call_log', 'kind', "TEXT DEFAULT 'llm'");
 // 企业模式（AUTH_MODE=jwt）：项目归属，用于按用户隔离数据（防 IDOR）
 ensureColumn('project', 'owner_id', "TEXT DEFAULT ''");
 sqlite.exec('CREATE INDEX IF NOT EXISTS idx_project_owner ON project(owner_id)');
+// 沙箱多运行时：老行默认 python，新行可写 node / shell
+ensureColumn('experiment', 'runtime', "TEXT DEFAULT 'python'");
 // 模型厂商 v1.2：协议 / 能力自动匹配（上下文窗口、最大输出、工具调用）/ 检测到的模型目录
 ensureColumn('model_provider', 'protocol', "TEXT DEFAULT 'openai-compatible'");
 ensureColumn('model_provider', 'context_window', 'INTEGER DEFAULT 0');
