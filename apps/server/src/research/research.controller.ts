@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Patch, Delete, Param, Query, HttpException, HttpStatus, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Patch, Delete, Param, Query, HttpException, HttpStatus, Req } from '@nestjs/common';
 import { ResearchService } from './research.service';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
@@ -29,8 +29,18 @@ export class ResearchController {
   }
 
   @Post('comparison')
-  async compare(@Body() body: { papers: any[] }) {
-    return this.assertNoError(await this.research.comparePapers(body?.papers || []));
+  async compare(@Body() body: { papers?: unknown }) {
+    // 入参守卫：papers 必须是对象数组。此前直接透传，传字符串会让 service 里 p.title 抛 TypeError → 500
+    // （实测：POST {"papers":"A paper"} 返回 500 而不是可读的 400）。
+    const raw = body?.papers;
+    if (raw !== undefined && !Array.isArray(raw)) {
+      throw new BadRequestException('papers 必须是论文对象数组（每项含 title/year/venue 等字段）');
+    }
+    const papers = (raw as { title?: string }[] | undefined) ?? [];
+    if (!papers.every((p) => p && typeof p === 'object' && typeof p.title === 'string')) {
+      throw new BadRequestException('papers 每一项都必须含字符串 title');
+    }
+    return this.assertNoError(await this.research.comparePapers(papers as never));
   }
 
   @Post('review')

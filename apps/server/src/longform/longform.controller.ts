@@ -63,6 +63,13 @@ export class LongformController {
     return this.longform.writeChapters(id, Number(body?.count) || 1);
   }
 
+  /** 全书一致性检查（确定性规则，不调模型） */
+  @Get('books/:id/consistency')
+  consistency(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.assertBook(id, req.user);
+    return this.longform.consistency(id);
+  }
+
   @Get('books/:id/compile')
   compile(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
     this.assertBook(id, req.user);

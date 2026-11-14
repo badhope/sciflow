@@ -5,6 +5,7 @@ import { db } from '../db/database';
 import { longformBooks, longformVolumes, longformChapters } from '../db/schema';
 import { AiService } from '../ai/ai.service';
 import { planChapters, draftChapter, summarizeChapter } from './longform.agent';
+import { checkConsistency } from './longform.consistency';
 
 /**
  * 长篇写作服务：分卷 → 分章 → 逐章生成 → 前情压缩 → 断点续写。
@@ -212,6 +213,15 @@ export class LongformService {
       db.update(longformBooks).set({ status: 'completed', updatedAt: Date.now() }).where(eq(longformBooks.id, bookId)).run();
     }
     return { stopped: false, written, stats: book.stats, allDone };
+  }
+
+  /** 全书一致性检查（确定性，不调模型）：实体漏写 / 疑似改名 / 未登记人名 */
+  consistency(bookId: string) {
+    const book = this.getBook(bookId);
+    const chapters = book.chapters
+      .filter((c) => c.status === 'done')
+      .map((c) => ({ seq: c.seq, title: c.title, entities: this.parseList(c.entities), content: c.content || '' }));
+    return { bookId, title: book.title, ...checkConsistency(chapters) };
   }
 
   /** 合并全文（按章序），用于导出 */

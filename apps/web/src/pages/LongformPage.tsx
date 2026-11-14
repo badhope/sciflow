@@ -25,6 +25,7 @@ export function LongformPage({ project }: { project: Project }) {
   const toast = useContext(ToastContext);
   const [selected, setSelected] = useState('');
   const [busy, setBusy] = useState('');
+  const [consistency, setConsistency] = useState<{ score: number; issues: { severity: string; message: string }[] } | null>(null);
   const [error, setError] = useState('');
 
   // 新建书籍表单
@@ -162,6 +163,21 @@ export function LongformPage({ project }: { project: Project }) {
     }
   };
 
+  const runConsistency = async () => {
+    if (!bookId) return;
+    setBusy('consistency');
+    setError('');
+    try {
+      const r = await api.longform.consistency(bookId);
+      setConsistency({ score: r.score, issues: r.issues });
+      toast(r.score === 100 ? 'success' : 'info', `一致性评分 ${r.score}，问题 ${r.issues.length} 条`);
+    } catch (e: unknown) {
+      setError(errMsg(e));
+    } finally {
+      setBusy('');
+    }
+  };
+
   const chaptersByVolume = useMemo<{ volume: LongformBookDetail['volumes'][number]; chapters: LongformBookDetail['chapters'] }[]>(() => {
     if (!book) return [];
     return book.volumes.map((v) => ({
@@ -252,11 +268,35 @@ export function LongformPage({ project }: { project: Project }) {
               <Button variant="outline" onClick={() => void writeBatch()} loading={busy === 'batch'} disabled={book.stats.pending === 0}>
                 <Loader2 size={14} className={busy === 'batch' ? 'animate-spin' : ''} /> 连写 3 章
               </Button>
+              <Button variant="outline" onClick={() => void runConsistency()} loading={busy === 'consistency'} disabled={book.stats.done === 0}>
+                一致性检查
+              </Button>
               <Button variant="ghost" onClick={() => void download()} loading={busy === 'export'} disabled={book.stats.done === 0}>
                 <Download size={14} /> 导出 Markdown
               </Button>
             </div>
           </Card>
+
+          {consistency && (
+            <Card className="mb-4 p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">一致性检查</span>
+                <Badge tone={consistency.score >= 90 ? 'green' : consistency.score >= 70 ? 'amber' : 'red'}>评分 {consistency.score}</Badge>
+                <span className="text-[11px] text-slate-400">共 {consistency.issues.length} 条问题</span>
+              </div>
+              {consistency.issues.length === 0 ? (
+                <div className="text-xs text-emerald-600 dark:text-emerald-400">未发现实体漏写、疑似改名或未登记人名。</div>
+              ) : (
+                <ul className="space-y-1 text-xs">
+                  {consistency.issues.slice(0, 30).map((it, i) => (
+                    <li key={i} className={it.severity === 'warning' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}>
+                      · {it.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          )}
 
           {chaptersByVolume.length === 0 ? (
             <EmptyState illustration="documents" title="还没有卷" hint="填卷标题与章数，系统会先生成章节计划（不写正文）" />

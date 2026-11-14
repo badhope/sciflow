@@ -69,6 +69,12 @@ export const longform = {
       `/api/longform/books/${id}/write`,
       { method: 'POST', body: JSON.stringify({ count }) },
     ),
+  consistency: (id: string) =>
+    request<{
+      bookId: string; title: string; chapters: number; chars: number;
+      declaredEntities: string[]; observedEntities: string[]; score: number;
+      issues: { kind: string; severity: 'warning' | 'info'; seq?: number; title?: string; message: string }[];
+    }>(`/api/longform/books/${id}/consistency`),
   compile: (id: string) =>
     request<{ title: string; chapters: number; chars: number; markdown: string }>(`/api/longform/books/${id}/compile`),
 };
