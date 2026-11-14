@@ -139,15 +139,21 @@ export class LongformService {
   // ---------- 章节写作 ----------
 
   /** 写「下一个 pending 章节」；返回 null 表示已全部完成 */
-  async writeNextChapter(bookId: string, opts: { retryFailed?: boolean } = {}) {
+  async writeNextChapter(bookId: string, opts: { retryFailed?: boolean; chapterId?: string } = {}) {
     if (this.running.has(bookId)) throw new BadRequestException('本书正在写作中，请等待当前章节完成');
     const book = db.select().from(longformBooks).where(eq(longformBooks.id, bookId)).get();
     if (!book) throw new NotFoundException('书籍不存在');
 
     const chapters = db.select().from(longformChapters).where(eq(longformChapters.bookId, bookId)).orderBy(asc(longformChapters.seq)).all();
+    /**
+     * 选择顺序很重要：指定章 > 失败章（retry）> 下一个 pending。
+     * 历史 bug：retryFailed 时把 pending 放在前面，重试实际去写了下一章，
+     * 失败章被永久跳过且不会出现在 failures 里（批写结果看着"成功"其实是漏写）。
+     */
     const next =
-      chapters.find((c) => c.status === 'pending') ??
-      (opts.retryFailed ? chapters.find((c) => c.status === 'failed') : undefined);
+      (opts.chapterId ? chapters.find((c) => c.id === opts.chapterId) : undefined) ??
+      (opts.retryFailed ? chapters.find((c) => c.status === 'failed') : undefined) ??
+      chapters.find((c) => c.status === 'pending');
     if (!next) return { done: true, chapter: null, stats: this.stats(chapters) };
 
     this.running.add(bookId);
@@ -191,20 +197,42 @@ export class LongformService {
       db.update(longformChapters).set({ status: 'failed', error: msg, updatedAt: Date.now() }).where(eq(longformChapters.id, next.id)).run();
       this.logger.warn(`[longform] ${bookId.slice(0, 8)} 第 ${next.seq} 章失败：${msg}`);
       const fresh = db.select().from(longformChapters).where(eq(longformChapters.bookId, bookId)).all();
-      return { done: false, chapter: null, error: msg, failedSeq: next.seq, stats: this.stats(fresh) };
+      return { done: false, chapter: null, error: msg, failedSeq: next.seq, failedChapterId: next.id, stats: this.stats(fresh) };
     } finally {
       this.running.delete(bookId);
     }
   }
 
-  /** 连续写 N 章（无人值守批处理）；遇到失败即停，返回进度 */
+  /**
+   * 连续写 N 章（无人值守批处理）。
+   *
+   * 单章失败不应终止整批：先对同一章重试一次（网络抖动/限流多为瞬时），
+   * 仍失败则记下失败并继续写后续章节——长篇的关键是「能一直往前推」，
+   * 不是「一章坏了全书停摆」。全部跑完再由调用方决定是否回头补失败章。
+   */
   async writeChapters(bookId: string, count: number) {
     const limit = Math.max(1, Math.min(50, Number(count) || 1));
     const written: { seq: number; title: string; chars: number }[] = [];
+    const failures: { seq: number; error: string }[] = [];
+    // 已重试过的章节号：避免同一章在循环里被无限重试
+    const retried = new Set<number>();
     for (let i = 0; i < limit; i++) {
-      const r = await this.writeNextChapter(bookId);
+      let r = await this.writeNextChapter(bookId);
       if (r.done) break;
-      if (r.error) return { stopped: true, error: r.error, failedSeq: r.failedSeq, written, stats: r.stats };
+      if (r.error) {
+        // 瞬时失败重试一次；仍失败则记录并继续下一章。
+        // 注意：writeNextChapter 默认只取 pending，失败章是 failed，必须显式 retryFailed 才会再试。
+        const seq = r.failedSeq ?? -1;
+        if (!retried.has(seq)) {
+          retried.add(seq);
+          // 精确重试这一章（不能只用 retryFailed：那样会退化成"再写一个 pending"）
+          r = await this.writeNextChapter(bookId, { chapterId: (r as { failedChapterId?: string }).failedChapterId });
+        }
+        if (r.error) {
+          failures.push({ seq: r.failedSeq ?? -1, error: r.error });
+          continue;
+        }
+      }
       if (r.chapter) written.push(r.chapter);
     }
     const book = this.getBook(bookId);
@@ -212,7 +240,7 @@ export class LongformService {
     if (allDone && book.chapters.length > 0) {
       db.update(longformBooks).set({ status: 'completed', updatedAt: Date.now() }).where(eq(longformBooks.id, bookId)).run();
     }
-    return { stopped: false, written, stats: book.stats, allDone };
+    return { stopped: false, written, failures, stats: book.stats, allDone };
   }
 
   /** 全书一致性检查（确定性，不调模型）：实体漏写 / 疑似改名 / 未登记人名 */

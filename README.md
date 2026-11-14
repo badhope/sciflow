@@ -21,8 +21,8 @@
 | **Citations you can trace** | Every `[n]` anchor resolves to a citation row and then to a reference row. Ghost anchors, orphan entries, broken numbering and duplicate DOIs are reported by number. An empty reference pool forbids citation markers outright. |
 | **Evidence, not prose** | Claims are stored with stance, strength and verbatim quotes from experiment stdout. The Critic cannot mark `supported` without a matching `supports` evidence item. |
 | **Web project sandbox** | Create a project in an isolated directory, `npm install`, build, and preview it on loopback. Two built-in templates (zero-dependency static, React + Vite); logs and status per step; one-click run. |
-| **Built-in browser** | Real Chromium on the server: navigate any site, read visible text, capture screenshots, list interactive elements, click and fill. What an iframe cannot do (most sites forbid embedding). |
-| **Long-form writing** | Book → volume → chapter, generated one chapter at a time. Each chapter is stored independently (never overwritten), failures retry, and cross-chapter continuity rides on compressed summaries — so length is not bounded by the context window. |
+| **Built-in browser** | Real Chromium on the server: navigate any site, read visible text, capture screenshots, list interactive elements, click and fill, and **assert page expectations** (`exists` / `visible` / `count` / `text` / `value`) so a built page can be accepted or rejected by machine. |
+| **Long-form writing** | Book → volume → chapter, generated one chapter at a time. Each chapter is stored independently, a failed chapter retries once then the batch continues, and cross-chapter continuity rides on compressed summaries — so length is not bounded by the context window. A built-in consistency checker reports entity gaps and suspected renames deterministically. |
 | **Manuscript pipeline** | Topic validation → literature survey → outline gate → section drafting → quality gate → polish → citation formatting. Checkpoints after every step; restart-safe. |
 | **Grounded retrieval** | SQLite FTS5 + sqlite-vec, RRF fusion and MMR; OpenAlex / Crossref / arXiv search with relevance gating and TTL cache. Literature hits enter the research loop as background, never as fabricated citations. |
 | **Open by design** | MCP server and client, OpenAI-compatible / Anthropic / Gemini protocols, local Ollama or GGUF, desktop app, headless CLI, JWT mode for shared deployments. |
@@ -73,7 +73,7 @@ Every number below comes from a command run on the current tree (2026-11-13).
 
 | Check | Command | Result |
 |---|---|---|
-| Server unit/integration | `pnpm --filter @sciflow/server test` | 88 files, 683 tests |
+| Server unit/integration | `pnpm --filter @sciflow/server test` | 88 files, 687 tests |
 | Web unit | `pnpm --filter @sciflow/web test` | 29 files, 201 tests |
 | Desktop unit | `pnpm --filter @sciflow/desktop test` | 1 file, 5 tests |
 | Types / build | `pnpm -r typecheck` · `pnpm -r build` | clean |

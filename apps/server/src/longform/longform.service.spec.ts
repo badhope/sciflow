@@ -116,6 +116,37 @@ describe('LongformService 分卷续写', () => {
     expect(detail.stats.failed).toBe(1);
   });
 
+  it('单章失败不终止整批：记录 failures 并继续后续章节', async () => {
+    // 第 2 章首次生成长度不足 → 应重试一次；重试仍失败则记录并继续写第 3 章
+    const flakyAi = {
+      completeStructured: async () => ({
+        chapters: [
+          { title: '第1章', goal: 'g', beats: ['b'], entities: [] },
+          { title: '第2章', goal: 'g', beats: ['b'], entities: [] },
+          { title: '第3章', goal: 'g', beats: ['b'], entities: [] },
+        ],
+      }),
+      // 按 prompt 内容判定，而不是按调用序号：摘要调用也走 complete，序号会错位
+      complete: async (messages: unknown[], opts: any) => {
+        const prompt = JSON.stringify(messages);
+        if (opts?.maxTokens === 400) return '前情摘要。';
+        if (prompt.includes('【本章】第2章')) return '短';
+        return '正文'.repeat(400);
+      },
+    } as unknown as AiService;
+    const svc = new LongformService(flakyAi);
+    const book = svc.createBook({ projectId: pid, title: '容错书', premise: '' });
+    bookId = book.id;
+    await svc.addVolume(bookId, { title: '第一卷', chapters: 3 });
+    const r = await svc.writeChapters(bookId, 3);
+    expect(r.failures.length).toBe(1);
+    expect(r.failures[0].seq).toBe(2);
+    // 第 1、3 章仍写成
+    expect(r.written.map((w) => w.seq)).toEqual([1, 3]);
+    expect(r.stats.done).toBe(2);
+    expect(r.stats.failed).toBe(1);
+  });
+
   it('批量写 2 章：written 顺序正确，统计累加', async () => {
     const svc = new LongformService(fakeAi({ chapters: 3 }).ai);
     const book = svc.createBook({ projectId: pid, title: '批写', premise: '' });

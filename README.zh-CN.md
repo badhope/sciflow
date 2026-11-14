@@ -21,8 +21,8 @@
 | **引用可追溯** | 正文每个 `[n]` 锚点都能追到 citation 行，再追到 reference 行；幽灵锚点、孤儿条目、断号、重复 DOI 按编号报告。文献池为空时，起草直接禁止引用标记。 |
 | **证据而非文风** | 结论落库时带 stance、强度与实验 stdout 的逐字引用；评审没有对应的 supports 证据就不能判 supported。 |
 | **Web 项目沙箱** | 在独立目录里建项目、`npm install`、构建，并在回环地址上预览。内置两个模板（零依赖静态、React + Vite）；每步有状态与日志，支持一键跑通。 |
-| **内置浏览器** | 服务端真实 Chromium：打开任意站点、读可见文本、截图、列可交互元素、点击与填表。这是 iframe 做不到的（多数站点禁止被嵌入）。 |
-| **长篇写作** | 书 → 卷 → 章，逐章生成。每章独立落库、已完成不覆盖、失败可重试；跨章一致性靠压缩摘要传递，因此篇幅不受上下文窗口限制。 |
+| **内置浏览器** | 服务端真实 Chromium：打开任意站点、读可见文本、截图、列可交互元素、点击与填表，并能**按断言验收页面**（`exists` / `visible` / `count` / `text` / `value`），让做出来的网页由机器判通过或打回。 |
+| **长篇写作** | 书 → 卷 → 章，逐章生成。每章独立落库；单章失败重试一次后继续写后续章节，不整批停摆；跨章一致性靠压缩摘要传递，篇幅不受上下文窗口限制。内置确定性一致性检查，报告实体缺口与疑似改名。 |
 | **稿件流水线** | 选题验证 → 文献调研 → 大纲门禁 → 分章起草 → 质量门 → 润色 → 引用格式化。每步写检查点，重启可续跑。 |
 | **检索有依据** | SQLite FTS5 + sqlite-vec，RRF 融合与 MMR；OpenAlex / Crossref / arXiv 检索带相关性门禁与 TTL 缓存。文献只作为研究循环的背景输入，不作为编造引用的素材。 |
 | **开放接入** | MCP 服务端与客户端、OpenAI 兼容 / Anthropic / Gemini 协议、本地 Ollama 或 GGUF、桌面端、无界面 CLI、共享部署用 JWT 模式。 |
@@ -73,7 +73,7 @@ docker compose -f docker-compose.prod.yml up --build
 
 | 检查项 | 命令 | 结果 |
 |---|---|---|
-| 服务端单测/集成 | `pnpm --filter @sciflow/server test` | 88 文件，683 项 |
+| 服务端单测/集成 | `pnpm --filter @sciflow/server test` | 88 文件，687 项 |
 | 前端单测 | `pnpm --filter @sciflow/web test` | 29 文件，201 项 |
 | 桌面端单测 | `pnpm --filter @sciflow/desktop test` | 1 文件，5 项 |
 | 类型 / 构建 | `pnpm -r typecheck` · `pnpm -r build` | 通过 |
