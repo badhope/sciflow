@@ -717,6 +717,31 @@ export const longformChapters = sqliteTable('longform_chapter', {
 
 export type LongformChapter = typeof longformChapters.$inferSelect;
 
+/**
+ * Web 项目沙箱：在独立临时目录里 npm install → build → 静态预览。
+ * 与 experiment 的区别：experiment 跑一次性脚本，webProject 是持续存在的项目 + 预览端口。
+ */
+export const webProjects = sqliteTable('web_project', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  name: text('name').notNull(),
+  /** static | react-vite */
+  template: text('template').default('static'),
+  /** 沙箱工作目录（临时目录，删除项目时一并清理） */
+  workDir: text('work_dir').notNull(),
+  /** created | installing | installed | install_failed | building | built | build_failed | previewing | preview_failed */
+  status: text('status').default('created'),
+  previewPort: integer('preview_port'),
+  previewUrl: text('preview_url').default(''),
+  installLog: text('install_log').default(''),
+  buildLog: text('build_log').default(''),
+  error: text('error').default(''),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type WebProject = typeof webProjects.$inferSelect;
+
 /** 用户（企业认证 · AUTH_MODE=jwt 时启用；本地/桌面模式 AUTH_MODE=none 不强制登录） */
 export const users = sqliteTable('user', {
   id: text('id').primaryKey(),

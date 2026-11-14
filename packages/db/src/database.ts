@@ -595,6 +595,24 @@ CREATE TABLE IF NOT EXISTS longform_chapter (
 CREATE INDEX IF NOT EXISTS idx_longform_chapter_book ON longform_chapter(book_id, seq);
 CREATE INDEX IF NOT EXISTS idx_longform_chapter_status ON longform_chapter(book_id, status);
 
+-- Web 项目沙箱：独立目录 + npm 构建 + 静态预览
+CREATE TABLE IF NOT EXISTS web_project (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  template TEXT DEFAULT 'static',
+  work_dir TEXT NOT NULL,
+  status TEXT DEFAULT 'created',
+  preview_port INTEGER,
+  preview_url TEXT DEFAULT '',
+  install_log TEXT DEFAULT '',
+  build_log TEXT DEFAULT '',
+  error TEXT DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_web_project_project ON web_project(project_id, updated_at DESC);
+
 -- 投稿流程状态跟踪：投稿记录 + 状态历史流水
 CREATE TABLE IF NOT EXISTS submission (
   id TEXT PRIMARY KEY,

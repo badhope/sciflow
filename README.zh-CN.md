@@ -20,6 +20,8 @@
 | **确定性质量门** | 七个维度由规则计分并带稳定指纹，同一文本必然同分。门禁分是验收标准，LLM 分只作参考；低于阈值触发定向回炉，不靠重抽。 |
 | **引用可追溯** | 正文每个 `[n]` 锚点都能追到 citation 行，再追到 reference 行；幽灵锚点、孤儿条目、断号、重复 DOI 按编号报告。文献池为空时，起草直接禁止引用标记。 |
 | **证据而非文风** | 结论落库时带 stance、强度与实验 stdout 的逐字引用；评审没有对应的 supports 证据就不能判 supported。 |
+| **Web 项目沙箱** | 在独立目录里建项目、`npm install`、构建，并在回环地址上预览。内置两个模板（零依赖静态、React + Vite）；每步有状态与日志，支持一键跑通。 |
+| **内置浏览器** | 服务端真实 Chromium：打开任意站点、读可见文本、截图、列可交互元素、点击与填表。这是 iframe 做不到的（多数站点禁止被嵌入）。 |
 | **长篇写作** | 书 → 卷 → 章，逐章生成。每章独立落库、已完成不覆盖、失败可重试；跨章一致性靠压缩摘要传递，因此篇幅不受上下文窗口限制。 |
 | **稿件流水线** | 选题验证 → 文献调研 → 大纲门禁 → 分章起草 → 质量门 → 润色 → 引用格式化。每步写检查点，重启可续跑。 |
 | **检索有依据** | SQLite FTS5 + sqlite-vec，RRF 融合与 MMR；OpenAlex / Crossref / arXiv 检索带相关性门禁与 TTL 缓存。文献只作为研究循环的背景输入，不作为编造引用的素材。 |
@@ -71,7 +73,7 @@ docker compose -f docker-compose.prod.yml up --build
 
 | 检查项 | 命令 | 结果 |
 |---|---|---|
-| 服务端单测/集成 | `pnpm --filter @sciflow/server test` | 87 文件，676 项 |
+| 服务端单测/集成 | `pnpm --filter @sciflow/server test` | 88 文件，683 项 |
 | 前端单测 | `pnpm --filter @sciflow/web test` | 29 文件，201 项 |
 | 桌面端单测 | `pnpm --filter @sciflow/desktop test` | 1 文件，5 项 |
 | 类型 / 构建 | `pnpm -r typecheck` · `pnpm -r build` | 通过 |
@@ -79,8 +81,8 @@ docker compose -f docker-compose.prod.yml up --build
 | 浏览器 UI 巡检 | `npx playwright test e2e/ui-sweep.spec.ts` | 4 项通过 |
 | 设置页交互 | `npx playwright test e2e/settings-interaction.spec.ts` | 2 项通过 |
 | 长篇写作 E2E | `npx playwright test e2e/longform.spec.ts` | 1 项通过 |
-| 全功能 API 覆盖（24 模块） | `pnpm test:api` | 79/79 通过 |
-| 截图自动化 | `pnpm capture:ui` | 13 浅色 + 3 深色，0 页面错误 |
+| 全功能 API 覆盖（26 模块） | `pnpm test:api` | 90/90 通过 |
+| 截图自动化 | `pnpm capture:ui` | 15 浅色 + 3 深色，0 页面错误 |
 | AI 权限档 | `pnpm --filter @sciflow/server test -- agent-policy` | 7 项通过 |
 | 真实模型稿件产出 | pipeline API，2026-11-13 | 20 篇文献、10,834 字、18 锚点、0 幽灵、客观 97 |
 | 真实模型研究循环 | cycle `50a629be` | supported/90，5 条 verified 证据 |

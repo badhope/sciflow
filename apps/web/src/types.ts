@@ -768,6 +768,23 @@ export interface JournalMatchResult {
 }
 
 /** 轻量实验沙箱：本机 python3 执行记录 */
+/** Web 项目沙箱记录 */
+export interface WebProject {
+  id: string;
+  projectId: string;
+  name: string;
+  template: string;
+  workDir: string;
+  status: string;
+  previewPort: number | null;
+  previewUrl: string;
+  installLog: string;
+  buildLog: string;
+  error: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Experiment {
   id: string;
   projectId: string;
