@@ -41,6 +41,15 @@ export const browser = {
     request<{ url: string; elements: { tag: string; text: string; selector: string; type?: string }[] }>(`/api/browser/sessions/${id}/elements`),
   click: (id: string, selector: string) =>
     request<{ ok: boolean }>(`/api/browser/sessions/${id}/click`, { method: 'POST', body: JSON.stringify({ selector }) }),
+  /** 网页验收：按断言列表检查并返回逐条通过/失败 */
+  verify: (
+    id: string,
+    checks: { type: 'exists' | 'text' | 'count' | 'visible' | 'value'; selector?: string; expect?: string | number; label?: string }[],
+  ) =>
+    request<{
+      url: string; title: string; total: number; passed: number; failed: number; allPassed: boolean;
+      results: { label: string; type: string; ok: boolean; actual: string }[];
+    }>(`/api/browser/sessions/${id}/verify`, { method: 'POST', body: JSON.stringify({ checks }) }),
   fill: (id: string, selector: string, value: string) =>
     request<{ ok: boolean }>(`/api/browser/sessions/${id}/fill`, { method: 'POST', body: JSON.stringify({ selector, value }) }),
 };

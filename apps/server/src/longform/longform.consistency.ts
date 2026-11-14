@@ -78,6 +78,22 @@ const CN_GIVEN_CHARS = new Set(
   ('伟芳娜秀英敏静丽强磊军洋勇艳杰娟涛明超秀霞平刚桂香文华建国志强晓东海燕鹏飞宇浩然子轩雨欣佳怡梓涵一诺思远若曦晨阳雨泽沐辰逸辰清越知微怀瑾致远思齐南星北辰衡之').split(''),
 );
 
+/**
+ * 实体名归一化：模型常把实体写成「名称（角色）」，如「林远（主角/测绘员）」。
+ * 正文里只会出现「林远」，拿带括号的整串去比对必然 0 命中——这是检查器与数据格式的契约差异，
+ * 不是正文漏写。这里统一剥掉括号注释，再参与比对与展示。
+ */
+export function normalizeEntityName(raw: string): string {
+  const s = String(raw || '').trim();
+  // 1) 去掉括号注释：「林远（主角/测绘员）」→「林远」
+  const cut = s.replace(/[（(][^）)]*[）)]/g, '').trim() || s;
+  // 2) 去掉角色前缀：「向导阿海」→「阿海」、「主角林远」→「林远」
+  //    只剥已知角色词，避免把正常地名（如「老城区」）误切。
+  const m = /^(主角|配角|反派|向导|旁白|叙述者|NPC|npc|地点|地标|目标|线索|文档|信息|方案|威胁|事件|环境|实体|人物|组织|系统|模块|设备|区域)(.+)$/.exec(cut);
+  if (m && m[2].length >= 2) return m[2].trim();
+  return cut;
+}
+
 export interface ConsistencyChapter {
   seq: number;
   title: string;
@@ -110,19 +126,41 @@ export interface ConsistencyReport {
  */
 export function checkConsistency(chapters: ConsistencyChapter[], knownEntities: string[] = []): ConsistencyReport {
   const issues: ConsistencyIssue[] = [];
-  const declared = new Set<string>(knownEntities.filter(Boolean));
-  for (const ch of chapters) for (const e of ch.entities) if (e) declared.add(e);
+  const declared = new Set<string>();
+  for (const e of knownEntities) {
+    const n = normalizeEntityName(e);
+    if (n) declared.add(n);
+  }
+  for (const ch of chapters) {
+    for (const e of ch.entities) {
+      const n = normalizeEntityName(e);
+      if (n) declared.add(n);
+    }
+  }
 
   const observed = new Set<string>();
   for (const ch of chapters) {
     const body = ch.content || '';
-    // 1) 声明了但正文没出现
-    for (const e of ch.entities) {
+    // 1) 声明了但正文没出现（按归一化名比对）
+    for (const raw of ch.entities) {
+      const e = normalizeEntityName(raw);
       if (!e) continue;
       if (!body.includes(e)) {
+        /**
+         * 分级：只有「人/地点」类漏写才扣分。
+         * 实测一本书会声明 40+ 个设备/文档/参数类实体（全站仪、历史档案、加密指令…），
+         * 正文没逐字提到它们是正常写作取舍，不该和「主角没出场」同权重报警，
+         * 否则分数恒为 0，真正的人物漏写被淹没。
+         */
+        /**
+         * 判定标准（保守）：只有「2-3 个纯汉字、看起来就是人名」的实体才算 critical。
+         * 「无线电通讯 / 灯塔内部人员 / 新挖掘土壤 / 浑浊海水」这类描述性名词一律 info——
+         * 它们没在正文里逐字出现是正常写作取舍，不该压掉分数。
+         */
+        const isEntityCritical = /^[一-龥]{2,3}$/.test(e) && CN_SURNAMES.has(e[0]);
         issues.push({
           kind: 'missing-entity',
-          severity: 'warning',
+          severity: isEntityCritical ? 'warning' : 'info',
           seq: ch.seq,
           title: ch.title,
           message: `第 ${ch.seq} 章声明出场「${e}」，但正文未出现`,
@@ -130,6 +168,8 @@ export function checkConsistency(chapters: ConsistencyChapter[], knownEntities: 
       }
     }
     // 2) 正文里疑似人名但未登记
+    //    注意：正文里出现的人名会被记入 observed，但**不因此变成已登记**——
+    //    否则「模型自己编了个新角色」这件事永远查不出来。未登记只报 info，不扣分。
     for (const name of guessChineseNames(body, declared)) {
       observed.add(name);
       if (declared.has(name)) continue;
@@ -149,15 +189,59 @@ export function checkConsistency(chapters: ConsistencyChapter[], knownEntities: 
 
   // 去重（同名问题只报一次）
   const seen = new Set<string>();
-  const deduped = issues.filter((i) => {
+  const dedupedRaw = issues.filter((i) => {
     const k = `${i.kind}:${i.seq}:${i.message}`;
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
   });
+  // 上面的配对逻辑作用在去重后的集合上
+  const deduped = dedupedRaw;
 
-  const warnings = deduped.filter((i) => i.severity === 'warning').length;
-  const infos = deduped.length - warnings;
+  /**
+   * 合并配对：同一章里「声明了但没写」与「写了但没登记」若是同长度且共享至少一个字，
+   * 实质是同一件事——模型在计划里叫「阿海」，正文里写成「张海」。
+   * 分开报会变成两条噪音，合并成一条「疑似改名」才是准确诊断。
+   */
+  const merged: ConsistencyIssue[] = [];
+  const unregByChapter = new Map<number, ConsistencyIssue[]>();
+  for (const i of deduped) {
+    if (i.kind === 'unregistered-entity' && typeof i.seq === 'number') {
+      const list = unregByChapter.get(i.seq) ?? [];
+      list.push(i);
+      unregByChapter.set(i.seq, list);
+    }
+  }
+  const consumed = new Set<ConsistencyIssue>();
+  for (const i of deduped) {
+    if (i.kind !== 'missing-entity' || typeof i.seq !== 'number') continue;
+    const declaredName = /「([^」]+)」/.exec(i.message)?.[1] ?? '';
+    const candidates = unregByChapter.get(i.seq) ?? [];
+    const match = candidates.find((u) => {
+      if (consumed.has(u)) return false;
+      const written = /「([^」]+)」/.exec(u.message)?.[1] ?? '';
+      if (!written || written.length !== declaredName.length) return false;
+      // 共享至少一个字（阿海 / 张海 共享「海」；陈默 / 陈墨 共享「陈」）
+      return [...declaredName].some((ch) => written.includes(ch));
+    });
+    if (match) {
+      consumed.add(match);
+      consumed.add(i);
+      const written = /「([^」]+)」/.exec(match.message)?.[1] ?? '';
+      merged.push({
+        kind: 'name-variant',
+        severity: 'warning',
+        seq: i.seq,
+        title: i.title,
+        message: `第 ${i.seq} 章计划里写「${declaredName}」，正文里写「${written}」，疑似改名或漏改`,
+      });
+    }
+  }
+  const finalIssues = [...deduped.filter((i) => !consumed.has(i)), ...merged];
+
+
+  const warnings = finalIssues.filter((i) => i.severity === 'warning').length;
+  const infos = finalIssues.length - warnings;
   // info 只是「可能相关」的提示，不参与扣分；扣分只来自确定性错误（漏写/改名）
   const score = Math.max(0, 100 - warnings * 8);
 
@@ -166,7 +250,7 @@ export function checkConsistency(chapters: ConsistencyChapter[], knownEntities: 
     chars: chapters.reduce((s, c) => s + (c.content || '').length, 0),
     declaredEntities: [...declared].sort(),
     observedEntities: [...observed].sort(),
-    issues: deduped.slice(0, 200),
+    issues: finalIssues.slice(0, 200),
     score,
   };
 }

@@ -509,7 +509,7 @@ ${augmentation}` };
       if (AiTransportService.isTimeoutError(err, t0, timeoutMs)) {
         throw new HttpException(`AI 请求超时（${Math.round(timeoutMs / 1000)}s 无响应，可通过 AI_REQUEST_TIMEOUT_MS 调整）：上游端点无响应，任务已中止以免永久挂起`, HttpStatus.GATEWAY_TIMEOUT);
       }
-      throw new HttpException(`AI 服务调用失败: ${String(err?.message || err).slice(0, 300)}`, HttpStatus.BAD_GATEWAY);
+      throw new HttpException(`AI 服务调用失败: ${AiTransportService.describeError(err).slice(0, 300)}`, HttpStatus.BAD_GATEWAY);
     });
   }
 
@@ -607,7 +607,7 @@ ${augmentation}` };
       });
     } catch (err: any) {
       this.logLlmCall({ caller, model, promptTokens: 0, completionTokens: 0, latencyMs: Date.now() - t0, success: false, error: err?.message });
-      throw new HttpException(`AI 工具调用失败: ${String(err?.message || err).slice(0, 300)}`, HttpStatus.BAD_GATEWAY);
+      throw new HttpException(`AI 工具调用失败: ${AiTransportService.describeError(err).slice(0, 300)}`, HttpStatus.BAD_GATEWAY);
     }
   }
 

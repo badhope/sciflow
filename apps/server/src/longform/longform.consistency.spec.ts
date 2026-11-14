@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checkConsistency, guessChineseNames } from './longform.consistency';
+import { checkConsistency, guessChineseNames, normalizeEntityName } from './longform.consistency';
 
 /**
  * 一致性检查器是确定性规则，必须稳定：同一输入永远同一结论。
@@ -35,6 +35,41 @@ describe('长篇一致性检查', () => {
     ]);
     expect(r.issues.filter((i) => i.severity === 'warning')).toHaveLength(0);
     expect(r.score).toBe(100);
+  });
+
+  it('实体名带角色注释时不误判漏写（真实缺陷回归）', () => {
+    // 实测：模型把实体写成「林远（主角/测绘员）」，正文只出现「林远」，
+    // 旧实现拿整串比对，导致每章几十条假「漏写」。
+    const r = checkConsistency([
+      { seq: 1, title: '第一章', entities: ['林远（主角/测绘员）', '黑潮港（地点）'], content: '林远抵达黑潮港，风很大。' },
+    ]);
+    expect(r.issues.filter((i) => i.kind === 'missing-entity')).toHaveLength(0);
+    expect(r.declaredEntities).toContain('林远');
+    expect(r.declaredEntities).toContain('黑潮港');
+  });
+
+  it('normalizeEntityName 剥掉中英文括号注释与角色前缀', () => {
+    expect(normalizeEntityName('林远（主角/测绘员）')).toBe('林远');
+    expect(normalizeEntityName('黑潮港 (地点)')).toBe('黑潮港');
+    expect(normalizeEntityName('向导阿海')).toBe('阿海');
+    expect(normalizeEntityName('主角林远')).toBe('林远');
+    expect(normalizeEntityName('灯塔')).toBe('灯塔');
+    // 不在角色词表里的地名不应被误切
+    expect(normalizeEntityName('老城区')).toBe('老城区');
+    expect(normalizeEntityName('（无名称）')).toBe('（无名称）');
+  });
+
+  it('声明「阿海」正文写「张海」→ 合并成一条疑似改名，而不是两条噪音', () => {
+    const r = checkConsistency([
+      { seq: 1, title: '第一章', entities: ['向导阿海（NPC）'], content: '张海在码头等他，雨很大。' },
+    ]);
+    const variants = r.issues.filter((i) => i.kind === 'name-variant');
+    expect(variants).toHaveLength(1);
+    expect(variants[0].message).toContain('阿海');
+    expect(variants[0].message).toContain('张海');
+    // 合并后不应再单独出现「漏写」与「未登记」两条
+    expect(r.issues.filter((i) => i.kind === 'missing-entity')).toHaveLength(0);
+    expect(r.issues.filter((i) => i.kind === 'unregistered-entity')).toHaveLength(0);
   });
 
   it('统计口径：章数与字数', () => {

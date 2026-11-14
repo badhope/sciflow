@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Compass, Loader2, MousePointerClick, RefreshCw, X } from 'lucide-react';
 import { api } from '../api/client';
 import type { BrowserSession } from '../api/web-projects';
-import { Badge, Button, Card, ErrorBox, Input, SectionTitle, Spinner, errMsg } from '../components/ui';
+import { Badge, Button, Card, ErrorBox, Input, SectionTitle, Spinner, Textarea, errMsg } from '../components/ui';
 
 /**
  * 内置浏览器页：真实 Chromium 会话，截图 + 取文本 + 点元素。
@@ -21,6 +21,8 @@ export function BrowserPage() {
   const [shot, setShot] = useState('');
   const [text, setText] = useState('');
   const [selector, setSelector] = useState('');
+  const [checksText, setChecksText] = useState('text | | 示例\nexists | body');
+  const [verifyResult, setVerifyResult] = useState<null | { total: number; passed: number; failed: number; allPassed: boolean; results: { label: string; ok: boolean; actual: string }[] }>(null);
 
   const sessionsQuery = useQuery({ queryKey: ['browser-sessions'], queryFn: () => api.browser.list() });
   const sessions = sessionsQuery.data ?? [];
@@ -73,6 +75,45 @@ export function BrowserPage() {
       }
       await refresh();
       await capture(currentId);
+    } catch (e: unknown) {
+      setError(errMsg(e));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  /**
+   * 网页验收：每行一条断言，格式 `type | selector | expect | label`。
+   * 用文本行而不是 JSON textarea，是因为验收清单是给人写给人读的，JSON 引号容易打错。
+   * 示例：
+   *   text ||| 欢迎               → 页面包含「欢迎」
+   *   exists | #submit          → 存在 #submit
+   *   count  | li.item | 3      → 命中 3 个
+   */
+  const runVerify = async () => {
+    if (!currentId) return;
+    const checks = checksText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#'))
+      .map((line) => {
+        const [type, sel, expect, label] = line.split('|').map((x) => x.trim());
+        return {
+          type: type as 'exists' | 'text' | 'count' | 'visible' | 'value',
+          selector: sel || undefined,
+          expect: expect || undefined,
+          label: label || undefined,
+        };
+      });
+    if (!checks.length) {
+      setError('至少写一条断言');
+      return;
+    }
+    setBusy('verify');
+    setError('');
+    try {
+      const r = await api.browser.verify(currentId, checks);
+      setVerifyResult(r);
     } catch (e: unknown) {
       setError(errMsg(e));
     } finally {
@@ -155,6 +196,39 @@ export function BrowserPage() {
                 <X size={14} /> 关闭会话
               </Button>
             </div>
+          </Card>
+
+          <Card className="mb-4 p-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">网页验收（每行一条断言）</span>
+              <Button size="xs" onClick={() => void runVerify()} loading={busy === 'verify'}>
+                运行验收
+              </Button>
+            </div>
+            <p className="mb-2 text-[11px] text-slate-400">
+              格式：类型 | 选择器 | 期望值 | 说明。类型支持 exists / visible / count / text / value；
+              例如 <code>text | | 登录成功</code> 表示页面文本包含「登录成功」。
+            </p>
+            <Textarea rows={4} className="font-mono text-xs" value={checksText} onChange={(e) => setChecksText(e.target.value)} aria-label="验收断言" />
+            {verifyResult && (
+              <div className="mt-3">
+                <div className="mb-1 flex items-center gap-2 text-xs">
+                  <Badge tone={verifyResult.allPassed ? 'green' : 'red'}>
+                    {verifyResult.allPassed ? '全部通过' : '存在失败'}
+                  </Badge>
+                  <span className="text-slate-400">
+                    {verifyResult.passed}/{verifyResult.total} 通过
+                  </span>
+                </div>
+                <ul className="space-y-0.5 text-[11px]">
+                  {verifyResult.results.map((r, i) => (
+                    <li key={i} className={r.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
+                      {r.ok ? '✓' : '✗'} {r.label} — {r.actual}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">

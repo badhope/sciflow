@@ -314,6 +314,88 @@ export class BrowserService implements OnModuleDestroy {
     return { url: s.page.url(), elements: items };
   }
 
+  /**
+   * 网页验收：按断言列表检查页面，返回逐条通过/失败。
+   *
+   * 为什么需要：能打开、能截图不等于「做对了」。Web 项目交付前必须能声明
+   * 「标题是 X、按钮存在、点完出现 Y」，并由机器给出结论，而不是人眼看图。
+   *
+   * 支持 5 种断言（够覆盖大部分验收）：
+   *  - exists：选择器存在
+   *  - text：页面（或指定选择器）包含文本
+   *  - count：选择器命中数量等于期望
+   *  - visible：选择器可见
+   *  - value：输入框的值等于期望（可选 selector）
+   */
+  async verify(
+    id: string,
+    checks: { type: 'exists' | 'text' | 'count' | 'visible' | 'value'; selector?: string; expect?: string | number; label?: string }[],
+  ) {
+    const s = this.session(id);
+    const results: { label: string; type: string; ok: boolean; actual: string }[] = [];
+    for (const c of checks) {
+      const label = c.label || `${c.type}${c.selector ? ` ${c.selector}` : ''}`;
+      let ok = false;
+      let actual = '';
+      try {
+        switch (c.type) {
+          case 'exists': {
+            if (!c.selector) throw new Error('exists 需要 selector');
+            const n = await s.page.locator(c.selector).count();
+            ok = n > 0;
+            actual = `${n} 个匹配`;
+            break;
+          }
+          case 'visible': {
+            if (!c.selector) throw new Error('visible 需要 selector');
+            ok = await s.page.locator(c.selector).first().isVisible().catch(() => false);
+            actual = ok ? '可见' : '不可见';
+            break;
+          }
+          case 'count': {
+            if (!c.selector) throw new Error('count 需要 selector');
+            const n = await s.page.locator(c.selector).count();
+            ok = n === Number(c.expect);
+            actual = `${n}（期望 ${c.expect}）`;
+            break;
+          }
+          case 'text': {
+            const scope = c.selector ? s.page.locator(c.selector).first() : s.page.locator('body');
+            const t = (await scope.innerText().catch(() => '')).replace(/\s+/g, ' ');
+            const want = String(c.expect ?? '');
+            ok = t.includes(want);
+            actual = ok ? `包含「${want}」` : `未包含「${want}」，实际：${t.slice(0, 120)}`;
+            break;
+          }
+          case 'value': {
+            if (!c.selector) throw new Error('value 需要 selector');
+            const v = await s.page.locator(c.selector).first().inputValue().catch(() => '');
+            ok = v === String(c.expect ?? '');
+            actual = `${JSON.stringify(v)}（期望 ${JSON.stringify(c.expect)}）`;
+            break;
+          }
+          default:
+            throw new Error(`未知断言类型：${(c as { type: string }).type}`);
+        }
+      } catch (e: any) {
+        ok = false;
+        actual = `执行失败：${String(e?.message || e).slice(0, 160)}`;
+      }
+      results.push({ label, type: c.type, ok, actual });
+    }
+    const passed = results.filter((r) => r.ok).length;
+    s.history.push({ action: 'verify', target: `${passed}/${results.length}`, at: Date.now(), ok: passed === results.length });
+    return {
+      url: s.page.url(),
+      title: await s.page.title().catch(() => ''),
+      total: results.length,
+      passed,
+      failed: results.length - passed,
+      allPassed: passed === results.length,
+      results,
+    };
+  }
+
   async close(id: string) {
     const s = this.sessions.get(id);
     if (!s) return { ok: true };

@@ -60,6 +60,19 @@ export class BrowserController {
     return this.browser.elements(id);
   }
 
+  /** 网页验收：按断言列表检查页面并给出通过/失败 */
+  @Post('sessions/:id/verify')
+  verify(
+    @Param('id') id: string,
+    @Body() body: { checks?: { type: 'exists' | 'text' | 'count' | 'visible' | 'value'; selector?: string; expect?: string | number; label?: string }[] },
+    @Req() req: { user?: AuthPayload },
+  ) {
+    this.access.assertAdmin(req.user);
+    if (!Array.isArray(body?.checks) || body.checks.length === 0) throw new BadRequestException('checks 不能为空');
+    if (body.checks.length > 50) throw new BadRequestException('单次最多 50 条断言');
+    return this.browser.verify(id, body.checks);
+  }
+
   @Post('sessions/:id/click')
   click(@Param('id') id: string, @Body() body: { selector: string }, @Req() req: { user?: AuthPayload }) {
     this.access.assertAdmin(req.user);
