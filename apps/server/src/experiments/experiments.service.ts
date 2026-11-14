@@ -23,6 +23,8 @@ const runSchema = z.object({
   goal: z.string().max(2000).optional().default(''),
   code: z.string().min(1, '代码不能为空').refine((v) => v.trim().length > 0, '代码不能为空'),
   documentId: z.string().nullish(),
+  /** 运行时：python（默认）| node | shell。缺省按代码特征自动判断 */
+  runtime: z.enum(['python', 'node', 'shell']).optional(),
 });
 
 const updateSchema = z.object({
@@ -48,10 +50,30 @@ const NO_PYTHON_MESSAGE =
   'macOS 执行 brew install python3；Linux（Debian/Ubuntu）执行 sudo apt install python3。' +
   '安装后重启应用即可。';
 
+const NO_NODE_MESSAGE = '本机未检测到 Node 运行时。选择 node 运行时时请先安装 Node ≥ 20（与应用本身所需一致）。';
+
+export type SandboxRuntime = 'python' | 'node' | 'shell';
+
+/**
+ * 按代码特征推断运行时（用户未显式指定时）。
+ * 只做显而易见的判断，不确定一律回落 python——猜错运行时会让脚本直接报语法错。
+ */
+export function inferRuntime(code: string): SandboxRuntime {
+  const c = String(code || '');
+  if (/^\s*#!\/.*\b(bash|sh)\b/m.test(c)) return 'shell';
+  // Windows 批处理特征：@echo off / set VAR= / rem 注释 / %VAR%
+  if (/^\s*@?echo\s+(off|on)\b/im.test(c) || /^\s*(set\s+\w+=|rem\s)/im.test(c) || /%[A-Za-z_]\w*%/.test(c)) return 'shell';
+  if (/(^|\n)\s*(import\s+[\w{},*\s]+\s+from\s+['"]|const\s+\w+\s*=|let\s+\w+\s*=|require\(['"]|console\.log\()/.test(c)) return 'node';
+  if (/(^|\n)\s*(def\s+\w+\(|import\s+\w+\s*$|from\s+\w+\s+import\s)/m.test(c)) return 'python';
+  return 'python';
+}
+
 @Injectable()
 export class ExperimentsService {
   /** 已解析出的可用 python 解释器路径；undefined=未探测，null=无可用解释器 */
   private resolvedPython: string | null | undefined = undefined;
+  /** 已解析出的 node 路径；undefined=未探测，null=无 */
+  private resolvedNode: string | null | undefined = undefined;
 
   /**
    * 探测本机可用的 Python 3 解释器（结果缓存）。
@@ -79,6 +101,33 @@ export class ExperimentsService {
     }
     this.resolvedPython = null;
     return null;
+  }
+
+  /** 探测 Node（沙箱跑 JS 用）；与应用自身同源即可，只校验能否启动 */
+  private detectNode(): string | null {
+    if (this.resolvedNode !== undefined) return this.resolvedNode;
+    const override = process.env.SANDBOX_NODE;
+    const candidates = override ? [override] : [process.execPath, 'node'];
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      const r = spawnSync(candidate, ['--version'], { timeout: 3000, env: sandboxEnv() });
+      if (!r.error && r.status === 0) {
+        this.resolvedNode = candidate;
+        return candidate;
+      }
+    }
+    this.resolvedNode = null;
+    return null;
+  }
+
+  /** 探测 shell（Windows 用 COMSPEC/cmd，POSIX 用 sh） */
+  private detectShell(): string | null {
+    if (process.platform === 'win32') {
+      const cmd = process.env.COMSPEC || 'cmd.exe';
+      return spawnSync(cmd, ['/c', 'echo ok'], { timeout: 3000, env: sandboxEnv() }).error ? null : cmd;
+    }
+    const sh = '/bin/sh';
+    return spawnSync(sh, ['-c', 'echo ok'], { timeout: 3000, env: sandboxEnv() }).error ? null : sh;
   }
 
   list(projectId: string) {
@@ -109,12 +158,13 @@ export class ExperimentsService {
     return this.toDto(row);
   }
 
-  /** 保存实验行并在临时目录中执行 python3 */
+  /** 保存实验行并在临时目录中执行（python / node / shell） */
   async run(input: unknown) {
     const parsed = this.parse(runSchema, input);
     const project = db.select().from(projects).where(eq(projects.id, parsed.projectId)).get();
     if (!project) throw new NotFoundException('项目不存在');
 
+    const runtime: SandboxRuntime = parsed.runtime ?? inferRuntime(parsed.code);
     const now = Date.now();
     const row = {
       id: randomUUID(),
@@ -122,6 +172,7 @@ export class ExperimentsService {
       documentId: parsed.documentId || null,
       goal: parsed.goal || '',
       code: parsed.code,
+      runtime,
       stdout: '',
       stderr: '',
       stdoutTruncated: 0,
@@ -134,17 +185,18 @@ export class ExperimentsService {
       updatedAt: now,
     };
 
-    // 无可用 Python：落一条 error 行，友好降级而非 500
-    const pythonPath = this.detectPython();
-    if (!pythonPath) {
+    // 解释器缺失：落一条 error 行，友好降级而非 500
+    const exe =
+      runtime === 'python' ? this.detectPython() : runtime === 'node' ? this.detectNode() : this.detectShell();
+    if (!exe) {
       row.status = 'error';
-      row.stderr = NO_PYTHON_MESSAGE;
+      row.stderr = runtime === 'python' ? NO_PYTHON_MESSAGE : runtime === 'node' ? NO_NODE_MESSAGE : '本机未检测到可用 shell。';
       db.insert(experiments).values(row).run();
       const dto = this.get(row.id);
       return { ...dto, memoryMonitored: false };
     }
 
-    const result = await this.executePython(parsed.code, pythonPath);
+    const result = await this.executeCode(parsed.code, runtime, exe);
     row.stdout = result.stdout;
     row.stderr = result.stderr;
     row.stdoutTruncated = result.stdoutTruncated ? 1 : 0;
@@ -186,7 +238,7 @@ export class ExperimentsService {
     return r.data;
   }
 
-  private async executePython(code: string, pythonPath: string): Promise<{
+  private async executeCode(code: string, runtime: SandboxRuntime, exe: string): Promise<{
     stdout: string;
     stderr: string;
     stdoutTruncated: boolean;
@@ -197,7 +249,13 @@ export class ExperimentsService {
     memoryMonitored: boolean;
   }> {
     const workDir = mkdtempSync(path.join(tmpdir(), 'sciflow-exp-'));
-    writeFileSync(path.join(workDir, 'main.py'), code, 'utf-8');
+    // 文件名与启动参数按运行时区分：python 读写 main.py；node 用 .cjs（避免被当 ESM）；
+    // shell 在 Windows 必须是 .bat（cmd /c 不执行 .sh），POSIX 用 .sh。
+    const isWin = process.platform === 'win32';
+    const fileName =
+      runtime === 'python' ? 'main.py' : runtime === 'node' ? 'main.cjs' : isWin ? 'main.bat' : 'main.sh';
+    writeFileSync(path.join(workDir, fileName), code, 'utf-8');
+    const args = runtime === 'shell' ? (isWin ? ['/c', fileName] : ['-c', fileName]) : [fileName];
     const started = Date.now();
     let status: 'ok' | 'error' | 'timeout' = 'ok';
     let memoryKilled = false;
@@ -205,7 +263,7 @@ export class ExperimentsService {
     let memTimer: NodeJS.Timeout | null = null;
 
     try {
-      const child = spawn(pythonPath, ['main.py'], {
+      const child = spawn(exe, args, {
         cwd: workDir,
         env: sandboxEnv(),
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -362,6 +420,7 @@ export class ExperimentsService {
       documentId: row.documentId,
       goal: row.goal ?? '',
       code: row.code,
+      runtime: (row.runtime || 'python') as SandboxRuntime,
       stdout: row.stdout ?? '',
       stderr: row.stderr ?? '',
       stdoutTruncated: row.stdoutTruncated === 1,

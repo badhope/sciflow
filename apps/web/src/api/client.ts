@@ -14,6 +14,7 @@ import { platform } from './platform';
 import { agent } from './agent';
 import { programs } from './programs';
 import { researchCycles } from './research-cycles';
+import { longform } from './longform';
 
 export const api = {
   ...writing,
@@ -22,5 +23,6 @@ export const api = {
   agent,
   programs,
   researchCycles,
+  longform,
 };
 export { streamChat, getToken, setToken } from './core';

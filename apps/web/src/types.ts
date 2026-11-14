@@ -774,6 +774,8 @@ export interface Experiment {
   documentId: string | null;
   goal: string;
   code: string;
+  /** 运行时：python（默认）| node | shell */
+  runtime?: 'python' | 'node' | 'shell';
   stdout: string;
   stderr: string;
   stdoutTruncated: boolean;

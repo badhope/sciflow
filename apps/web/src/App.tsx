@@ -21,6 +21,7 @@ import { useHotkeys } from './lib/hotkeys';
 import { Button, Input, Modal, Spinner, ErrorBox, ToastViewport, ConfirmDialog, downloadText, type ToastItem, type ToastKind } from './components/ui';
 // 路由级代码分割：所有页面懒加载（首屏只加载当前视图，大厂 SPA 标准）
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const LongformPage = lazy(() => import('./pages/LongformPage').then((m) => ({ default: m.LongformPage })));
 const ResearchProgramsPage = lazy(() => import('./pages/ResearchProgramsPage').then((m) => ({ default: m.ResearchProgramsPage })));
 const WritingPage = lazy(() => import('./pages/WritingPage').then((m) => ({ default: m.WritingPage })));
 const LiteraturePage = lazy(() => import('./pages/LiteraturePage').then((m) => ({ default: m.LiteraturePage })));
@@ -56,6 +57,7 @@ export type View =
   | 'dashboard'
   | 'programs'
   | 'writing'
+  | 'longform'
   | 'literature'
   | 'experiments'
   | 'pipeline'
@@ -69,7 +71,7 @@ export type View =
 /** 平台修饰键显示文案（Windows 上不显示 ⌘） */
 const MOD_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 
-const VIEW_KEYS: readonly View[] = ['workspace', 'dashboard', 'programs', 'writing', 'literature', 'experiments', 'pipeline', 'quality', 'submission', 'knowledge', 'memory', 'settings'];
+const VIEW_KEYS: readonly View[] = ['workspace', 'dashboard', 'programs', 'writing', 'longform', 'literature', 'experiments', 'pipeline', 'quality', 'submission', 'knowledge', 'memory', 'settings'];
 
 /** 功能导航分组（大厂式：按工作流分组，设置独立收纳到底部） */
 const VIEW_LABELS: Record<View, string> = {
@@ -77,6 +79,7 @@ const VIEW_LABELS: Record<View, string> = {
   dashboard: '项目总览',
   programs: '研究计划',
   writing: '论文写作',
+  longform: '长篇写作',
   literature: '文献调研',
   experiments: '实验记录',
   knowledge: '知识库',
@@ -122,6 +125,7 @@ const NAV_GROUPS: { label: string; hint: string; defaultCollapsed?: boolean; ite
     items: [
       { key: 'pipeline', label: VIEW_LABELS.pipeline, icon: Workflow },
       { key: 'writing', label: VIEW_LABELS.writing, icon: BookOpen },
+      { key: 'longform', label: VIEW_LABELS.longform, icon: BookOpen },
       { key: 'quality', label: VIEW_LABELS.quality, icon: Gauge },
     ],
   },
@@ -143,7 +147,7 @@ const NAV_GROUPS: { label: string; hint: string; defaultCollapsed?: boolean; ite
 const VIEW_STAGE: Record<View, number> = {
   workspace: 0, dashboard: 0, programs: 0,
   literature: 1, knowledge: 1, experiments: 1,
-  pipeline: 2, writing: 2, quality: 2,
+  pipeline: 2, writing: 2, longform: 2, quality: 2,
   submission: 3, memory: 3,
   settings: -1,
 };
@@ -183,6 +187,8 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
     project ? <PageErrorBoundary pageName="研究计划"><SuspensePage name="研究计划"><ResearchProgramsPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null,
   writing: ({ project, initialDocId }) =>
     project ? <PageErrorBoundary pageName="论文写作"><SuspensePage name="论文写作"><WritingPage key={project.id} project={project} initialDocId={initialDocId} /></SuspensePage></PageErrorBoundary> : null,
+  longform: ({ project }) =>
+    project ? <PageErrorBoundary pageName="长篇写作"><SuspensePage name="长篇写作"><LongformPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null,
   literature: ({ project }) => (project ? <PageErrorBoundary pageName="文献调研"><SuspensePage name="文献调研"><LiteraturePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
   experiments: ({ project }) => (project ? <PageErrorBoundary pageName="实验记录"><SuspensePage name="实验记录"><ExperimentsPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
   knowledge: ({ project }) => (project ? <PageErrorBoundary pageName="知识库"><SuspensePage name="知识库"><KnowledgePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),

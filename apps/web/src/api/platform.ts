@@ -194,7 +194,7 @@ export const platform = {
       request<any>(`/api/mcp/external/${id}/call`, { method: 'POST', body: JSON.stringify({ name, arguments: args }) }),
   },
   experiments: {
-    run: (body: { projectId: string; goal?: string; code: string; documentId?: string | null }) =>
+    run: (body: { projectId: string; goal?: string; code: string; documentId?: string | null; runtime?: 'python' | 'node' | 'shell' }) =>
       request<Experiment>('/api/experiments/run', { method: 'POST', body: JSON.stringify(body) }),
     list: (projectId: string) => request<Experiment[]>(`/api/experiments?projectId=${projectId}`),
     /** 按文档关联的实验（updatedAt 倒序；接口未就绪时前端 catch 降级为空态） */
