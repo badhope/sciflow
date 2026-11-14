@@ -71,7 +71,7 @@ docker compose -f docker-compose.prod.yml up --build
 
 | 检查项 | 命令 | 结果 |
 |---|---|---|
-| 服务端单测/集成 | `pnpm --filter @sciflow/server test` | 86 文件，670 项 |
+| 服务端单测/集成 | `pnpm --filter @sciflow/server test` | 87 文件，676 项 |
 | 前端单测 | `pnpm --filter @sciflow/web test` | 29 文件，201 项 |
 | 桌面端单测 | `pnpm --filter @sciflow/desktop test` | 1 文件，5 项 |
 | 类型 / 构建 | `pnpm -r typecheck` · `pnpm -r build` | 通过 |
@@ -79,6 +79,8 @@ docker compose -f docker-compose.prod.yml up --build
 | 浏览器 UI 巡检 | `npx playwright test e2e/ui-sweep.spec.ts` | 4 项通过 |
 | 设置页交互 | `npx playwright test e2e/settings-interaction.spec.ts` | 2 项通过 |
 | 长篇写作 E2E | `npx playwright test e2e/longform.spec.ts` | 1 项通过 |
+| 全功能 API 覆盖（24 模块） | `pnpm test:api` | 79/79 通过 |
+| 截图自动化 | `pnpm capture:ui` | 13 浅色 + 3 深色，0 页面错误 |
 | AI 权限档 | `pnpm --filter @sciflow/server test -- agent-policy` | 7 项通过 |
 | 真实模型稿件产出 | pipeline API，2026-11-13 | 20 篇文献、10,834 字、18 锚点、0 幽灵、客观 97 |
 | 真实模型研究循环 | cycle `50a629be` | supported/90，5 条 verified 证据 |

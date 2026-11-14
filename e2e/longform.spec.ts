@@ -29,4 +29,8 @@ test('长篇写作：建书 → 生成计划 → 写一章 → 章节出现', as
   // 写一章
   await page.getByRole('button', { name: '写下一章' }).click();
   await expect(page.getByText(/已写/).first()).toBeVisible({ timeout: 90_000 });
+
+  // 一致性检查：按钮真实接通后端并给出评分
+  await page.getByRole('button', { name: '一致性检查' }).click();
+  await expect(page.getByText(/评分 \d+/).first()).toBeVisible({ timeout: 30_000 });
 });

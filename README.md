@@ -71,7 +71,7 @@ Every number below comes from a command run on the current tree (2026-11-13).
 
 | Check | Command | Result |
 |---|---|---|
-| Server unit/integration | `pnpm --filter @sciflow/server test` | 86 files, 670 tests |
+| Server unit/integration | `pnpm --filter @sciflow/server test` | 87 files, 676 tests |
 | Web unit | `pnpm --filter @sciflow/web test` | 29 files, 201 tests |
 | Desktop unit | `pnpm --filter @sciflow/desktop test` | 1 file, 5 tests |
 | Types / build | `pnpm -r typecheck` · `pnpm -r build` | clean |
@@ -79,6 +79,8 @@ Every number below comes from a command run on the current tree (2026-11-13).
 | Browser UI sweep | `npx playwright test e2e/ui-sweep.spec.ts` | 4 passed (incl. long-form page) |
 | Settings interaction | `npx playwright test e2e/settings-interaction.spec.ts` | 2 passed |
 | Long-form E2E | `npx playwright test e2e/longform.spec.ts` | 1 passed |
+| API coverage (24 modules) | `pnpm test:api` | 79/79 passed |
+| Screenshot sweep | `pnpm capture:ui` | 13 light + 3 dark, 0 page errors |
 | AI access policy | `pnpm --filter @sciflow/server test -- agent-policy` | 7 passed |
 | Real-model manuscript run | pipeline API, 2026-11-13 | 20 refs, 10,834 chars, 18 anchors, 0 ghost, objective 97 |
 | Real-model research loop | cycle `50a629be` | supported/90, 5 verified evidence items |

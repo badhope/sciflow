@@ -1,6 +1,6 @@
 {
   "name": "sciflow",
-  "version": "1.16.2",
+  "version": "1.16.3",
   "private": true,
   "description": "SciFlow - 本地优先的自主科研平台：多智能体研究循环（人工或 AI 专家审批）+ 确定性质量门 + 引用三级可追溯 + 可复现稿件流水线",
   "scripts": {
@@ -21,7 +21,9 @@
     "icons": "node scripts/generate-icons.mjs",
     "backup": "node scripts/backup-db.mjs",
     "doctor": "node scripts/doctor.mjs",
-    "verify:jwt": "node scripts/verify-jwt-access.mjs"
+    "verify:jwt": "node scripts/verify-jwt-access.mjs",
+    "test:api": "node scripts/api-coverage.mjs",
+    "capture:ui": "node scripts/capture-ui.mjs"
   },
   "engines": {
     "node": ">=20"

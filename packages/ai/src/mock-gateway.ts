@@ -138,6 +138,49 @@ const ROUTE_TABLE: RouteRule[] = [
     matches: (p) => p.includes('把给定章节正文压成 1-2 句前情摘要'),
     respond: () => '主角在港口档案室找到被篡改的记录，发现线索指向地下仓库，但联系人未出现。',
   },
+  // 0.8) 研究设计诊断（结构化）
+  {
+    matches: (p) => p.includes('资深科研导师') && p.includes('noveltyScore'),
+    respond: () =>
+      j({
+        noveltyScore: 72,
+        noveltyFeedback: '与现有工作相比有一定差异化，但需要更明确地界定创新边界与对照基线。',
+        feasibilityScore: 80,
+        feasibilityFeedback: '数据可得，算力需求可控；建议先用小规模数据验证再扩展。',
+        methods: ['对照实验设计（含消融）', '跨数据集外部验证'],
+        risks: ['样本量不足导致方差偏大', '基线选择不当削弱说服力'],
+        nextSteps: ['补齐近三年相关工作', '固定随机种子并报告多次重复'],
+      }),
+  },
+  // 0.9) 多文献横向对比（结构化）
+  {
+    matches: (p) => p.includes('科研综述助手') && p.includes('"rows"'),
+    respond: (p) => {
+      const titles = [...p.matchAll(/^\s*\d+\.\s*(.+)$/gm)].map((m) => m[1].trim()).slice(0, 5);
+      const rows = (titles.length ? titles : ['论文 A', '论文 B']).map((t) => ({
+        paper: t.slice(0, 80),
+        研究问题: '问题陈述（mock）',
+        方法: '方法概述（mock）',
+        主要结论: '结论概述（mock）',
+        局限: '局限（mock）',
+      }));
+      return j({ summary: '这些工作共享同一研究主线，分歧主要在评估口径与数据规模。', rows });
+    },
+  },
+  // 0.95) 多角色模拟同行评审（结构化）
+  {
+    matches: (p) => p.includes('三位同行评审专家') && p.includes('reviewers'),
+    respond: () =>
+      j({
+        reviewers: [
+          { role: '新颖性审稿人', score: 72, strengths: ['问题定位清晰'], concerns: ['创新点需强化'], suggestion: '补充与最新工作的对比' },
+          { role: '方法学审稿人', score: 68, strengths: ['实验流程完整'], concerns: ['缺少消融'], suggestion: '补充消融实验与置信区间' },
+          { role: '写作审稿人', score: 80, strengths: ['结构清楚'], concerns: ['图表说明偏简'], suggestion: '完善图表标注' },
+        ],
+        verdict: 'major_revision',
+        overall: '选题有价值，需补充方法与消融证据后再审。',
+      }),
+  },
   // 1) Planner 研究计划
   { matches: (p) => p.includes('科研规划专家') && p.includes('researchQuestions'), respond: () => j({ objective: '围绕给定主题完成一篇系统性综述，覆盖方法演进、代表工作与应用前景。', researchQuestions: ['该主题的核心方法演进脉络是什么？', '代表性模型/工作有哪些共性与差异？', '在目标场景下的应用价值与局限如何？'], searchStrategy: { keywords: ['graph neural network', '图神经网络', '消息传递', 'node classification'], minPapers: 8, depth: 'overview' }, draftingPlan: { sections: ['引言', '相关工作', '方法', '结果与讨论', '结论'], wordCount: 5000 }, risks: ['公开文献时效性不足', '跨领域术语口径差异'] }) },
   // 1.5) F2 反共识大纲变体（必须在大纲规则之前匹配：prompt 同样包含「设计论文大纲」与 "sections"）
