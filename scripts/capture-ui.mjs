@@ -40,6 +40,8 @@ const PAGES = [
   { name: 'pipeline', hash: '#/pipeline', expect: /流水线/ },
   { name: 'writing', hash: '#/writing', expect: /写作|正文|章节/ },
   { name: 'longform', hash: '#/longform', expect: /长篇写作/ },
+  { name: 'websandbox', hash: '#/websandbox', expect: /Web 项目沙箱/ },
+  { name: 'browser', hash: '#/browser', expect: /内置浏览器/ },
   { name: 'quality', hash: '#/quality', expect: /质量/ },
   { name: 'submission', hash: '#/submission', expect: /投稿|期刊/ },
   { name: 'memory', hash: '#/memory', expect: /记忆/ },

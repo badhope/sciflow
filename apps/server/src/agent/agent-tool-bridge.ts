@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { envInt } from '../common/env';
 import { profileAllowsTool, resolveAgentToolProfile } from './agent-tool-profiles';
 import { AgentPolicyService } from './agent-policy.service';
+import { redactSensitive, shouldRedactForMode } from '../common/redaction';
 import type { AuthPayload } from '../auth/auth.service';
 
 /**
@@ -284,6 +285,11 @@ export class AgentToolBridge {
           timer.unref?.();
         }),
       ]);
+      // strict 档：返回值整体脱敏（含密钥/路径字段连回答都不给）
+      if (this.policy && shouldRedactForMode(this.policy.mode())) {
+        if (result && typeof result === 'object') result = redactSensitive(result);
+        else if (typeof result === 'string') result = redactSensitive(result);
+      }
       const r = result as { isError?: boolean; content?: { text?: string }[] };
       if (r?.isError) {
         ok = false;

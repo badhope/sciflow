@@ -20,6 +20,8 @@
 | **Deterministic quality gate** | Seven dimensions scored by rules with a stable fingerprint — same text, same score. The gate is the acceptance criterion; the LLM score is reference only. Below threshold triggers targeted revision, not a reroll. |
 | **Citations you can trace** | Every `[n]` anchor resolves to a citation row and then to a reference row. Ghost anchors, orphan entries, broken numbering and duplicate DOIs are reported by number. An empty reference pool forbids citation markers outright. |
 | **Evidence, not prose** | Claims are stored with stance, strength and verbatim quotes from experiment stdout. The Critic cannot mark `supported` without a matching `supports` evidence item. |
+| **Web project sandbox** | Create a project in an isolated directory, `npm install`, build, and preview it on loopback. Two built-in templates (zero-dependency static, React + Vite); logs and status per step; one-click run. |
+| **Built-in browser** | Real Chromium on the server: navigate any site, read visible text, capture screenshots, list interactive elements, click and fill. What an iframe cannot do (most sites forbid embedding). |
 | **Long-form writing** | Book → volume → chapter, generated one chapter at a time. Each chapter is stored independently (never overwritten), failures retry, and cross-chapter continuity rides on compressed summaries — so length is not bounded by the context window. |
 | **Manuscript pipeline** | Topic validation → literature survey → outline gate → section drafting → quality gate → polish → citation formatting. Checkpoints after every step; restart-safe. |
 | **Grounded retrieval** | SQLite FTS5 + sqlite-vec, RRF fusion and MMR; OpenAlex / Crossref / arXiv search with relevance gating and TTL cache. Literature hits enter the research loop as background, never as fabricated citations. |
@@ -71,7 +73,7 @@ Every number below comes from a command run on the current tree (2026-11-13).
 
 | Check | Command | Result |
 |---|---|---|
-| Server unit/integration | `pnpm --filter @sciflow/server test` | 87 files, 676 tests |
+| Server unit/integration | `pnpm --filter @sciflow/server test` | 88 files, 683 tests |
 | Web unit | `pnpm --filter @sciflow/web test` | 29 files, 201 tests |
 | Desktop unit | `pnpm --filter @sciflow/desktop test` | 1 file, 5 tests |
 | Types / build | `pnpm -r typecheck` · `pnpm -r build` | clean |
@@ -79,8 +81,8 @@ Every number below comes from a command run on the current tree (2026-11-13).
 | Browser UI sweep | `npx playwright test e2e/ui-sweep.spec.ts` | 4 passed (incl. long-form page) |
 | Settings interaction | `npx playwright test e2e/settings-interaction.spec.ts` | 2 passed |
 | Long-form E2E | `npx playwright test e2e/longform.spec.ts` | 1 passed |
-| API coverage (24 modules) | `pnpm test:api` | 79/79 passed |
-| Screenshot sweep | `pnpm capture:ui` | 13 light + 3 dark, 0 page errors |
+| API coverage (26 modules) | `pnpm test:api` | 90/90 passed |
+| Screenshot sweep | `pnpm capture:ui` | 15 light + 3 dark, 0 page errors |
 | AI access policy | `pnpm --filter @sciflow/server test -- agent-policy` | 7 passed |
 | Real-model manuscript run | pipeline API, 2026-11-13 | 20 refs, 10,834 chars, 18 anchors, 0 ghost, objective 97 |
 | Real-model research loop | cycle `50a629be` | supported/90, 5 verified evidence items |

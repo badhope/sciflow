@@ -47,15 +47,36 @@ export function guessChineseNames(text: string, known: Set<string> = new Set()):
   const out = new Set<string>();
   for (let i = 0; i < s.length; i++) {
     if (!CN_SURNAMES.has(s[i])) continue;
-    // 2 字候选：姓氏 + 1 字，最常见的姓名长度
     const two = s.slice(i, i + 2);
-    if (two.length === 2 && !CN_STOP.has(two) && !CN_FALSE_POSITIVES.has(two)) out.add(two);
-    // 3 字候选只在「整串就是已登记实体」时采纳：否则「陈默走」「陈默打」都会被当成人名
+    if (two.length !== 2) continue;
+    if (CN_STOP.has(two) || CN_FALSE_POSITIVES.has(two)) continue;
+    // 已登记实体直接收（不受下面的启发式限制）
+    if (known.has(two)) {
+      out.add(two);
+      continue;
+    }
+    // 未登记候选：满足任一才收
+    //  a) 第二字是常见人名用字；
+    //  b) 与某个已登记实体同姓同长度（改名检测的关键场景：陈默 → 陈墨，墨不在白名单里）。
+    // 其余一律丢弃：否则「白墙/钟表/史状」这类普通词会被当成人名，几十条噪音会埋掉真问题。
+    const sameSurnameEntity = [...known].some((k) => k.length === 2 && k[0] === two[0] && k !== two);
+    if (!CN_GIVEN_CHARS.has(two[1]) && !sameSurnameEntity) continue;
+    out.add(two);
+    // 3 字候选只在整串是已登记实体时采纳（避免「陈默走」）
     const three = s.slice(i, i + 3);
     if (three.length === 3 && known.has(three)) out.add(three);
   }
   return [...out];
 }
+
+/**
+ * 常见人名用字（第二字白名单）。
+ * 不做这层限制时，「白墙」「钟表」「史状」「钟而」都会被识别成人名，
+ * 一本书能刷出几十条误报，把真正的问题埋掉。
+ */
+const CN_GIVEN_CHARS = new Set(
+  ('伟芳娜秀英敏静丽强磊军洋勇艳杰娟涛明超秀霞平刚桂香文华建国志强晓东海燕鹏飞宇浩然子轩雨欣佳怡梓涵一诺思远若曦晨阳雨泽沐辰逸辰清越知微怀瑾致远思齐南星北辰衡之').split(''),
+);
 
 export interface ConsistencyChapter {
   seq: number;
@@ -137,7 +158,8 @@ export function checkConsistency(chapters: ConsistencyChapter[], knownEntities: 
 
   const warnings = deduped.filter((i) => i.severity === 'warning').length;
   const infos = deduped.length - warnings;
-  const score = Math.max(0, 100 - warnings * 8 - infos * 2);
+  // info 只是「可能相关」的提示，不参与扣分；扣分只来自确定性错误（漏写/改名）
+  const score = Math.max(0, 100 - warnings * 8);
 
   return {
     chapters: chapters.length,

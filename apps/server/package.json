@@ -51,6 +51,7 @@
     "p-retry": "^9.0.0",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",
+    "playwright": "1.64.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "sqlite-vec": "^0.1.7-alpha.2",

@@ -70,6 +70,7 @@ async function call(module, name, method, p, body, check = () => true, opts = {}
       method,
       headers: { 'Content-Type': 'application/json', 'X-Sciflow-Actor': 'coverage' },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: opts.timeout ? AbortSignal.timeout(opts.timeout) : undefined,
     });
     status = res.status;
     const text = await res.text();
@@ -160,6 +161,25 @@ async function main() {
   await call('longform', 'write one chapter', 'POST', `/api/longform/books/${bookId}/write-next`, {}, (d) => d?.chapter?.seq === 1);
   await call('longform', 'consistency', 'GET', `/api/longform/books/${bookId}/consistency`, undefined, (d) => typeof d?.score === 'number' && Array.isArray(d?.issues));
   await call('longform', 'compile', 'GET', `/api/longform/books/${bookId}/compile`, undefined, (d) => typeof d?.markdown === 'string' && d.chapters >= 1);
+
+  // ── Web 项目沙箱（真实 npm 构建 + 预览） ──────────────
+  await call('web-sandbox', 'templates', 'GET', '/api/web-projects/templates', undefined, (d) => Array.isArray(d) && d.length >= 1);
+  const wp = await call('web-sandbox', 'create', 'POST', '/api/web-projects', { projectId, name: `cov-web-${Date.now()}`, template: 'static' }, (d) => !!d?.id);
+  const wpId = wp.data?.id || '';
+  await call('web-sandbox', 'list', 'GET', `/api/web-projects?projectId=${projectId}`, undefined, (d) => Array.isArray(d));
+  await call('web-sandbox', 'run-all', 'POST', `/api/web-projects/${wpId}/run-all`, undefined, (d) => d?.ok === true && typeof d?.url === 'string');
+  await call('web-sandbox', 'stop', 'POST', `/api/web-projects/${wpId}/stop`, undefined, (d) => d?.stopped === true);
+
+  // ── 内置浏览器（真实 Chromium） ──────────────────────
+  const bs = await call('browser', 'open', 'POST', '/api/browser/sessions', { url: 'https://example.com' }, (d) => !!d?.id, { timeout: 60000 });
+  if (bs?.data?.id) {
+    const bid = bs.data.id;
+    await call('browser', 'text', 'GET', `/api/browser/sessions/${bid}/text`, undefined, (d) => typeof d?.text === 'string' && d.text.length > 0);
+    await call('browser', 'screenshot', 'GET', `/api/browser/sessions/${bid}/screenshot`, undefined, (d) => String(d?.dataUrl || '').startsWith('data:image/png'));
+    await call('browser', 'elements', 'GET', `/api/browser/sessions/${bid}/elements`, undefined, (d) => Array.isArray(d?.elements));
+    await call('browser', 'close', 'DELETE', `/api/browser/sessions/${bid}`, undefined, (d) => d?.ok === true);
+  }
+  await call('browser', 'rejects loopback', 'POST', '/api/browser/sessions', { url: 'http://127.0.0.1:1/' }, () => true, { expectStatus: 400 });
 
   // ── 科研对象 / 研究循环 ──────────────────────────────
   const prog = await call('programs', 'create program', 'POST', '/api/programs', { projectId, title: '覆盖测试计划', goal: '验证', autonomyLevel: 'L2' }, (d) => !!d?.id);
