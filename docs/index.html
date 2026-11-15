@@ -255,11 +255,11 @@ footer a:hover{color:var(--brand2)}
       <span class="badge">🔌 <b>三协议接入</b> 自配模型 Key</span>
     </div>
     <div class="cta-row">
-      <a class="btn btn-primary" href="#quickstart">快速开始</a>
+      <a class="btn btn-primary" href="https://github.com/Morningstar202604/sciflow/releases/latest/download/SciFlow-Setup-x64.exe" rel="noopener">下载 Windows 安装包</a>
       <a class="btn btn-ghost" href="#quickstart">快速开始</a>
       <a class="btn btn-ghost" href="#downloads">全部下载</a>
     </div>
-    <p class="dl-note">当前版本 <b>v1.16.8</b> · 源码运行与 Docker 部署可直接使用；Windows 安装包由 CI 的 <code>desktop-installer</code> workflow 构建 · <a href="https://github.com/Morningstar202604/sciflow/releases" rel="noopener">发布记录</a></p>
+    <p class="dl-note">当前版本 <b>v1.16.8</b> · Windows x64 安装包（约 574 MB，含 Node 运行时与后端，装完即用）· <a href="https://github.com/Morningstar202604/sciflow/releases" rel="noopener">全部发布记录</a></p>
     <figure class="hero-shot">
       <img src="screenshots/workspace.png" alt="SciFlow 工作台：研究项目、文献预览与 AI 对话" width="1600" height="1000">
       <figcaption>真实运行的界面：工作台、项目驾驶舱与 AI 对话</figcaption>
@@ -454,17 +454,16 @@ footer a:hover{color:var(--brand2)}
 <section id="downloads">
   <div class="wrap">
     <div class="sec-head">
-      <h2 class="sec-title">安装与<span class="grad-text">运行</span></h2>
-      <p class="sec-sub">三种方式任选：源码运行（最直接）、Docker（部署省事）、Windows 安装包（由 CI 构建，自带运行时，不用配环境）。</p>
+      <h2 class="sec-title">下载<span class="grad-text">安装</span></h2>
+      <p class="sec-sub">推荐用安装包：自带 Node 运行时与后端服务，不需要配置开发环境。想改代码或跑在服务器上，再用下面的源码方式。</p>
     </div>
     <div class="code-grid">
       <div>
-        <div class="step-label"><span class="step-num">A</span>Windows 安装包（CI 构建）</div>
-        <pre class="code"><span class="c"># 安装包由 desktop-installer workflow 构建，产物见该 workflow 的 Artifacts</span>
-<span class="c"># 也可以在本机自行打包（需能访问 GitHub 下载 NSIS 工具链）</span>
-pnpm install
-pnpm --filter @sciflow/desktop dist:win
-<span class="c"># 产物：apps/desktop/release/SciFlow Setup *.exe</span>
+        <div class="step-label"><span class="step-num">A</span>Windows 安装包（推荐）</div>
+        <pre class="code"><span class="c"># 方式一：打开最新 Release 手动下载</span>
+<a href="https://github.com/Morningstar202604/sciflow/releases/latest" rel="noopener">github.com/Morningstar202604/sciflow/releases/latest</a>
+<span class="c"># 方式二：稳定直链（每次发版自动更新，无需找版本号）</span>
+<a href="https://github.com/Morningstar202604/sciflow/releases/latest/download/SciFlow-Setup-x64.exe" rel="noopener">releases/latest/download/SciFlow-Setup-x64.exe</a>
 <span class="c"># 装完从开始菜单启动，首次运行在「设置」里填模型 Key</span></pre>
       </div>
       <div>
