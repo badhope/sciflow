@@ -14,6 +14,8 @@ export interface AppSettings {
   ai: {
     baseUrl: string; model: string; fastModel: string; strongModel: string; configured: boolean; models: string[];
     protocol: string; contextWindow: number; maxOutput: number; toolCalling: boolean;
+    /** true = 未配置强模型，高难任务实际在用 fast（科研质量瓶颈的可观测信号） */
+    strongModelFallback: boolean;
   };
   env: { node: string; database: string; port: number };
   sources: { literature: string[] };

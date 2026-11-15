@@ -171,12 +171,39 @@ async function main() {
   await call('web-sandbox', 'stop', 'POST', `/api/web-projects/${wpId}/stop`, undefined, (d) => d?.stopped === true);
 
   // ── 内置浏览器（真实 Chromium） ──────────────────────
-  const bs = await call('browser', 'open', 'POST', '/api/browser/sessions', { url: 'https://example.com' }, (d) => !!d?.id, { timeout: 60000 });
+  // 基线用本机 Web 沙箱页面，而不是公网站点：公网页面结构会变（example.com 已无 h1），
+  // 验收断言的基线必须由我们自己控制，否则失败原因无法区分「功能坏了」和「站点改版了」。
+  const fixtureWp = await call('web-sandbox', 'create fixture', 'POST', '/api/web-projects', { projectId, name: `verify-fixture-${Date.now()}`, template: 'static' }, (d) => !!d?.id);
+  const fixtureRun = await call('web-sandbox', 'build fixture', 'POST', `/api/web-projects/${fixtureWp.data?.id}/run-all`, undefined, (d) => d?.ok === true);
+  // 文件读写：Agent 迭代页面的基础能力 + 路径穿越必须被拒
+  if (fixtureWp?.data?.id) {
+    const fid = fixtureWp.data.id;
+    await call('web-sandbox', 'list files', 'GET', `/api/web-projects/${fid}/files`, undefined, (d) => Array.isArray(d) && d.some((f) => f.path === 'index.html'));
+    await call('web-sandbox', 'read file', 'GET', `/api/web-projects/${fid}/file?path=index.html`, undefined, (d) => typeof d?.content === 'string' && d.content.includes('<html'));
+    await call('web-sandbox', 'write file', 'PUT', `/api/web-projects/${fid}/file`, { path: 'index.html', content: '<!doctype html><html><body><h1>覆盖测试</h1><button id="btn">ok</button></body></html>' }, (d) => d?.ok === true);
+    await call('web-sandbox', 'write escapes', 'PUT', `/api/web-projects/${fid}/file`, { path: '../evil.txt', content: 'x' }, () => true, { expectStatus: 400 });
+    await call('web-sandbox', 'write absolute', 'PUT', `/api/web-projects/${fid}/file`, { path: process.platform === 'win32' ? 'C:/Windows/temp/x.txt' : '/tmp/x.txt', content: 'x' }, () => true, { expectStatus: 400 });
+  }
+  const fixtureUrl = fixtureRun.data?.url || 'https://example.com';
+  const bs = await call('browser', 'open', 'POST', '/api/browser/sessions', { url: fixtureUrl }, (d) => !!d?.id, { timeout: 60000 });
   if (bs?.data?.id) {
     const bid = bs.data.id;
     await call('browser', 'text', 'GET', `/api/browser/sessions/${bid}/text`, undefined, (d) => typeof d?.text === 'string' && d.text.length > 0);
     await call('browser', 'screenshot', 'GET', `/api/browser/sessions/${bid}/screenshot`, undefined, (d) => String(d?.dataUrl || '').startsWith('data:image/png'));
     await call('browser', 'elements', 'GET', `/api/browser/sessions/${bid}/elements`, undefined, (d) => Array.isArray(d?.elements));
+    // 网页验收：正向（页面有 h1）+ 负向（不存在的元素必失败）
+    // 只验 exists：外部站点（example.com）可能因 CSP/字体产生 console error，
+    // no-console-error 断言应留给自家页面用，不能拿公网站点当基线。
+    await call('browser', 'verify pass', 'POST', `/api/browser/sessions/${bid}/verify`, { checks: [{ type: 'exists', selector: 'h1' }, { type: 'visible', selector: '#btn' }, { type: 'no-console-error' }] }, (d) => d?.allPassed === true && d?.total === 3);
+    await call('browser', 'verify fail', 'POST', `/api/browser/sessions/${bid}/verify`, { checks: [{ type: 'exists', selector: '#definitely-not-here' }] }, (d) => d?.allPassed === false && d?.failed === 1);
+    // 视觉回归：存基线 → 立刻比对应为 0 差异 → visual 断言通过 → 基线列表可见 → 清理
+    const baselineName = `api-coverage-${Date.now()}`;
+    await call('browser', 'save baseline', 'POST', `/api/browser/sessions/${bid}/baseline`, { name: baselineName, fullPage: true }, (d) => d?.ok === true && d?.width > 0 && d?.height > 0);
+    await call('browser', 'dup baseline', 'POST', `/api/browser/sessions/${bid}/visual-diff`, { name: baselineName, fullPage: true }, (d) => d?.ok === true && d?.diffPixels === 0 && d?.sizeMismatch === false);
+    await call('browser', 'visual assert', 'POST', `/api/browser/sessions/${bid}/verify`, { checks: [{ type: 'visual', baseline: baselineName }] }, (d) => d?.allPassed === true && d?.total === 1);
+    await call('browser', 'baselines list', 'GET', '/api/browser/baselines', undefined, (d) => Array.isArray(d) && d.some((b) => b.name === baselineName));
+    await call('browser', 'diff missing baseline', 'POST', `/api/browser/sessions/${bid}/visual-diff`, { name: 'no-such-baseline-xyz' }, () => true, { expectStatus: 404 });
+    await call('browser', 'delete baseline', 'DELETE', `/api/browser/baselines/${encodeURIComponent(baselineName)}`, undefined, (d) => d?.ok === true);
     await call('browser', 'close', 'DELETE', `/api/browser/sessions/${bid}`, undefined, (d) => d?.ok === true);
   }
   await call('browser', 'rejects loopback', 'POST', '/api/browser/sessions', { url: 'http://127.0.0.1:1/' }, () => true, { expectStatus: 400 });

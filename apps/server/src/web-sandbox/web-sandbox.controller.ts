@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query, Req } from '@nestjs/common';
 import { WebSandboxService } from './web-sandbox.service';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
@@ -47,6 +47,35 @@ export class WebSandboxController {
   install(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
     this.assertOwn(id, req.user);
     return this.sandbox.install(id);
+  }
+
+  /** 项目文件列表（不含 node_modules/dist） */
+  @Get(':id/files')
+  files(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.assertOwn(id, req.user);
+    return this.sandbox.listFiles(id);
+  }
+
+  /** 读单个文件（Agent 迭代页面时要先看现状） */
+  @Get(':id/file')
+  readFile(@Param('id') id: string, @Query('path') filePath: string, @Req() req: { user?: AuthPayload }) {
+    this.assertOwn(id, req.user);
+    return this.sandbox.readFile(id, filePath);
+  }
+
+  /** 写单个文件（覆盖或新建）；路径限定在项目目录内 */
+  @Put(':id/file')
+  writeFile(@Param('id') id: string, @Body() body: { path: string; content: string }, @Req() req: { user?: AuthPayload }) {
+    this.assertOwn(id, req.user);
+    if (!body?.path?.trim()) throw new BadRequestException('path 必填');
+    return this.sandbox.writeFile(id, body.path, String(body.content ?? ''));
+  }
+
+  /** 删除单个文件 */
+  @Delete(':id/file')
+  removeFile(@Param('id') id: string, @Query('path') filePath: string, @Req() req: { user?: AuthPayload }) {
+    this.assertOwn(id, req.user);
+    return this.sandbox.removeFile(id, filePath);
   }
 
   @Post(':id/build')

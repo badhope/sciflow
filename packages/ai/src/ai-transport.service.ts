@@ -173,10 +173,13 @@ export class AiTransportService {
   get config(): {
     baseUrl: string; model: string; fastModel: string; strongModel: string; configured: boolean; mock: boolean;
     protocol: ModelProtocol; contextWindow: number; maxOutput: number; toolCalling: boolean;
+    /** true = 未配置 strong 档，高难任务（PI/评审/长文起草）实际在用 fast 模型 */
+    strongModelFallback: boolean;
   } {
     return {
       baseUrl: this.baseUrl, model: this.fastModel, fastModel: this.fastModel, strongModel: this.strongModel, configured: this.configured, mock: this.mockConnectionActive,
       protocol: this.protocol, contextWindow: this.contextWindow, maxOutput: this.maxOutput, toolCalling: this.toolCalling,
+      strongModelFallback: !process.env.AI_MODEL_STRONG && this.strongModel === this.fastModel,
     };
   }
 
@@ -222,8 +225,16 @@ export class AiTransportService {
   //  transport helpers                                              //
   // ----------------------------------------------------------------- //
 
+  /** strong 档回落告警只打一次，避免每个请求刷日志 */
+  private strongFallbackWarned = false;
+
   protected resolveModel(opts: CompleteOptions): string {
     if (opts.modelName) return opts.modelName;
+    if (opts.model === 'strong' && this.strongModel === this.fastModel && !this.strongFallbackWarned) {
+      this.strongFallbackWarned = true;
+      // 这是「科研质量瓶颈」的可观测点：PI/评审本该用强模型，实际用了 fast。
+      console.warn(`[ai] 未配置 AI_MODEL_STRONG，高难任务（PI/评审/长文）将使用 ${this.fastModel}；建议在设置中指定强模型`);
+    }
     return opts.model === 'strong' ? this.strongModel : this.fastModel;
   }
 

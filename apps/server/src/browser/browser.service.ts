@@ -1,9 +1,11 @@
-import { Injectable, Logger, BadRequestException, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, OnModuleDestroy } from '@nestjs/common';
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { safeOutboundFetch } from '../common/safe-outbound';
 import { envInt } from '../common/env';
+import { DB_PATH } from '../db/database';
+import { comparePngs, readPng, type VisualDiff } from './visual-diff';
 
 /**
  * 内置浏览器：让应用（和 Agent）真的能打开网页、读内容、点元素、截图。
@@ -290,6 +292,117 @@ export class BrowserService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * 视觉基线目录：与数据库同目录（DATABASE_PATH 所在目录）下的 `browser-baselines/`。
+   *
+   * 为什么不存数据库 BLOB：PNG 每张几百 KB，放进 SQLite 会让 WAL 与备份体积随基线数量膨胀，
+   * 而基线本身是「可丢弃、可重建」的产物；放磁盘目录 + 库里只存元数据即可。
+   */
+  private baselineDir(): string {
+    const dir = path.join(path.dirname(DB_PATH), 'browser-baselines');
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  /** 基线文件名：只允许安全字符，避免路径穿越 */
+  private baselinePath(name: string): string {
+    const safe = String(name || '').trim().replace(/[^\w\u4e00-\u9fa5.-]/g, '_').slice(0, 80);
+    if (!safe) throw new BadRequestException('基线名称不能为空');
+    return path.join(this.baselineDir(), `${safe}.png`);
+  }
+
+  /** 保存当前页面截图为视觉基线（覆盖同名基线，等于「接受这次外观」） */
+  async saveBaseline(id: string, name: string, fullPage = false) {
+    const s = this.session(id);
+    const file = this.baselinePath(name);
+    const buf = await s.page.screenshot({ fullPage, type: 'png' });
+    const png = readPng(buf, '截图');
+    fs.writeFileSync(file, buf);
+    s.history.push({ action: 'save-baseline', target: name, at: Date.now(), ok: true });
+    return {
+      ok: true,
+      name: path.basename(file, '.png'),
+      url: s.page.url(),
+      width: png.width,
+      height: png.height,
+      bytes: buf.length,
+      savedAt: Date.now(),
+    };
+  }
+
+  listBaselines() {
+    const dir = this.baselineDir();
+    const out: { name: string; bytes: number; savedAt: number }[] = [];
+    for (const entry of fs.readdirSync(dir)) {
+      if (!entry.endsWith('.png')) continue;
+      try {
+        const st = fs.statSync(path.join(dir, entry));
+        out.push({ name: entry.slice(0, -4), bytes: st.size, savedAt: Math.round(st.mtimeMs) });
+      } catch {
+        /* 读不到就跳过 */
+      }
+    }
+    return out.sort((a, b) => b.savedAt - a.savedAt);
+  }
+
+  deleteBaseline(name: string) {
+    const file = this.baselinePath(name);
+    if (!fs.existsSync(file)) throw new NotFoundException(`基线不存在：${name}`);
+    fs.unlinkSync(file);
+    return { ok: true };
+  }
+
+  /**
+   * 视觉回归：当前页面截图 vs 已存基线，返回差异比例与差异图（data URL）。
+   *
+   * 阈值语义：maxDiffRatio 是**允许的差异像素占比**（默认 1%）。
+   * 完全没有宽容度会让任何抗锯齿差异都报红，过宽则掩盖真实改版；
+   * 尺寸不同直接判失败，因为固定视口下尺寸变化意味着布局结构变了。
+   */
+  async compareBaseline(
+    id: string,
+    name: string,
+    opts: { fullPage?: boolean; maxDiffRatio?: number; pixelThreshold?: number } = {},
+  ): Promise<VisualDiff & { name: string; url: string; baselineBytes: number; actualBytes: number; diffDataUrl?: string }> {
+    const s = this.session(id);
+    const r = await this.diffAgainstBaseline(s, name, opts);
+    s.history.push({
+      action: 'visual-diff',
+      target: `${r.name} ${(r.diffRatio * 100).toFixed(2)}%`,
+      at: Date.now(),
+      ok: r.ok,
+    });
+    return { ...r, url: s.page.url() };
+  }
+
+  /** 逐像素比对的具体实现：供独立接口与 verify 的 visual 断言共用 */
+  private async diffAgainstBaseline(
+    s: Session,
+    name: string,
+    opts: { fullPage?: boolean; maxDiffRatio?: number; pixelThreshold?: number } = {},
+  ) {
+    const file = this.baselinePath(name);
+    if (!fs.existsSync(file)) {
+      // 用 NotFoundException：基线缺失是「请求对象不存在」，不该变成 500
+      throw new NotFoundException(`基线不存在：${name}（先用「保存基线」生成）`);
+    }
+    const expectedBuf = fs.readFileSync(file);
+    const actualBuf = await s.page.screenshot({ fullPage: opts.fullPage ?? false, type: 'png' });
+    // 基线用视口截图（1280×800 固定尺寸）：fullPage 的高度随内容变化，
+    // 一旦页面比之前高/矮就会「尺寸不一致」，把真正的像素差异掩盖掉。
+    const result = comparePngs(expectedBuf, actualBuf, {
+      maxDiffRatio: opts.maxDiffRatio,
+      pixelThreshold: opts.pixelThreshold,
+    });
+    return {
+      ...result,
+      name: path.basename(file, '.png'),
+      baselineBytes: expectedBuf.length,
+      actualBytes: actualBuf.length,
+      diffDataUrl: result.diffPng ? `data:image/png;base64,${result.diffPng.toString('base64')}` : undefined,
+    };
+  }
+
   /** 列出可交互元素（供 Agent 决定下一步点什么） */
   async elements(id: string, limit = 40) {
     const s = this.session(id);
@@ -320,19 +433,44 @@ export class BrowserService implements OnModuleDestroy {
    * 为什么需要：能打开、能截图不等于「做对了」。Web 项目交付前必须能声明
    * 「标题是 X、按钮存在、点完出现 Y」，并由机器给出结论，而不是人眼看图。
    *
-   * 支持 5 种断言（够覆盖大部分验收）：
+   * 断言类型：
    *  - exists：选择器存在
    *  - text：页面（或指定选择器）包含文本
    *  - count：选择器命中数量等于期望
    *  - visible：选择器可见
    *  - value：输入框的值等于期望（可选 selector）
+   *  - request：指定请求被发出（可断言状态码/方法），用于验证「点按钮真的调了后端」
+   *  - no-console-error：本次会话内无新增 console error（最廉价的运行时健康断言）
+   *  - visual：与已保存基线逐像素比对，差异比例不超过阈值（防「改了别的页面没坏」）
    */
   async verify(
     id: string,
-    checks: { type: 'exists' | 'text' | 'count' | 'visible' | 'value'; selector?: string; expect?: string | number; label?: string }[],
+    checks: {
+      type: 'exists' | 'text' | 'count' | 'visible' | 'value' | 'request' | 'no-console-error' | 'visual';
+      selector?: string;
+      expect?: string | number;
+      label?: string;
+      /** request 断言：URL 子串（匹配已记录请求），可选期望状态码 */
+      urlIncludes?: string;
+      /** visual 断言：基线名称（等价于 selector） */
+      baseline?: string;
+      /** visual 断言：允许的差异比例，默认 0.01 */
+      maxDiffRatio?: number;
+    }[],
   ) {
     const s = this.session(id);
     const results: { label: string; type: string; ok: boolean; actual: string }[] = [];
+    // 网络断言与 console error 断言需要「从此刻起」的观测窗口：在这里挂监听，验完摘掉
+    const net: { url: string; method: string; status: number }[] = [];
+    const consoleErrors: string[] = [];
+    const onResponse = (res: import('playwright').Response) => {
+      net.push({ url: res.url(), method: res.request().method(), status: res.status() });
+    };
+    const onConsole = (msg: import('playwright').ConsoleMessage) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text().slice(0, 300));
+    };
+    s.page.on('response', onResponse);
+    s.page.on('console', onConsole);
     for (const c of checks) {
       const label = c.label || `${c.type}${c.selector ? ` ${c.selector}` : ''}`;
       let ok = false;
@@ -374,6 +512,37 @@ export class BrowserService implements OnModuleDestroy {
             actual = `${JSON.stringify(v)}（期望 ${JSON.stringify(c.expect)}）`;
             break;
           }
+          case 'request': {
+            // 给页面一点时间把请求发出去（点击类断言后常见）
+            if (!net.length) await s.page.waitForTimeout(400);
+            const want = c.urlIncludes ?? String(c.expect ?? '');
+            const hit = net.filter((r) => r.url.includes(want));
+            const expectStatus = c.expect !== undefined && typeof c.expect === 'number' ? c.expect : undefined;
+            const matched = expectStatus ? hit.filter((r) => r.status === expectStatus) : hit;
+            ok = matched.length > 0;
+            actual = ok
+              ? `${matched.length} 次命中（${matched[0].method} ${matched[0].status}）`
+              : `未命中；已记录 ${net.length} 条请求${hit.length ? `，其中 ${hit.length} 条 URL 匹配但状态码不符` : ''}`;
+            break;
+          }
+          case 'no-console-error': {
+            ok = consoleErrors.length === 0;
+            actual = ok ? '无 console error' : `${consoleErrors.length} 条：${consoleErrors[0]}`;
+            break;
+          }
+          case 'visual': {
+            const baseline = c.baseline || c.selector;
+            if (!baseline) throw new Error('visual 需要 baseline（基线名称）');
+            const d = await this.diffAgainstBaseline(s, baseline, {
+              fullPage: false,
+              maxDiffRatio: c.maxDiffRatio ?? (typeof c.expect === 'number' ? c.expect : undefined),
+            });
+            ok = d.ok;
+            actual = d.sizeMismatch
+              ? `尺寸不一致：基线 ${d.expected.width}×${d.expected.height}，当前 ${d.actual.width}×${d.actual.height}`
+              : `差异 ${(d.diffRatio * 100).toFixed(2)}%（${d.diffPixels}/${d.totalPixels} 像素，阈值 ${(d.threshold * 100).toFixed(2)}%）`;
+            break;
+          }
           default:
             throw new Error(`未知断言类型：${(c as { type: string }).type}`);
         }
@@ -383,6 +552,8 @@ export class BrowserService implements OnModuleDestroy {
       }
       results.push({ label, type: c.type, ok, actual });
     }
+    s.page.off('response', onResponse);
+    s.page.off('console', onConsole);
     const passed = results.filter((r) => r.ok).length;
     s.history.push({ action: 'verify', target: `${passed}/${results.length}`, at: Date.now(), ok: passed === results.length });
     return {

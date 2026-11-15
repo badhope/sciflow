@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![Version](https://img.shields.io/badge/version-1.15.3-black.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.16.7-black.svg)](CHANGELOG.md)
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -21,7 +21,7 @@
 | **Citations you can trace** | Every `[n]` anchor resolves to a citation row and then to a reference row. Ghost anchors, orphan entries, broken numbering and duplicate DOIs are reported by number. An empty reference pool forbids citation markers outright. |
 | **Evidence, not prose** | Claims are stored with stance, strength and verbatim quotes from experiment stdout. The Critic cannot mark `supported` without a matching `supports` evidence item. |
 | **Web project sandbox** | Create a project in an isolated directory, `npm install`, build, and preview it on loopback. Two built-in templates (zero-dependency static, React + Vite); logs and status per step; one-click run. |
-| **Built-in browser** | Real Chromium on the server: navigate any site, read visible text, capture screenshots, list interactive elements, click and fill, and **assert page expectations** (`exists` / `visible` / `count` / `text` / `value`) so a built page can be accepted or rejected by machine. |
+| **Built-in browser** | Real Chromium on the server: navigate any site, read visible text, capture screenshots, list interactive elements, click and fill, and **assert page expectations** (`exists` / `visible` / `count` / `text` / `value` / `request` / `no-console-error` / `visual`) so a built page can be accepted or rejected by machine. The `visual` check diffs the page against a saved baseline (pixelmatch) and reports the exact changed-pixel ratio plus a diff image, so restyling cannot silently break a page. |
 | **Long-form writing** | Book → volume → chapter, generated one chapter at a time. Each chapter is stored independently, a failed chapter retries once then the batch continues, and cross-chapter continuity rides on compressed summaries — so length is not bounded by the context window. A built-in consistency checker reports entity gaps and suspected renames deterministically. |
 | **Manuscript pipeline** | Topic validation → literature survey → outline gate → section drafting → quality gate → polish → citation formatting. Checkpoints after every step; restart-safe. |
 | **Grounded retrieval** | SQLite FTS5 + sqlite-vec, RRF fusion and MMR; OpenAlex / Crossref / arXiv search with relevance gating and TTL cache. Literature hits enter the research loop as background, never as fabricated citations. |
@@ -73,7 +73,7 @@ Every number below comes from a command run on the current tree (2026-11-13).
 
 | Check | Command | Result |
 |---|---|---|
-| Server unit/integration | `pnpm --filter @sciflow/server test` | 88 files, 687 tests |
+| Server unit/integration | `pnpm --filter @sciflow/server test` | 90 files, 700 tests |
 | Web unit | `pnpm --filter @sciflow/web test` | 29 files, 201 tests |
 | Desktop unit | `pnpm --filter @sciflow/desktop test` | 1 file, 5 tests |
 | Types / build | `pnpm -r typecheck` · `pnpm -r build` | clean |
@@ -81,7 +81,7 @@ Every number below comes from a command run on the current tree (2026-11-13).
 | Browser UI sweep | `npx playwright test e2e/ui-sweep.spec.ts` | 4 passed (incl. long-form page) |
 | Settings interaction | `npx playwright test e2e/settings-interaction.spec.ts` | 2 passed |
 | Long-form E2E | `npx playwright test e2e/longform.spec.ts` | 1 passed |
-| API coverage (26 modules) | `pnpm test:api` | 90/90 passed |
+| API coverage (27 modules) | `pnpm test:api` | 105/105 passed |
 | Screenshot sweep | `pnpm capture:ui` | 15 light + 3 dark, 0 page errors |
 | AI access policy | `pnpm --filter @sciflow/server test -- agent-policy` | 7 passed |
 | Real-model manuscript run | pipeline API, 2026-11-13 | 20 refs, 10,834 chars, 18 anchors, 0 ghost, objective 97 |
@@ -146,7 +146,7 @@ See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 
 ## Status
 
-Current release: **1.15.3**. The autonomous research loop and the manuscript pipeline are both real and covered by tests. Known limits: the quality gate is rule-based and intentionally conservative; autonomous runs need a capable model for the PI/Critic roles; the Python sandbox is local and is not a security boundary for hostile code.
+Current release: **1.16.7**. The autonomous research loop and the manuscript pipeline are both real and covered by tests. Known limits: the quality gate is rule-based and intentionally conservative; autonomous runs need a capable model for the PI/Critic roles; the Python sandbox is local and is not a security boundary for hostile code.
 
 ## License
 

@@ -87,53 +87,38 @@ node reproduction/publish-run.mjs \
 - 写入 manifest 的 `startedAt/endedAt`，驾驶舱显示真实运行时间；
 - `--dry-run` 只打印 payload，不发请求。
 
-## 三角色研究循环（规则驱动骨架）
+## 编排归位（不再由脚本编排）
 
-`run-cycle.mjs` 串联 PI / Experimenter / Critic：
+`run-cycle.mjs` / `run-econ-loop.mjs` 这两个**规则驱动编排脚本已删除**。
+多轮「问题 → 假设 → 协议 → 实验 → 评审 → 修订」现在由服务端 LangGraph 承担：
+
+- 图：`apps/server/src/research-cycle/research-cycle.graph.ts`（带回边与终止条件）
+- API：`POST /api/research-cycles/start`、`POST /api/research-cycles/:id/resume`、`GET /api/research-cycles/:id`
+- 角色：`apps/server/src/research-cycle/agents/{pi,experimenter,critic,expert}.agent.ts`（真实 LLM）
+- 门禁：L2 人工审批（`interrupt`）或全自动 AI 专家审批
+
+保留的两个脚本只做**执行器**，不再包含任何编排决策：
+
+| 脚本 | 职责 | 不做什么 |
+|---|---|---|
+| `run-case.mjs` | 克隆固定 commit、建 venv、跑两遍、比对产物哈希、写 `manifest.json` | 不做角色决策、不写 Claim/Evidence |
+| `publish-run.mjs` | 把 manifest 摘要发布为 `research_run` | 不判断结论、不改 Claim 状态 |
+
+用法不变：
 
 ```bash
-node reproduction/run-cycle.mjs \
-  --api http://127.0.0.1:43100 \
-  --program <programId> \
+# 1) 执行一次可复现运行（纯执行器）
+node reproduction/run-case.mjs \
   --case reproduction/cases/plass-stone-1983.json \
-  --question "该复现是否可稳定重跑？" \
-  --auto-approve \
+  --workdir D:/sciflow-research/data/reproduction-runs \
   --uv "C:/Program Files/Python315/Scripts/uv.exe" \
-  --repo-cache D:/sciflow-research/data/reproduction/plass-stone-1983/repo \
   --runs 2
+
+# 2) 把 manifest 发布为 research_run
+node reproduction/publish-run.mjs --api http://127.0.0.1:43100 --program <programId> --manifest <path>
 ```
 
-流程：
-
-```text
-PI: 问题 → 假设 → 协议（--auto-approve 才自动批准）
-Experimenter: run-case.mjs → publish-run.mjs
-Critic: 读 manifest → 判断确定性/指标 → Claim + Evidence（verified）
-```
-
-- 无 `--auto-approve` 时只创建到协议并退出，等待人工批准（符合 L2 默认）。
-- `--repo-cache` 用于弱网/离线：从已审阅的本地镜像 clone，仍校验 commit。
-- 当前角色决策是规则驱动；后续把 PI/Critic 换成 LLM 即可，API 与数据流不变。
-- 不自动投稿、不调用外部模型。
-
-## 经济学多轮循环（Card 1995）
-
-`run-econ-loop.mjs` 用同一套 API 跑**多轮**“协议 → 实验 → 评判 → 修订”：
-
-```bash
-node reproduction/run-econ-loop.mjs \
-  --api http://127.0.0.1:43100 \
-  --program <programId> \
-  --case reproduction/cases/card-1995-returns-schooling.json \
-  --python D:/sciflow-research/data/reproduction/econ/venv/Scripts/python.exe \
-  --question "Card (1995) 教育回报率的 OLS 与 IV 估计能否复现？" \
-  --auto-approve --max-cycles 2
-```
-
-- 数据来自 `wooldridge` 包内置 `card`，无外部下载；纯 CPU，秒级；
-- 第一轮 `naive`（遗漏控制变量）OLS=0.052，被 Critic 判 `refuted`；
-- 第二轮 `controlled`（控制变量 + `nearc4` IV）OLS=0.074、IV=0.132，判 `supported`；
-- 失败轮与成功轮都保留 Cycle/Run/Claim/Evidence，形成修订轨迹。
+需要多轮自动研究时，走研究循环 API，不要再在仓库外写循环脚本。
 
 ## 后续
 
