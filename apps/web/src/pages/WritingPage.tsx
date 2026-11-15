@@ -508,18 +508,16 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
 
   // 引用或格式变化时刷新列表（异步；bibtex 也走同一个端点）
   useEffect(() => {
+    if (!docId || citations.length === 0) return;
     let cancelled = false;
-    if (!docId || citations.length === 0) {
-      setExported([]);
-      return;
-    }
     loadExportedList(exportFormat)
       .then((list) => { if (!cancelled) setExported(list); })
       .catch(() => { if (!cancelled) setExported([]); });
     return () => { cancelled = true; };
   }, [docId, citations, exportFormat, loadExportedList]);
 
-  const effectiveExported = exported;
+  // 「没有引用」时列表恒为空，由渲染期派生即可；在 effect 里 setState([]) 会多一轮渲染
+  const effectiveExported = !docId || citations.length === 0 ? [] : exported;
 
   const exportRefs = async (format: string) => {
     setExportFormat(format);

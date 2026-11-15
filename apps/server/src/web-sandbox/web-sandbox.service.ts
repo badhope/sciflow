@@ -52,9 +52,6 @@ createServer((req, res) => {
 }).listen(port, '127.0.0.1', () => console.log('preview listening ' + port));
 `;
 
-/** 允许的 npm 脚本名（白名单，防止跑任意生命周期脚本） */
-const ALLOWED_SCRIPTS = new Set(['install', 'build', 'dev', 'start']);
-
 function sandboxEnv(workDir: string): NodeJS.ProcessEnv {
   const allowed = ['PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR', 'USER', 'SHELL', 'SystemRoot', 'COMSPEC', 'PATHEXT'];
   const env: NodeJS.ProcessEnv = {};
