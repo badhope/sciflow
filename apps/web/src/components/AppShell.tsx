@@ -125,10 +125,14 @@ export function ShellNavGroup({
 }) {
   const [open, setOpen] = useState(!defaultCollapsed);
   const count = Children.count(children);
-  // 切到该阶段的页面时确保分组可见（用户从命令面板/深链进入时不会看到收起的分组）
-  useEffect(() => {
+  // 切到该阶段的页面时确保分组可见（用户从命令面板/深链进入时不会看到收起的分组）。
+  // 用渲染期比较而不是 effect：effect 里同步 setState 会多渲染一轮，
+  // 且首帧会先闪一下收起状态。React 官方对这种「props 变了要调整 state」给的就是这个写法。
+  const [prevActiveStage, setPrevActiveStage] = useState(activeStage);
+  if (activeStage !== prevActiveStage) {
+    setPrevActiveStage(activeStage);
     if (activeStage) setOpen(true);
-  }, [activeStage]);
+  }
   return (
     <div className={`shell-nav-group ${activeStage ? 'is-active-stage' : ''}`}>
       <button

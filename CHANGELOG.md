@@ -4,6 +4,83 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.16.8] - 2026-11-16
+
+首个可发布版本。1.16.0–1.16.7 的开发过程没有逐版记录，这里合并为一份面向使用者的说明：
+**从「能演示」到「能交付」**。全部能力有测试与真实运行证据，发布前完整门禁 229 项回归全绿。
+
+### Added
+
+#### 自主研究循环（1.16.0）
+
+- **多轮科研循环搬进服务端图引擎**：`plan → gate → execute → evaluate → decide` 带真实回边，
+  PI / 实验者 / 评审三个 LLM 智能体走结构化输出。终止条件是轮次上限、token 预算、
+  以及「连续两轮结论相同且方案指纹未变」的停滞判定——没有终止条件的循环等于烧钱。
+- **门禁可选**：L2 人工审批（`interrupt()` 挂起 + `Command({resume})` 恢复）或全自动 AI 专家审批。
+  默认保守档，需要无人值守时显式切换。
+- 数据链贯通：`ResearchProgram → ResearchCycle → ResearchQuestion → ResearchHypothesis →
+  ResearchProtocol → ResearchRun → ResearchClaim → ResearchEvidence`。未批准协议不允许创建运行。
+
+#### 长篇写作（1.16.2）
+
+- **按卷立项 → 按章生成 → 跨章摘要 → 断点续写**。每章只携带压缩后的前情，不携带全文，
+  因此篇幅增长不会撑爆上下文；章节状态 `pending/writing/done/failed`，失败保留原因可重试，已完成不覆盖。
+- 跨卷时额外注入「上一卷主线回顾」，避免换卷后丢掉卷首设定。
+- **一致性检查器**：确定性规则（实体漏写、疑似改名、未登记人名），不调模型，
+  20 章实测从 0 分/98 条误报到 76 分/3 条真实问题。
+
+#### Web 项目沙箱与内置浏览器（1.16.4–1.16.7）
+
+- **Web 沙箱**：独立目录 + `npm install` + 构建 + 回环地址预览，两个模板（零依赖静态、React + Vite）。
+  项目文件可经 API 读写删——没有这一步，Agent 只能生成一次骨架、无法迭代，所谓「做网页」是断的。
+- **内置浏览器**：服务端真实 Chromium，打开任意站点、读文本、截图、列元素、点击、填表。
+  iframe 做不到（多数站点用 `X-Frame-Options`/CSP 禁止嵌入），只有真内核能。
+- **网页自动验收**：8 种断言 `exists` / `visible` / `count` / `text` / `value` / `request` /
+  `no-console-error` / `visual`。`visual` 与已存基线逐像素比对（pngjs + pixelmatch），
+  给出差异比例与差异图，改样式不会悄悄改坏页面。
+
+#### 实验沙箱多运行时（1.16.2）
+
+- Python / Node / Shell 三种脚本走同一隔离执行器（超时、输出截断、env 白名单）。
+  解释器缺失时返回可读原因而不是 500。
+
+### Fixed
+
+发布门禁暴露的真实缺陷（全部有回归测试钉住）：
+
+- **sqlite-vec 缺失时知识上传直接 500**：`knowledge_chunks_embedding` 是 vec0 虚拟表，
+  只在扩展加载成功时存在。上传事务里 `prepare` 会抛 "no such table" 并回滚整个事务，
+  而检索侧本来就有 FTS5/LIKE 兜底——「没有向量索引」不该导致连文档都存不进去。
+  现在写向量与删向量都按扩展可用性跳过，上传/删除/检索三条路径全部可用。
+  触发条件很宽：无预编译包的平台、精简部署、`SCIFLOW_NO_VEC=1` 排障模式都会踩到。
+- **视觉基线用整页截图导致比对永远「尺寸不一致」**：整页高度随内容浮动，
+  把真正的像素差异伪装成结构变化，也拿不到差异图。改为固定视口（1280×800）。
+- **基线缺失返回 500**：改为 404，并加负向用例。
+- **「打开」每次新建浏览器会话，三次后撞上限**：改为已有会话时导航，符合「换个网址」的心智模型。
+- **切到当前阶段的分组时侧栏会闪一下收起态**：分组展开改在渲染期判定，不再在 effect 里 setState。
+- **切换 Web 项目时预览地址残留上一个项目**：预览地址改为按项目派生。
+- **参考文列表在无引用时靠 effect 清空**：改为渲染期派生，省一轮渲染。
+
+### Security
+
+- **mongoose 继承属性污染 / `sanitizeFilter` 未生效**（2 项 high）：唯链路是
+  `promptfoo(devDep) → natural → mongoose`，不进生产运行时；按同 major 定点钉到已修复的 9.11.4。
+  发布门禁 `pnpm audit --audit-level high` 现为 0 high。
+- 沙箱文件读写做了路径校验：拒绝绝对路径与 `..` 穿越，解析后复核前缀必须落在项目目录内。
+  没有这道校验，写文件接口就是任意文件写入漏洞。
+
+### Removed
+
+- **`reproduction/run-cycle.mjs` / `run-econ-loop.mjs`**（共 477 行规则驱动编排脚本）：
+  编排职责已全部归 LangGraph 图。留着两套编排只会让人分不清哪套是真链路。
+  保留 `run-case.mjs`（纯执行器）与 `publish-run.mjs`（发布 manifest）。
+
+### Changed
+
+- 未配置强模型时，设置页会明确提示「高难任务当前回落 Fast 档」，
+  而不是让人以为 PI/评审在用强模型。
+- 13 张失效截图（`dash.png` 与 12 张旧主题变体）删除；全部界面截图用当前版本重拍为 18 张。
+
 ## [1.15.3] - 2026-11-09
 
 接 v1.15.2 的第二轮排查，重点转向**桌面端（Electron）适配**、**出站安全**与**检索质量**三块。

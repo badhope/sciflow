@@ -85,6 +85,10 @@ overrides:
   # Vite / happy-dom：前端工具链的安全补丁线（vite 8 起为 rolldown 内核）
   vite: ^8.3.6
   happy-dom: ^21.0.4
+  # mongoose：公告 GHSA-8332-j7wj-wjw4 等（<9.11.4，继承属性污染 + sanitizeFilter 未生效）。
+  # 唯一链路是 promptfoo(devDep) → natural → mongoose，不进生产运行时；
+  # 按同 major 定点补丁钉版，不跨大版本替换。
+  'mongoose@>=9.0.0 <9.11.4': ^9.11.4
   # node-forge：promptfoo 的 jks-js 传递依赖，锁到当前已发布的安全版本
   node-forge: ^1.4.1
   # Azure Identity：promptfoo / Azure AI Projects 均接受 4.14.x，消除 MSAL Node <7.1 的高危传递依赖

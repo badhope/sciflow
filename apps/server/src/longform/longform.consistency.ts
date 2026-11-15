@@ -241,7 +241,6 @@ export function checkConsistency(chapters: ConsistencyChapter[], knownEntities: 
 
 
   const warnings = finalIssues.filter((i) => i.severity === 'warning').length;
-  const infos = finalIssues.length - warnings;
   // info 只是「可能相关」的提示，不参与扣分；扣分只来自确定性错误（漏写/改名）
   const score = Math.max(0, 100 - warnings * 8);
 

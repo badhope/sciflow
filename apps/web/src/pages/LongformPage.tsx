@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useContext, useMemo, useState, type ChangeEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Download, Loader2, PenLine, Plus } from 'lucide-react';
 import { api } from '../api/client';
@@ -52,10 +52,8 @@ export function LongformPage({ project }: { project: Project }) {
     enabled: Boolean(bookId),
   });
   const book: LongformBookDetail | undefined = detailQuery.data;
-
-  useEffect(() => {
-    if (detailQuery.error) setError(errMsg(detailQuery.error));
-  }, [detailQuery.error]);
+  // 加载失败直接派生，不进 state：否则 effect 里 setState 会多一轮渲染，且关闭错误后无法自然恢复
+  const loadError = detailQuery.error ? errMsg(detailQuery.error) : '';
 
   const refresh = async (id = bookId) => {
     await qc.invalidateQueries({ queryKey: ['longform-books', project.id] });
@@ -188,7 +186,7 @@ export function LongformPage({ project }: { project: Project }) {
 
   return (
     <div className="page-container">
-      <ErrorBox message={error} />
+      <ErrorBox message={error || loadError} />
 
       <Card tone="inset" className="mb-4 p-4">
         <SectionTitle extra={book ? <Badge tone={book.status === 'completed' ? 'green' : 'amber'}>{STATUS_LABEL[book.status] || book.status}</Badge> : undefined}>
