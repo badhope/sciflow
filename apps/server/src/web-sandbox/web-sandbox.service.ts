@@ -2,7 +2,7 @@ import { Injectable, Logger, BadRequestException, NotFoundException, type OnModu
 import { eq, desc } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync, existsSync, readdirSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, existsSync, readdirSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createServer } from 'node:net';
@@ -225,6 +225,81 @@ export class WebSandboxService implements OnModuleInit {
 
   templates() {
     return Object.keys(TEMPLATES).map((key) => ({ key, label: key === 'static' ? '纯静态站点（零依赖）' : 'React + Vite' }));
+  }
+
+  /**
+   * 把用户/Agent 给的相对路径解析成项目目录内的绝对路径。
+   *
+   * 安全要点：只允许项目根目录内的文件；显式拒绝绝对路径与 `..` 穿越。
+   * 没有这道校验，「写文件」接口就是一个任意文件写入漏洞。
+   */
+  private resolveInside(workDir: string, rel: string): string {
+    const raw = String(rel || '').trim();
+    if (!raw) throw new BadRequestException('path 必填');
+    if (path.isAbsolute(raw)) throw new BadRequestException('只接受相对路径');
+    const root = path.resolve(workDir);
+    const abs = path.resolve(root, raw);
+    const inside = abs === root || abs.startsWith(root + path.sep);
+    if (!inside) throw new BadRequestException('路径越界：只允许项目目录内的文件');
+    return abs;
+  }
+
+  /** 列出项目文件（跳过依赖与构建产物，避免把几万个文件返回给前端/模型） */
+  listFiles(id: string) {
+    const row = this.get(id);
+    const skip = new Set(['node_modules', 'dist', '.npm-cache', '.git']);
+    const out: { path: string; bytes: number }[] = [];
+    const walk = (dir: string, prefix: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (out.length >= 500) return;
+        if (skip.has(entry.name)) continue;
+        const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+        const abs = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(abs, rel);
+        } else if (entry.isFile()) {
+          try {
+            const st = statSync(abs);
+            if (st.size > 1_000_000) continue; // 二进制/超大文件不给编辑
+            out.push({ path: rel, bytes: st.size });
+          } catch {
+            /* 读不到就跳过 */
+          }
+        }
+      }
+    };
+    walk(row.workDir, '');
+    return out.sort((a, b) => a.path.localeCompare(b.path));
+  }
+
+  /** 读单个文件（只允许项目内、<=1MB 的文本） */
+  readFile(id: string, rel: string) {
+    const row = this.get(id);
+    const abs = this.resolveInside(row.workDir, rel);
+    if (!existsSync(abs)) throw new NotFoundException(`文件不存在：${rel}`);
+    const st = statSync(abs);
+    if (st.size > 1_000_000) throw new BadRequestException('文件过大（上限 1MB）');
+    return { path: rel, content: readFileSync(abs, 'utf-8'), bytes: st.size };
+  }
+
+  /** 写单个文件（覆盖或新建）：让 Agent 真正迭代页面代码，而不是只能生成模板 */
+  writeFile(id: string, rel: string, content: string) {
+    const row = this.get(id);
+    const abs = this.resolveInside(row.workDir, rel);
+    const text = String(content ?? '');
+    if (text.length > 1_000_000) throw new BadRequestException('内容过大（上限 1MB）');
+    mkdirSync(path.dirname(abs), { recursive: true });
+    writeFileSync(abs, text, 'utf-8');
+    return { ok: true, path: rel, bytes: Buffer.byteLength(text, 'utf-8') };
+  }
+
+  /** 删除单个文件（同样限制在项目目录内） */
+  removeFile(id: string, rel: string) {
+    const row = this.get(id);
+    const abs = this.resolveInside(row.workDir, rel);
+    if (!existsSync(abs)) throw new NotFoundException(`文件不存在：${rel}`);
+    rmSync(abs, { force: true });
+    return { ok: true };
   }
 
   /** 创建项目骨架（不装依赖，不构建） */

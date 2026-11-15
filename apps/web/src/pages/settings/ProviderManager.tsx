@@ -317,6 +317,11 @@ export function ProviderManager({ settings }: { settings: AppSettings | null }) 
               <div className="text-xs text-slate-400 dark:text-slate-500 mb-1">Strong 档（高难任务）</div>
               <div className="text-sm font-mono text-slate-700 dark:text-slate-200">{settings.ai.strongModel || '未配置'}</div>
               <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">研究规划 · 大纲 · 长文起草 · 质量评审</div>
+              {settings.ai.strongModelFallback && (
+                <div className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+                  未配置强模型：以上高难任务当前回落使用 Fast 档，PI 跑题与 JSON 截断概率更高
+                </div>
+              )}
             </div>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">

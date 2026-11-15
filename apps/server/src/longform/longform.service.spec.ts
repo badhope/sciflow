@@ -159,6 +159,50 @@ describe('LongformService 分卷续写', () => {
     expect(r.allDone).toBe(false);
   });
 
+  it('多卷：卷一写完后再建卷二，章节序号连续且卷二计划带上卷级回顾', async () => {
+    const prompts: string[] = [];
+    // 按 prompt 里要求的章数返回同样数量的章节（模拟真实 planner）
+    const multiAi = {
+      completeStructured: async (messages: unknown[]) => {
+        // 直接取原始文本，不做 JSON 中转：避免转义层级干扰断言
+        const prompt = (messages as { content?: string }[]).map((m) => m?.content ?? '').join('\n');
+        prompts.push(prompt);
+        const want = Number(/正好\s*(\d+)\s*章/.exec(prompt)?.[1] || 1);
+        return {
+          chapters: Array.from({ length: Math.max(1, want) }, (_, i) => ({
+            title: `第${i + 1}章`,
+            goal: 'g',
+            beats: ['b'],
+            entities: [],
+          })),
+        };
+      },
+      complete: async () => '正文'.repeat(400),
+    } as unknown as AiService;
+    const svc = new LongformService(multiAi);
+    const book = svc.createBook({ projectId: pid, title: '多卷书', premise: '' });
+    bookId = book.id;
+
+    // 卷一：2 章
+    await svc.addVolume(bookId, { title: '第一卷', chapters: 2 });
+    await svc.writeChapters(bookId, 2);
+
+    // 卷二：再 2 章，序号应从 3 继续
+    const v2 = await svc.addVolume(bookId, { title: '第二卷', chapters: 2 });
+    // getBook 返回全书章节；卷二新增的两章序号应接在第一卷之后
+    const allSeqs = v2.chapters.map((c) => c.seq);
+    expect(allSeqs).toEqual([1, 2, 3, 4]);
+    const seqs = v2.chapters.filter((c) => c.volumeId !== v2.volumes[0].id).map((c) => c.seq);
+    expect(seqs).toEqual([3, 4]);
+    // 卷二计划请求里应包含卷级回顾（上一卷 2 章主线）
+    const recapPrompt = prompts.find((p) => p.includes('【上一卷回顾（本卷必须承接）】'));
+    expect(recapPrompt, '卷二计划未带卷级回顾').toBeTruthy();
+    expect(recapPrompt).toContain('上一卷共 2 章');
+    // 卷归属正确
+    const v2Chapters = v2.chapters.filter((c) => c.seq >= 3);
+    expect(new Set(v2Chapters.map((c) => c.volumeId)).size).toBe(1);
+  });
+
   it('合并导出只包含已完成章节', async () => {
     const svc = new LongformService(fakeAi({ chapters: 3 }).ai);
     const book = svc.createBook({ projectId: pid, title: '导出', premise: '' });

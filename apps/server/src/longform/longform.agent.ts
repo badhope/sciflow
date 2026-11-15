@@ -35,6 +35,8 @@ export interface ChapterPlanInput {
   volumeGoal: string;
   /** 已有章节摘要（前情），只放摘要不放正文 */
   priorSynopses: string[];
+  /** 上一卷的主线回顾（卷级连续性；跨卷时尤其重要） */
+  volumeRecap?: string;
   targetChapters: number;
   context?: string;
 }
@@ -52,6 +54,7 @@ export async function planChapters(ai: AiService, input: ChapterPlanInput): Prom
   const prior = input.priorSynopses.length
     ? `\n\n【已有前情摘要（必须保持一致）】\n${input.priorSynopses.slice(-20).map((s, i) => `${i + 1}. ${s}`).join('\n')}`
     : '';
+  const recap = input.volumeRecap ? `\n\n【上一卷回顾（本卷必须承接）】\n${input.volumeRecap}` : '';
   const messages = [
     { role: 'system' as const, content: PLAN_SYSTEM },
     {
@@ -62,6 +65,7 @@ export async function planChapters(ai: AiService, input: ChapterPlanInput): Prom
         `【本卷】${input.volumeTitle}：${input.volumeGoal}`,
         `【需要拆成 ${input.targetChapters} 章】`,
         prior,
+        recap,
         '',
         `请输出正好 ${input.targetChapters} 章。`,
       ].join('\n'),

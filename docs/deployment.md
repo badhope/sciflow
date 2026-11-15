@@ -107,10 +107,44 @@ pnpm --filter @sciflow/web build     # 产物在 apps/web/dist，纯静态文件
 | `AI_MOCK` | 设为 `1` 启用进程内 mock 网关（MSW 拦截，不占端口） | 关闭 | `ai/ai.service.ts`、`ai/mock-gateway.ts` |
 | `MOCK_HTTP_PORT` | mock HTTP 包装脚本端口（仅回环，供 promptfoo 等外部工具） | `5099` | `apps/server/scripts/mock-openai-http.mjs` |
 | `CORS_ORIGIN` | 允许的前端来源，逗号分隔；`*` 全放行 | `http://localhost:5173,http://127.0.0.1:5173` | `main.ts` |
-| `SANDBOX_PYTHON` | 实验沙箱解释器路径 | 空 → 自动探测 `python3` / `python` | `experiments/experiments.service.ts` |
+| `SANDBOX_PYTHON` | 实验沙箱 Python 解释器路径 | 空 → 自动探测 `python3` / `python` | `experiments/experiments.service.ts` |
+| `SANDBOX_NODE` | 沙箱 Node 解释器路径（runtime=node 时） | 空 → 用当前进程的 `process.execPath`，再试 `node` | `experiments/experiments.service.ts` |
 | `SANDBOX_TIMEOUT_MS` | 沙箱单次执行超时（毫秒） | `10000` | `experiments/experiments.service.ts` |
+| `WEB_SANDBOX_PORT_BASE` | Web 项目预览起始端口（向上找空闲端口） | `43500` | `web-sandbox/web-sandbox.service.ts` |
+| `WEB_SANDBOX_NPM_TIMEOUT_MS` | Web 项目 `npm install` 超时 | `300000` | `web-sandbox/web-sandbox.service.ts` |
+| `WEB_SANDBOX_BUILD_TIMEOUT_MS` | Web 项目构建超时 | `300000` | `web-sandbox/web-sandbox.service.ts` |
+| `SCIFLOW_BROWSERS_PATH` | 内置浏览器的 Playwright 浏览器缓存目录 | 空 → 依次探测 `$SCIFLOW_HOME/cache/ms-playwright`、`<盘符>/sciflow-research/cache/ms-playwright`、Playwright 默认 | `browser/browser.service.ts` |
+| `PLAYWRIGHT_BROWSERS_PATH` | 同上（Playwright 自身变量，优先级更高） | 空 | `browser/browser.service.ts` |
+| `BROWSER_MAX_SESSIONS` | 内置浏览器并发会话上限 | `3` | `browser/browser.service.ts` |
+| `BROWSER_IDLE_TTL_MS` | 浏览器会话闲置回收时间 | `300000` | `browser/browser.service.ts` |
+| `BROWSER_NAV_TIMEOUT_MS` | 单次页面导航超时 | `30000` | `browser/browser.service.ts` |
+| `RESEARCH_CYCLE_MAX_ITERATIONS` | 研究循环默认最大轮次 | `2` | `research-cycle/research-cycle.service.ts` |
+| `RESEARCH_CYCLE_TOKEN_BUDGET` | 研究循环 token 预算（0=不限） | `0` | `research-cycle/research-cycle.service.ts` |
 
 兼容端点示例（格式均为 `base_url` + 模型名，任选其一）：火山方舟、DeepSeek `https://api.deepseek.com/v1`、通义、智谱、Kimi `https://api.moonshot.cn/v1`、Ollama 本地 `http://localhost:11434/v1`。
+
+## 4.1 运行时依赖（沙箱与内置浏览器）
+
+三类能力依赖本机运行时，缺失时会**优雅降级并给出可读提示**，不会 500：
+
+| 能力 | 依赖 | 缺失时的表现 | 准备方式 |
+|---|---|---|---|
+| 实验沙箱（Python） | Python ≥ 3.10 | 记录一条 `status=error` 的实验，提示安装方式 | 设 `SANDBOX_PYTHON` 指向解释器，或把 `python3`/`python` 放进 PATH |
+| 实验沙箱（Node） | Node（与应用同版本即可） | 同上，提示 Node 未检测到 | 默认用应用自身的 `process.execPath`，通常无需配置 |
+| 实验沙箱（shell） | Windows `cmd.exe` / POSIX `/bin/sh` | 同上 | 系统自带 |
+| Web 项目沙箱 | Node + npm | `install`/`build` 返回可读失败原因与日志 | Node 自带的 npm 即可；离线环境用 `static` 模板（零依赖） |
+| 内置浏览器 | Playwright Chromium | 返回 400 并提示执行安装命令 | `npx playwright install chromium`，或设 `SCIFLOW_BROWSERS_PATH` 指向已安装缓存 |
+
+**隔离说明**：以上执行都在独立临时目录、独立端口、独立 BrowserContext 内完成；
+env 为白名单（不透传 `AI_API_KEY` / `SCIFLOW_SECRET` 等服务端密钥）；
+Web 沙箱的 npm 缓存写入项目目录内部，删除项目即清理。
+
+**视觉基线存储**：网页验收的视觉基线（PNG）保存在数据库同目录的 `browser-baselines/`，
+不写进 SQLite（每张几百 KB，长期累积会让备份体积失控）。基线可随时重建：
+删掉目录后重新「保存为基线」即可。备份时若需保留验收基线，连同该目录一起拷贝。
+
+**生产部署建议**：如果面向多租户或运行不可信代码，进程级隔离不够，
+应把「实验沙箱 / Web 沙箱 / 内置浏览器」放到容器或独立 VM 中，通过内网 API 调用。
 
 ## 5. 日志与排障
 

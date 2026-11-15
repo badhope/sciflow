@@ -23,8 +23,15 @@ export function BrowserPage() {
   const [selector, setSelector] = useState('');
   const [checksText, setChecksText] = useState('text | | 示例\nexists | body');
   const [verifyResult, setVerifyResult] = useState<null | { total: number; passed: number; failed: number; allPassed: boolean; results: { label: string; ok: boolean; actual: string }[] }>(null);
+  const [baselineName, setBaselineName] = useState('');
+  const [diffResult, setDiffResult] = useState<null | {
+    ok: boolean; name: string; diffRatio: number; diffPixels: number; totalPixels: number; threshold: number;
+    sizeMismatch: boolean; expected: { width: number; height: number }; actual: { width: number; height: number }; diffDataUrl?: string;
+  }>(null);
 
   const sessionsQuery = useQuery({ queryKey: ['browser-sessions'], queryFn: () => api.browser.list() });
+  const baselinesQuery = useQuery({ queryKey: ['browser-baselines'], queryFn: () => api.browser.baselines() });
+  const baselines = baselinesQuery.data ?? [];
   const sessions = sessionsQuery.data ?? [];
   const currentId = activeId || sessions[0]?.id || '';
   const current: BrowserSession | undefined = sessions.find((s) => s.id === currentId);
@@ -37,8 +44,13 @@ export function BrowserPage() {
     setBusy('open');
     setError('');
     try {
-      const s = await api.browser.open(url.trim());
+      // 已有会话时在当前会话内导航，而不是再开一个：
+      // 每次「打开」都新建会话会在三次之后就撞上会话上限（默认 3），
+      // 而用户的心智模型是「在同一个浏览器里换个网址」。
+      const s = currentId ? await api.browser.navigate(currentId, url.trim()) : await api.browser.open(url.trim());
       setActiveId(s.id);
+      setDiffResult(null);
+      setVerifyResult(null);
       await refresh();
       await capture(s.id);
     } catch (e: unknown) {
@@ -99,9 +111,18 @@ export function BrowserPage() {
       .map((line) => {
         const [type, sel, expect, label] = line.split('|').map((x) => x.trim());
         return {
-          type: type as 'exists' | 'text' | 'count' | 'visible' | 'value',
-          selector: sel || undefined,
-          expect: expect || undefined,
+          // request 断言把「期望状态码」写进 expect，把 URL 子串写进 selector 位（复用同一行格式）
+          // visual 断言把基线名写进 selector 位，expect 位写允许的差异比例
+          type: type as 'exists' | 'text' | 'count' | 'visible' | 'value' | 'request' | 'no-console-error' | 'visual',
+          selector: type === 'request' || type === 'visual' ? undefined : sel || undefined,
+          urlIncludes: type === 'request' ? sel || undefined : undefined,
+          baseline: type === 'visual' ? sel || undefined : undefined,
+          maxDiffRatio: type === 'visual' && expect ? Number(expect) : undefined,
+          expect: type === 'request'
+            ? (expect ? Number(expect) : undefined)
+            : type === 'visual'
+              ? undefined
+              : expect || undefined,
           label: label || undefined,
         };
       });
@@ -124,6 +145,63 @@ export function BrowserPage() {
   const pick = async (id: string) => {
     setActiveId(id);
     await capture(id);
+  };
+
+  /**
+   * 视觉基线：把当前页面外观存成基线，之后每次改样式都能问「跟上次比变了多少」。
+   * 名称按用户输入存成文件名，所以先在前端挡掉空值与路径字符，避免服务端来回一次 400。
+   */
+  const saveBaseline = async () => {
+    if (!currentId) return;
+    const name = baselineName.trim();
+    if (!name) {
+      setError('请填写基线名称，例如 home-default');
+      return;
+    }
+    setBusy('baseline');
+    setError('');
+    try {
+      await api.browser.saveBaseline(currentId, name);
+      setDiffResult(null);
+      await qc.invalidateQueries({ queryKey: ['browser-baselines'] });
+    } catch (e: unknown) {
+      setError(errMsg(e));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const runDiff = async () => {
+    if (!currentId) return;
+    const name = baselineName.trim();
+    if (!name) {
+      setError('请填写要比对的基线名称');
+      return;
+    }
+    setBusy('diff');
+    setError('');
+    try {
+      setDiffResult(await api.browser.visualDiff(currentId, name));
+    } catch (e: unknown) {
+      setError(errMsg(e));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const removeBaseline = async (name: string) => {
+    setBusy('delete-baseline');
+    setError('');
+    try {
+      await api.browser.deleteBaseline(name);
+      if (baselineName.trim() === name) setBaselineName('');
+      if (diffResult?.name === name) setDiffResult(null);
+      await qc.invalidateQueries({ queryKey: ['browser-baselines'] });
+    } catch (e: unknown) {
+      setError(errMsg(e));
+    } finally {
+      setBusy('');
+    }
   };
 
   return (
@@ -206,8 +284,10 @@ export function BrowserPage() {
               </Button>
             </div>
             <p className="mb-2 text-[11px] text-slate-400">
-              格式：类型 | 选择器 | 期望值 | 说明。类型支持 exists / visible / count / text / value；
-              例如 <code>text | | 登录成功</code> 表示页面文本包含「登录成功」。
+              格式：类型 | 选择器 | 期望值 | 说明。类型支持 exists / visible / count / text / value / request / no-console-error / visual；
+              例如 <code>text | | 登录成功</code> 表示页面文本包含「登录成功」，
+              <code>request | /api/save | 200</code> 表示页面发出过该请求且返回 200，
+              <code>visual | home-default</code> 表示外观与基线差异不超过 1%。
             </p>
             <Textarea rows={4} className="font-mono text-xs" value={checksText} onChange={(e) => setChecksText(e.target.value)} aria-label="验收断言" />
             {verifyResult && (
@@ -227,6 +307,73 @@ export function BrowserPage() {
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+          </Card>
+
+          <Card className="mb-4 p-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">视觉回归（与基线逐像素比对）</span>
+              <div className="flex items-center gap-2">
+                <Button size="xs" variant="outline" onClick={() => void saveBaseline()} loading={busy === 'baseline'}>
+                  保存为基线
+                </Button>
+                <Button size="xs" onClick={() => void runDiff()} loading={busy === 'diff'}>
+                  比对基线
+                </Button>
+              </div>
+            </div>
+            <p className="mb-2 text-[11px] text-slate-400">
+              基线是「已认可的页面外观」（按当前视口 1280×800 截取）。改动样式后比对，差异比例超过阈值即判失败；
+              尺寸变化直接判失败（固定视口下代表布局结构变了）。
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                className="w-full sm:w-64"
+                placeholder="基线名称，例如 home-default"
+                value={baselineName}
+                onChange={(e) => setBaselineName(e.target.value)}
+                aria-label="基线名称"
+              />
+              {baselines.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {baselines.slice(0, 6).map((b) => (
+                    <span key={b.name} className="inline-flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => setBaselineName(b.name)}
+                        className="rounded border border-slate-200 px-2 py-0.5 text-[11px] text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                        title={`保存于 ${new Date(b.savedAt).toLocaleString()} · ${Math.round(b.bytes / 1024)} KB`}
+                      >
+                        {b.name}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`删除基线 ${b.name}`}
+                        onClick={() => void removeBaseline(b.name)}
+                        className="ml-0.5 rounded px-1 text-[11px] text-slate-400 hover:text-rose-600"
+                        title="删除该基线"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            {diffResult && (
+              <div className="mt-3">
+                <div className="mb-1 flex flex-wrap items-center gap-2 text-xs">
+                  <Badge tone={diffResult.ok ? 'green' : 'red'}>{diffResult.ok ? '外观一致' : '外观有差异'}</Badge>
+                  <span className="text-slate-400">
+                    {diffResult.sizeMismatch
+                      ? `尺寸不一致：基线 ${diffResult.expected.width}×${diffResult.expected.height}，当前 ${diffResult.actual.width}×${diffResult.actual.height}`
+                      : `差异 ${(diffResult.diffRatio * 100).toFixed(2)}%（${diffResult.diffPixels}/${diffResult.totalPixels} 像素，阈值 ${(diffResult.threshold * 100).toFixed(2)}%）`}
+                  </span>
+                </div>
+                {diffResult.diffDataUrl && (
+                  <img src={diffResult.diffDataUrl} alt="差异图" className="mt-2 max-h-72 w-full border border-slate-200 object-contain dark:border-slate-700" />
+                )}
               </div>
             )}
           </Card>
