@@ -29,6 +29,20 @@
         ]
       }
     },
+    "/metrics": {
+      "get": {
+        "operationId": "HealthController_metrics",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
     "/agent/executions": {
       "get": {
         "operationId": "AgentTraceController_listExecutions",
@@ -106,6 +120,20 @@
         ],
         "responses": {
           "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentTrace"
+        ]
+      }
+    },
+    "/agent/otel/export": {
+      "post": {
+        "operationId": "AgentTraceController_exportOtel",
+        "parameters": [],
+        "responses": {
+          "201": {
             "description": ""
           }
         },
@@ -480,6 +508,22 @@
         "parameters": [
           {
             "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
             "required": true,
             "in": "query",
             "schema": {
@@ -2347,12 +2391,65 @@
         ]
       }
     },
+    "/projects/{id}/export": {
+      "get": {
+        "operationId": "ProjectsController_exportBundle",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/projects/import": {
+      "post": {
+        "operationId": "ProjectsController_importBundle",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
     "/documents": {
       "get": {
         "operationId": "DocumentsController_list",
         "parameters": [
           {
             "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
             "required": true,
             "in": "query",
             "schema": {
@@ -2534,6 +2631,75 @@
             "in": "path",
             "schema": {
               "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/documents/{id}/sections/diff": {
+      "get": {
+        "operationId": "DocumentsController_sectionDiff",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/documents/{id}/sections/revise": {
+      "post": {
+        "operationId": "DocumentsController_reviseSection",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/documents/{id}/sections/restore": {
+      "post": {
+        "operationId": "DocumentsController_restoreSection",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -3176,6 +3342,32 @@
         ]
       }
     },
+    "/settings/agent-access": {
+      "get": {
+        "operationId": "SettingsController_getAgentAccess",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      },
+      "post": {
+        "operationId": "SettingsController_setAgentAccess",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
     "/settings": {
       "get": {
         "operationId": "SettingsController_getSettings",
@@ -3404,6 +3596,1575 @@
         },
         "tags": [
           "Usage"
+        ]
+      }
+    },
+    "/programs": {
+      "get": {
+        "operationId": "ProgramsController_list",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      },
+      "post": {
+        "operationId": "ProgramsController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      }
+    },
+    "/programs/{id}": {
+      "get": {
+        "operationId": "ProgramsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      },
+      "patch": {
+        "operationId": "ProgramsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      }
+    },
+    "/programs/{id}/cycles": {
+      "get": {
+        "operationId": "ProgramsController_listCycles",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      },
+      "post": {
+        "operationId": "ProgramsController_createCycle",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      }
+    },
+    "/programs/{id}/protocols": {
+      "get": {
+        "operationId": "ProgramsController_listProgramProtocols",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      }
+    },
+    "/programs/cycles/{cycleId}": {
+      "patch": {
+        "operationId": "ProgramsController_updateCycle",
+        "parameters": [
+          {
+            "name": "cycleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      }
+    },
+    "/programs/{id}/questions": {
+      "get": {
+        "operationId": "ProgramsController_listQuestions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      },
+      "post": {
+        "operationId": "ProgramsController_createQuestion",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      }
+    },
+    "/programs/questions/{questionId}/hypotheses": {
+      "get": {
+        "operationId": "ProgramsController_listHypotheses",
+        "parameters": [
+          {
+            "name": "questionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      },
+      "post": {
+        "operationId": "ProgramsController_createHypothesis",
+        "parameters": [
+          {
+            "name": "questionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      }
+    },
+    "/programs/hypotheses/{hypothesisId}/protocols": {
+      "get": {
+        "operationId": "ProgramsController_listProtocols",
+        "parameters": [
+          {
+            "name": "hypothesisId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      },
+      "post": {
+        "operationId": "ProgramsController_createProtocol",
+        "parameters": [
+          {
+            "name": "hypothesisId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      }
+    },
+    "/programs/protocols/{protocolId}/approve": {
+      "post": {
+        "operationId": "ProgramsController_approveProtocol",
+        "parameters": [
+          {
+            "name": "protocolId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Programs"
+        ]
+      }
+    },
+    "/programs/{id}/claims": {
+      "get": {
+        "operationId": "ResearchRecordsController_listClaims",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchRecords"
+        ]
+      },
+      "post": {
+        "operationId": "ResearchRecordsController_createClaim",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchRecords"
+        ]
+      }
+    },
+    "/programs/claims/{claimId}": {
+      "get": {
+        "operationId": "ResearchRecordsController_getClaim",
+        "parameters": [
+          {
+            "name": "claimId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchRecords"
+        ]
+      },
+      "patch": {
+        "operationId": "ResearchRecordsController_updateClaim",
+        "parameters": [
+          {
+            "name": "claimId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchRecords"
+        ]
+      }
+    },
+    "/programs/claims/{claimId}/evidence": {
+      "get": {
+        "operationId": "ResearchRecordsController_listEvidence",
+        "parameters": [
+          {
+            "name": "claimId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchRecords"
+        ]
+      },
+      "post": {
+        "operationId": "ResearchRecordsController_addEvidence",
+        "parameters": [
+          {
+            "name": "claimId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchRecords"
+        ]
+      }
+    },
+    "/programs/evidence/{evidenceId}/verify": {
+      "post": {
+        "operationId": "ResearchRecordsController_verifyEvidence",
+        "parameters": [
+          {
+            "name": "evidenceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchRecords"
+        ]
+      }
+    },
+    "/programs/{id}/runs": {
+      "get": {
+        "operationId": "ResearchRecordsController_listRuns",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchRecords"
+        ]
+      },
+      "post": {
+        "operationId": "ResearchRecordsController_createRun",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchRecords"
+        ]
+      }
+    },
+    "/programs/runs/{runId}": {
+      "get": {
+        "operationId": "ResearchRecordsController_getRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchRecords"
+        ]
+      },
+      "patch": {
+        "operationId": "ResearchRecordsController_updateRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchRecords"
+        ]
+      }
+    },
+    "/research-cycles/start": {
+      "post": {
+        "operationId": "ResearchCycleController_start",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchCycle"
+        ]
+      }
+    },
+    "/research-cycles/{cycleId}/resume": {
+      "post": {
+        "operationId": "ResearchCycleController_resume",
+        "parameters": [
+          {
+            "name": "cycleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchCycle"
+        ]
+      }
+    },
+    "/research-cycles/{cycleId}": {
+      "get": {
+        "operationId": "ResearchCycleController_status",
+        "parameters": [
+          {
+            "name": "cycleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchCycle"
+        ]
+      }
+    },
+    "/research-cycles": {
+      "get": {
+        "operationId": "ResearchCycleController_list",
+        "parameters": [
+          {
+            "name": "programId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchCycle"
+        ]
+      }
+    },
+    "/experiments/run": {
+      "post": {
+        "operationId": "ExperimentsController_run",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Experiments"
+        ]
+      }
+    },
+    "/experiments": {
+      "get": {
+        "operationId": "ExperimentsController_list",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Experiments"
+        ]
+      }
+    },
+    "/experiments/by-document/{documentId}": {
+      "get": {
+        "operationId": "ExperimentsController_byDocument",
+        "parameters": [
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Experiments"
+        ]
+      }
+    },
+    "/experiments/{id}": {
+      "get": {
+        "operationId": "ExperimentsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Experiments"
+        ]
+      },
+      "patch": {
+        "operationId": "ExperimentsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Experiments"
+        ]
+      },
+      "delete": {
+        "operationId": "ExperimentsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Experiments"
+        ]
+      }
+    },
+    "/longform/books": {
+      "get": {
+        "operationId": "LongformController_list",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Longform"
+        ]
+      },
+      "post": {
+        "operationId": "LongformController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Longform"
+        ]
+      }
+    },
+    "/longform/books/{id}": {
+      "get": {
+        "operationId": "LongformController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Longform"
+        ]
+      }
+    },
+    "/longform/books/{id}/volumes": {
+      "post": {
+        "operationId": "LongformController_addVolume",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Longform"
+        ]
+      }
+    },
+    "/longform/books/{id}/write-next": {
+      "post": {
+        "operationId": "LongformController_writeNext",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Longform"
+        ]
+      }
+    },
+    "/longform/books/{id}/write": {
+      "post": {
+        "operationId": "LongformController_write",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Longform"
+        ]
+      }
+    },
+    "/longform/books/{id}/consistency": {
+      "get": {
+        "operationId": "LongformController_consistency",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Longform"
+        ]
+      }
+    },
+    "/longform/books/{id}/compile": {
+      "get": {
+        "operationId": "LongformController_compile",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Longform"
+        ]
+      }
+    },
+    "/web-projects/templates": {
+      "get": {
+        "operationId": "WebSandboxController_templates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSandbox"
+        ]
+      }
+    },
+    "/web-projects": {
+      "get": {
+        "operationId": "WebSandboxController_list",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSandbox"
+        ]
+      },
+      "post": {
+        "operationId": "WebSandboxController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSandbox"
+        ]
+      }
+    },
+    "/web-projects/{id}": {
+      "get": {
+        "operationId": "WebSandboxController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSandbox"
+        ]
+      },
+      "delete": {
+        "operationId": "WebSandboxController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSandbox"
+        ]
+      }
+    },
+    "/web-projects/{id}/install": {
+      "post": {
+        "operationId": "WebSandboxController_install",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSandbox"
+        ]
+      }
+    },
+    "/web-projects/{id}/files": {
+      "get": {
+        "operationId": "WebSandboxController_files",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSandbox"
+        ]
+      }
+    },
+    "/web-projects/{id}/file": {
+      "get": {
+        "operationId": "WebSandboxController_readFile",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSandbox"
+        ]
+      },
+      "put": {
+        "operationId": "WebSandboxController_writeFile",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSandbox"
+        ]
+      },
+      "delete": {
+        "operationId": "WebSandboxController_removeFile",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSandbox"
+        ]
+      }
+    },
+    "/web-projects/{id}/build": {
+      "post": {
+        "operationId": "WebSandboxController_build",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSandbox"
+        ]
+      }
+    },
+    "/web-projects/{id}/preview": {
+      "post": {
+        "operationId": "WebSandboxController_preview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSandbox"
+        ]
+      }
+    },
+    "/web-projects/{id}/stop": {
+      "post": {
+        "operationId": "WebSandboxController_stop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSandbox"
+        ]
+      }
+    },
+    "/web-projects/{id}/run-all": {
+      "post": {
+        "operationId": "WebSandboxController_runAll",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSandbox"
+        ]
+      }
+    },
+    "/browser/sessions": {
+      "get": {
+        "operationId": "BrowserController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      },
+      "post": {
+        "operationId": "BrowserController_open",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}": {
+      "delete": {
+        "operationId": "BrowserController_close",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/navigate": {
+      "post": {
+        "operationId": "BrowserController_navigate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/text": {
+      "get": {
+        "operationId": "BrowserController_text",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "maxChars",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/screenshot": {
+      "get": {
+        "operationId": "BrowserController_screenshot",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fullPage",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/elements": {
+      "get": {
+        "operationId": "BrowserController_elements",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/verify": {
+      "post": {
+        "operationId": "BrowserController_verify",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/click": {
+      "post": {
+        "operationId": "BrowserController_click",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/baselines": {
+      "get": {
+        "operationId": "BrowserController_baselines",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/baseline": {
+      "post": {
+        "operationId": "BrowserController_saveBaseline",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/visual-diff": {
+      "post": {
+        "operationId": "BrowserController_visualDiff",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/baselines/{name}": {
+      "delete": {
+        "operationId": "BrowserController_deleteBaseline",
+        "parameters": [
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/fill": {
+      "post": {
+        "operationId": "BrowserController_fill",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
         ]
       }
     },
@@ -3688,131 +5449,6 @@
         ]
       }
     },
-    "/experiments/run": {
-      "post": {
-        "operationId": "ExperimentsController_run",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Experiments"
-        ]
-      }
-    },
-    "/experiments": {
-      "get": {
-        "operationId": "ExperimentsController_list",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Experiments"
-        ]
-      }
-    },
-    "/experiments/by-document/{documentId}": {
-      "get": {
-        "operationId": "ExperimentsController_byDocument",
-        "parameters": [
-          {
-            "name": "documentId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Experiments"
-        ]
-      }
-    },
-    "/experiments/{id}": {
-      "get": {
-        "operationId": "ExperimentsController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Experiments"
-        ]
-      },
-      "patch": {
-        "operationId": "ExperimentsController_update",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Experiments"
-        ]
-      },
-      "delete": {
-        "operationId": "ExperimentsController_remove",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Experiments"
-        ]
-      }
-    },
     "/dashboard/overview": {
       "get": {
         "operationId": "DashboardController_overview",
@@ -3831,7 +5467,7 @@
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "1.10.0",
+    "version": "1.16.8",
     "contact": {}
   },
   "tags": [],

@@ -1,7 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { db } from '../../db/src/database';
-import { sqlite } from '../../db/src/database';
+import { sqlite, vecLoaded } from '../../db/src/database';
 import { knowledgeDocs, knowledgeChunks, references, appSettings } from '../../db/src/schema';
 import { eq, inArray, and, asc, sql } from 'drizzle-orm';
 import { AiService } from '../../ai/src/ai.service';
@@ -167,14 +167,17 @@ export class KnowledgeService {
       const insertChunk = sqlite.prepare(
         `INSERT INTO knowledge_chunk (id, doc_id, content, seq, context, embedding) VALUES (?, ?, ?, ?, ?, ?)`
       );
-      const insertVec = sqlite.prepare(
-        `INSERT OR REPLACE INTO knowledge_chunks_embedding (chunk_id, embedding) VALUES (?, ?)`
-      );
+      // vec0 虚拟表只在 sqlite-vec 扩展加载成功时存在。扩展缺失（如精简部署、无预编译包的平台）
+      // 时这里必须跳过写入：直接 prepare 会抛 "no such table"，整个事务回滚导致上传 500，
+      // 而检索侧本来就有 FTS5/LIKE 兜底，不该因为「没有向量索引」就连文档都存不进去。
+      const insertVec = vecLoaded
+        ? sqlite.prepare(`INSERT OR REPLACE INTO knowledge_chunks_embedding (chunk_id, embedding) VALUES (?, ?)`)
+        : null;
       for (let i = 0; i < chunks.length; i++) {
         const chunkId = randomUUID();
         insertChunk.run(chunkId, docId, chunks[i], i, context, embeddings[i] ?? null);
         // vec0 仅在有向量时写入（无向量则走 LIKE/BM25 兜底检索）
-        if (embeddings[i]) insertVec.run(chunkId, embeddings[i]);
+        if (insertVec && embeddings[i]) insertVec.run(chunkId, embeddings[i]);
       }
     });
     insertDoc();
@@ -259,10 +262,12 @@ export class KnowledgeService {
   }
 
   async remove(id: string) {
-    // 同步清理 vec0 虚拟表
-    const chunkRows = db.select({ id: knowledgeChunks.id }).from(knowledgeChunks).where(eq(knowledgeChunks.docId, id)).all();
-    const delVec = sqlite.prepare('DELETE FROM knowledge_chunks_embedding WHERE chunk_id = ?');
-    for (const c of chunkRows) delVec.run(c.id);
+    // 同步清理 vec0 虚拟表（扩展未加载时该表不存在，跳过即可——chunk 行本身仍会被删）
+    if (vecLoaded) {
+      const chunkRows = db.select({ id: knowledgeChunks.id }).from(knowledgeChunks).where(eq(knowledgeChunks.docId, id)).all();
+      const delVec = sqlite.prepare('DELETE FROM knowledge_chunks_embedding WHERE chunk_id = ?');
+      for (const c of chunkRows) delVec.run(c.id);
+    }
     await db.delete(knowledgeChunks).where(eq(knowledgeChunks.docId, id));
     await db.delete(knowledgeDocs).where(eq(knowledgeDocs.id, id));
     return { ok: true };

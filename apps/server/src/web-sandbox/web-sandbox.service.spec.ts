@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/database';
-import { projects, webProjects } from '../db/schema';
+import { projects } from '../db/schema';
 import { WebSandboxService } from './web-sandbox.service';
 
 /**

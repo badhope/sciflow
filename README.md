@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![Version](https://img.shields.io/badge/version-1.16.7-black.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.16.8-black.svg)](CHANGELOG.md)
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -73,7 +73,7 @@ Every number below comes from a command run on the current tree (2026-11-13).
 
 | Check | Command | Result |
 |---|---|---|
-| Server unit/integration | `pnpm --filter @sciflow/server test` | 90 files, 700 tests |
+| Server unit/integration | `pnpm --filter @sciflow/server test` | 91 files, 703 tests |
 | Web unit | `pnpm --filter @sciflow/web test` | 29 files, 201 tests |
 | Desktop unit | `pnpm --filter @sciflow/desktop test` | 1 file, 5 tests |
 | Types / build | `pnpm -r typecheck` · `pnpm -r build` | clean |
@@ -146,7 +146,7 @@ See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 
 ## Status
 
-Current release: **1.16.7**. The autonomous research loop and the manuscript pipeline are both real and covered by tests. Known limits: the quality gate is rule-based and intentionally conservative; autonomous runs need a capable model for the PI/Critic roles; the Python sandbox is local and is not a security boundary for hostile code.
+Current release: **1.16.8**. The autonomous research loop and the manuscript pipeline are both real and covered by tests. Known limits: the quality gate is rule-based and intentionally conservative; autonomous runs need a capable model for the PI/Critic roles; the Python sandbox is local and is not a security boundary for hostile code.
 
 ## License
 

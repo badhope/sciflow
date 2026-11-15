@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Code2, ExternalLink, Loader2, Play, Plus, RefreshCw, Square, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
@@ -46,18 +46,24 @@ export function WebSandboxPage({ project }: { project: Project }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [log, setLog] = useState('');
-  const [previewUrl, setPreviewUrl] = useState('');
   const [selected, setSelected] = useState('');
+  /**
+   * 手动启动/停止预览后的地址覆盖。
+   *
+   * 为什么不直接用 useEffect 把 current.previewUrl 同步进 state：
+   *  - effect 里 setState 会多渲染一轮；
+   *  - 更实际的问题是切换项目时，旧项目的地址会残留在 state 里，预览区显示别的项目的页面。
+   * 这里只记录「用户本次操作的项目 + 地址」，渲染时与当前项目比对，不匹配就不采用。
+   */
+  const [manualPreview, setManualPreview] = useState<{ projectId: string; url: string } | null>(null);
 
   const templatesQuery = useQuery({ queryKey: ['web-templates'], queryFn: () => api.webProjects.templates() });
   const listQuery = useQuery({ queryKey: ['web-projects', project.id], queryFn: () => api.webProjects.list(project.id) });
   const items = listQuery.data ?? [];
   const currentId = selected || items[0]?.id || '';
   const current: WebProject | undefined = items.find((i) => i.id === currentId);
-
-  useEffect(() => {
-    if (current?.previewUrl) setPreviewUrl(current.previewUrl);
-  }, [current?.previewUrl]);
+  const previewUrl = (manualPreview && manualPreview.projectId === currentId ? manualPreview.url : '') || current?.previewUrl || '';
+  const setPreviewUrl = (url: string) => setManualPreview(url ? { projectId: currentId, url } : null);
 
   const refresh = async () => {
     await qc.invalidateQueries({ queryKey: ['web-projects', project.id] });
