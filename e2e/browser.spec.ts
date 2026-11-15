@@ -51,18 +51,47 @@ test('内置浏览器：打开本地页面 → 截图 → 文本 → 点击', as
   await page.getByRole('button', { name: '点击' }).click();
   await expect(page.getByText(/已点击/, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
 
-  // 网页验收：断言标题存在、按钮可见、文本匹配
+  // 网页验收：断言标题存在、按钮可见、文本匹配、无 console error
   await page.getByLabel('验收断言').fill(`exists | h1
 visible | #btn
-text | | browser-e2e-`);
+text | | browser-e2e-
+no-console-error`);
   await page.getByRole('button', { name: '运行验收' }).click();
   await expect(page.getByText('全部通过', { exact: false })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/3\/3 通过/)).toBeVisible();
+  await expect(page.getByText(/4\/4 通过/)).toBeVisible();
 
   // 负向：故意断言不存在的元素，必须报失败（证明验收真的在检查）
   await page.getByLabel('验收断言').fill('exists | #definitely-not-here');
   await page.getByRole('button', { name: '运行验收' }).click();
   await expect(page.getByText('存在失败', { exact: false })).toBeVisible({ timeout: 30_000 });
 
+  // ── 视觉回归闭环 ─────────────────────────────────────
+  // 1) 存基线 → 2) 立刻比对必须 0 差异 → 3) 换一个外观不同的页面 → 4) 比对必须报差异。
+  // 第 3 步是关键：只验「相同图通过」无法证明比对器在工作（恒定返回 ok 也能过）。
+  const baseline = `e2e-${Date.now()}`;
+  await page.getByLabel('基线名称').fill(baseline);
+  await page.getByRole('button', { name: '保存为基线' }).click();
+  await page.getByRole('button', { name: '比对基线' }).click();
+  await expect(page.getByText('外观一致', { exact: false })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/差异 0\.00%/)).toBeVisible();
+
+  // 造一个外观明显不同的页面：用文件 API 改样式（这也是 Agent 迭代页面的真实路径）
+  const styleWrite = await request.put(`${API}/api/web-projects/${wpId}/file`, {
+    data: { path: 'style.css', content: 'body{margin:0;min-height:100vh;background:#ff0000;color:#fff;font-family:serif}' },
+  });
+  expect(styleWrite.status(), `写样式失败：${await styleWrite.text()}`).toBe(200);
+  const rebuilt = await request.post(`${API}/api/web-projects/${wpId}/build`);
+  expect((await rebuilt.json()).ok, '改样式后重建失败').toBe(true);
+
+  // 带 query 打开，绕过预览服务的任何缓存
+  await page.getByLabel('网址').fill(`${url}?v=${Date.now()}`);
+  await page.getByRole('button', { name: '打开' }).click();
+  await expect(page.locator('img[alt="页面截图"]')).toBeVisible({ timeout: 60_000 });
+  await page.getByLabel('基线名称').fill(baseline);
+  await page.getByRole('button', { name: '比对基线' }).click();
+  await expect(page.getByText('外观有差异', { exact: false })).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator('img[alt="差异图"]')).toBeVisible();
+
+  await request.delete(`${API}/api/browser/baselines/${encodeURIComponent(baseline)}`);
   await request.delete(`${API}/api/web-projects/${wpId}`);
 });

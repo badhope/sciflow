@@ -653,6 +653,8 @@ export interface EvidenceResult {
 export interface AppSettings {
   ai: {
     baseUrl: string; model: string; fastModel: string; strongModel: string; configured: boolean; models: string[];
+    /** true = 未配置强模型，PI/评审/长文实际在用 fast（质量瓶颈信号） */
+    strongModelFallback?: boolean;
     protocol: ModelProtocol; contextWindow: number; maxOutput: number; toolCalling: boolean;
   };
   env: { node: string; database: string; port: number };

@@ -89,14 +89,31 @@ export class LongformService {
     const volumeId = randomUUID();
     db.insert(longformVolumes).values({ id: volumeId, bookId, seq, title: volumeTitle.slice(0, 200), goal: String(input.goal || '').slice(0, 2000), createdAt: now }).run();
 
-    const priorSynopses = db
-      .select({ summary: longformChapters.summary })
+    /**
+     * 前情分两层：
+     *  1) 卷级回顾：上一卷（或前几卷）每章摘要各取一句，压成「上一卷发生了什么」；
+     *  2) 近章摘要：最近若干章（跨卷时即上一卷末几章）。
+     * 只给全局最近 N 章会在「上一卷很长」时丢掉卷首的关键设定，所以两层都传。
+     */
+    const doneRows = db
+      .select({ summary: longformChapters.summary, volumeId: longformChapters.volumeId, seq: longformChapters.seq })
       .from(longformChapters)
       .where(and(eq(longformChapters.bookId, bookId), eq(longformChapters.status, 'done')))
       .orderBy(asc(longformChapters.seq))
       .all()
-      .map((r) => r.summary || '')
-      .filter(Boolean);
+      .filter((r) => Boolean(r.summary));
+
+    const prevVolumeIds = [...new Set(doneRows.map((r) => r.volumeId))];
+    const lastPrevVolumeId = prevVolumeIds[prevVolumeIds.length - 1];
+    const prevVolumeChapters = lastPrevVolumeId ? doneRows.filter((r) => r.volumeId === lastPrevVolumeId) : [];
+    const volumeRecap = prevVolumeChapters.length
+      ? `上一卷共 ${prevVolumeChapters.length} 章，主线：${prevVolumeChapters
+          .slice(0, 12)
+          .map((r) => r.summary!.slice(0, 90))
+          .join('；')}`
+      : '';
+
+    const priorSynopses = doneRows.map((r) => r.summary!);
 
     const plan = await planChapters(this.ai, {
       bookTitle: book.title,
@@ -104,6 +121,7 @@ export class LongformService {
       volumeTitle,
       volumeGoal: String(input.goal || ''),
       priorSynopses,
+      volumeRecap,
       targetChapters: target,
       context: `longform:${bookId}:plan:v${seq}`,
     });
