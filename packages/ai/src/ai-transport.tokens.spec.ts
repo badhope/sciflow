@@ -148,6 +148,25 @@ describe('AI provider key 生命周期', () => {
     }
   });
 
+  it('流式收尾 usage 通过 onUsage 回调返回，供计划预算记账', async () => {
+    const previous = process.env.AI_MOCK;
+    process.env.AI_MOCK = '1';
+    try {
+      const svc = new AiService();
+      const usages: { promptTokens: number; completionTokens: number; totalTokens: number }[] = [];
+      const stream = await svc.streamChat('你好', [], { onUsage: (u) => usages.push(u) });
+      const body = await new Response(stream).text();
+      expect(body).toContain('usage');
+      expect(usages).toHaveLength(1);
+      expect(usages[0].promptTokens).toBeGreaterThan(0);
+      expect(usages[0].totalTokens).toBeGreaterThan(0);
+    } finally {
+      stopMockGateway();
+      if (previous === undefined) delete process.env.AI_MOCK;
+      else process.env.AI_MOCK = previous;
+    }
+  });
+
   it('切换到无 key provider 时无条件清空旧运行时 key', () => {
     const id = insertTransportProvider({ name: 'transport-spec-empty', active: false });
     const svc = new InspectableTransport();

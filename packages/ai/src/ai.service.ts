@@ -153,6 +153,7 @@ export class AiService extends AiTransportService {
       enableThinking: streamOpts.enableThinking,
       signal: streamOpts.signal,
       streamIncludeUsage: true,
+      onUsage: streamOpts.onUsage,
       ...(streamOpts.tools ? { tools: streamOpts.tools, maxSteps: streamOpts.maxSteps } : {}),
     });
   }
@@ -168,6 +169,7 @@ export class AiService extends AiTransportService {
       enableThinking: streamOpts.enableThinking,
       signal: streamOpts.signal,
       streamIncludeUsage: true,
+      onUsage: streamOpts.onUsage,
       ...(streamOpts.tools ? { tools: streamOpts.tools, maxSteps: streamOpts.maxSteps } : {}),
     });
   }

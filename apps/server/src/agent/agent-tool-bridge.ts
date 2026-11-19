@@ -117,6 +117,11 @@ export class AgentToolBridge {
     private readonly policy?: AgentPolicyService,
   ) {}
 
+  /** 把一轮真实 token 记到当前项目生效的计划上；无计划/未启用时静默跳过。 */
+  recordPlanTokens(projectId: string, tokens: number): void {
+    this.plans?.recordProjectTokens(projectId, tokens);
+  }
+
   /** 技能→工具前缀映射：设置页停用某技能后，对应工具不再暴露给模型（技能真实生效，非仅展示） */
   private enabledSkillKeys(): Set<string> | null {
     try {

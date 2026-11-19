@@ -42,6 +42,13 @@ export class AiEmptyResponseError extends Error {
   }
 }
 
+/** 单次模型调用的 token 用量（流式收尾或非流式返回） */
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
 /** chat 流式/问答的可选运行参数（best-effort 透传，厂商不支持时静默忽略） */
 export interface ChatStreamOptions {
   /** 显式覆盖完整模型 ID（优先于 fast/strong 档位） */
@@ -54,6 +61,8 @@ export interface ChatStreamOptions {
   tools?: ToolSet;
   /** 工具调用最大步数 */
   maxSteps?: number;
+  /** 本轮真实 token 用量回调（流式收尾块 / 非流式回退都会触发） */
+  onUsage?: (usage: TokenUsage) => void;
 }
 
 export interface CompleteOptions {
@@ -79,6 +88,8 @@ export interface CompleteOptions {
   maxSteps?: number;
   /** 失败重试次数（默认 4；润色等长输出场景应降低，避免空响应重试把流水线拖死） */
   retries?: number;
+  /** 真实用量回调；上层可据此做计划预算/成本归属，不依赖全局 lastTotalTokens */
+  onUsage?: (usage: TokenUsage) => void;
 }
 
 /**
@@ -731,7 +742,9 @@ ${augmentation}` };
           const usage = r.usage;
           const pt = usage?.inputTokens ?? 0;
           const ct = usage?.outputTokens ?? 0;
-          enqueue({ choices: [{ delta: {}, index: 0, finish_reason: 'stop' }], usage: { prompt_tokens: pt, completion_tokens: ct, total_tokens: pt + ct } });
+          const total = pt + ct;
+          enqueue({ choices: [{ delta: {}, index: 0, finish_reason: 'stop' }], usage: { prompt_tokens: pt, completion_tokens: ct, total_tokens: total } });
+          try { opts.onUsage?.({ promptTokens: pt, completionTokens: ct, totalTokens: total }); } catch { /* 记账失败不影响主流程 */ }
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           selfLog({ caller, model, promptTokens: pt, completionTokens: ct, latencyMs: Date.now() - t0, success: true });
         } catch (err: any) {
@@ -818,14 +831,18 @@ ${augmentation}` };
               }
             }
             const usage = await result.usage;
+            const pt = usage?.inputTokens ?? 0;
+            const ct = usage?.outputTokens ?? 0;
+            const total = pt + ct;
             enqueue({
               choices: [{ delta: {}, index: 0, finish_reason: 'stop' }],
               usage: {
-                prompt_tokens: usage?.inputTokens ?? 0,
-                completion_tokens: usage?.outputTokens ?? 0,
-                total_tokens: (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0),
+                prompt_tokens: pt,
+                completion_tokens: ct,
+                total_tokens: total,
               },
             });
+            try { opts.onUsage?.({ promptTokens: pt, completionTokens: ct, totalTokens: total }); } catch { /* 记账失败不影响流 */ }
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
             selfLog({ caller, model, promptTokens: usage?.inputTokens ?? 0, completionTokens: usage?.outputTokens ?? 0, latencyMs: Date.now() - t0, success: true });
           } catch (err: any) {

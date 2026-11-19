@@ -81,4 +81,20 @@ describe('PlanAuthorizationService', () => {
     svc.recordTokens(plan.id, 50);
     expect(svc.get(plan.id).status).toBe('exhausted');
   });
+
+  it('按项目记真实 token：chat 收尾 usage 能命中当前生效计划', () => {
+    const plan = svc.create({ projectId: PROJECT, title: 'P', allowedTools: ['document.update'], budgetTokens: 100 });
+    svc.decide(plan.id, true);
+    svc.recordProjectTokens(PROJECT, 60);
+    expect(svc.get(plan.id).usedTokens).toBe(60);
+    expect(svc.get(plan.id).status).toBe('approved');
+    svc.recordProjectTokens(PROJECT, 50);
+    expect(svc.get(plan.id).usedTokens).toBe(110);
+    expect(svc.get(plan.id).status).toBe('exhausted');
+
+    // 没有生效计划的项目不串账
+    expect(svc.get(plan.id).usedTokens).toBe(110);
+    svc.recordProjectTokens('other-project', 30);
+    expect(svc.get(plan.id).usedTokens).toBe(110);
+  });
 });

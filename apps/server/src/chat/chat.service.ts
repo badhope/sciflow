@@ -303,6 +303,11 @@ export class ChatService {
         modelName: opts.model,
         enableThinking: opts.enableThinking,
         signal: opts.signal,
+        // 计划预算记账：流式收尾的真实 usage 回写到当前项目生效的研究计划；
+        // 没有计划时 recordPlanTokens 静默跳过，不影响普通对话。
+        ...(projectId && useTools
+          ? { onUsage: (usage) => this.tools.recordPlanTokens(projectId, usage.totalTokens) }
+          : {}),
         // 配置中心工具可多次调用（一次对话里完成角色+约束+钩子等），步数上限提高到 12
         ...(toolSet && toolNames.length ? { tools: toolSet, maxSteps: 12 } : {}),
       };

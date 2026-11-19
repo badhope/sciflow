@@ -155,13 +155,7 @@ export class PlanAuthorizationService {
    */
   authorize(toolName: string, projectId?: string | null, _runId?: string | null): AgentPlanView | null {
     this.expireStale();
-    const row = db
-      .select()
-      .from(agentPlans)
-      .where(eq(agentPlans.status, 'approved'))
-      .orderBy(desc(agentPlans.approvedAt))
-      .all()
-      .find((r) => (r.projectId ?? null) === (projectId ?? null) && (r.expiresAt ?? 0) > Date.now());
+    const row = this.findActivePlan(projectId);
     if (!row) return null;
     const tools = parseJson<string[]>(row.allowedTools, []);
     if (!tools.includes(toolName)) return null;
@@ -173,6 +167,27 @@ export class PlanAuthorizationService {
     }
     db.update(agentPlans).set({ usedSteps: used + 1 }).where(eq(agentPlans.id, row.id)).run();
     return this.get(row.id);
+  }
+
+  /** 按项目找当前生效的计划（已批准、未过期、未耗尽）；供工具授权与 token 记账共用。 */
+  private findActivePlan(projectId?: string | null) {
+    return db
+      .select()
+      .from(agentPlans)
+      .where(eq(agentPlans.status, 'approved'))
+      .orderBy(desc(agentPlans.approvedAt))
+      .all()
+      .find((r) => (r.projectId ?? null) === (projectId ?? null) && (r.expiresAt ?? 0) > Date.now());
+  }
+
+  /**
+   * 按项目记一轮真实 token：chat 流式收尾拿到 usage 后调用。
+   * 无生效计划则静默跳过；预算耗尽由 recordTokens 统一标记 exhausted。
+   */
+  recordProjectTokens(projectId: string, tokens: number): void {
+    this.expireStale();
+    const row = this.findActivePlan(projectId);
+    if (row) this.recordTokens(row.id, tokens);
   }
 
   /** token 记账：仅在已知 usage 时调用；预算耗尽则计划失效，回落到逐次审批。 */
