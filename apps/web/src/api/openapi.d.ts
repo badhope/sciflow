@@ -3464,6 +3464,29 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ProjectDto: {
+            /** @description 项目 ID */
+            id: string;
+            /** @description 项目名称 */
+            name: string;
+            /** @description 项目描述 */
+            description: string;
+            /**
+             * @description 项目状态
+             * @example active
+             */
+            status: string;
+            /** @description 创建时间（毫秒时间戳） */
+            createdAt: number;
+            /** @description 更新时间（毫秒时间戳） */
+            updatedAt: number;
+            /** @description 项目级系统提示（写作偏好等） */
+            preface?: string;
+            /** @description 自定义大纲模板 JSON 字符串 */
+            templates?: string;
+            /** @description 企业模式归属用户；本地模式为空串 */
+            ownerId?: string;
+        };
         ResearchBriefDto: {
             /** @description 项目 ID */
             projectId: string;
@@ -5833,7 +5856,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProjectDto"][];
+                };
             };
         };
     };
@@ -5846,11 +5871,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProjectDto"];
+                };
             };
         };
     };
@@ -5869,7 +5896,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProjectDto"];
+                };
             };
         };
     };
@@ -5907,7 +5936,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProjectDto"];
+                };
             };
         };
     };

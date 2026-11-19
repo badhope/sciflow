@@ -2334,7 +2334,17 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectDto"
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2345,8 +2355,15 @@
         "operationId": "ProjectsController_create",
         "parameters": [],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2369,7 +2386,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2390,7 +2414,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -5652,6 +5683,56 @@
   "servers": [],
   "components": {
     "schemas": {
+      "ProjectDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "项目 ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "项目名称"
+          },
+          "description": {
+            "type": "string",
+            "description": "项目描述"
+          },
+          "status": {
+            "type": "string",
+            "description": "项目状态",
+            "example": "active"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒时间戳）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "更新时间（毫秒时间戳）"
+          },
+          "preface": {
+            "type": "string",
+            "description": "项目级系统提示（写作偏好等）"
+          },
+          "templates": {
+            "type": "string",
+            "description": "自定义大纲模板 JSON 字符串"
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "企业模式归属用户；本地模式为空串"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
       "ResearchBriefDto": {
         "type": "object",
         "properties": {

@@ -1,17 +1,10 @@
 import type { components } from './api/openapi-types';
 
-export interface Project {
-  id: string;
-  name: string;
-  description: string;
-  status: string;
-  createdAt: number;
-  updatedAt: number;
-  /** 项目级系统提示（差距#22：写作偏好，每轮注入；仅字符串） */
-  preface?: string;
-  /** 差距#1：自定义大纲模板持久化（JSON 字符串，PATCH /api/projects/:id 写入；GET/list 返回） */
-  templates?: string;
-}
+/**
+ * 项目：类型来自 OpenAPI 生成 contract（ProjectDto）。
+ * 不再手写第二份字段；新增字段先在 server DTO 声明。
+ */
+export type Project = components['schemas']['ProjectDto'];
 
 /**
  * 项目级研究 Brief：研究问题 / 范围 / 方法 / 约束 / 成功标准（Agent 每轮读取）。
