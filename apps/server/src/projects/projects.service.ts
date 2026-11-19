@@ -3,7 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { db, sqlite } from '../db/database';
-import { projects, documents, references, pipelineTasks, reflexionLogs, screeningQueue, extractionFields, extractionValues, reviewComments, experiments, submissions, submissionStatusEvents, citations, qualityReports, polishRecords, knowledgeDocs, knowledgeChunks, memoryLogs, agentExecutions, agentSteps, chatSessions } from '../db/schema';
+import { projects, documents, references, pipelineTasks, reflexionLogs, screeningQueue, extractionFields, extractionValues, reviewComments, experiments, submissions, submissionStatusEvents, citations, qualityReports, polishRecords, knowledgeDocs, knowledgeChunks, memoryLogs, agentExecutions, agentSteps, agentTasks, toolApprovals, agentPlans, llmCallLogs, chatSessions } from '../db/schema';
 import { parseJson } from '../common/json-guard';
 import { BUNDLE_TABLES, BUNDLE_VERSION, buildIdMap, remapRow, renameOnImport, validateBundle } from './project-bundle';
 
@@ -116,6 +116,11 @@ export class ProjectsService {
       db.delete(agentSteps).where(eq(agentSteps.runId, runId)).run();
     }
     db.delete(agentExecutions).where(eq(agentExecutions.projectId, id)).run();
+    // Harness 级联：任务清单、工具审批、计划授权、LLM/工具调用日志（均带 project_id）
+    db.delete(agentTasks).where(eq(agentTasks.projectId, id)).run();
+    db.delete(toolApprovals).where(eq(toolApprovals.projectId, id)).run();
+    db.delete(agentPlans).where(eq(agentPlans.projectId, id)).run();
+    db.delete(llmCallLogs).where(eq(llmCallLogs.projectId, id)).run();
     // 对话会话摘要级联（chat_session 按 project_id 关联；消息体在摘要字段内，无独立表）
     db.delete(chatSessions).where(eq(chatSessions.projectId, id)).run();
     db.delete(documents).where(eq(documents.projectId, id)).run();

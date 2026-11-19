@@ -3,7 +3,8 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/database';
 import {
   projects, documents, references, citations, qualityReports, polishRecords, reviewComments,
-  pipelineTasks, reflexionLogs, agentExecutions, agentSteps, chatSessions, memoryLogs,
+  pipelineTasks, reflexionLogs, agentExecutions, agentSteps, agentTasks, toolApprovals,
+  agentPlans, llmCallLogs, chatSessions, memoryLogs,
   knowledgeDocs, knowledgeChunks, screeningQueue, extractionFields, extractionValues,
   submissions, submissionStatusEvents, experiments,
 } from '../db/schema';
@@ -44,6 +45,10 @@ function seed() {
 
   db.insert(agentExecutions).values({ id: 'run-full-1', projectId: PID, source: 'pipeline', input: 't', status: 'done', createdAt: NOW }).run();
   db.insert(agentSteps).values({ id: 'step-full-1', runId: 'run-full-1', seq: 1, kind: 'tool', title: 'lit', status: 'ok', createdAt: NOW }).run();
+  db.insert(agentTasks).values({ id: 'at-full-1', projectId: PID, content: '任务', status: 'pending', createdAt: NOW, updatedAt: NOW }).run();
+  db.insert(toolApprovals).values({ id: 'ta-full-1', projectId: PID, toolName: 'document.update', status: 'pending', createdAt: NOW }).run();
+  db.insert(agentPlans).values({ id: 'ap-full-1', projectId: PID, title: '计划', status: 'pending', createdAt: NOW }).run();
+  db.insert(llmCallLogs).values({ id: 'll-full-1', projectId: PID, caller: 'chat', kind: 'llm', totalTokens: 12, createdAt: NOW }).run();
 
   db.insert(chatSessions).values({ id: 'cs-full-1', projectId: PID, summary: 's', messageCount: 2, totalTokens: 9, createdAt: NOW, updatedAt: NOW }).run();
   db.insert(memoryLogs).values({ id: 'mem-full-1', projectId: PID, type: 'episodic', content: 'm', createdAt: NOW }).run();
@@ -77,6 +82,10 @@ function counts() {
     reflexionLogs: db.select().from(reflexionLogs).where(eq(reflexionLogs.taskId, 'task-full-1')).all().length,
     agentExecutions: db.select().from(agentExecutions).where(eq(agentExecutions.projectId, PID)).all().length,
     agentSteps: db.select().from(agentSteps).where(eq(agentSteps.runId, 'run-full-1')).all().length,
+    agentTasks: db.select().from(agentTasks).where(eq(agentTasks.projectId, PID)).all().length,
+    toolApprovals: db.select().from(toolApprovals).where(eq(toolApprovals.projectId, PID)).all().length,
+    agentPlans: db.select().from(agentPlans).where(eq(agentPlans.projectId, PID)).all().length,
+    llmCallLogs: db.select().from(llmCallLogs).where(eq(llmCallLogs.projectId, PID)).all().length,
     chatSessions: db.select().from(chatSessions).where(eq(chatSessions.projectId, PID)).all().length,
     memoryLogs: db.select().from(memoryLogs).where(eq(memoryLogs.projectId, PID)).all().length,
     knowledgeDocs: db.select().from(knowledgeDocs).where(eq(knowledgeDocs.projectId, PID)).all().length,
@@ -93,6 +102,7 @@ function counts() {
 const ZERO = Object.fromEntries(Object.keys({
   projects: 0, documents: 0, references: 0, citations: 0, qualityReports: 0, polishRecords: 0,
   reviewComments: 0, pipelineTasks: 0, reflexionLogs: 0, agentExecutions: 0, agentSteps: 0,
+  agentTasks: 0, toolApprovals: 0, agentPlans: 0, llmCallLogs: 0,
   chatSessions: 0, memoryLogs: 0, knowledgeDocs: 0, knowledgeChunks: 0, screeningQueue: 0,
   extractionFields: 0, extractionValues: 0, submissions: 0, submissionStatusEvents: 0, experiments: 0,
 }).map((k) => [k, 0]));
@@ -115,6 +125,10 @@ function cleanup() {
   db.delete(pipelineTasks).where(eq(pipelineTasks.projectId, PID)).run();
   db.delete(agentSteps).where(eq(agentSteps.runId, 'run-full-1')).run();
   db.delete(agentExecutions).where(eq(agentExecutions.projectId, PID)).run();
+  db.delete(agentTasks).where(eq(agentTasks.projectId, PID)).run();
+  db.delete(toolApprovals).where(eq(toolApprovals.projectId, PID)).run();
+  db.delete(agentPlans).where(eq(agentPlans.projectId, PID)).run();
+  db.delete(llmCallLogs).where(eq(llmCallLogs.projectId, PID)).run();
   db.delete(chatSessions).where(eq(chatSessions.projectId, PID)).run();
   db.delete(memoryLogs).where(eq(memoryLogs.projectId, PID)).run();
   db.delete(references).where(eq(references.projectId, PID)).run();
@@ -122,7 +136,7 @@ function cleanup() {
   db.delete(projects).where(eq(projects.id, PID)).run();
 }
 
-describe('ProjectsService.remove 级联删除（全表 21 张）', () => {
+describe('ProjectsService.remove 级联删除（全表 25 张）', () => {
   const svc = new ProjectsService();
 
   beforeEach(() => {
@@ -134,7 +148,7 @@ describe('ProjectsService.remove 级联删除（全表 21 张）', () => {
     cleanup();
   });
 
-  it('删除前 21 张表种子数据齐全（防测试空跑）', () => {
+  it('删除前 25 张表种子数据齐全（防测试空跑）', () => {
     const c = counts();
     for (const [k, v] of Object.entries(c)) expect(v, `${k} 未 seed`).toBe(1);
   });
