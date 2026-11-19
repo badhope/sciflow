@@ -35,6 +35,7 @@ import {
 import type { ChatSource, Doc, IntentResult, KnowledgeDoc, Outline, PipelineTask, Project } from '../types';
 import { Badge, Button, ConfirmDialog, Empty, ErrorBox, Input, Modal, downloadText } from '../components/ui';
 import { WritingPreview } from './writing/WritingPreview';
+import { ProjectStatsBar } from './dashboard/ProjectStatsBar';
 
 /**
  * WorkspacePage — 对话优先工作台（唯一对话入口）：
@@ -615,6 +616,16 @@ export function WorkspacePage({
           </span>
         )}
       </div>
+
+      {/* 项目上下文：复用共享体征条，全部走本页已有 docs/refs/kb/pipeline 查询，不新增请求 */}
+      <ProjectStatsBar
+        variant="line"
+        docCount={docsQuery.data?.length}
+        refCount={refsQuery.data?.length}
+        knowledgeCount={kbDocsQuery.data?.length}
+        pipelineCount={activePipelineQuery.data?.length}
+        className="shrink-0"
+      />
 
       {/* 会话面板：本地多会话（管理）+ 服务端沉淀摘要（注入对话背景） */}
       {showSessionsPanel && (
