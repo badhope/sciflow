@@ -16,6 +16,7 @@ import {
 } from '../components/ui';
 import { HBar } from '../components/charts';
 import { useHotkeys } from '../lib/hotkeys';
+import { useDocumentActions } from '../lib/document-actions';
 import { useProjectDocs, useProjectRefs } from '../lib/queries';
 import { qk } from '../lib/query-keys';
 import { getWritingEditorHandle } from './writing/editor-handle';
@@ -66,6 +67,7 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
   const [outline, setOutline] = useState<Outline | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [error, setError] = useState('');
+  const docActions = useDocumentActions(docId);
   const [topicInput, setTopicInput] = useState('');
   const [sectionTarget, setSectionTarget] = useState('');
 
@@ -418,7 +420,7 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
     run(async () => {
       const target = window.getSelection()?.toString()?.trim() || content;
       if (!target) throw new Error('请先在编辑器中选中文本，或保证文档有内容');
-      const r = await api.documents.polish(docId!, target, mode);
+      const r = await docActions.polish(target, mode);
       setPolishResult(r);
       setHistory((h) => [{ type: mode, original: r.original, polished: r.polished, reason: r.reason }, ...h]);
     });
@@ -427,7 +429,7 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
     run(async () => {
       const target = window.getSelection()?.toString()?.trim() || content;
       if (!target) throw new Error('请选择要翻译的文本');
-      const { translated } = await api.documents.translate(docId!, target, translateTarget);
+      const { translated } = await docActions.translate(target, translateTarget);
       setPolishResult({ original: target, polished: translated, reason: `学术翻译（${translateTarget === 'zh' ? '英→中' : '中→英'}）` });
     });
 
@@ -472,7 +474,7 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
   const generateAbstract = () =>
     run(async () => {
       if (!content.trim()) throw new Error('请先撰写论文正文，再生成摘要');
-      const r = await api.documents.abstract(docId!);
+      const r = await docActions.abstract();
       setAbstractResult(r);
       toast('success', '摘要与关键词已生成');
     });

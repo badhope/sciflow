@@ -6,7 +6,7 @@ import { Card } from '../components/ui';
 import { AgentChatThread } from '../components/AgentChat';
 import { useChatSession, type ChatMessage } from '../lib/chat-session';
 import { applyChatCommand, filterChatCommands, type ChatCommand } from '../lib/chat-commands';
-import { useAsyncAction } from '../lib/async';
+import { useDocumentActions } from '../lib/document-actions';
 
 /** Slash 命令（窄栏精简版） */
 
@@ -72,35 +72,32 @@ export function ChatPanel({
     setSlashOpen(false);
   };
 
-  /** 快捷动作三态（running/error 统一管理，失败不再静默） */
-  const [actionKind, setActionKind] = useState<QuickAction | ''>('');
-  const runAction = useAsyncAction(
-    async (kind: QuickAction) => {
-      if (!doc) return;
-      if (kind === 'abstract') {
-        const r = await api.documents.abstract(doc.id);
-        onDocUpdated({ abstract: r.abstract });
-        chat.append({ role: 'assistant', content: `已生成摘要：\n\n${r.abstract}\n\n关键词：${r.keywords.join('、')}` });
-      } else if (kind === 'polish') {
-        const r = await api.documents.polish(doc.id, doc.content || '', 'polish');
-        onDocUpdated({ content: r.polished });
-        chat.append({ role: 'assistant', content: `已润色全文（正文已更新）。\n\n主要修改：${r.reason || '见润色历史'}` });
-      } else {
-        const r = await api.documents.translate(doc.id, doc.content || '', 'en');
-        onDocUpdated({ content: r.translated });
-        chat.append({ role: 'assistant', content: '已翻译为英文全文（正文已更新）。' });
-      }
-    },
-    { onError: (message) => setError(message) },
-  );
+  /** 快捷动作走共享 hook：API 调用与 busy/error 不再在页面内重复实现 */
+  const actions = useDocumentActions(doc?.id ?? null);
+  const actionBusy = actions.busy;
 
   const startAction = (kind: QuickAction) => {
     setError('');
-    setActionKind(kind);
-    void runAction.run(kind);
+    void (async () => {
+      try {
+        if (kind === 'abstract') {
+          const r = await actions.abstract();
+          onDocUpdated({ abstract: r.abstract });
+          chat.append({ role: 'assistant', content: `已生成摘要：\n\n${r.abstract}\n\n关键词：${r.keywords.join('、')}` });
+        } else if (kind === 'polish') {
+          const r = await actions.polish(doc?.content || '', 'polish');
+          onDocUpdated({ content: r.polished });
+          chat.append({ role: 'assistant', content: `已润色全文（正文已更新）。\n\n主要修改：${r.reason || '见润色历史'}` });
+        } else {
+          const r = await actions.translate(doc?.content || '', 'en');
+          onDocUpdated({ content: r.translated });
+          chat.append({ role: 'assistant', content: '已翻译为英文全文（正文已更新）。' });
+        }
+      } catch {
+        /* actions.error 已更新，页面底部统一展示 */
+      }
+    })();
   };
-
-  const actionBusy = runAction.running ? actionKind : '';
 
   return (
     <Card className={`w-full md:w-72 shrink-0 flex flex-col min-h-0 ${open ? '' : 'w-10 cursor-pointer'} transition-all`}>
@@ -134,7 +131,7 @@ export function ChatPanel({
               </div>
             </div>
           )}
-          {error && <div className="px-3 pb-1 text-[11px] text-rose-500 shrink-0">{error}</div>}
+          {(error || actions.error) && <div className="px-3 pb-1 text-[11px] text-rose-500 shrink-0">{error || actions.error}</div>}
           <div className="p-2 border-t border-slate-100 dark:border-slate-800 shrink-0 relative">
             {/* Slash 下拉（窄栏） */}
             {slashOpen && slashFiltered.length > 0 && (
