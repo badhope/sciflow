@@ -127,18 +127,11 @@ export interface ResearchRun {
   updatedAt: number;
 }
 
-export interface Doc {
-  id: string;
-  projectId: string;
-  title: string;
-  content: string;
-  outline: string;
-  version: number;
-  versions: string;
-  status: string;
-  createdAt: number;
-  updatedAt: number;
-}
+/**
+ * 文档：类型来自 OpenAPI 生成 contract（DocDto）。
+ * 写作/质量/投稿/实验共用同一字段源，后端新增字段先改 DocDto。
+ */
+export type Doc = components['schemas']['DocDto'];
 
 export interface OutlineSection {
   title: string;

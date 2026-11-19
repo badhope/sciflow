@@ -3487,6 +3487,31 @@ export interface components {
             /** @description 企业模式归属用户；本地模式为空串 */
             ownerId?: string;
         };
+        DocDto: {
+            /** @description 文档 ID */
+            id: string;
+            /** @description 所属项目 ID */
+            projectId: string;
+            /** @description 标题 */
+            title: string;
+            /** @description 正文 Markdown */
+            content: string;
+            /** @description 大纲 JSON 字符串 */
+            outline: string;
+            /** @description 当前版本号 */
+            version: number;
+            /** @description 历史版本 JSON 字符串 */
+            versions: string;
+            /**
+             * @description 文档状态
+             * @example draft
+             */
+            status: string;
+            /** @description 创建时间（毫秒时间戳） */
+            createdAt: number;
+            /** @description 更新时间（毫秒时间戳） */
+            updatedAt: number;
+        };
         ResearchBriefDto: {
             /** @description 项目 ID */
             projectId: string;
@@ -6008,11 +6033,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocDto"];
+                };
             };
         };
     };
@@ -6031,7 +6058,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocDto"];
+                };
             };
         };
     };
@@ -6069,7 +6098,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocDto"];
+                };
             };
         };
     };

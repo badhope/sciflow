@@ -1,9 +1,12 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service';
+import { DocDto } from './documents.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 import { paginate } from '../common/paginate';
 
+@ApiTags('Documents')
 @Controller('documents')
 export class DocumentsController {
   constructor(
@@ -30,6 +33,7 @@ export class DocumentsController {
   }
 
   @Get(':id')
+  @ApiOkResponse({ type: DocDto })
   get(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
     // 归属校验（企业模式防 IDOR；本地模式 no-op）——此前可直接按 id 读他人项目文档
     this.access.assertDocument(id, req.user);
@@ -52,6 +56,7 @@ export class DocumentsController {
   }
 
   @Post()
+  @ApiOkResponse({ type: DocDto })
   create(@Body() body: { projectId?: string; title?: string }, @Req() req: { user?: AuthPayload }) {
     if (!body?.projectId?.trim()) throw new BadRequestException('projectId 必填');
     if (!body?.title?.trim()) throw new BadRequestException('文档标题必填');
@@ -60,6 +65,7 @@ export class DocumentsController {
   }
 
   @Patch(':id')
+  @ApiOkResponse({ type: DocDto })
   update(@Param('id') id: string, @Body() body: { title?: string; content?: string; outline?: string; status?: string }, @Req() req: { user?: AuthPayload }) {
     this.access.assertDocument(id, req.user);
     return this.documents.update(id, body);
