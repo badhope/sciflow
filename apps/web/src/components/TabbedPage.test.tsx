@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TabbedPage } from './TabbedPage';
 
 describe('TabbedPage', () => {
@@ -34,5 +34,25 @@ describe('TabbedPage', () => {
       />,
     );
     expect(screen.getByText('流水线')).toBeTruthy();
+  });
+});
+
+describe('TabbedPage controlled mode', () => {
+  it('follows activeKey and reports changes', async () => {
+    const onChange = vi.fn();
+    render(
+      <TabbedPage
+        name="写作与评审"
+        activeKey="quality"
+        onChange={onChange}
+        tabs={[
+          { key: 'writing', label: '论文写作', node: <div>写作</div> },
+          { key: 'quality', label: '质量评审', node: <div>评审</div> },
+        ]}
+      />,
+    );
+    expect(screen.getByText('评审')).toBeTruthy();
+    await userEvent.click(screen.getByRole('tab', { name: '论文写作' }));
+    expect(onChange).toHaveBeenCalledWith('writing');
   });
 });

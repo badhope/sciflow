@@ -179,6 +179,8 @@ interface PageRenderCtx {
   openDoc: (id: string) => void;
   onNavigate: (v: View) => void;
   initialDocId: string | null;
+  tab: string | null;
+  onTabChange: (key: string) => void;
 }
 const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
   workspace: ({ project, openDoc, initialDocId }) =>
@@ -193,10 +195,12 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
   settings: () => <PageErrorBoundary pageName="设置"><SuspensePage name="设置"><SettingsPage /></SuspensePage></PageErrorBoundary>,
   dashboard: ({ project, onNavigate, openDoc }) =>
     project ? <PageErrorBoundary pageName="工作台"><SuspensePage name="项目总览"><DashboardPage project={project} onNavigate={onNavigate} openDoc={openDoc} /></SuspensePage></PageErrorBoundary> : null,
-  design: ({ project, openDoc }) =>
+  design: ({ project, openDoc, tab, onTabChange }) =>
     project ? (
       <TabbedPage
         name="研究设计"
+        activeKey={tab ?? undefined}
+        onChange={onTabChange}
         tabs={[
           {
             key: 'programs',
@@ -211,10 +215,12 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
         ]}
       />
     ) : null,
-  evidence: ({ project }) =>
+  evidence: ({ project, tab, onTabChange }) =>
     project ? (
       <TabbedPage
         name="证据库"
+        activeKey={tab ?? undefined}
+        onChange={onTabChange}
         tabs={[
           {
             key: 'literature',
@@ -229,10 +235,12 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
         ]}
       />
     ) : null,
-  'write-review': ({ project, initialDocId }) =>
+  'write-review': ({ project, initialDocId, tab, onTabChange }) =>
     project ? (
       <TabbedPage
         name="写作与评审"
+        activeKey={tab ?? undefined}
+        onChange={onTabChange}
         tabs={[
           {
             key: 'writing',
@@ -378,11 +386,20 @@ function AppInner() {
   const rawView = (location.pathname.replace(/^\//, '') || 'dashboard') as View;
   const view: View = VIEW_KEYS.includes(rawView) ? rawView : 'dashboard';
   const selectedDocId = searchParams.get('doc');
+  const selectedTab = searchParams.get('tab');
   const setView = useCallback(
     (v: View) => {
       navigate(`/${v}`);
     },
     [navigate],
+  );
+  const setTab = useCallback(
+    (key: string) => {
+      const next = new URLSearchParams(searchParams);
+      next.set('tab', key);
+      navigate(`/${view}?${next.toString()}`);
+    },
+    [navigate, searchParams, view],
   );
 
   useEffect(() => {
@@ -654,7 +671,7 @@ function AppInner() {
                   </ol>
                 </div>
               ) : (
-                <>{PAGE_RENDERERS[view]({ project: currentProject, openDoc: (id: string) => navigate(`/write-review?doc=${id}`), onNavigate: setView, initialDocId: selectedDocId })}</>
+                <>{PAGE_RENDERERS[view]({ project: currentProject, openDoc: (id: string) => navigate(`/write-review?tab=writing&doc=${id}`), onNavigate: setView, initialDocId: selectedDocId, tab: selectedTab, onTabChange: setTab })}</>
               )}
             </div>
           </AppShell>

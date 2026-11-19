@@ -8,13 +8,24 @@ export function TabbedPage({
   name,
   tabs,
   initialKey,
+  activeKey,
+  onChange,
 }: {
   name: string;
   tabs: { key: string; label: string; node: ReactNode }[];
   initialKey?: string;
+  /** 受控模式：由路由 ?tab= 决定当前页；非法值回落到第一个 Tab */
+  activeKey?: string;
+  onChange?: (key: string) => void;
 }) {
-  const [active, setActive] = useState(initialKey ?? tabs[0]?.key ?? '');
+  const [local, setLocal] = useState(initialKey ?? tabs[0]?.key ?? '');
+  const controlled = activeKey && tabs.some((t) => t.key === activeKey) ? activeKey : undefined;
+  const active = controlled ?? local;
   const current = tabs.find((t) => t.key === active) ?? tabs[0];
+  const select = (key: string) => {
+    setLocal(key);
+    onChange?.(key);
+  };
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div
@@ -28,7 +39,7 @@ export function TabbedPage({
             type="button"
             role="tab"
             aria-selected={active === t.key}
-            onClick={() => setActive(t.key)}
+            onClick={() => select(t.key)}
             className={`shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
               active === t.key
                 ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300'
