@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Beaker, FileText, FlaskConical, Gauge, Plus, Workflow, ChevronDown } from 'lucide-react';
+import { BookOpen, Beaker, FileText, FlaskConical, Gauge, Plus, Send, Workflow, ChevronDown } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardOverview, Project } from '../types';
 import { Button, Card, EmptyState, Skeleton, Badge, jsonText, SectionTitle, Textarea, errMsg } from '../components/ui';
 import { Donut, HBar, MetricCard } from '../components/charts';
 import { formatWordCount } from '../lib/format';
+import { qk } from '../lib/query-keys';
 import { useProjectDocs, useProjectRefs } from '../lib/queries';
 import { useContext } from 'react';
 import { ToastContext } from '../App';
@@ -83,7 +84,7 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
     setCreatingDoc(true);
     try {
       const doc = await api.documents.create(project.id, newTitle.trim());
-      void qc.invalidateQueries({ queryKey: ['dash', project.id] });
+      void qc.invalidateQueries({ queryKey: qk.docs(project.id) });
       setNewTitle('');
       toast('success', `草稿「${doc.title}」已创建`);
       openDoc(doc.id);
@@ -115,6 +116,7 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
     { label: '实验记录', desc: '本机 Python 沙箱 · 出图留存', icon: Beaker, view: 'experiments' as View },
     { label: '全自动流水线', desc: '主题 → 初稿 → 评分 → 定稿', icon: Workflow, view: 'design' as View, tab: 'pipeline' },
     { label: '质量评分', desc: '7 维雷达评分与改进建议', icon: Gauge, view: 'write-review' as View, tab: 'quality' },
+    { label: '投稿管理', desc: '选刊 · Cover Letter · 修回 · 台账', icon: Send, view: 'submission' as View },
   ];
 
   return (
@@ -200,7 +202,7 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
         </Card>
       </div>
 
-      {/* 功能入口：原为 5 张等大卡片（与草稿列表争主次，把主任务挤到首屏之外）。
+      {/* 功能入口：6 个一级入口压成一条分段导航（与草稿列表争主次的大卡片已删除）。
           改为一行紧凑的「分段导航条」——功能一个不少，视觉权重降到辅助层。 */}
       <nav className="page-quicknav mb-6" aria-label="功能入口">
         {entries.map((item) => (

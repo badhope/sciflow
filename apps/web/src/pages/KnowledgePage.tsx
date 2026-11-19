@@ -438,16 +438,10 @@ export function KnowledgePage({ project }: { project: Project }) {
 
       {/* 上传区 */}
       <Card tone="inset" className="p-4 sm:p-5 mb-4">
-        <SectionTitle>
-          <span className="flex items-center gap-2">
-            <Upload size={16} className="text-teal-600" /> 上传研究资料
-          </span>
-        </SectionTitle>
         <div
-          className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
-            dragging ? 'border-teal-500 bg-teal-50/80 border-dashed' : 'border-slate-300 dark:border-slate-700 hover:border-teal-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+          className={`flex flex-wrap items-center gap-2 rounded-lg border-2 border-dashed p-2.5 transition-colors ${
+            dragging ? 'border-teal-500 bg-teal-50/80' : 'border-transparent hover:border-slate-200 dark:hover:border-slate-700'
           }`}
-          onClick={() => fileRef.current?.click()}
           onDragOver={(e) => {
             e.preventDefault();
             setDragging(true);
@@ -471,14 +465,16 @@ export function KnowledgePage({ project }: { project: Project }) {
               e.target.value = '';
             }}
           />
-          <FileText size={28} className="mx-auto text-slate-400 dark:text-slate-500 mb-2" />
-          <div className="text-sm text-slate-600 dark:text-slate-300">点击选择或拖拽 PDF / TXT / Markdown 到此处</div>
-          <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">支持 PDF 解析与自动分块（基于资料的可溯源问答）</div>
-          {busy.startsWith('upload:') && (
-            <div className="mt-2">
-              <Spinner label={`解析 ${busy.slice(7)}…`} />
-            </div>
-          )}
+          <span className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <Upload size={15} className="text-teal-600" aria-hidden="true" /> 研究资料
+          </span>
+          <span className="text-[11px] text-slate-400 dark:text-slate-500">
+            {docs.length > 0 ? `${docs.length} 份 · ` : ''}PDF / TXT / Markdown，拖拽或点击上传
+          </span>
+          <Button size="sm" variant="outline" className="ml-auto" onClick={() => fileRef.current?.click()}>
+            <FileText size={13} /> 上传
+          </Button>
+          {busy.startsWith('upload:') && <Spinner label={`解析 ${busy.slice(7)}…`} />}
         </div>
 
         {/* 语义地图（F-2.2）：默认折叠，展开时才拉数据（只读已有向量，不触发嵌入模型） */}
