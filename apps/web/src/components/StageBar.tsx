@@ -11,7 +11,9 @@ export interface StageBarProps {
   score: number | null;
   reviewedDocCount: number;
   submissionCount: number;
-  onNavigate: (view: string) => void;
+  onNavigate: (view: string, tab?: string) => void;
+  /** 当前一级入口内的 ?tab=，用于判断真实阶段 */
+  tab?: string;
 }
 
 /**
@@ -23,7 +25,7 @@ export interface StageBarProps {
  * 点任意阶段直达对应工作区。窄屏压缩为「当前阶段 + 进度 n/6」。
  */
 export function StageBar(props: StageBarProps) {
-  const { view, onNavigate } = props;
+  const { view, tab, onNavigate } = props;
   const stages: StageState[] = useStages({
     project: props.project,
     overview: props.overview,
@@ -36,7 +38,7 @@ export function StageBar(props: StageBarProps) {
   });
 
   const doneCount = stages.filter((s) => s.done).length;
-  const activeStage = stageOfView(view);
+  const activeStage = stageOfView(view, tab);
   const currentLabel = stages.find((s) => s.current)?.label ?? '选题';
 
   return (
@@ -61,7 +63,7 @@ export function StageBar(props: StageBarProps) {
             <li key={s.key} className="stage-bar__item">
               <button
                 type="button"
-                onClick={() => onNavigate(s.view)}
+                onClick={() => onNavigate(s.view, s.tab)}
                 className={`stage-bar__btn ${cls} ${isActive ? 'is-active' : ''}`}
                 aria-current={isActive ? 'step' : undefined}
                 title={`${s.label} · ${s.hint}${s.pending ? ` · ${s.pending} 项待处理` : ''}`}

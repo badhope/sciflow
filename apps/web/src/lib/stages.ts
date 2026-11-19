@@ -15,6 +15,8 @@ export interface StageState {
   pending: number;
   /** 点击跳转视图（默认阶段对应页） */
   view: string;
+  /** 目标一级入口内的二级 Tab（如 pipeline / quality） */
+  tab?: string;
   hint: string;
 }
 
@@ -54,11 +56,11 @@ export function deriveStages(input: StageInput): StageState[] {
   const submitDone = submissionCount > 0;
 
   const raw: Omit<StageState, 'current'>[] = [
-    { key: 'research', label: '选题', done: docCount > 0 || literatureDone, pending: 0, view: 'workspace', hint: '确认研究主题与可行性' },
-    { key: 'literature', label: '文献', done: literatureDone, pending: 0, view: 'literature', hint: '检索、筛选与编码文献' },
-    { key: 'outline', label: '大纲', done: outlineDone, pending: pendingOutline, view: 'pipeline', hint: '生成并确认章节大纲' },
-    { key: 'draft', label: '起草', done: draftDone, pending: 0, view: 'writing', hint: '分章起草与润色' },
-    { key: 'review', label: '评审', done: reviewDone, pending: openComments, view: 'quality', hint: '7 维质量评分与改进' },
+    { key: 'research', label: '选题', done: docCount > 0 || literatureDone, pending: 0, view: 'design', tab: 'programs', hint: '确认研究主题与可行性' },
+    { key: 'literature', label: '文献', done: literatureDone, pending: 0, view: 'evidence', tab: 'literature', hint: '检索、筛选与编码文献' },
+    { key: 'outline', label: '大纲', done: outlineDone, pending: pendingOutline, view: 'design', tab: 'pipeline', hint: '生成并确认章节大纲' },
+    { key: 'draft', label: '起草', done: draftDone, pending: 0, view: 'write-review', tab: 'writing', hint: '分章起草与润色' },
+    { key: 'review', label: '评审', done: reviewDone, pending: openComments, view: 'write-review', tab: 'quality', hint: '7 维质量评分与改进' },
     { key: 'submit', label: '投稿', done: submitDone, pending: overdue, view: 'submission', hint: '选刊、投稿信与状态跟踪' },
   ];
 
@@ -84,7 +86,11 @@ const VIEW_TO_STAGE: Record<string, StageKey> = {
 };
 
 /** 当前视图属于哪个阶段（用于阶段条高亮跟随页面） */
-export function stageOfView(view: string): StageKey | null {
+export function stageOfView(view: string, tab?: string | null): StageKey | null {
+  // 新一级入口要结合 ?tab 才能判断真实阶段：研究设计可能是计划或流水线，写作与评审可能是写作或质量。
+  if (view === 'design') return tab === 'pipeline' ? 'outline' : 'research';
+  if (view === 'evidence') return 'literature';
+  if (view === 'write-review') return tab === 'quality' ? 'review' : 'draft';
   return VIEW_TO_STAGE[view] ?? null;
 }
 

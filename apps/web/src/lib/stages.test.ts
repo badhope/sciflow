@@ -65,4 +65,20 @@ describe('deriveStages（项目阶段推断）', () => {
     expect(stageOfView('quality')).toBe('review');
     expect(stageOfView('settings')).toBeNull();
   });
+
+  it('新一级入口按 ?tab 判断真实阶段', () => {
+    expect(stageOfView('design', 'programs')).toBe('research');
+    expect(stageOfView('design', 'pipeline')).toBe('outline');
+    expect(stageOfView('evidence')).toBe('literature');
+    expect(stageOfView('write-review', 'writing')).toBe('draft');
+    expect(stageOfView('write-review', 'quality')).toBe('review');
+  });
+
+  it('阶段点击目标落到 6 入口而不是隐藏旧页', () => {
+    const stages = deriveStages({ ...base, overview: overview(), docCount: 0, hasContent: false });
+    expect(stages.find((s) => s.key === 'research')).toMatchObject({ view: 'design', tab: 'programs' });
+    expect(stages.find((s) => s.key === 'outline')).toMatchObject({ view: 'design', tab: 'pipeline' });
+    expect(stages.find((s) => s.key === 'draft')).toMatchObject({ view: 'write-review', tab: 'writing' });
+    expect(stages.find((s) => s.key === 'review')).toMatchObject({ view: 'write-review', tab: 'quality' });
+  });
 });

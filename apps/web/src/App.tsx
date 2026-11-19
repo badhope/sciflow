@@ -401,6 +401,12 @@ function AppInner() {
     },
     [navigate, searchParams, view],
   );
+  const navigateTo = useCallback(
+    (v: View, tab?: string) => {
+      navigate(`/${v}${tab ? `?tab=${tab}` : ''}`);
+    },
+    [navigate],
+  );
 
   useEffect(() => {
     try { localStorage.setItem('sciflow-theme', themeMode); } catch { /* 隐私模式 */ }
@@ -579,7 +585,8 @@ function AppInner() {
                   score={null}
                   reviewedDocCount={stageReviewedCount}
                   submissionCount={stageSubmissionCount}
-                  onNavigate={(v) => setView(v as View)}
+                  tab={selectedTab ?? undefined}
+                  onNavigate={(v, tab) => navigateTo(v as View, tab)}
                 />
               ) : undefined
             }
