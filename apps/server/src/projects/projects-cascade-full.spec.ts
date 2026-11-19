@@ -153,7 +153,7 @@ describe('ProjectsService.remove 级联删除（全表 25 张）', () => {
     for (const [k, v] of Object.entries(c)) expect(v, `${k} 未 seed`).toBe(1);
   });
 
-  it('删除项目后所有表归零（含 references / knowledge / submissions / experiments）', () => {
+  it('删除项目后所有表归零（含 references / knowledge / submissions / agent_plan / tool_approval）', () => {
     svc.remove(PID);
     expect(counts()).toEqual(ZERO);
   });
