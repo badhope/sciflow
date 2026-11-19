@@ -20,6 +20,10 @@ export const qk = {
   experiments: (projectId: string) => ['experiments', projectId] as const,
   pipelineTask: (taskId: string) => ['pipeline-task', taskId] as const,
 
+  dashboardOverview: (projectId: string) => ['dashboard-overview', projectId] as const,
+  dashboardGate: (projectId: string) => ['dashboard-gate', projectId] as const,
+  dashboardSubmissions: (projectId: string) => ['dashboard-submissions', projectId] as const,
+
   agentMetrics: (projectId: string) => ['agent-metrics', projectId] as const,
   agentPlans: (projectId: string) => ['agent-plans', projectId] as const,
   agentApprovals: (projectId: string) => ['agent-approvals', projectId] as const,

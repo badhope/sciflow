@@ -202,6 +202,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_type ON memory_log(type);
 CREATE INDEX IF NOT EXISTS idx_citation_reference ON citation(reference_id);
 CREATE INDEX IF NOT EXISTS idx_memory_project_created ON memory_log(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pipeline_status ON pipeline_task(status);
+CREATE INDEX IF NOT EXISTS idx_pipeline_project_status ON pipeline_task(project_id, status);
 CREATE INDEX IF NOT EXISTS idx_document_project_updated ON document(project_id, updated_at DESC);
 CREATE TABLE IF NOT EXISTS model_provider (
   id TEXT PRIMARY KEY,
@@ -392,6 +393,7 @@ CREATE TABLE IF NOT EXISTS review_comment (
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_review_comment_document ON review_comment(document_id);
+CREATE INDEX IF NOT EXISTS idx_review_comment_status_document ON review_comment(status, document_id);
 
 -- 科研高级功能：自建期刊库（全局共享）
 CREATE TABLE IF NOT EXISTS journal (

@@ -23,14 +23,14 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
 }) {
   const qc = useQueryClient();
   // 文档/文献走共享 hook（与写作/证据库同 key，不再单独拼 ['dash'] 全量查询）
-  const docsQuery = useProjectDocs(project.id);
-  const refsQuery = useProjectRefs(project.id, { retry: 0 });
+  const docsQuery = useProjectDocs(project.id, { staleTime: 30_000 });
+  const refsQuery = useProjectRefs(project.id, { retry: 0, staleTime: 30_000 });
   const docs = docsQuery.data ?? [];
   const refs = refsQuery.data ?? [];
   const loading = docsQuery.isLoading || refsQuery.isLoading;
   const [newTitle, setNewTitle] = useState('');
   /** 科研全链路总览：后端未就绪/失败时为 null，前端降级为小字提示，不白屏 */
-  const overviewQuery = useQuery({ queryKey: ['dash-overview', project.id], queryFn: () => api.dashboard.overview(project.id), retry: 0 });
+  const overviewQuery = useQuery({ queryKey: qk.dashboardOverview(project.id), queryFn: () => api.dashboard.overview(project.id), retry: 0, staleTime: 15_000 });
   const overview: DashboardOverview | null = overviewQuery.data ?? null;
   const knowledgeCount = overview?.knowledgeCount ?? 0;
   const pipelineCount = overview?.pipelineCount ?? 0;
@@ -40,7 +40,7 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
    * 两者都是只读接口，失败时降级为未评分状态，不阻塞首屏。
    */
   const gateQuery = useQuery({
-    queryKey: ['dash-gate', project.id],
+    queryKey: qk.dashboardGate(project.id),
     queryFn: async () => {
       const [ov, settings] = await Promise.all([
         api.quality.projectOverview(project.id).catch(() => null),
@@ -53,7 +53,7 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
   });
   /** 投稿条数：概览接口不含该字段，驾驶舱阶段推断需要 */
   const submissionsQuery = useQuery({
-    queryKey: ['dash-submissions', project.id],
+    queryKey: qk.dashboardSubmissions(project.id),
     queryFn: () => api.submission.listTracks(project.id).catch(() => [] as never[]),
     retry: 0,
     staleTime: 60_000,

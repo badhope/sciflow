@@ -84,7 +84,12 @@ export class DashboardService {
   private pendingOutlineCount(projectId?: string): number {
     const conds = [eq(pipelineTasks.status, 'awaiting_confirmation')];
     if (projectId) conds.push(eq(pipelineTasks.projectId, projectId));
-    return db.select().from(pipelineTasks).where(and(...conds)).all().length;
+    const row = db
+      .select({ n: sql<number>`COUNT(*)` })
+      .from(pipelineTasks)
+      .where(and(...conds))
+      .get();
+    return Number(row?.n ?? 0);
   }
 
   /** open 状态审稿意见总数（按项目过滤时经 document 关联 projectId） */
