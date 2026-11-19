@@ -1,5 +1,7 @@
 import { Controller, Post, Get, Delete, Patch, Body, Param, Query, Req } from '@nestjs/common';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { SubmissionService } from './submission.service';
+import { JournalDto, SubmissionTrackDto } from './submission.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -9,6 +11,7 @@ import type { AuthPayload } from '../auth/auth.service';
  * （期刊名、稿号、修回截止日）、改他人投稿状态、删他人投稿。期刊库是全局共享资源，
  * 增删仅管理员（实例级配置）。
  */
+@ApiTags('Submission')
 @Controller('submission')
 export class SubmissionController {
   constructor(
@@ -23,6 +26,7 @@ export class SubmissionController {
 
   /** 期刊库列表 */
   @Get('journals')
+  @ApiOkResponse({ type: [JournalDto] })
   listJournals() {
     return this.submission.listJournals();
   }
@@ -41,6 +45,7 @@ export class SubmissionController {
 
   /** 新增期刊 */
   @Post('journals-lib')
+  @ApiOkResponse({ type: JournalDto })
   addJournal(@Body() body: Record<string, any>, @Req() req: { user?: AuthPayload }) {
     this.access.assertAdmin(req.user);
     return this.submission.addJournal({
@@ -73,6 +78,7 @@ export class SubmissionController {
 
   /** 登记投稿（L1） */
   @Post('track')
+  @ApiOkResponse({ type: SubmissionTrackDto })
   createTrack(@Body() body: Record<string, any>, @Req() req: { user?: AuthPayload }) {
     this.access.assertProject(body?.projectId, req.user);
     if (body?.documentId) this.access.assertDocument(body.documentId, req.user);
@@ -92,6 +98,7 @@ export class SubmissionController {
 
   /** 投稿列表（含事件流 + 超期推断） */
   @Get('track')
+  @ApiOkResponse({ type: [SubmissionTrackDto] })
   listTracks(@Query('projectId') projectId: string, @Req() req: { user?: AuthPayload }) {
     this.access.assertProject(projectId, req.user);
     return this.submission.listTracks(projectId || '');
@@ -105,6 +112,7 @@ export class SubmissionController {
 
   /** 追加状态事件 */
   @Post('track/:id/event')
+  @ApiOkResponse({ type: SubmissionTrackDto })
   addEvent(@Param('id') id: string, @Body() body: { status: string; date?: number; note?: string }, @Req() req: { user?: AuthPayload }) {
     this.access.assertSubmission(id, req.user);
     return this.submission.addTrackEvent(id, {
@@ -116,6 +124,7 @@ export class SubmissionController {
 
   /** 修改 note / currentStatus / revisionDeadline */
   @Patch('track/:id')
+  @ApiOkResponse({ type: SubmissionTrackDto })
   updateTrack(@Param('id') id: string, @Body() body: { notes?: string; currentStatus?: string; revisionDeadline?: number | null }, @Req() req: { user?: AuthPayload }) {
     this.access.assertSubmission(id, req.user);
     return this.submission.updateTrack(id, { notes: body.notes, currentStatus: body.currentStatus, revisionDeadline: body.revisionDeadline });

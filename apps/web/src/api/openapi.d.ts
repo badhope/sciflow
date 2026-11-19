@@ -3506,6 +3506,111 @@ export interface components {
             /** @description 重复文献指向的已有文献 ID */
             isDuplicateOf?: string;
         };
+        JournalDto: {
+            /** @description 期刊 ID */
+            id: string;
+            /** @description 期刊名 */
+            name: string;
+            /** @description ISSN */
+            issn: string;
+            /** @description 出版方 */
+            publisher: string;
+            /** @description 收稿范围 */
+            scopeText: string;
+            /** @description 2024 影响因子（未知为 null） */
+            if2024: number | null;
+            /** @description 分区 */
+            quartile: string;
+            /** @description 首次决定周期（周，未知为 null） */
+            firstDecisionWeeks: number | null;
+            /** @description 录用率（未知为 null） */
+            acceptanceRate: number | null;
+            /** @description 开放获取状态 */
+            oa: string;
+            /** @description 创建时间 */
+            createdAt: number;
+        };
+        SubmissionStatusEventDto: {
+            /** @description 事件 ID */
+            id: string;
+            /** @description 投稿记录 ID */
+            submissionId: string;
+            /** @description 变更前状态；首条为空串 */
+            fromStatus: string;
+            /**
+             * @description 变更后状态
+             * @enum {string}
+             */
+            toStatus: "submitted" | "initial_review" | "external_review" | "review_returned" | "minor_revision" | "major_revision" | "re_review" | "final_review" | "accepted" | "in_production" | "rejected" | "withdrawn" | "transferred";
+            /** @description 状态实际发生时间 */
+            eventAt: number;
+            /**
+             * @description 来源
+             * @example manual
+             */
+            source: string;
+            /** @description 邮件原文片段（来源为 email_ai 时） */
+            rawEmailText: string;
+            /** @description 解析置信度；手动录入为 1 */
+            confidence: number;
+            /** @description 备注 */
+            note: string;
+            /** @description 录入时间 */
+            createdAt: number;
+        };
+        SubmissionTrackDto: {
+            /** @description 投稿记录 ID */
+            id: string;
+            /** @description 所属项目 ID */
+            projectId: string;
+            /** @description 关联文档 ID */
+            documentId: string;
+            /** @description 关联期刊库 ID */
+            journalId: string;
+            /** @description 期刊名（冗余，未入库也可记） */
+            journalName: string;
+            /** @description 稿号 */
+            manuscriptNo: string;
+            /** @description 稿件标题 */
+            title: string;
+            /** @description 投稿日期 */
+            submittedAt: number | null;
+            /**
+             * @description 当前状态
+             * @enum {string}
+             */
+            currentStatus: "submitted" | "initial_review" | "external_review" | "review_returned" | "minor_revision" | "major_revision" | "re_review" | "final_review" | "accepted" | "in_production" | "rejected" | "withdrawn" | "transferred";
+            /** @description 当前状态最近变更时间 */
+            statusUpdatedAt: number | null;
+            /** @description 修回/缴费截止 */
+            revisionDeadline: number | null;
+            /** @description 转投时指向的旧投稿记录 ID */
+            previousSubmissionId: string;
+            /**
+             * @description 来源
+             * @example manual
+             */
+            source: string;
+            /** @description 备注 */
+            notes: string;
+            /** @description 创建时间 */
+            createdAt: number;
+            /** @description 更新时间 */
+            updatedAt: number;
+            /** @description 全部状态事件（时间正序） */
+            events: components["schemas"]["SubmissionStatusEventDto"][];
+            /** @description 预计首次决定时间（L3 推断） */
+            dueAt: number | null;
+            /** @description 是否超期（L3 推断） */
+            overdue: boolean;
+            /** @description 超期天数（L3 推断） */
+            overdueDays: number;
+            /**
+             * @description 预计阶段（L3 推断）
+             * @enum {string|null}
+             */
+            estimatedStage?: "submitted" | "initial_review" | "external_review" | "review_returned" | "minor_revision" | "major_revision" | "re_review" | "final_review" | "accepted" | "in_production" | "rejected" | "withdrawn" | "transferred" | null;
+        };
         ProjectDto: {
             /** @description 项目 ID */
             id: string;
@@ -5022,7 +5127,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["JournalDto"][];
+                };
             };
         };
     };
@@ -5086,11 +5193,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["JournalDto"];
+                };
             };
         };
     };
@@ -5145,7 +5254,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SubmissionTrackDto"][];
+                };
             };
         };
     };
@@ -5158,11 +5269,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SubmissionTrackDto"];
+                };
             };
         };
     };
@@ -5194,11 +5307,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SubmissionTrackDto"];
+                };
             };
         };
     };
@@ -5236,7 +5351,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SubmissionTrackDto"];
+                };
             };
         };
     };

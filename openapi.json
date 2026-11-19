@@ -1434,7 +1434,17 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JournalDto"
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1475,8 +1485,15 @@
         "operationId": "SubmissionController_addJournal",
         "parameters": [],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1526,8 +1543,15 @@
         "operationId": "SubmissionController_createTrack",
         "parameters": [],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionTrackDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1548,7 +1572,17 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SubmissionTrackDto"
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1584,8 +1618,15 @@
           }
         ],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionTrackDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1608,7 +1649,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionTrackDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -5860,6 +5908,294 @@
           "tags",
           "citationCount",
           "createdAt"
+        ]
+      },
+      "JournalDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "期刊 ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "期刊名"
+          },
+          "issn": {
+            "type": "string",
+            "description": "ISSN"
+          },
+          "publisher": {
+            "type": "string",
+            "description": "出版方"
+          },
+          "scopeText": {
+            "type": "string",
+            "description": "收稿范围"
+          },
+          "if2024": {
+            "type": "number",
+            "description": "2024 影响因子（未知为 null）",
+            "nullable": true
+          },
+          "quartile": {
+            "type": "string",
+            "description": "分区"
+          },
+          "firstDecisionWeeks": {
+            "type": "number",
+            "description": "首次决定周期（周，未知为 null）",
+            "nullable": true
+          },
+          "acceptanceRate": {
+            "type": "number",
+            "description": "录用率（未知为 null）",
+            "nullable": true
+          },
+          "oa": {
+            "type": "string",
+            "description": "开放获取状态"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "issn",
+          "publisher",
+          "scopeText",
+          "if2024",
+          "quartile",
+          "firstDecisionWeeks",
+          "acceptanceRate",
+          "oa",
+          "createdAt"
+        ]
+      },
+      "SubmissionStatusEventDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "事件 ID"
+          },
+          "submissionId": {
+            "type": "string",
+            "description": "投稿记录 ID"
+          },
+          "fromStatus": {
+            "type": "string",
+            "description": "变更前状态；首条为空串"
+          },
+          "toStatus": {
+            "type": "string",
+            "description": "变更后状态",
+            "enum": [
+              "submitted",
+              "initial_review",
+              "external_review",
+              "review_returned",
+              "minor_revision",
+              "major_revision",
+              "re_review",
+              "final_review",
+              "accepted",
+              "in_production",
+              "rejected",
+              "withdrawn",
+              "transferred"
+            ]
+          },
+          "eventAt": {
+            "type": "number",
+            "description": "状态实际发生时间"
+          },
+          "source": {
+            "type": "string",
+            "description": "来源",
+            "example": "manual"
+          },
+          "rawEmailText": {
+            "type": "string",
+            "description": "邮件原文片段（来源为 email_ai 时）"
+          },
+          "confidence": {
+            "type": "number",
+            "description": "解析置信度；手动录入为 1"
+          },
+          "note": {
+            "type": "string",
+            "description": "备注"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "录入时间"
+          }
+        },
+        "required": [
+          "id",
+          "submissionId",
+          "fromStatus",
+          "toStatus",
+          "eventAt",
+          "source",
+          "rawEmailText",
+          "confidence",
+          "note",
+          "createdAt"
+        ]
+      },
+      "SubmissionTrackDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "投稿记录 ID"
+          },
+          "projectId": {
+            "type": "string",
+            "description": "所属项目 ID"
+          },
+          "documentId": {
+            "type": "string",
+            "description": "关联文档 ID"
+          },
+          "journalId": {
+            "type": "string",
+            "description": "关联期刊库 ID"
+          },
+          "journalName": {
+            "type": "string",
+            "description": "期刊名（冗余，未入库也可记）"
+          },
+          "manuscriptNo": {
+            "type": "string",
+            "description": "稿号"
+          },
+          "title": {
+            "type": "string",
+            "description": "稿件标题"
+          },
+          "submittedAt": {
+            "type": "number",
+            "description": "投稿日期",
+            "nullable": true
+          },
+          "currentStatus": {
+            "type": "string",
+            "description": "当前状态",
+            "enum": [
+              "submitted",
+              "initial_review",
+              "external_review",
+              "review_returned",
+              "minor_revision",
+              "major_revision",
+              "re_review",
+              "final_review",
+              "accepted",
+              "in_production",
+              "rejected",
+              "withdrawn",
+              "transferred"
+            ]
+          },
+          "statusUpdatedAt": {
+            "type": "number",
+            "description": "当前状态最近变更时间",
+            "nullable": true
+          },
+          "revisionDeadline": {
+            "type": "number",
+            "description": "修回/缴费截止",
+            "nullable": true
+          },
+          "previousSubmissionId": {
+            "type": "string",
+            "description": "转投时指向的旧投稿记录 ID"
+          },
+          "source": {
+            "type": "string",
+            "description": "来源",
+            "example": "manual"
+          },
+          "notes": {
+            "type": "string",
+            "description": "备注"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "更新时间"
+          },
+          "events": {
+            "description": "全部状态事件（时间正序）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubmissionStatusEventDto"
+            }
+          },
+          "dueAt": {
+            "type": "number",
+            "description": "预计首次决定时间（L3 推断）",
+            "nullable": true
+          },
+          "overdue": {
+            "type": "boolean",
+            "description": "是否超期（L3 推断）"
+          },
+          "overdueDays": {
+            "type": "number",
+            "description": "超期天数（L3 推断）"
+          },
+          "estimatedStage": {
+            "type": "string",
+            "description": "预计阶段（L3 推断）",
+            "enum": [
+              "submitted",
+              "initial_review",
+              "external_review",
+              "review_returned",
+              "minor_revision",
+              "major_revision",
+              "re_review",
+              "final_review",
+              "accepted",
+              "in_production",
+              "rejected",
+              "withdrawn",
+              "transferred"
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "documentId",
+          "journalId",
+          "journalName",
+          "manuscriptNo",
+          "title",
+          "submittedAt",
+          "currentStatus",
+          "statusUpdatedAt",
+          "revisionDeadline",
+          "previousSubmissionId",
+          "source",
+          "notes",
+          "createdAt",
+          "updatedAt",
+          "events",
+          "dueAt",
+          "overdue",
+          "overdueDays"
         ]
       },
       "ProjectDto": {

@@ -719,20 +719,8 @@ export interface ReviewComment {
   updatedAt: number;
 }
 
-/** 自建期刊库 */
-export interface Journal {
-  id: string;
-  name: string;
-  issn: string;
-  publisher: string;
-  scopeText: string;
-  if2024: number | null;
-  quartile: string;
-  firstDecisionWeeks: number | null;
-  acceptanceRate: number | null;
-  oa: string;
-  createdAt: number;
-}
+/** 自建期刊库：类型来自 OpenAPI 生成 contract（JournalDto）。 */
+export type Journal = components['schemas']['JournalDto'];
 
 /** 期刊匹配推荐结果（结构化） */
 export interface JournalMatchItem {
@@ -780,61 +768,17 @@ export type Experiment = components['schemas']['ExperimentDto'];
  * 投稿流程状态跟踪（13 状态码 + 事件流 + 周期推断）
  * ===================================================================== */
 
-/** 13 个统一状态码（后端 SUBMISSION_STATUSES） */
-export type SubmissionStatus =
-  | 'submitted'
-  | 'initial_review'
-  | 'external_review'
-  | 'review_returned'
-  | 'minor_revision'
-  | 'major_revision'
-  | 're_review'
-  | 'final_review'
-  | 'accepted'
-  | 'in_production'
-  | 'rejected'
-  | 'withdrawn'
-  | 'transferred';
+/**
+ * 投稿状态：类型来自 OpenAPI 生成 contract（SubmissionTrackDto.currentStatus 枚举）。
+ * 13 个状态码单一来源为后端 SUBMISSION_STATUSES。
+ */
+export type SubmissionStatus = components['schemas']['SubmissionTrackDto']['currentStatus'];
 
-/** 投稿状态历史事件（append-only 流水） */
-export interface SubmissionStatusEvent {
-  id: string;
-  submissionId: string;
-  fromStatus: string;
-  toStatus: string;
-  eventAt: number;
-  source: string; // manual | email_ai | system
-  rawEmailText: string;
-  confidence: number;
-  note: string;
-  createdAt: number;
-}
+/** 投稿状态历史事件：类型来自 OpenAPI 生成 contract（SubmissionStatusEventDto）。 */
+export type SubmissionStatusEvent = components['schemas']['SubmissionStatusEventDto'];
 
-/** 一条投稿记录（含全部事件 + L3 推断字段） */
-export interface SubmissionTrack {
-  id: string;
-  projectId: string;
-  documentId: string;
-  journalId: string;
-  journalName: string;
-  manuscriptNo: string;
-  title: string;
-  submittedAt: number | null;
-  currentStatus: SubmissionStatus;
-  statusUpdatedAt: number | null;
-  revisionDeadline: number | null;
-  previousSubmissionId: string;
-  source: string;
-  notes: string;
-  createdAt: number;
-  updatedAt: number;
-  events: SubmissionStatusEvent[];
-  /** L3 周期推断（journal.firstDecisionWeeks 存在时才有值） */
-  dueAt: number | null;
-  overdue: boolean;
-  overdueDays: number;
-  estimatedStage: SubmissionStatus | null;
-}
+/** 一条投稿记录（含事件流 + L3 推断字段）：类型来自 OpenAPI 生成 contract。 */
+export type SubmissionTrack = components['schemas']['SubmissionTrackDto'];
 
 /** AI 解析编辑部邮件的建议（不改库，用户确认后走 event 端点） */
 export interface ParseEmailResult {
