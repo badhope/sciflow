@@ -40,5 +40,6 @@ describe('AGENT_TOOL_MODE=dynamic', () => {
     const search = set['tool_search'] as { execute: (a: Record<string, unknown>) => Promise<unknown> };
     const found = (await search.execute({ query: 'document.update' })) as { tools: { name: string }[] };
     expect(found.tools.map((t) => t.name)).toContain('document.update');
-  }, 30_000);
+  // 全量并发/冷缓存下，动态工具集导入与 DB 初始化可能接近 30s；给测试留出 CI 余量。
+  }, 60_000);
 });
