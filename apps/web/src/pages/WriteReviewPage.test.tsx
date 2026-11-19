@@ -28,6 +28,7 @@ describe('WriteReviewPage', () => {
     const onDocChange = vi.fn();
     render(<WriteReviewPage project={project} initialDocId={null} onTabChange={vi.fn()} onDocChange={onDocChange} />);
     expect(await screen.findByText('写作当前：d2')).toBeTruthy();
+    expect(onDocChange).toHaveBeenLastCalledWith('d2');
     await userEvent.click(screen.getByRole('button', { name: '选择论文 A' }));
     expect(await screen.findByText('写作当前：d1')).toBeTruthy();
     expect(onDocChange).toHaveBeenLastCalledWith('d1');

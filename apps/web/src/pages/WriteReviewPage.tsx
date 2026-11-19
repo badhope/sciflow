@@ -43,6 +43,7 @@ export function WriteReviewPage({
   }, [initialDocId]);
 
   // 没有 URL 指定时默认选最新一篇；列表按 updatedAt 升序，取最后一条。
+  // 默认选择也写回 URL（App 用 replace 更新，不会堆历史）；刷新/分享仍停在同一篇。
   useEffect(() => {
     if (!docId && docs.length > 0) {
       const latest = docs[docs.length - 1].id;

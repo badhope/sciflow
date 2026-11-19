@@ -409,7 +409,8 @@ function AppInner() {
       const next = new URLSearchParams(searchParams);
       if (id) next.set('doc', id);
       else next.delete('doc');
-      navigate(`/${view}?${next.toString()}`);
+      // 文档切换不是一次新导航：replace 避免每次选稿都堆历史、造成返回时来回跳。
+      navigate(`/${view}?${next.toString()}`, { replace: true });
     },
     [navigate, searchParams, view],
   );
@@ -690,7 +691,7 @@ function AppInner() {
                   </ol>
                 </div>
               ) : (
-                <>{PAGE_RENDERERS[view]({ project: currentProject, openDoc: (id: string) => navigate(`/write-review?tab=writing&doc=${id}`), onNavigate: setView, initialDocId: selectedDocId, tab: selectedTab, onTabChange: setTab, onDocChange: setDocParam })}</>
+                <>{PAGE_RENDERERS[view]({ project: currentProject, openDoc: (id: string) => navigate(`/write-review?tab=writing&doc=${id}`), onNavigate: navigateTo, initialDocId: selectedDocId, tab: selectedTab, onTabChange: setTab, onDocChange: setDocParam })}</>
               )}
             </div>
           </AppShell>
