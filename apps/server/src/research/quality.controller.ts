@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Body, Param, Query, Req } from '@nestjs/common';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { QualityService } from './quality.service';
+import { ProjectQualityOverviewDto } from './quality-overview.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -8,6 +10,7 @@ import type { AuthPayload } from '../auth/auth.service';
  * v1.8 安全：此前零归属校验 —— 企业模式下可按 documentId 读他人稿件的评分与改进建议
  * （含正文摘要）、按 report id 读任意报告。现在统一经 document → project 断言。
  */
+@ApiTags('Quality')
 @Controller('quality')
 export class QualityController {
   constructor(
@@ -41,6 +44,7 @@ export class QualityController {
    * 必须声明在 ':id' 动态路由之前，否则 'project-overview' 会被当成报告 id。
    */
   @Get('project-overview')
+  @ApiOkResponse({ type: ProjectQualityOverviewDto })
   projectOverview(@Query('projectId') projectId: string, @Req() req: { user?: AuthPayload }) {
     this.access.assertProject(projectId, req.user);
     return this.quality.projectOverview(projectId);

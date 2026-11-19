@@ -70,7 +70,7 @@
           }
         },
         "tags": [
-          "AgentTrace"
+          "Agent"
         ]
       }
     },
@@ -93,7 +93,7 @@
           }
         },
         "tags": [
-          "AgentTrace"
+          "Agent"
         ]
       }
     },
@@ -120,11 +120,18 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentUsageTrendDto"
+                }
+              }
+            }
           }
         },
         "tags": [
-          "AgentTrace"
+          "Agent"
         ]
       }
     },
@@ -138,7 +145,7 @@
           }
         },
         "tags": [
-          "AgentTrace"
+          "Agent"
         ]
       }
     },
@@ -1353,7 +1360,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectQualityOverviewDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -5859,6 +5873,43 @@
   "servers": [],
   "components": {
     "schemas": {
+      "TokenUsagePointDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "日期 YYYY-MM-DD"
+          },
+          "tokens": {
+            "type": "number",
+            "description": "token 数"
+          },
+          "runs": {
+            "type": "number",
+            "description": "run 数"
+          }
+        },
+        "required": [
+          "date",
+          "tokens",
+          "runs"
+        ]
+      },
+      "AgentUsageTrendDto": {
+        "type": "object",
+        "properties": {
+          "trend": {
+            "description": "按日用量",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TokenUsagePointDto"
+            }
+          }
+        },
+        "required": [
+          "trend"
+        ]
+      },
       "AgentToolCallsSummaryDto": {
         "type": "object",
         "properties": {
@@ -6288,6 +6339,123 @@
           "tags",
           "citationCount",
           "createdAt"
+        ]
+      },
+      "ProjectQualityOverviewItemDto": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "文档 ID"
+          },
+          "title": {
+            "type": "string",
+            "description": "文档标题"
+          },
+          "status": {
+            "type": "string",
+            "description": "文档状态"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "更新时间"
+          },
+          "chars": {
+            "type": "number",
+            "description": "正文字符数"
+          },
+          "objectiveScore": {
+            "type": "number",
+            "description": "客观质量分"
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "客观报告指纹"
+          },
+          "hardFailCount": {
+            "type": "number",
+            "description": "硬失败数量"
+          },
+          "hardFails": {
+            "description": "硬失败条目",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "llmScore": {
+            "type": "number",
+            "description": "最新 LLM 分",
+            "nullable": true
+          },
+          "llmScoredAt": {
+            "type": "number",
+            "description": "最新 LLM 评分时间",
+            "nullable": true
+          },
+          "passScore": {
+            "type": "number",
+            "description": "当前标准的及格线"
+          },
+          "passed": {
+            "type": "boolean",
+            "description": "客观分是否达到及格线"
+          }
+        },
+        "required": [
+          "documentId",
+          "title",
+          "status",
+          "updatedAt",
+          "chars",
+          "objectiveScore",
+          "fingerprint",
+          "hardFailCount",
+          "hardFails",
+          "llmScore",
+          "llmScoredAt",
+          "passScore",
+          "passed"
+        ]
+      },
+      "ProjectQualityOverviewDto": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "description": "项目 ID"
+          },
+          "total": {
+            "type": "number",
+            "description": "文档总数"
+          },
+          "passed": {
+            "type": "number",
+            "description": "达标数"
+          },
+          "failed": {
+            "type": "number",
+            "description": "未达标数"
+          },
+          "unscored": {
+            "type": "number",
+            "description": "空稿/未评分数"
+          },
+          "items": {
+            "description": "文档条目（按客观分升序）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectQualityOverviewItemDto"
+            }
+          }
+        },
+        "required": [
+          "projectId",
+          "total",
+          "passed",
+          "failed",
+          "unscored",
+          "items"
         ]
       },
       "JournalDto": {

@@ -249,32 +249,11 @@ export interface ObjectiveAuditResponse {
   llmHistory: { totalScore: number; createdAt: number; scores: string | Record<string, number> }[];
 }
 
-/** 项目内全部文档的最新分总览（GET /api/quality/project-overview） */
-export interface ProjectQualityOverviewItem {
-  documentId: string;
-  title: string;
-  status: string;
-  updatedAt: number;
-  chars: number;
-  objectiveScore: number;
-  fingerprint: string;
-  hardFailCount: number;
-  hardFails: string[];
-  llmScore: number | null;
-  llmScoredAt: number | null;
-  /** 当前评审标准的及格线（draft 70 / conference 78 / standard 80 / strict 85） */
-  passScore: number;
-  passed: boolean;
-}
+/** 项目质量总览：类型来自 OpenAPI 生成 contract（ProjectQualityOverviewDto）。 */
+export type ProjectQualityOverview = components['schemas']['ProjectQualityOverviewDto'];
 
-export interface ProjectQualityOverview {
-  projectId: string;
-  total: number;
-  passed: number;
-  failed: number;
-  unscored: number;
-  items: ProjectQualityOverviewItem[];
-}
+/** 单篇质量条目：从总览契约的数组元素派生，不另写一份。 */
+export type ProjectQualityOverviewItem = ProjectQualityOverview['items'][number];
 
 /** GET /api/documents/:id/objective-audit 的 report 字段 —— 同一文本必然同分同指纹 */
 export interface ObjectiveQualityReport {

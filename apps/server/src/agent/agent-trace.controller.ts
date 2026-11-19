@@ -3,7 +3,9 @@
  */
 
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { AgentTraceService } from './agent-trace.service';
+import { AgentUsageTrendDto } from './token-usage.dto';
 import { OtelExportService } from './otel-export.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectAccessService } from '../common/project-access.service';
@@ -14,6 +16,7 @@ import type { AuthPayload } from '../auth/auth.service';
  * v1.8 安全：此前只挂了 JwtAuthGuard（只管「是否登录」），任意登录账号可用他人 projectId
  * 读执行轨迹（输入原文、模型、耗时、token），或用 run id 读单次详情。现按归属断言。
  */
+@ApiTags('Agent')
 @Controller('agent')
 @UseGuards(JwtAuthGuard)
 export class AgentTraceController {
@@ -42,6 +45,7 @@ export class AgentTraceController {
 
   /** Token 用量走势 */
   @Get('usage')
+  @ApiOkResponse({ type: AgentUsageTrendDto })
   usageTrend(@Query('projectId') projectId: string, @Req() req?: { user?: AuthPayload }, @Query('days') days?: string) {
     if (!projectId) return { error: 'projectId required' };
     this.access.assertProject(projectId, req?.user);

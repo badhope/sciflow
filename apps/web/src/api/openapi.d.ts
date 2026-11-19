@@ -3464,6 +3464,18 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        TokenUsagePointDto: {
+            /** @description 日期 YYYY-MM-DD */
+            date: string;
+            /** @description token 数 */
+            tokens: number;
+            /** @description run 数 */
+            runs: number;
+        };
+        AgentUsageTrendDto: {
+            /** @description 按日用量 */
+            trend: components["schemas"]["TokenUsagePointDto"][];
+        };
         AgentToolCallsSummaryDto: {
             /** @description 调用总次数 */
             total: number;
@@ -3625,6 +3637,48 @@ export interface components {
             fingerprint?: string;
             /** @description 重复文献指向的已有文献 ID */
             isDuplicateOf?: string;
+        };
+        ProjectQualityOverviewItemDto: {
+            /** @description 文档 ID */
+            documentId: string;
+            /** @description 文档标题 */
+            title: string;
+            /** @description 文档状态 */
+            status: string;
+            /** @description 更新时间 */
+            updatedAt: number;
+            /** @description 正文字符数 */
+            chars: number;
+            /** @description 客观质量分 */
+            objectiveScore: number;
+            /** @description 客观报告指纹 */
+            fingerprint: string;
+            /** @description 硬失败数量 */
+            hardFailCount: number;
+            /** @description 硬失败条目 */
+            hardFails: string[];
+            /** @description 最新 LLM 分 */
+            llmScore: number | null;
+            /** @description 最新 LLM 评分时间 */
+            llmScoredAt: number | null;
+            /** @description 当前标准的及格线 */
+            passScore: number;
+            /** @description 客观分是否达到及格线 */
+            passed: boolean;
+        };
+        ProjectQualityOverviewDto: {
+            /** @description 项目 ID */
+            projectId: string;
+            /** @description 文档总数 */
+            total: number;
+            /** @description 达标数 */
+            passed: number;
+            /** @description 未达标数 */
+            failed: number;
+            /** @description 空稿/未评分数 */
+            unscored: number;
+            /** @description 文档条目（按客观分升序） */
+            items: components["schemas"]["ProjectQualityOverviewItemDto"][];
         };
         JournalDto: {
             /** @description 期刊 ID */
@@ -4059,7 +4113,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentUsageTrendDto"];
+                };
             };
         };
     };
@@ -5253,7 +5309,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProjectQualityOverviewDto"];
+                };
             };
         };
     };

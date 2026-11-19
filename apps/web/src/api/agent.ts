@@ -35,11 +35,8 @@ export interface AgentRunDetail extends AgentExecution {
   steps: AgentStep[];
 }
 
-export interface TokenUsagePoint {
-  date: string;
-  tokens: number;
-  runs: number;
-}
+/** Token 用量点：类型来自 OpenAPI 生成 contract（TokenUsagePointDto）。 */
+export type TokenUsagePoint = components['schemas']['TokenUsagePointDto'];
 
 
 /** 任务清单条目（harness：模型把多步工作显式列出，用户可核进度） */
