@@ -13,6 +13,7 @@ import { ToastContext } from '../App';
 import type { View } from '../App';
 import { ProjectCockpit, type QualityGateState } from './dashboard/ProjectCockpit';
 import { AgentOpsPanel } from './dashboard/AgentOpsPanel';
+import { ResearchBriefCard } from './dashboard/ResearchBriefCard';
 
 export function DashboardPage({ project, onNavigate, openDoc }: {
   project: Project;
@@ -194,6 +195,9 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
         onNavigate={onNavigate}
         onOpenDoc={openDoc}
       />
+
+      {/* 研究 Brief：项目级研究契约，Agent 对话/研究计划自动读取 */}
+      <ResearchBriefCard projectId={project.id} />
 
       {/* Agent 运行：计划批准 / 单次审批 / 任务进度 / 工具指标 / 最近执行，紧跟驾驶舱之后 */}
       <div className="mb-6">

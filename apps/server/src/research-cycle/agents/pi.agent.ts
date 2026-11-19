@@ -36,6 +36,8 @@ export interface PiPlanInput {
   /** 上一轮结论（第一轮为空） */
   priorVerdict?: string;
   iteration: number;
+  /** 项目研究 Brief（用户维护的研究契约；无项目上下文时为空） */
+  brief?: string;
   /** 检索到的文献线索（仅作背景；无命中时为空） */
   literature?: { title: string; year: number | null; venue: string; doi: string }[];
   /** LLM 调用归集标签（按循环维度统计 token 用） */
@@ -56,6 +58,11 @@ const PI_SYSTEM = [
 ].join('\n');
 
 /** 文献线索块：只给标题/年份/载体的紧凑列表，控制 token 且便于模型引用 */
+function briefBlock(brief: string | undefined): string {
+  const text = brief?.trim();
+  return text ? `\n\n【项目研究 Brief（必须遵守的范围/约束/成功标准）】\n${text.slice(0, 2400)}` : '';
+}
+
 function literatureBlock(refs: PiPlanInput['literature']): string {
   if (!refs?.length) return '';
   const lines = refs.slice(0, 6).map((r, i) => `${i + 1}. ${r.title}（${r.year ?? 'n.d.'}，${r.venue || '未知载体'}${r.doi ? `，DOI:${r.doi}` : ''}）`);
@@ -76,6 +83,7 @@ export async function planWithPi(ai: AiService, input: PiPlanInput): Promise<PiP
         `【这是第 ${input.iteration + 1} 轮】`,
         '请先在 questionEcho 里逐字复述上面的研究问题，再给出假设与协议。',
         '假设与协议必须只针对这个研究问题，不得替换成别的主题。',
+        briefBlock(input.brief),
         literatureBlock(input.literature),
         feedbackBlock,
       ].join('\n'),

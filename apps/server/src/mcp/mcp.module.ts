@@ -12,9 +12,10 @@ import { ResearchModule } from '../research/research.module';
 import { ExperimentsModule } from '../experiments/experiments.module';
 import { BrowserModule } from '../browser/browser.module';
 import { MemoryModule } from '../memory/memory.module';
+import { ResearchBriefModule } from '../research-brief/research-brief.module';
 
 @Module({
-  imports: [AiModule, ReferencesModule, KnowledgeModule, ConfigModule, ExtensionsModule, ProjectsModule, DocumentsModule, ResearchModule, ExperimentsModule, BrowserModule, MemoryModule],
+  imports: [AiModule, ReferencesModule, KnowledgeModule, ConfigModule, ExtensionsModule, ProjectsModule, DocumentsModule, ResearchModule, ExperimentsModule, BrowserModule, MemoryModule, ResearchBriefModule],
   controllers: [McpController],
   providers: [McpService],
   exports: [McpService],

@@ -12,6 +12,7 @@ import { resolveAgentToolProfile } from '../agent/agent-tool-profiles';
 import { ConfigCenterService } from '../config/config-center.service';
 import { loadDefaultRole } from '../common/prompt-augmentation';
 import { AgentTraceService } from '../agent/agent-trace.service';
+import { ResearchBriefService } from '../research-brief/research-brief.service';
 import { db } from '../db/database';
 import { projects, appSettings } from '../db/schema';
 import { envInt } from '../common/env';
@@ -76,6 +77,7 @@ export class ChatService {
     private readonly tools: AgentToolBridge,
     private readonly trace: AgentTraceService,
     private readonly config: ConfigCenterService,
+    private readonly researchBrief: ResearchBriefService,
   ) {}
 
   /** 组装项目上下文：程序/情景记忆 + 知识库检索片段（NotebookLM 式 RAG 注入）；同时返回去重后的来源列表
@@ -95,9 +97,11 @@ export class ChatService {
       if (projectId) {
         const proj = db.select().from(projects).where(eq(projects.id, projectId)).get();
         if (proj?.preface?.trim()) parts.push(`项目要求：${proj.preface.trim()}`);
+        const brief = this.researchBrief.render(projectId);
+        if (brief) parts.push(brief);
       }
     } catch {
-      /* preface 不可用时忽略 */
+      /* preface / brief 不可用时忽略 */
     }
     try {
       const mems = this.memory.list(undefined, undefined, projectId).slice(0, 4);

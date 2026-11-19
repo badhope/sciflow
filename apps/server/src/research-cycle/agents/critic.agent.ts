@@ -41,6 +41,8 @@ export interface CriticInput {
   previousVerdict?: string;
   /** 原始研究问题（评审据此判断是否跑题） */
   originalQuestion?: string;
+  /** 项目研究 Brief（评审据此判断是否越界/违反约束） */
+  brief?: string;
   /** 检索到的文献线索（仅作背景，不得当作实验证据） */
   literature?: { title: string; year: number | null; venue: string; doi: string }[];
   /** LLM 调用归集标签（按循环维度统计 token 用） */
@@ -74,6 +76,7 @@ export async function evaluateWithCritic(
       role: 'user' as const,
       content: [
         input.originalQuestion ? `【原始研究问题（必须始终围绕它）】${input.originalQuestion}` : '',
+        input.brief ? `【项目研究 Brief（范围/约束/成功标准）】\n${input.brief.slice(0, 2400)}` : '',
         `【本轮假设】${input.hypothesisStatement}`,
         `【预期观察】${predictions}`,
         input.designSummary ? `【本轮协议设计】${input.designSummary}` : '',

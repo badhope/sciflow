@@ -909,3 +909,15 @@ export const agentPlans = sqliteTable('agent_plan', {
 
 export type AgentPlan = typeof agentPlans.$inferSelect;
 
+/** 项目级研究 Brief：研究问题 / 范围 / 方法 / 约束 / 成功标准，供 Agent 自动注入与用户维护。 */
+export const researchBriefs = sqliteTable('research_brief', {
+  projectId: text('project_id').primaryKey(),
+  question: text('question').default(''),
+  scope: text('scope').default(''),
+  methods: text('methods').default(''),
+  constraints: text('constraints').default(''),
+  successCriteria: text('success_criteria').default(''),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type ResearchBrief = typeof researchBriefs.$inferSelect;

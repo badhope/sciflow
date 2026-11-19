@@ -11,6 +11,17 @@ export interface Project {
   templates?: string;
 }
 
+/** 项目级研究 Brief：研究问题 / 范围 / 方法 / 约束 / 成功标准（Agent 每轮读取） */
+export interface ResearchBrief {
+  projectId: string;
+  question: string;
+  scope: string;
+  methods: string;
+  constraints: string;
+  successCriteria: string;
+  updatedAt: number;
+}
+
 /** 自主科研对象（阶段 2） */
 export interface ResearchProgram {
   id: string;

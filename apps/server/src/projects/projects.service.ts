@@ -3,7 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { db, sqlite } from '../db/database';
-import { projects, documents, references, pipelineTasks, reflexionLogs, screeningQueue, extractionFields, extractionValues, reviewComments, experiments, submissions, submissionStatusEvents, citations, qualityReports, polishRecords, knowledgeDocs, knowledgeChunks, memoryLogs, agentExecutions, agentSteps, agentTasks, toolApprovals, agentPlans, llmCallLogs, chatSessions } from '../db/schema';
+import { projects, documents, references, pipelineTasks, reflexionLogs, screeningQueue, extractionFields, extractionValues, reviewComments, experiments, submissions, submissionStatusEvents, citations, qualityReports, polishRecords, knowledgeDocs, knowledgeChunks, memoryLogs, agentExecutions, agentSteps, agentTasks, toolApprovals, agentPlans, llmCallLogs, chatSessions, researchBriefs } from '../db/schema';
 import { parseJson } from '../common/json-guard';
 import { BUNDLE_TABLES, BUNDLE_VERSION, buildIdMap, remapRow, renameOnImport, validateBundle } from './project-bundle';
 
@@ -127,6 +127,7 @@ export class ProjectsService {
     db.delete(references).where(eq(references.projectId, id)).run();
     db.delete(pipelineTasks).where(eq(pipelineTasks.projectId, id)).run();
     db.delete(experiments).where(eq(experiments.projectId, id)).run();
+    db.delete(researchBriefs).where(eq(researchBriefs.projectId, id)).run();
     db.delete(projects).where(eq(projects.id, id)).run();
     return { ok: true };
   }

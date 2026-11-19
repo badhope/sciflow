@@ -10,6 +10,7 @@ import {
   memoryLogs,
   pipelineTasks,
   reflexionLogs,
+  researchBriefs,
 } from '../db/schema';
 import { ProjectsService } from './projects.service';
 
@@ -34,6 +35,7 @@ function seed() {
   db.insert(agentSteps).values({ id: 'step-1', runId: 'run-1', seq: 1, kind: 'tool', title: 'literature', status: 'ok', createdAt: now }).run();
   db.insert(chatSessions).values({ id: 'cs-1', projectId: PID, summary: '摘要', messageCount: 4, totalTokens: 100, createdAt: now, updatedAt: now }).run();
   db.insert(memoryLogs).values({ id: 'mem-1', projectId: PID, type: 'episodic', content: '记忆', createdAt: now }).run();
+  db.insert(researchBriefs).values({ projectId: PID, question: '级联测试问题', updatedAt: now }).run();
 }
 
 function counts() {
@@ -46,6 +48,7 @@ function counts() {
     agentSteps: db.select().from(agentSteps).where(eq(agentSteps.runId, 'run-1')).all().length,
     chatSessions: db.select().from(chatSessions).where(eq(chatSessions.projectId, PID)).all().length,
     memoryLogs: db.select().from(memoryLogs).where(eq(memoryLogs.projectId, PID)).all().length,
+    researchBriefs: db.select().from(researchBriefs).where(eq(researchBriefs.projectId, PID)).all().length,
   };
 }
 
@@ -58,6 +61,7 @@ describe('ProjectsService.remove 级联删除完整性', () => {
     db.delete(agentExecutions).where(eq(agentExecutions.projectId, PID)).run();
     db.delete(chatSessions).where(eq(chatSessions.projectId, PID)).run();
     db.delete(memoryLogs).where(eq(memoryLogs.projectId, PID)).run();
+    db.delete(researchBriefs).where(eq(researchBriefs.projectId, PID)).run();
     db.delete(reflexionLogs).where(eq(reflexionLogs.taskId, 'task-1')).run();
     db.delete(pipelineTasks).where(eq(pipelineTasks.projectId, PID)).run();
     db.delete(documents).where(eq(documents.projectId, PID)).run();
@@ -70,6 +74,7 @@ describe('ProjectsService.remove 级联删除完整性', () => {
     db.delete(agentExecutions).where(eq(agentExecutions.projectId, PID)).run();
     db.delete(chatSessions).where(eq(chatSessions.projectId, PID)).run();
     db.delete(memoryLogs).where(eq(memoryLogs.projectId, PID)).run();
+    db.delete(researchBriefs).where(eq(researchBriefs.projectId, PID)).run();
     db.delete(reflexionLogs).where(eq(reflexionLogs.taskId, 'task-1')).run();
     db.delete(pipelineTasks).where(eq(pipelineTasks.projectId, PID)).run();
     db.delete(documents).where(eq(documents.projectId, PID)).run();
@@ -87,6 +92,7 @@ describe('ProjectsService.remove 级联删除完整性', () => {
       agentSteps: 1,
       chatSessions: 1,
       memoryLogs: 1,
+      researchBriefs: 1,
     });
   });
 
@@ -101,6 +107,7 @@ describe('ProjectsService.remove 级联删除完整性', () => {
       agentSteps: 0,
       chatSessions: 0,
       memoryLogs: 0,
+      researchBriefs: 0,
     });
   });
 });

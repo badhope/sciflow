@@ -58,6 +58,16 @@ CREATE TABLE IF NOT EXISTS project (
   owner_id TEXT DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS research_brief (
+  project_id TEXT PRIMARY KEY,
+  question TEXT DEFAULT '',
+  scope TEXT DEFAULT '',
+  methods TEXT DEFAULT '',
+  constraints TEXT DEFAULT '',
+  success_criteria TEXT DEFAULT '',
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS document (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,

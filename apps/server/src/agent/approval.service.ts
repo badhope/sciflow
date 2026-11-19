@@ -40,6 +40,7 @@ const DEFAULT_ASK_PREFIXES = [
   'browser.', // 打开/操作外部页面
   'config.', // 改全局配置
   'extension.', // 改扩展/技能
+  'research.brief.update', // 改项目研究契约，必须先确认
 ];
 
 /**
@@ -52,6 +53,7 @@ const READ_ONLY_TOOLS = new Set([
   'extension.list',
   'project.list',
   'project.get',
+  'research.brief.get',
   'document.list',
   'document.get',
   'quality.latest',

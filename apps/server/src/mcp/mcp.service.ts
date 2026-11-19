@@ -20,6 +20,7 @@ import { ExperimentsService } from '../experiments/experiments.service';
 import { BrowserService } from '../browser/browser.service';
 import { MemoryService } from '../memory/memory.service';
 import { SubmissionService } from '../research/submission.service';
+import { ResearchBriefService } from '../research-brief/research-brief.service';
 import { evaluateWithCritic } from '../research-cycle/agents/critic.agent';
 import { reviewWithExpert } from '../research-cycle/agents/expert.agent';
 import { planWithPi } from '../research-cycle/agents/pi.agent';
@@ -103,6 +104,7 @@ export class McpService {
     private readonly browser: BrowserService,
     private readonly memory: MemoryService,
     private readonly submission: SubmissionService,
+    private readonly brief: ResearchBriefService,
   ) {
     this.tools = [
       {
@@ -393,6 +395,7 @@ export class McpService {
         inputSchema: {
           type: 'object',
           properties: {
+            projectId: { type: 'string', description: '项目 ID（提供后会读取项目研究 Brief）' },
             question: { type: 'string', description: '要研究的问题' },
             iteration: { type: 'number', description: '第几轮修订（从 0 开始）' },
             priorFeedback: { type: 'string', description: '上一轮评审反馈（首轮可省略）' },
@@ -414,7 +417,7 @@ export class McpService {
           },
           required: ['question'],
         },
-        handler: async (args) => {
+        handler: async (args, user) => {
           const missing = noProjectHint(args, ['question']);
           if (missing) return { error: missing };
           const literature = Array.isArray(args.literature)
@@ -428,8 +431,12 @@ export class McpService {
                 }))
                 .filter((x) => x.title)
             : [];
+          const projectId = args.projectId ? String(args.projectId) : '';
+          if (projectId) this.access.assertProject(projectId, user);
+          const brief = projectId ? this.brief.render(projectId) : '';
           return planWithPi(this.ai, {
             question: String(args.question),
+            brief,
             iteration: Math.max(0, Number(args.iteration) || 0),
             priorFeedback: args.priorFeedback ? String(args.priorFeedback) : undefined,
             priorVerdict: args.priorVerdict ? String(args.priorVerdict) : undefined,
@@ -719,6 +726,40 @@ export class McpService {
           required: ['id'],
         },
         handler: async (args) => this.projects.get(String(args.id)),
+      },
+      {
+        name: 'research.brief.get',
+        description: '读取项目研究 Brief（研究问题/范围/方法/约束/成功标准），写研究计划前先读它。只读。',
+        inputSchema: {
+          type: 'object',
+          properties: { projectId: { type: 'string', description: '项目 ID' } },
+          required: ['projectId'],
+        },
+        handler: async (args, user) => {
+          this.access.assertProject(String(args.projectId), user);
+          return this.brief.get(String(args.projectId));
+        },
+      },
+      {
+        name: 'research.brief.update',
+        description: '更新项目研究 Brief 的字段（局部更新，未提交字段保留）。写操作需审批。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: { type: 'string', description: '项目 ID' },
+            question: { type: 'string', description: '研究问题' },
+            scope: { type: 'string', description: '范围与边界' },
+            methods: { type: 'string', description: '方法与数据' },
+            constraints: { type: 'string', description: '约束条件' },
+            successCriteria: { type: 'string', description: '成功标准' },
+          },
+          required: ['projectId'],
+        },
+        handler: async (args, user) => {
+          this.access.assertProject(String(args.projectId), user);
+          const { projectId, ...patch } = args;
+          return this.brief.upsert(String(projectId), patch);
+        },
       },
       {
         name: 'project.create',

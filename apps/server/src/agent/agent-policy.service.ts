@@ -42,6 +42,7 @@ const READ_ONLY_TOOLS = new Set([
   'extension.list',
   'project.list',
   'project.get',
+  'research.brief.get',
   'document.list',
   'document.get',
   'quality.latest',
@@ -61,7 +62,7 @@ const READ_ONLY_TOOLS = new Set([
   'submission.email',
 ]);
 
-const PROJECT_WRITE_PREFIXES = ['document.', 'project.', 'experiment.', 'quality.', 'browser.', 'memory.', 'submission.'];
+const PROJECT_WRITE_PREFIXES = ['document.', 'project.', 'experiment.', 'quality.', 'browser.', 'memory.', 'submission.', 'research.brief.'];
 const SYSTEM_WRITE_PREFIXES = ['config.', 'extension.'];
 
 function isProjectWrite(toolName: string): boolean {

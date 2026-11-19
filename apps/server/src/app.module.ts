@@ -16,6 +16,7 @@ import { KnowledgeModule } from './knowledge/knowledge.module';
 import { McpModule } from './mcp/mcp.module';
 import { MemoryModule } from './memory/memory.module';
 import { ResearchModule } from './research/research.module';
+import { ResearchBriefModule } from './research-brief/research-brief.module';
 import { ProgramsModule } from './programs/programs.module';
 import { ResearchCycleModule } from './research-cycle/research-cycle.module';
 import { LongformModule } from './longform/longform.module';
@@ -60,6 +61,7 @@ import { HttpExceptionFilter } from './common/http-exception.filter';
     McpModule,
     MemoryModule,
     ResearchModule,
+    ResearchBriefModule,
     ProgramsModule,
     ResearchCycleModule,
     LongformModule,

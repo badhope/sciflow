@@ -9,9 +9,10 @@ import { ChatController } from './chat.controller';
 import { ChatSessionService } from './chat-session.service';
 import { CompactionService } from './compaction.service';
 import { ConfigModule } from '../config/config.module';
+import { ResearchBriefModule } from '../research-brief/research-brief.module';
 
 @Module({
-  imports: [AiModule, MemoryModule, KnowledgeModule, WebSearchModule, AgentTraceModule, ConfigModule],
+  imports: [AiModule, MemoryModule, KnowledgeModule, WebSearchModule, AgentTraceModule, ConfigModule, ResearchBriefModule],
   controllers: [ChatController],
   providers: [ChatService, ChatSessionService, CompactionService],
   exports: [ChatService, ChatSessionService, CompactionService], // RAG 注入逻辑（contextFor）可被 McpModule 等复用

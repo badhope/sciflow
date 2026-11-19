@@ -43,6 +43,8 @@ const TOOL_GROUP_EXACT: Record<string, AgentToolGroup> = {
   'project.get': 'project_read',
   'project.create': 'project_write',
   'project.update': 'project_write',
+  'research.brief.get': 'project_read',
+  'research.brief.update': 'project_write',
   'document.list': 'document_read',
   'document.get': 'document_read',
   'document.create': 'document_write',

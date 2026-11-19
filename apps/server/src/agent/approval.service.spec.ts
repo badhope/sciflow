@@ -29,6 +29,7 @@ describe('ApprovalService', () => {
     expect(svc.needsApproval('submission.match')).toBe(false);
     expect(svc.needsApproval('submission.track')).toBe(false);
     expect(svc.needsApproval('memory.search')).toBe(false);
+    expect(svc.needsApproval('research.brief.get')).toBe(false);
   });
 
   it('有副作用的工具需要审批', () => {
@@ -41,6 +42,7 @@ describe('ApprovalService', () => {
     expect(svc.needsApproval('browser.open')).toBe(true);
     expect(svc.needsApproval('config.write')).toBe(true);
     expect(svc.needsApproval('submission.track.create')).toBe(true);
+    expect(svc.needsApproval('research.brief.update')).toBe(true);
   });
 
   it('登记后出现在待处理列表', () => {

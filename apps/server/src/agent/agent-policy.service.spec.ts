@@ -33,6 +33,8 @@ describe('Agent 权限档', () => {
     expect(toolAllowedInMode('strict', 'research.critic')).toBe(true);
     expect(toolAllowedInMode('strict', 'research.expert')).toBe(true);
     expect(toolAllowedInMode('strict', 'submission.match')).toBe(true);
+    expect(toolAllowedInMode('strict', 'research.brief.get')).toBe(true);
+    expect(toolAllowedInMode('strict', 'research.brief.update')).toBe(false);
     expect(toolAllowedInMode('strict', 'submission.track.create')).toBe(false);
     expect(toolAllowedInMode('strict', 'config.upsert_role')).toBe(false);
     expect(toolAllowedInMode('strict', 'document.update')).toBe(false);
@@ -44,6 +46,7 @@ describe('Agent 权限档', () => {
     expect(toolAllowedInMode('workspace', 'experiment.run')).toBe(true);
     expect(toolAllowedInMode('workspace', 'project.update')).toBe(true);
     expect(toolAllowedInMode('workspace', 'submission.track.create')).toBe(true);
+    expect(toolAllowedInMode('workspace', 'research.brief.update')).toBe(true);
     expect(toolAllowedInMode('workspace', 'config.upsert_role')).toBe(false);
     expect(toolAllowedInMode('workspace', 'config.set_permission')).toBe(false);
     expect(toolAllowedInMode('workspace', 'extension.create')).toBe(false);

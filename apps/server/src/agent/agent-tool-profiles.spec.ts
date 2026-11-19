@@ -44,6 +44,8 @@ describe('Agent 工具作用域', () => {
     expect(profileAllowsTool(p, 'references.extract')).toBe(true);
     expect(profileAllowsTool(p, 'document.get')).toBe(true);
     expect(profileAllowsTool(p, 'research.plan')).toBe(true);
+    expect(profileAllowsTool(p, 'research.brief.get')).toBe(true);
+    expect(profileAllowsTool(p, 'research.brief.update')).toBe(false);
     expect(profileAllowsTool(p, 'research.experiment')).toBe(true);
     expect(profileAllowsTool(p, 'research.critic')).toBe(true);
     expect(profileAllowsTool(p, 'research.expert')).toBe(true);
@@ -63,6 +65,7 @@ describe('Agent 工具作用域', () => {
     expect(profileAllowsTool(p, 'document.update')).toBe(true);
     expect(profileAllowsTool(p, 'experiment.run')).toBe(true);
     expect(profileAllowsTool(p, 'submission.track.create')).toBe(true);
+    expect(profileAllowsTool(p, 'research.brief.update')).toBe(true);
     expect(profileAllowsTool(p, 'browser.open')).toBe(true);
     expect(profileAllowsTool(p, 'config.snapshot')).toBe(false);
   });
@@ -73,6 +76,7 @@ describe('Agent 工具作用域', () => {
     expect(profileAllowsTool(p, 'experiment.run')).toBe(true);
     expect(profileAllowsTool(p, 'browser.verify')).toBe(true);
     expect(profileAllowsTool(p, 'memory.add')).toBe(true);
+    expect(profileAllowsTool(p, 'research.brief.update')).toBe(true);
   });
 
   it('config profile 只暴露配置中心写入口', () => {

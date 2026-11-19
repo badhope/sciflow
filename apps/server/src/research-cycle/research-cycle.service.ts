@@ -9,6 +9,7 @@ import { ExperimentsService } from '../experiments/experiments.service';
 import { AgentTraceService } from '../agent/agent-trace.service';
 import { AiService } from '../ai/ai.service';
 import { ScholarSearchService } from '../research/scholar-search.service';
+import { ResearchBriefService } from '../research-brief/research-brief.service';
 import { buildResearchCycleGraph } from './research-cycle.graph';
 import { planWithPi } from './agents/pi.agent';
 import { designExperiment } from './agents/experimenter.agent';
@@ -40,6 +41,7 @@ export class ResearchCycleService {
     private readonly ai: AiService,
     private readonly trace: AgentTraceService,
     private readonly scholar: ScholarSearchService,
+    private readonly brief: ResearchBriefService,
   ) {
     this.graph = buildResearchCycleGraph({
       programs: {
@@ -76,6 +78,7 @@ export class ResearchCycleService {
       runExperiment: (input) => this.experiments.run(input),
       // 文献检索：失败由 graph 降级为空列表；这里只做「服务结果 → 紧凑引用」映射，
       // 摘要不进提示词/checkpoint，避免 token 与状态膨胀。
+      brief: (projectId) => this.brief.render(projectId),
       literatureSearch: async ({ query, limit }) => {
         const hits = await this.scholar.search([query], limit ?? 6);
         return hits.slice(0, limit ?? 6).map((h) => ({

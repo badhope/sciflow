@@ -41,6 +41,7 @@ export const BUNDLE_TABLES: BundleTableSpec[] = [
   { key: 'experiments', table: 'experiment', projectColumn: 'project_id', defaultInclude: true },
   { key: 'submissions', table: 'submission', projectColumn: 'project_id', defaultInclude: true },
   { key: 'submissionEvents', table: 'submission_status_event', projectColumn: 'project_id', defaultInclude: true },
+  { key: 'researchBriefs', table: 'research_brief', projectColumn: 'project_id', defaultInclude: true },
   { key: 'screeningQueue', table: 'screening_queue', projectColumn: 'project_id', defaultInclude: true },
   { key: 'extractionFields', table: 'extraction_field', projectColumn: 'project_id', defaultInclude: true },
   { key: 'extractionValues', table: 'extraction_value', projectColumn: 'project_id', defaultInclude: true },

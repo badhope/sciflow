@@ -23,6 +23,7 @@ import type {
   ReferenceInput,
   DiscoveredReference,
   ExperimentDesignRecord,
+  ResearchBrief,
   ResearchDesignResult,
   ReviewComment,
   ScreeningItem,
@@ -32,6 +33,14 @@ import { friendlyError, request, u } from './core';
 
 /** research 域 API（client.ts 按域拆分；barrel 统一导出于 ./client） */
 export const research = {
+  brief: {
+    get: (projectId: string) => request<ResearchBrief>(`/api/projects/${projectId}/research-brief`),
+    update: (projectId: string, patch: Partial<Pick<ResearchBrief, 'question' | 'scope' | 'methods' | 'constraints' | 'successCriteria'>>) =>
+      request<ResearchBrief>(`/api/projects/${projectId}/research-brief`, {
+        method: 'PUT',
+        body: JSON.stringify(patch),
+      }),
+  },
   references: {
     search: (query: string, limit = 8, projectId?: string) =>
       request<Reference[]>(`/api/references/search`, { method: 'POST', body: JSON.stringify({ query, limit, projectId }) }),
