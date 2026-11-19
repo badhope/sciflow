@@ -2,6 +2,7 @@ import { Component, Suspense, lazy, useCallback, useContext, useEffect, useMemo,
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { HashRouter, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { PageErrorBoundary } from './components/PageErrorBoundary';
+import { EvidenceSummary } from './components/EvidenceSummary';
 import { Download, Upload } from 'lucide-react';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import {
@@ -217,23 +218,28 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
     ) : null,
   evidence: ({ project, tab, onTabChange }) =>
     project ? (
-      <TabbedPage
-        name="证据库"
-        activeKey={tab ?? undefined}
-        onChange={onTabChange}
-        tabs={[
-          {
-            key: 'literature',
-            label: '文献库',
-            node: <PageErrorBoundary pageName="文献调研"><SuspensePage name="文献调研"><LiteraturePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary>,
-          },
-          {
-            key: 'knowledge',
-            label: '知识库',
-            node: <PageErrorBoundary pageName="知识库"><SuspensePage name="知识库"><KnowledgePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary>,
-          },
-        ]}
-      />
+      <div className="flex h-full min-h-0 flex-col">
+        <EvidenceSummary project={project} />
+        <div className="min-h-0 flex-1">
+          <TabbedPage
+            name="证据库"
+            activeKey={tab ?? undefined}
+            onChange={onTabChange}
+            tabs={[
+              {
+                key: 'literature',
+                label: '文献库',
+                node: <PageErrorBoundary pageName="文献调研"><SuspensePage name="文献调研"><LiteraturePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary>,
+              },
+              {
+                key: 'knowledge',
+                label: '知识库',
+                node: <PageErrorBoundary pageName="知识库"><SuspensePage name="知识库"><KnowledgePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary>,
+              },
+            ]}
+          />
+        </div>
+      </div>
     ) : null,
   'write-review': ({ project, initialDocId, tab, onTabChange }) =>
     project ? (
