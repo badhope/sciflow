@@ -2,6 +2,8 @@ import { useContext, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Beaker, Check, Copy, Loader2, Play, RotateCcw, Save, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
+import { qk } from '../lib/query-keys';
+import { useProjectDocs } from '../lib/queries';
 import { ToastContext } from '../App';
 import type { Doc, Experiment, Project } from '../types';
 import { Badge, Button, Card, ConfirmDialog, Empty, ErrorBox, Input, SectionTitle, Select, Textarea, errMsg } from '../components/ui';
@@ -70,16 +72,18 @@ export function ExperimentsPage({ project }: { project: Project }) {
     }
   };
 
+  // 文档列表走共享 useProjectDocs，和写作/文献页共用同一份缓存；实验列表独立缓存。
+  const docsQuery = useProjectDocs(project.id, { retry: 0 });
   const expsQuery = useQuery({
-    queryKey: ['exps', project.id],
-    queryFn: async () => {
-      const [list, docList] = await Promise.all([api.experiments.list(project.id), api.documents.list(project.id).catch(() => [] as Doc[])]);
-      return { list, docList };
-    },
+    queryKey: qk.experiments(project.id),
+    queryFn: () => api.experiments.list(project.id),
   });
-  const exps: Experiment[] = expsQuery.data?.list ?? [];
-  const docs: Doc[] = expsQuery.data?.docList ?? [];
-  const invalidateExps = () => void qc.invalidateQueries({ queryKey: ['exps', project.id] });
+  const exps: Experiment[] = expsQuery.data ?? [];
+  const docs: Doc[] = docsQuery.data ?? [];
+  const invalidateExps = () => {
+    void qc.invalidateQueries({ queryKey: qk.experiments(project.id) });
+    void qc.invalidateQueries({ queryKey: qk.docs(project.id) });
+  };
 
   const run = async () => {
     if (!code.trim() || running) return;

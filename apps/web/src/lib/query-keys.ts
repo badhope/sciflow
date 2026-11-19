@@ -16,6 +16,7 @@ export const qk = {
   refs: (projectId: string) => ['refs', projectId] as const,
   knowledge: (projectId: string) => ['knowledge-docs', projectId] as const,
   pipeline: (projectId: string) => ['pipeline', projectId] as const,
+  experiments: (projectId: string) => ['experiments', projectId] as const,
   pipelineTask: (taskId: string) => ['pipeline-task', taskId] as const,
 
   agentMetrics: (projectId: string) => ['agent-metrics', projectId] as const,
