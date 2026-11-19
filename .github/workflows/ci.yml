@@ -43,6 +43,8 @@ jobs:
         run: pnpm --filter @sciflow/web test
       - name: Build (server)
         run: pnpm --filter @sciflow/server build
+      - name: OpenAPI contract drift
+        run: pnpm openapi:check
       - name: Build (web)
         run: pnpm --filter @sciflow/web build
       - name: Web first-screen JS budget

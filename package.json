@@ -19,6 +19,7 @@
     "test:agent-eval": "pnpm --filter @sciflow/server exec vitest run src/eval/agent-task-eval.spec.ts",
     "format": "prettier --write .",
     "openapi:gen": "pnpm --filter @sciflow/server build && node scripts/openapi-gen.mjs",
+    "openapi:check": "pnpm openapi:gen && git diff --exit-code -- openapi.json apps/web/src/api/openapi.d.ts",
     "icons": "node scripts/generate-icons.mjs",
     "backup": "node scripts/backup-db.mjs",
     "doctor": "node scripts/doctor.mjs",
