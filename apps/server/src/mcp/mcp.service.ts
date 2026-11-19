@@ -21,6 +21,7 @@ import { BrowserService } from '../browser/browser.service';
 import { MemoryService } from '../memory/memory.service';
 import { SubmissionService } from '../research/submission.service';
 import { NoveltyService } from '../research/novelty.service';
+import { SubmissionReadinessService } from '../research/submission-readiness.service';
 import { ResearchBriefService } from '../research-brief/research-brief.service';
 import { evaluateWithCritic } from '../research-cycle/agents/critic.agent';
 import { reviewWithExpert } from '../research-cycle/agents/expert.agent';
@@ -107,6 +108,7 @@ export class McpService {
     private readonly submission: SubmissionService,
     private readonly brief: ResearchBriefService,
     private readonly novelty: NoveltyService,
+    private readonly readiness: SubmissionReadinessService,
   ) {
     this.tools = [
       {
@@ -319,6 +321,25 @@ export class McpService {
           if (missing) return { error: missing };
           this.access.assertProject(String(args.projectId), user);
           return this.submission.listTracks(String(args.projectId));
+        },
+      },
+      {
+        name: 'submission.readiness',
+        description: '投稿就绪检查（确定性，不调模型）：核对标题、篇幅、章节结构、引用闭环、项目文献库、摘要/关键词块与客观质量门。返回可投稿/阻塞项、就绪分和逐项可行动说明。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: { type: 'string', description: '项目 ID' },
+            documentId: { type: 'string', description: '要投稿的文档 ID' },
+          },
+          required: ['projectId', 'documentId'],
+        },
+        handler: async (args, user) => {
+          const missing = noProjectHint(args, ['projectId', 'documentId']);
+          if (missing) return { error: missing };
+          this.access.assertProject(String(args.projectId), user);
+          this.access.assertDocument(String(args.documentId), user);
+          return this.readiness.check(String(args.projectId), String(args.documentId));
         },
       },
       {
@@ -1230,6 +1251,11 @@ export class McpService {
         throw new HttpException('企业模式下 literature.search 需要 projectId', HttpStatus.BAD_REQUEST);
       }
       this.access.assertProject(projectId, user);
+      return;
+    }
+    if (name === 'submission.readiness') {
+      this.access.assertProject(String(args?.projectId || ''), user);
+      this.access.assertDocument(String(args?.documentId || ''), user);
       return;
     }
     if (name === 'research.novelty') {

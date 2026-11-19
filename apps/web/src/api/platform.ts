@@ -21,6 +21,7 @@ import type { WebSearchConfig,
   ParseEmailResult,
   SelfCheck,
   SubmissionStatus,
+  SubmissionReadiness,
   SubmissionTrack,
 } from '../types';
 import { request, setToken } from './core';
@@ -218,6 +219,11 @@ export const platform = {
     listJournals: () => request<Journal[]>('/api/submission/journals'),
     addJournal: (j: Partial<Journal>) => request<Journal>('/api/submission/journals-lib', { method: 'POST', body: JSON.stringify(j) }),
     removeJournal: (id: string) => request<{ ok: boolean }>(`/api/submission/journals-lib/${id}`, { method: 'DELETE' }),
+    /* —— 投稿就绪检查 —— */
+    readiness: (projectId: string, documentId: string) =>
+      request<SubmissionReadiness>(
+        `/api/submission/readiness?projectId=${encodeURIComponent(projectId)}&documentId=${encodeURIComponent(documentId)}`,
+      ),
     /* —— 投稿流程状态跟踪 —— */
     trackSubmit: (body: {
       projectId: string;

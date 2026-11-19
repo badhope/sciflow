@@ -1581,6 +1581,44 @@
         ]
       }
     },
+    "/submission/readiness": {
+      "get": {
+        "operationId": "SubmissionController_readinessCheck",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionReadinessDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
     "/submission/cover-letter": {
       "post": {
         "operationId": "SubmissionController_coverLetter",
@@ -5967,7 +6005,7 @@
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "1.18.0",
+    "version": "1.19.0",
     "contact": {}
   },
   "tags": [],
@@ -7382,6 +7420,169 @@
           "failed",
           "unscored",
           "items"
+        ]
+      },
+      "SubmissionReadinessStandardDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "passScore": {
+            "type": "number"
+          },
+          "minChars": {
+            "type": "number"
+          },
+          "minSections": {
+            "type": "number"
+          },
+          "minUniqueCitations": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "passScore",
+          "minChars",
+          "minSections",
+          "minUniqueCitations"
+        ]
+      },
+      "SubmissionReadinessItemDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "检查项 key"
+          },
+          "label": {
+            "type": "string",
+            "description": "检查项名称"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warn",
+              "fail"
+            ],
+            "description": "pass 通过 / warn 提醒 / fail 阻塞"
+          },
+          "detail": {
+            "type": "string",
+            "description": "可行动说明"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "status",
+          "detail"
+        ]
+      },
+      "SubmissionReadinessStatsDto": {
+        "type": "object",
+        "properties": {
+          "chars": {
+            "type": "number"
+          },
+          "sections": {
+            "type": "number"
+          },
+          "citations": {
+            "type": "number"
+          },
+          "uniqueCitations": {
+            "type": "number"
+          },
+          "referenceEntries": {
+            "type": "number"
+          },
+          "libraryReferences": {
+            "type": "number"
+          },
+          "citationLinks": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "chars",
+          "sections",
+          "citations",
+          "uniqueCitations",
+          "referenceEntries",
+          "libraryReferences",
+          "citationLinks"
+        ]
+      },
+      "SubmissionReadinessDto": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "documentStatus": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "number"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "无 fail 项即视为可投稿；warn 不阻塞"
+          },
+          "score": {
+            "type": "number",
+            "description": "加权就绪分（0-100）"
+          },
+          "failCount": {
+            "type": "number"
+          },
+          "warnCount": {
+            "type": "number"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/SubmissionReadinessStandardDto"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubmissionReadinessItemDto"
+            }
+          },
+          "stats": {
+            "$ref": "#/components/schemas/SubmissionReadinessStatsDto"
+          },
+          "checkedAt": {
+            "type": "number",
+            "description": "检查时间（毫秒时间戳）"
+          }
+        },
+        "required": [
+          "projectId",
+          "documentId",
+          "title",
+          "documentStatus",
+          "updatedAt",
+          "ready",
+          "score",
+          "failCount",
+          "warnCount",
+          "standard",
+          "items",
+          "stats",
+          "checkedAt"
         ]
       },
       "JournalDto": {

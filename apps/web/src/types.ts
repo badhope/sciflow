@@ -749,6 +749,9 @@ export type SubmissionStatusEvent = components['schemas']['SubmissionStatusEvent
 /** 一条投稿记录（含事件流 + L3 推断字段）：类型来自 OpenAPI 生成 contract。 */
 export type SubmissionTrack = components['schemas']['SubmissionTrackDto'];
 
+/** 投稿就绪检查（确定性，不调模型）：类型来自 OpenAPI 生成 contract。 */
+export type SubmissionReadiness = components['schemas']['SubmissionReadinessDto'];
+
 /** AI 解析编辑部邮件的建议（不改库，用户确认后走 event 端点） */
 export interface ParseEmailResult {
   suggestedStatus: SubmissionStatus;

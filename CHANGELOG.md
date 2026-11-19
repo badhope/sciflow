@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.19.0] - 2026-11-20
+
+### Added
+
+- **投稿就绪检查**：投稿辅助页新增「就绪检查」Tab。选择项目文档后，按当前评审标准
+  （草稿/SCI 通用/顶刊等）核对标题、篇幅、章节结构、正文引用闭环、项目文献库、
+  摘要/关键词块与客观质量门；返回可投稿/阻塞项、就绪分和逐项可行动说明。
+- **确定性、可复现**：复用 `checkPaperQuality` 同一套客观口径，只读、不调模型；
+  `warn` 不阻塞，`fail` 明确标红。空文献库、citation 表为空、正文过短等假就绪会被拦下。
+- **Agent 工具 `submission.readiness`**：模型可在投稿前主动检查指定文档，参数为
+  `projectId / documentId`；已登记到 `submission` 只读 profile 与默认白名单。
+- **新 API**：`GET /api/submission/readiness?projectId=&documentId=`，DTO 进入 OpenAPI（218 paths）。
+
 ## [1.18.0] - 2026-11-20
 
 ### Added

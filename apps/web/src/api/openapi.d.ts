@@ -932,6 +932,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/submission/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SubmissionController_readinessCheck"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/submission/cover-letter": {
         parameters: {
             query?: never;
@@ -4012,6 +4028,54 @@ export interface components {
             /** @description 文档条目（按客观分升序） */
             items: components["schemas"]["ProjectQualityOverviewItemDto"][];
         };
+        SubmissionReadinessStandardDto: {
+            key: string;
+            label: string;
+            passScore: number;
+            minChars: number;
+            minSections: number;
+            minUniqueCitations: number;
+        };
+        SubmissionReadinessItemDto: {
+            /** @description 检查项 key */
+            key: string;
+            /** @description 检查项名称 */
+            label: string;
+            /**
+             * @description pass 通过 / warn 提醒 / fail 阻塞
+             * @enum {string}
+             */
+            status: "pass" | "warn" | "fail";
+            /** @description 可行动说明 */
+            detail: string;
+        };
+        SubmissionReadinessStatsDto: {
+            chars: number;
+            sections: number;
+            citations: number;
+            uniqueCitations: number;
+            referenceEntries: number;
+            libraryReferences: number;
+            citationLinks: number;
+        };
+        SubmissionReadinessDto: {
+            projectId: string;
+            documentId: string;
+            title: string;
+            documentStatus: string;
+            updatedAt: number;
+            /** @description 无 fail 项即视为可投稿；warn 不阻塞 */
+            ready: boolean;
+            /** @description 加权就绪分（0-100） */
+            score: number;
+            failCount: number;
+            warnCount: number;
+            standard: components["schemas"]["SubmissionReadinessStandardDto"];
+            items: components["schemas"]["SubmissionReadinessItemDto"][];
+            stats: components["schemas"]["SubmissionReadinessStatsDto"];
+            /** @description 检查时间（毫秒时间戳） */
+            checkedAt: number;
+        };
         JournalDto: {
             /** @description 期刊 ID */
             id: string;
@@ -5780,6 +5844,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    SubmissionController_readinessCheck: {
+        parameters: {
+            query: {
+                projectId: string;
+                documentId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionReadinessDto"];
+                };
             };
         };
     };

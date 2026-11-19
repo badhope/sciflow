@@ -1,7 +1,9 @@
 import { Controller, Post, Get, Delete, Patch, Body, Param, Query, Req } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { SubmissionService } from './submission.service';
+import { SubmissionReadinessService } from './submission-readiness.service';
 import { JournalDto, SubmissionTrackDto } from './submission.dto';
+import { SubmissionReadinessDto } from './submission-readiness.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -16,12 +18,26 @@ import type { AuthPayload } from '../auth/auth.service';
 export class SubmissionController {
   constructor(
     private readonly submission: SubmissionService,
+    private readonly readiness: SubmissionReadinessService,
     private readonly access: ProjectAccessService,
   ) {}
 
   @Post('journals')
   recommend(@Body() body: { title?: string; abstract?: string; field?: string }) {
     return this.submission.recommendJournals(body.title || '', body.abstract || '', body.field || '');
+  }
+
+  /** 投稿就绪检查：文档 + 项目文献库 + citation 表 + 客观质量门，只读、不调模型 */
+  @Get('readiness')
+  @ApiOkResponse({ type: SubmissionReadinessDto })
+  readinessCheck(
+    @Query('projectId') projectId: string,
+    @Query('documentId') documentId: string,
+    @Req() req: { user?: AuthPayload },
+  ) {
+    this.access.assertProject(projectId, req.user);
+    this.access.assertDocument(documentId, req.user);
+    return this.readiness.check(projectId, documentId);
   }
 
   /** 期刊库列表 */

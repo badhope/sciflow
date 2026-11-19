@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![Version](https://img.shields.io/badge/version-1.18.0-black.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.19.0-black.svg)](CHANGELOG.md)
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -146,7 +146,7 @@ See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 
 ## Status
 
-Current release: **1.18.0**. The autonomous research loop and the manuscript pipeline are both real and covered by tests. Known limits: the quality gate is rule-based and intentionally conservative; autonomous runs need a capable model for the PI/Critic roles; the Python sandbox is local and is not a security boundary for hostile code.
+Current release: **1.19.0**. The autonomous research loop and the manuscript pipeline are both real and covered by tests. Known limits: the quality gate is rule-based and intentionally conservative; autonomous runs need a capable model for the PI/Critic roles; the Python sandbox is local and is not a security boundary for hostile code.
 
 ## License
 

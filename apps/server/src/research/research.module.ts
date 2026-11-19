@@ -5,6 +5,7 @@ import { QualityController } from './quality.controller';
 import { QualityService } from './quality.service';
 import { SubmissionController } from './submission.controller';
 import { SubmissionService } from './submission.service';
+import { SubmissionReadinessService } from './submission-readiness.service';
 import { AiModule } from '../ai/ai.module';
 import { ScholarSearchService } from './scholar-search.service';
 import { NoveltyService } from './novelty.service';
@@ -13,7 +14,7 @@ import { NoveltyService } from './novelty.service';
 @Module({
   imports: [AiModule],
   controllers: [ResearchController, QualityController, SubmissionController],
-  providers: [ResearchService, QualityService, SubmissionService, ScholarSearchService, NoveltyService],
-  exports: [ResearchService, QualityService, SubmissionService, ScholarSearchService, NoveltyService],
+  providers: [ResearchService, QualityService, SubmissionService, SubmissionReadinessService, ScholarSearchService, NoveltyService],
+  exports: [ResearchService, QualityService, SubmissionService, SubmissionReadinessService, ScholarSearchService, NoveltyService],
 })
 export class ResearchModule {}

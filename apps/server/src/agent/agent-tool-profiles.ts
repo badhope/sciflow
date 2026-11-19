@@ -66,6 +66,7 @@ const TOOL_GROUP_EXACT: Record<string, AgentToolGroup> = {
   'submission.cover': 'submission',
   'submission.reply': 'submission',
   'submission.track': 'submission',
+  'submission.readiness': 'submission',
   'submission.email': 'submission',
   'submission.track.create': 'submission_write',
 };

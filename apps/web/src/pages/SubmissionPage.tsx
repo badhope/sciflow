@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  CalendarClock, Check, FilePen, Forward, Globe2, Library, Loader2, Mail, MessageSquareReply, Plus, Send, Trash2,
+  CalendarClock, Check, ClipboardCheck, FilePen, Forward, Globe2, Library, Loader2, Mail, MessageSquareReply, Plus, Send, Trash2,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { ToastContext } from '../App';
@@ -9,9 +9,10 @@ import type { Journal, JournalMatchResult, ParseEmailResult, Project, ReviewComm
 import { Badge, Button, Card, ConfirmDialog, ErrorBox, Input, Select, Spinner, Textarea, errMsg } from '../components/ui';
 import { DocumentSelect } from '../components/DocumentSelect';
 import { HBar } from '../components/charts';
+import { SubmissionReadinessPanel } from './submission/SubmissionReadinessPanel';
 import { useProjectDocs } from '../lib/queries';
 
-type Tab = 'journals' | 'cover' | 'reply' | 'track';
+type Tab = 'readiness' | 'journals' | 'cover' | 'reply' | 'track';
 
 /* —— 状态 → 中文标签 / Badge 颜色 / 阶段分组（页面顶部常量） —— */
 const STATUS_META: Record<SubmissionStatus, { label: string; tone: 'slate' | 'green' | 'amber' | 'red' | 'teal' | 'blue'; group: string }> = {
@@ -408,6 +409,7 @@ export function SubmissionPage({ project }: { project: Project }) {
   };
 
   const TABS: { key: Tab; label: string; icon: typeof Globe2 }[] = [
+    { key: 'readiness', label: '就绪检查', icon: ClipboardCheck },
     { key: 'journals', label: '期刊推荐', icon: Globe2 },
     { key: 'cover', label: 'Cover Letter', icon: FilePen },
     { key: 'reply', label: '审稿回复', icon: MessageSquareReply },
@@ -438,6 +440,10 @@ export function SubmissionPage({ project }: { project: Project }) {
       <ErrorBox message={error} />
 
       <Card className="p-4 mb-4">
+        {tab === 'readiness' && (
+          <SubmissionReadinessPanel projectId={project.id} docs={docs} />
+        )}
+
         {tab === 'journals' && (
           <div className="space-y-3">
             <div>
