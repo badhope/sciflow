@@ -63,6 +63,11 @@ const READ_ONLY_TOOLS = new Set([
   'memory.search',
   'memory.list',
   'task.list',
+  'submission.match',
+  'submission.cover',
+  'submission.reply',
+  'submission.track',
+  'submission.email',
 ]);
 
 /** 待确认请求的超时：超时视为拒绝，避免模型无限等待 */

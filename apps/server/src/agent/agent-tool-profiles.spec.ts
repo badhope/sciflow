@@ -47,6 +47,8 @@ describe('Agent 工具作用域', () => {
     expect(profileAllowsTool(p, 'research.experiment')).toBe(true);
     expect(profileAllowsTool(p, 'research.critic')).toBe(true);
     expect(profileAllowsTool(p, 'research.expert')).toBe(true);
+    expect(profileAllowsTool(p, 'submission.match')).toBe(true);
+    expect(profileAllowsTool(p, 'submission.track')).toBe(true);
     expect(profileAllowsTool(p, 'document.update')).toBe(false);
     expect(profileAllowsTool(p, 'experiment.run')).toBe(false);
     expect(profileAllowsTool(p, 'config.upsert_role')).toBe(false);

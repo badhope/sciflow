@@ -43,6 +43,10 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
   'research.experiment': envInt('AGENT_TOOL_TIMEOUT_RESEARCH_MS', 120_000, { min: 10_000, max: 600_000 }),
   'research.critic': envInt('AGENT_TOOL_TIMEOUT_RESEARCH_MS', 120_000, { min: 10_000, max: 600_000 }),
   'research.expert': envInt('AGENT_TOOL_TIMEOUT_RESEARCH_MS', 120_000, { min: 10_000, max: 600_000 }),
+  'submission.match': envInt('AGENT_TOOL_TIMEOUT_RESEARCH_MS', 120_000, { min: 10_000, max: 600_000 }),
+  'submission.cover': envInt('AGENT_TOOL_TIMEOUT_RESEARCH_MS', 120_000, { min: 10_000, max: 600_000 }),
+  'submission.reply': envInt('AGENT_TOOL_TIMEOUT_RESEARCH_MS', 120_000, { min: 10_000, max: 600_000 }),
+  'submission.email': envInt('AGENT_TOOL_TIMEOUT_RESEARCH_MS', 120_000, { min: 10_000, max: 600_000 }),
   'quality.audit': envInt('AGENT_TOOL_TIMEOUT_QUALITY_MS', 120_000, { min: 10_000, max: 600_000 }),
   'experiment.run': envInt('AGENT_TOOL_TIMEOUT_EXPERIMENT_MS', 60_000, { min: 10_000, max: 600_000 }),
   'browser.open': envInt('AGENT_TOOL_TIMEOUT_BROWSER_MS', 45_000, { min: 10_000, max: 600_000 }),
@@ -159,7 +163,7 @@ export class AgentToolBridge {
    */
   buildToolSet(projectId?: string, runId?: string, opts?: { profile?: string; user?: AuthPayload }): ToolSet {
     const allow = new Set(
-      (process.env.AGENT_TOOLS_ALLOW || 'literature.search,literature.summarize,knowledge.query,outline.generate,writing.polish,writing.translate,writing.review,research.plan,research.experiment,research.critic,research.expert,references.extract,references.evidence,project.list,project.get,project.create,project.update,document.list,document.get,document.create,document.update,quality.audit,quality.overview,experiment.run,experiment.list,experiment.get,browser.open,browser.text,browser.verify,browser.close,memory.search,memory.add,writing.draft,chat.answer,config.snapshot,config.set_permission,config.upsert_role,config.upsert_constraint,config.delete_constraint,config.upsert_hook,config.apply_preset,config.preview,extension.list,extension.create,extension.toggle,extension.generate')
+      (process.env.AGENT_TOOLS_ALLOW || 'literature.search,literature.summarize,knowledge.query,outline.generate,writing.polish,writing.translate,writing.review,research.plan,research.experiment,research.critic,research.expert,submission.match,submission.cover,submission.reply,submission.track,submission.email,references.extract,references.evidence,project.list,project.get,project.create,project.update,document.list,document.get,document.create,document.update,quality.audit,quality.overview,experiment.run,experiment.list,experiment.get,browser.open,browser.text,browser.verify,browser.close,memory.search,memory.add,writing.draft,chat.answer,config.snapshot,config.set_permission,config.upsert_role,config.upsert_constraint,config.delete_constraint,config.upsert_hook,config.apply_preset,config.preview,extension.list,extension.create,extension.toggle,extension.generate')
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean),

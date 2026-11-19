@@ -19,6 +19,7 @@ import { QualityService } from '../research/quality.service';
 import { ExperimentsService } from '../experiments/experiments.service';
 import { BrowserService } from '../browser/browser.service';
 import { MemoryService } from '../memory/memory.service';
+import { SubmissionService } from '../research/submission.service';
 import { evaluateWithCritic } from '../research-cycle/agents/critic.agent';
 import { reviewWithExpert } from '../research-cycle/agents/expert.agent';
 import { planWithPi } from '../research-cycle/agents/pi.agent';
@@ -101,6 +102,7 @@ export class McpService {
     private readonly experiments: ExperimentsService,
     private readonly browser: BrowserService,
     private readonly memory: MemoryService,
+    private readonly submission: SubmissionService,
   ) {
     this.tools = [
       {
@@ -229,6 +231,92 @@ export class McpService {
           const missing = noProjectHint(args, ['title', 'content']);
           if (missing) return { error: missing };
           return this.ai.reviewPaper(String(args.title), String(args.content));
+        },
+      },
+      {
+        name: 'submission.match',
+        description: '投稿选刊：根据标题/摘要推荐 3-6 本候选期刊，命中本地期刊库时补充影响因子/分区/审稿周期。只读、不写库；会调用一次 LLM。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: '论文标题' },
+            abstract: { type: 'string', description: '论文摘要（最多 1500 字）' },
+          },
+        },
+        handler: async (args) => {
+          const title = String(args.title || '').trim();
+          const abstract = String(args.abstract || '').trim();
+          if (!title && !abstract) return { error: '请提供论文标题或摘要' };
+          return this.submission.matchJournals(title, abstract);
+        },
+      },
+      {
+        name: 'submission.cover',
+        description: '生成投稿 Cover Letter：按目标期刊写一封可直接修改的封面信。只读、不写库；会调用一次 LLM。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            journal: { type: 'string', description: '目标期刊名' },
+            title: { type: 'string', description: '论文标题' },
+            abstract: { type: 'string', description: '论文摘要' },
+          },
+          required: ['journal'],
+        },
+        handler: async (args) => {
+          const missing = noProjectHint(args, ['journal']);
+          if (missing) return { error: missing };
+          return this.submission.coverLetter(String(args.title || ''), String(args.abstract || ''), String(args.journal));
+        },
+      },
+      {
+        name: 'submission.reply',
+        description: '生成审稿意见回复信，并同时返回结构化修改计划（逐条摘录/建议动作）。只读、不写库；会调用一次 LLM。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            reviewComments: { type: 'string', description: '审稿意见原文' },
+            response: { type: 'string', description: '作者已有回复草稿（可选）' },
+          },
+          required: ['reviewComments'],
+        },
+        handler: async (args) => {
+          const missing = noProjectHint(args, ['reviewComments']);
+          if (missing) return { error: missing };
+          return this.submission.replyReview(String(args.reviewComments), String(args.response || ''));
+        },
+      },
+      {
+        name: 'submission.track',
+        description: '读取项目投稿台账：期刊、当前状态、事件流、预计审稿阶段与超期天数。只读、不写库。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: { type: 'string', description: '项目 ID' },
+          },
+          required: ['projectId'],
+        },
+        handler: async (args, user) => {
+          const missing = noProjectHint(args, ['projectId']);
+          if (missing) return { error: missing };
+          this.access.assertProject(String(args.projectId), user);
+          return this.submission.listTracks(String(args.projectId));
+        },
+      },
+      {
+        name: 'submission.email',
+        description: '解析编辑部邮件：推断建议投稿状态、置信度与理由。只给建议、不改库；会调用一次 LLM。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            emailText: { type: 'string', description: '编辑部邮件正文' },
+            currentStatus: { type: 'string', description: '当前投稿状态（可选，用于对比）' },
+          },
+          required: ['emailText'],
+        },
+        handler: async (args) => {
+          const missing = noProjectHint(args, ['emailText']);
+          if (missing) return { error: missing };
+          return this.submission.parseTrackEmail({ emailText: String(args.emailText), currentStatus: String(args.currentStatus || '') });
         },
       },
       {

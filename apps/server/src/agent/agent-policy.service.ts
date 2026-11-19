@@ -54,6 +54,11 @@ const READ_ONLY_TOOLS = new Set([
   'memory.search',
   'memory.list',
   'task.list',
+  'submission.match',
+  'submission.cover',
+  'submission.reply',
+  'submission.track',
+  'submission.email',
 ]);
 
 const PROJECT_WRITE_PREFIXES = ['document.', 'project.', 'experiment.', 'quality.', 'browser.', 'memory.'];
