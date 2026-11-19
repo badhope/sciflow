@@ -29,6 +29,12 @@ describe('MCP research role tools', () => {
     expect(byName.get('document.revise_section')!.inputSchema.required).toEqual(['documentId', 'title', 'reviewPoints']);
   });
 
+  it('exposes external MCP discovery and call as tools', () => {
+    expect(byName.has('mcp.external.list')).toBe(true);
+    expect(byName.get('mcp.external.discover')!.inputSchema.required).toEqual(['url']);
+    expect(byName.get('mcp.external.call')!.inputSchema.required).toEqual(['serverId', 'tool']);
+  });
+
   it('exposes the project research brief as a read + approval-gated write pair', () => {
     expect(byName.has('research.brief.get')).toBe(true);
     expect(byName.get('research.brief.get')!.inputSchema.required).toEqual(['projectId']);

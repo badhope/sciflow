@@ -33,6 +33,7 @@ export type AgentToolGroup =
   | 'task'
   | 'config'
   | 'extension'
+  | 'mcp'
   | 'chat'
   | 'research'
   | 'submission'
@@ -84,6 +85,7 @@ const TOOL_GROUP_PREFIX: Record<string, AgentToolGroup> = {
   'task.': 'task',
   'config.': 'config',
   'extension.': 'extension',
+  'mcp.': 'mcp',
   'chat.': 'chat',
   'submission.': 'submission',
 };
@@ -124,6 +126,7 @@ export const AGENT_TOOL_PROFILES: Record<AgentToolProfileId, AgentToolProfile> =
       'task',
       'config',
       'extension',
+      'mcp',
       'research',
       'submission',
       'submission_write',

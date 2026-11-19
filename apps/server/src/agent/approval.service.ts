@@ -41,6 +41,7 @@ const DEFAULT_ASK_PREFIXES = [
   'config.', // 改全局配置
   'extension.', // 改扩展/技能
   'research.brief.update', // 改项目研究契约，必须先确认
+  'mcp.external.call', // 调第三方 MCP 工具，可能有外部副作用
 ];
 
 /**
@@ -71,6 +72,8 @@ const READ_ONLY_TOOLS = new Set([
   'submission.reply',
   'submission.track',
   'submission.email',
+  'mcp.external.list',
+  'mcp.external.discover',
 ]);
 
 /** 待确认请求的超时：超时视为拒绝，避免模型无限等待 */
@@ -133,6 +136,7 @@ export class ApprovalService {
     if (toolName.startsWith('document.')) return '将修改论文正文，此操作会写入版本历史。';
     if (toolName.startsWith('project.')) return '将修改项目结构或配置。';
     if (toolName.startsWith('config.')) return '将修改全局配置，影响后续所有会话。';
+    if (toolName.startsWith('mcp.external.')) return '将调用第三方 MCP 工具，可能有外部副作用；返回内容按不可信数据处理。';
     return '该操作会产生副作用，请确认。';
   }
 

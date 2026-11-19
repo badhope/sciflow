@@ -79,6 +79,13 @@ describe('Agent 工具作用域', () => {
     expect(profileAllowsTool(p, 'research.brief.update')).toBe(true);
   });
 
+  it('外部 MCP 工具只进入 full profile，研究/实验角色不越权', () => {
+    expect(profileAllowsTool(AGENT_TOOL_PROFILES.full, 'mcp.external.list')).toBe(true);
+    expect(profileAllowsTool(AGENT_TOOL_PROFILES.full, 'mcp.external.call')).toBe(true);
+    expect(profileAllowsTool(AGENT_TOOL_PROFILES.research, 'mcp.external.list')).toBe(false);
+    expect(profileAllowsTool(AGENT_TOOL_PROFILES.experiment, 'mcp.external.call')).toBe(false);
+  });
+
   it('config profile 只暴露配置中心写入口', () => {
     const p = AGENT_TOOL_PROFILES.config;
     expect(profileAllowsTool(p, 'config.upsert_role')).toBe(true);
