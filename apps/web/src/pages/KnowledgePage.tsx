@@ -469,7 +469,7 @@ export function KnowledgePage({ project }: { project: Project }) {
             <Upload size={15} className="text-teal-600" aria-hidden="true" /> 研究资料
           </span>
           <span className="text-[11px] text-slate-400 dark:text-slate-500">
-            {docs.length > 0 ? `${docs.length} 份 · ` : ''}PDF / TXT / Markdown，拖拽或点击上传
+            PDF / TXT / Markdown，拖拽或点击上传
           </span>
           <Button size="sm" variant="outline" className="ml-auto" onClick={() => fileRef.current?.click()}>
             <FileText size={13} /> 上传
