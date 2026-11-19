@@ -98,6 +98,33 @@ sciflow ext reset                     # 恢复全部内置
 
 ---
 
+## Agent 运行时：工具面、审批与外部 MCP
+
+Agent 不是「一个模型硬干所有事」，工具面、审批和预算都是运行时配置：
+
+| 配置 | 作用 | 默认 |
+|---|---|---|
+| `AGENT_TOOLS=off` | 关闭模型工具调用，只保留纯对话 | 开启 |
+| `AGENT_TOOLS_ALLOW` | 允许暴露给模型的工具白名单（逗号分隔，canonical 名） | 内置科研工具 + 配置/扩展 + 外部 MCP 三件套 |
+| `AGENT_TOOLS_PROFILE` | 按场景收窄工具面：`full` / `research` / `experiment` / `config` | `full` |
+| `AGENT_TOOL_MODE` | `full` 直接暴露全部白名单；`dynamic` 只直出核心工具，其余先 `tool_search` 再 `tool_invoke` | `full` |
+| `AGENT_MAX_TOOL_CALLS` | 单轮最多工具调用次数 | 24 |
+| `AGENT_TOOL_TIMEOUT_MS` | 单次工具超时（毫秒） | 20000 |
+
+**计划级授权**：模型可先提交研究计划（问题/假设/协议/风险/成本），用户在驾驶舱批准后，计划内工具按预算自动放行；预算按项目累计 token，耗尽自动回落逐次审批。计划与审批记录在 `agent_plan` / `tool_approval`，删项目时级联清理。
+
+**外部 MCP**：设置 → 扩展中心可添加任意 MCP Streamable HTTP 端点。Agent 通过三个工具接入：
+
+- `mcp.external.list`：列出已配置服务器（只读）
+- `mcp.external.discover`：按 URL 探测工具清单（只读，受 SSRF 防护）
+- `mcp.external.call`：调用外部工具（需审批，返回内容标记为第三方不可信）
+
+外部 MCP 只在 `full` profile 暴露；`research` / `experiment` 角色不可见。若你自定义了 `AGENT_TOOLS_ALLOW`，记得把这三个名字加进去，否则会被白名单挡掉。
+
+**指标**：`GET /api/agent/metrics?days=7&projectId=...` 返回工具调用成功率、P95、按工具/按天分布、run 汇总与最近 run；驾驶舱 `AgentOpsPanel` 直接消费该接口，不再重复拉执行列表。
+
+---
+
 ## 模型路由：fast / strong 双档
 
 SciFlow 把 LLM 调用分成两档，**分别计费**：
