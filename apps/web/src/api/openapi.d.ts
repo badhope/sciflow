@@ -3820,6 +3820,48 @@ export interface components {
             /** @description 更新时间 */
             updatedAt: number;
         };
+        OverdueSubmissionItemDto: {
+            /** @description 投稿记录 ID */
+            id: string;
+            /** @description 期刊名 */
+            journalName: string;
+            /** @description 稿件标题 */
+            title: string;
+            /** @description 当前状态 */
+            status: string;
+            /** @description 超期天数 */
+            overdueDays: number;
+        };
+        LowQualityDocItemDto: {
+            /** @description 文档 ID */
+            id: string;
+            /** @description 文档标题 */
+            title: string;
+            /** @description 质量分（客观分优先） */
+            score: number;
+            /** @description 质量报告时间 */
+            date: number;
+        };
+        DashboardOverviewDto: {
+            /** @description 待确认大纲数 */
+            pendingOutline: number;
+            /** @description 超期投稿列表 */
+            overdueSubmissions: components["schemas"]["OverdueSubmissionItemDto"][];
+            /** @description 未决评审意见数 */
+            openReviewComments: number;
+            /** @description 低分文档列表 */
+            lowQualityDocs: components["schemas"]["LowQualityDocItemDto"][];
+            /** @description 实验记录数 */
+            experimentCount: number;
+            /** @description 文档数 */
+            docCount: number;
+            /** @description 文献数 */
+            refCount: number;
+            /** @description 知识库资料数 */
+            knowledgeCount: number;
+            /** @description 流水线任务数 */
+            pipelineCount: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -9183,7 +9225,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DashboardOverviewDto"];
+                };
             };
         };
     };

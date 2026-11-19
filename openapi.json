@@ -5826,7 +5826,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardOverviewDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -6723,6 +6730,123 @@
           "error",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "OverdueSubmissionItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "投稿记录 ID"
+          },
+          "journalName": {
+            "type": "string",
+            "description": "期刊名"
+          },
+          "title": {
+            "type": "string",
+            "description": "稿件标题"
+          },
+          "status": {
+            "type": "string",
+            "description": "当前状态"
+          },
+          "overdueDays": {
+            "type": "number",
+            "description": "超期天数"
+          }
+        },
+        "required": [
+          "id",
+          "journalName",
+          "title",
+          "status",
+          "overdueDays"
+        ]
+      },
+      "LowQualityDocItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "文档 ID"
+          },
+          "title": {
+            "type": "string",
+            "description": "文档标题"
+          },
+          "score": {
+            "type": "number",
+            "description": "质量分（客观分优先）"
+          },
+          "date": {
+            "type": "number",
+            "description": "质量报告时间"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "score",
+          "date"
+        ]
+      },
+      "DashboardOverviewDto": {
+        "type": "object",
+        "properties": {
+          "pendingOutline": {
+            "type": "number",
+            "description": "待确认大纲数"
+          },
+          "overdueSubmissions": {
+            "description": "超期投稿列表",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OverdueSubmissionItemDto"
+            }
+          },
+          "openReviewComments": {
+            "type": "number",
+            "description": "未决评审意见数"
+          },
+          "lowQualityDocs": {
+            "description": "低分文档列表",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LowQualityDocItemDto"
+            }
+          },
+          "experimentCount": {
+            "type": "number",
+            "description": "实验记录数"
+          },
+          "docCount": {
+            "type": "number",
+            "description": "文档数"
+          },
+          "refCount": {
+            "type": "number",
+            "description": "文献数"
+          },
+          "knowledgeCount": {
+            "type": "number",
+            "description": "知识库资料数"
+          },
+          "pipelineCount": {
+            "type": "number",
+            "description": "流水线任务数"
+          }
+        },
+        "required": [
+          "pendingOutline",
+          "overdueSubmissions",
+          "openReviewComments",
+          "lowQualityDocs",
+          "experimentCount",
+          "docCount",
+          "refCount",
+          "knowledgeCount",
+          "pipelineCount"
         ]
       }
     }

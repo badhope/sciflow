@@ -13,6 +13,8 @@ function overview(patch: Partial<DashboardOverview> = {}): DashboardOverview {
     experimentCount: 0,
     docCount: 0,
     refCount: 0,
+    knowledgeCount: 0,
+    pipelineCount: 0,
     ...patch,
   };
 }

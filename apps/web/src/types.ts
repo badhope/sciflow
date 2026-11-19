@@ -799,36 +799,14 @@ export interface BibtexImportResult {
  * 连贯连通：Dashboard 全链路总览聚合（GET /api/dashboard/overview）
  * ===================================================================== */
 
-/** 超期投稿卡点条目（后端 join 投稿记录） */
-export interface OverdueSubmissionItem {
-  id: string;
-  journalName: string;
-  title: string;
-  status: string;
-  overdueDays: number;
-}
+/** 驾驶舱总览：类型来自 OpenAPI 生成 contract（DashboardOverviewDto）。 */
+export type DashboardOverview = components['schemas']['DashboardOverviewDto'];
 
-/** 低分文档卡点条目（后端取最新一次 QualityReport） */
-export interface LowQualityDocItem {
-  id: string;
-  title: string;
-  score: number;
-  date: number;
-}
+/** 超期投稿卡点：从总览契约的数组元素派生，不另写一份。 */
+export type OverdueSubmissionItem = DashboardOverview['overdueSubmissions'][number];
 
-/** 科研全链路总览（待办计数 + 卡点列表；后端未就绪时前端优雅降级为 null） */
-export interface DashboardOverview {
-  pendingOutline: number;
-  overdueSubmissions: OverdueSubmissionItem[];
-  openReviewComments: number;
-  lowQualityDocs: LowQualityDocItem[];
-  experimentCount: number;
-  docCount: number;
-  refCount: number;
-  /** v2.1：知识库/流水线计数并入 overview，避免驾驶舱为取 length 拉全量列表 */
-  knowledgeCount?: number;
-  pipelineCount?: number;
-}
+/** 低分文档卡点：从总览契约的数组元素派生，不另写一份。 */
+export type LowQualityDocItem = DashboardOverview['lowQualityDocs'][number];
 
 /** B-4.3 引用体检结果（/api/documents/:id/citation-audit） */
 export interface CitationAudit {
