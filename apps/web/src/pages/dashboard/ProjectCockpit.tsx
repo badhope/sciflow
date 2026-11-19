@@ -43,7 +43,7 @@ export function ProjectCockpit({
   gate: QualityGateState;
   /** 投稿跟踪条数（概览接口未含此字段，由上层单独查询后传入） */
   submissionCount: number;
-  onNavigate: (v: View) => void;
+  onNavigate: (v: View, tab?: string) => void;
   onOpenDoc: (id: string) => void;
 }) {
   const hasContent = docs.some((d) => (d.content || '').trim().length > 0);
@@ -116,7 +116,7 @@ export function ProjectCockpit({
           <li key={s.key} className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => onNavigate(s.view as View)}
+              onClick={() => onNavigate(s.view as View, s.tab)}
               className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
                 s.current
                   ? 'border-teal-500 bg-teal-50 font-medium text-teal-800 dark:border-teal-600 dark:bg-teal-950/40 dark:text-teal-200'

@@ -70,10 +70,10 @@ describe('ProjectCockpit', () => {
     expect(screen.getByText(/2 项硬伤，封顶 40 分/)).toBeTruthy();
   });
 
-  it('阶段进度可点击跳转：点「文献」进文献页（阶段条不是只读装饰）', async () => {
+  it('阶段进度可点击跳转：点「文献」进证据库文献 Tab（阶段条不是只读装饰）', async () => {
     const { onNavigate } = setup();
     await userEvent.click(screen.getByRole('button', { name: '文献' }));
-    expect(onNavigate).toHaveBeenCalledWith('literature');
+    expect(onNavigate).toHaveBeenCalledWith('evidence', 'literature');
   });
 
   it('全部阶段完成（有投稿记录）时停在最后一阶段，不再回指「选题」', () => {
