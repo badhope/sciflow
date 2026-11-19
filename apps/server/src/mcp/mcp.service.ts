@@ -821,6 +821,27 @@ export class McpService {
         },
       },
       {
+        name: 'document.revise_section',
+        description: '按审稿意见改写文档的某一节（保留全文其他部分），用于逐条响应评审。写操作需审批。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            documentId: { type: 'string', description: '文档 ID' },
+            title: { type: 'string', description: '要改写的章节标题' },
+            reviewPoints: { type: 'string', description: '审稿意见/修改要求' },
+          },
+          required: ['documentId', 'title', 'reviewPoints'],
+        },
+        handler: async (args, user) => {
+          this.access.assertDocument(String(args.documentId), user);
+          return this.documents.reviseSectionFromReview(
+            String(args.documentId),
+            String(args.title),
+            String(args.reviewPoints),
+          );
+        },
+      },
+      {
         name: 'document.snapshot',
         description: '给文档创建一次版本快照（类似 git commit），用于在重大修改前保留可回退版本。',
         inputSchema: {

@@ -24,6 +24,11 @@ describe('MCP research role tools', () => {
     expect(byName.get('document.snapshot')!.inputSchema.required).toEqual(['documentId']);
   });
 
+  it('exposes section revision with the inputs the reviewer flow needs', () => {
+    expect(byName.has('document.revise_section')).toBe(true);
+    expect(byName.get('document.revise_section')!.inputSchema.required).toEqual(['documentId', 'title', 'reviewPoints']);
+  });
+
   it('resolves legacy tool names to canonical names', () => {
     expect(resolveMcpToolName('reference.search')).toBe('literature.search');
     expect(resolveMcpToolName('config.inspect')).toBe('config.snapshot');
