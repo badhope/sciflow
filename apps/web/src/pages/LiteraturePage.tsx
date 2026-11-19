@@ -6,13 +6,14 @@ import { api } from '../api/client';
 import { ToastContext } from '../App';
 import { LiteratureTools, Tool } from './literature/LiteratureTools';
 import { LiteratureTable } from './literature/LiteratureTable';
+import { useProjectRefs } from '../lib/queries';
+import { qk } from '../lib/query-keys';
 
 export function LiteraturePage({ project }: { project: Project }) {
   const toast = useContext(ToastContext);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [hits, setHits] = useState<(Reference | DiscoveredReference)[]>([]);
-  const [refs, setRefs] = useState<Reference[]>([]);
   const [imported, setImported] = useState<Set<string>>(new Set());
   const [tool, setTool] = useState<Tool>('summary');
   const [summary, setSummary] = useState('');
@@ -36,16 +37,19 @@ export function LiteraturePage({ project }: { project: Project }) {
   const [bibText, setBibText] = useState('');
   const [importing, setImporting] = useState(false);
 
-  useEffect(() => {
-    api.references.list(project.id).then(setRefs).catch((e: unknown) => setError(errMsg(e)));
-  }, [project.id]);
+  // 文献库走共享 hook；表格内的增删改直接写同一个 query cache，避免本地 state 与缓存分叉
+  const qc = useQueryClient();
+  const refsQuery = useProjectRefs(project.id, { retry: 0 });
+  const refs = useMemo(() => refsQuery.data ?? [], [refsQuery.data]);
+  const setRefs = (updater: (prev: Reference[]) => Reference[]) => {
+    qc.setQueryData<Reference[]>(qk.refs(project.id), (prev) => updater(prev ?? []));
+  };
 
   useEffect(() => {
     api.references.screenList(project.id).then(setScreenItems).catch((e: unknown) => { setScreenItems([]); setError(errMsg(e)); });
   }, [project.id]);
 
   // 引用网络（React Query）：切到图谱页时拉取；子组件写回走 setQueryData（保持局部演进能力）
-  const qc = useQueryClient();
   const graphQuery = useQuery({
     queryKey: ['ref-graph', project.id],
     queryFn: () => api.references.graph(project.id),

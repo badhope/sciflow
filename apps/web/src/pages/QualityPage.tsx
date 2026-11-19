@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, useContext } from 'react';
 import { AlertTriangle, CheckCircle2, Gauge, LayoutList, Loader2, ShieldCheck, Sparkles, ListChecks } from 'lucide-react';
 import { api } from '../api/client';
-import type { Doc, Project, QualityReport, CitationAudit, ObjectiveQualityReport, ProjectQualityOverview } from '../types';
+import type { Project, QualityReport, CitationAudit, ObjectiveQualityReport, ProjectQualityOverview } from '../types';
 import { Badge, Button, Card, EmptyState, ErrorBox, Select, Spinner, jsonText, errMsg } from '../components/ui';
 import { ToastContext } from '../App';
 import { HBar, LineChart, ProgressRing } from '../components/charts';
 import { QUALITY_DIMS } from './qualityDims';
+import { useProjectDocs } from '../lib/queries';
 
 /** LLM 参考分：新报告读 llmScore；拆分前老数据回落到 totalScore（那时 totalScore 存的就是 LLM 分） */
 function llmScoreOf(r: QualityReport): number {
@@ -81,7 +82,8 @@ function Radar({ scores, compare }: { scores: Record<string, number>; compare?: 
 }
 
 export function QualityPage({ project }: { project: Project }) {
-  const [docs, setDocs] = useState<Doc[]>([]);
+  const docsQuery = useProjectDocs(project.id);
+  const docs = useMemo(() => docsQuery.data ?? [], [docsQuery.data]);
   const [docId, setDocId] = useState<string>('');
   const [scoring, setScoring] = useState(false);
   const [error, setError] = useState('');
@@ -136,13 +138,14 @@ export function QualityPage({ project }: { project: Project }) {
    * 默认选中最新一篇：docs 按 updatedAt 升序，docs[0] 是最旧的——与 WorkspacePage /
    * WritingPage 同类 bug（那两处已修，本页漏了），会导致刚改完的稿子不在默认选中里。
    */
+  // 文档列表走共享 hook；默认选中最新一篇（docs 升序，取最后一条）
+  useEffect(() => {
+    if (!docId && docs.length) setDocId(docs[docs.length - 1].id);
+  }, [docId, docs]);
+
+  // 质量总览单独拉取；文档列表不再在 effect 里重复请求
   useEffect(() => {
     let cancelled = false;
-    api.documents.list(project.id).then((d) => {
-      if (cancelled) return;
-      setDocs(d);
-      if (d.length) setDocId(d[d.length - 1].id);
-    });
     api.quality
       .projectOverview(project.id)
       .then((o) => { if (!cancelled) { setOverview(o); setOverviewError(''); } })

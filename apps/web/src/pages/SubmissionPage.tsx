@@ -5,9 +5,10 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client';
 import { ToastContext } from '../App';
-import type { Doc, Journal, JournalMatchResult, ParseEmailResult, Project, ReviewComment, SubmissionStatus, SubmissionTrack } from '../types';
+import type { Journal, JournalMatchResult, ParseEmailResult, Project, ReviewComment, SubmissionStatus, SubmissionTrack } from '../types';
 import { Badge, Button, Card, ConfirmDialog, ErrorBox, Input, Select, Spinner, Textarea, errMsg } from '../components/ui';
 import { HBar } from '../components/charts';
+import { useProjectDocs } from '../lib/queries';
 
 type Tab = 'journals' | 'cover' | 'reply' | 'track';
 
@@ -54,7 +55,8 @@ export function SubmissionPage({ project }: { project: Project }) {
   const [loadErr, setLoadErr] = useState('');
   const [removingJournal, setRemovingJournal] = useState<Journal | null>(null);
   const [removingTrack, setRemovingTrack] = useState<SubmissionTrack | null>(null);
-  const [docs, setDocs] = useState<Doc[]>([]);
+  const docsQuery = useProjectDocs(project.id);
+  const docs = docsQuery.data ?? [];
   const [selDoc, setSelDoc] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -96,10 +98,10 @@ export function SubmissionPage({ project }: { project: Project }) {
   // 任务2：每条投稿关联文档的 open 审稿意见数（预取，用于「从审稿意见记录事件」按钮禁用态）
   const toast = useContext(ToastContext);
 
-  // 拉取项目内文档，否则「选择项目内论文」下拉恒空
+  // 文档列表走共享 hook；失败时保留页面级错误提示
   useEffect(() => {
-    api.documents.list(project.id).then(setDocs).catch((e) => { setDocs([]); setLoadErr(errMsg(e)); });
-  }, [project.id]);
+    if (docsQuery.error) setLoadErr(errMsg(docsQuery.error));
+  }, [docsQuery.error]);
 
   // 期刊库加载
   useEffect(() => {
