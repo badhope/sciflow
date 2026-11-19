@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Beaker, FileText, FlaskConical, Gauge, Plus, Workflow, ChevronDown } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardOverview, Project } from '../types';
-import { Button, Card, EmptyState, Skeleton, Badge, jsonText, SectionHeader, SectionTitle, Textarea, errMsg } from '../components/ui';
+import { Button, Card, EmptyState, Skeleton, Badge, jsonText, SectionTitle, Textarea, errMsg } from '../components/ui';
 import { Donut, HBar, MetricCard } from '../components/charts';
 import { formatWordCount } from '../lib/format';
 import { useProjectDocs, useProjectRefs } from '../lib/queries';
@@ -277,7 +277,7 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
 
       {docs.length > 0 && ( /* 草稿状态：与草稿列表同主题，inset 弱化 */
         <Card tone="inset" className="mb-6">
-          <SectionHeader title="草稿状态分布" description="按文档状态统计，点击卡片进入写作页" />
+          <SectionTitle description="按文档状态统计，点击卡片进入写作页">草稿状态分布</SectionTitle>
           <div className="mt-3 flex flex-wrap items-center gap-6">
             <Donut
               size={132}

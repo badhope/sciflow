@@ -1,7 +1,6 @@
-import { useMemo } from 'react';
 import type { Project, DashboardOverview } from '../types';
 import type { StageKey, StageState } from '../lib/stages';
-import { deriveStages, stageOfView } from '../lib/stages';
+import { stageOfView, useStages } from '../lib/stages';
 
 export interface StageBarProps {
   project: Project;
@@ -25,20 +24,16 @@ export interface StageBarProps {
  */
 export function StageBar(props: StageBarProps) {
   const { view, onNavigate } = props;
-  const stages: StageState[] = useMemo(
-    () =>
-      deriveStages({
-        project: props.project,
-        overview: props.overview,
-        docCount: props.docCount,
-        hasContent: props.hasContent,
-        score: props.score,
-        reviewedDocCount: props.reviewedDocCount,
-        submissionCount: props.submissionCount,
-        view,
-      }),
-    [props.project, props.overview, props.docCount, props.hasContent, props.score, props.reviewedDocCount, props.submissionCount, view],
-  );
+  const stages: StageState[] = useStages({
+    project: props.project,
+    overview: props.overview,
+    docCount: props.docCount,
+    hasContent: props.hasContent,
+    score: props.score,
+    reviewedDocCount: props.reviewedDocCount,
+    submissionCount: props.submissionCount,
+    view,
+  });
 
   const doneCount = stages.filter((s) => s.done).length;
   const activeStage = stageOfView(view);

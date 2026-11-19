@@ -154,27 +154,33 @@ export function Card({
   );
 }
 
-/** 区块标题：全站统一的信息层级（标题 / 描述 / 右侧操作） */
-export function SectionHeader({ title, description, actions, level = 2, className = '' }: {
-  title: ReactNode;
+/** 区块标题：全站统一的信息层级（标题 / 描述 / 右侧操作）。 */
+export function SectionTitle({
+  children,
+  extra,
+  description,
+  level = 2,
+  className = '',
+}: {
+  children: ReactNode;
+  extra?: ReactNode;
   description?: ReactNode;
-  actions?: ReactNode;
   level?: 2 | 3;
   className?: string;
 }) {
   const Tag = level === 2 ? 'h2' : 'h3';
   return (
-    <div className={`flex flex-wrap items-start justify-between gap-2 ${className}`}>
+    <div className={`mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between ${className}`}>
       <div className="min-w-0">
-        <Tag className={`${level === 2 ? 'text-[15px]' : 'text-sm'} font-semibold tracking-tight text-slate-900 dark:text-slate-100 truncate`}>{title}</Tag>
-        {description && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{description}</p>}
+        <Tag className="text-base font-semibold text-slate-800 dark:text-slate-100">{children}</Tag>
+        {description && <p className="mt-0.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{description}</p>}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}
+      {extra && <div className="flex shrink-0 items-center gap-1.5">{extra}</div>}
     </div>
   );
 }
 
-/** 空态：插图 + 标题 + 说明 + 主操作（缺一不可，避免"只有一行字"） */
+/** 空态薄壳：保留原 EmptyState 的“虚线框 + 插画 + 主操作”视觉，实现统一走 Empty(surface)。 */
 export function EmptyState({ title, hint, illustration, action, compact }: {
   title: string;
   hint?: string;
@@ -182,22 +188,7 @@ export function EmptyState({ title, hint, illustration, action, compact }: {
   action?: ReactNode;
   compact?: boolean;
 }) {
-  const IllustrationComp = illustration ? ILLUSTRATIONS[illustration] : null;
-  return (
-    // 空态用「虚线框 + 极浅底」：它是「此处尚未有内容」的占位，不该长得像一张正常内容卡
-    <div className={`empty-surface flex flex-col items-center justify-center text-center ${compact ? 'py-8' : 'py-14'} px-6`}>
-      {IllustrationComp ? (
-        <IllustrationComp className="w-24 h-20 mb-2 opacity-90" />
-      ) : (
-        <div className="w-11 h-11 rounded-[var(--r-md)] brand-logo flex items-center justify-center mb-2">
-          <Sparkles size={19} aria-hidden="true" />
-        </div>
-      )}
-      <div className="text-sm font-medium text-slate-700 dark:text-slate-200">{title}</div>
-      {hint && <div className="mt-1 max-w-sm text-xs leading-relaxed text-slate-500 dark:text-slate-400">{hint}</div>}
-      {action && <div className="mt-4">{action}</div>}
-    </div>
-  );
+  return <Empty variant="surface" text={title} hint={hint} illustration={illustration} action={action} compact={compact} />;
 }
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
@@ -276,14 +267,44 @@ export function Skeleton({ className = '', lines = 3 }: { className?: string; li
   );
 }
 
-export function Empty({ text, hint, illustration, compact = false }: { text: string; hint?: string; illustration?: IllustrationKey; compact?: boolean }) {
+export function Empty({
+  text,
+  hint,
+  illustration,
+  compact = false,
+  action,
+  variant = 'plain',
+}: {
+  text: string;
+  hint?: string;
+  illustration?: IllustrationKey;
+  compact?: boolean;
+  action?: ReactNode;
+  variant?: 'plain' | 'surface';
+}) {
   const IllustrationComp = illustration ? ILLUSTRATIONS[illustration] : null;
+  if (variant === 'surface') {
+    return (
+      <div className={`empty-surface flex flex-col items-center justify-center text-center ${compact ? 'py-8' : 'py-14'} px-6`}>
+        {IllustrationComp ? (
+          <IllustrationComp className="w-24 h-20 mb-2 opacity-90" />
+        ) : (
+          <div className="w-11 h-11 rounded-[var(--r-md)] brand-logo flex items-center justify-center mb-2">
+            <Sparkles size={19} aria-hidden="true" />
+          </div>
+        )}
+        <div className="text-sm font-medium text-slate-700 dark:text-slate-200">{text}</div>
+        {hint && <div className="mt-1 max-w-sm text-xs leading-relaxed text-slate-500 dark:text-slate-400">{hint}</div>}
+        {action && <div className="mt-4">{action}</div>}
+      </div>
+    );
+  }
   if (compact) {
-    /* 紧凑变体：窄栏卡片内的空态——一条引导就够，大图标 + 大留白会把主任务挤出视口 */
     return (
       <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-700 px-3 py-2.5 text-center">
         <div className="text-xs text-slate-500 dark:text-slate-400">{text}</div>
         {hint && <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{hint}</div>}
+        {action && <div className="mt-2">{action}</div>}
       </div>
     );
   }
@@ -298,6 +319,7 @@ export function Empty({ text, hint, illustration, compact = false }: { text: str
       )}
       <div className="text-sm font-medium text-slate-500 dark:text-slate-400">{text}</div>
       {hint && <div className="text-xs text-slate-400 dark:text-slate-500">{hint}</div>}
+      {action && <div className="mt-3">{action}</div>}
     </div>
   );
 }
@@ -412,16 +434,6 @@ export function CollapsibleCard({
       </button>
       {open ? <div className="mt-4">{children}</div> : null}
     </Card>
-  );
-}
-
-export function SectionTitle({ children, extra }: { children: ReactNode; extra?: ReactNode }) {
-  // 窄屏：标题与右侧操作纵向堆叠（sm+ 恢复原左右布局，桌面端不变）
-  return (
-    <div className="flex flex-col gap-2 mb-3 sm:flex-row sm:items-center sm:justify-between">
-      <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">{children}</h2>
-      {extra}
-    </div>
   );
 }
 

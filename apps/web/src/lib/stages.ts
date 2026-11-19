@@ -84,5 +84,5 @@ export function stageOfView(view: string): StageKey | null {
 
 export function useStages(input: StageInput): StageState[] {
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => deriveStages(input), [input.overview, input.docCount, input.hasContent, input.score, input.submissionCount, input.reviewedDocCount, input.view]);
+  return useMemo(() => deriveStages(input), [input.project, input.overview, input.docCount, input.hasContent, input.score, input.submissionCount, input.reviewedDocCount, input.view]);
 }

@@ -1,6 +1,6 @@
 import type { DashboardOverview, Doc, Project } from '../../types';
 import type { View } from '../../App';
-import { deriveStages, type StageState } from '../../lib/stages';
+import { useStages, type StageState } from '../../lib/stages';
 import { Badge, Button, Card } from '../../components/ui';
 import { ArrowRight, CheckCircle2, Circle, Clock3, Workflow, AlertTriangle } from 'lucide-react';
 
@@ -13,7 +13,7 @@ import { ArrowRight, CheckCircle2, Circle, Clock3, Workflow, AlertTriangle } fro
  * 本组件把这三件事放在首屏唯一的主区域，其余统计降为次级区块。
  *
  * 设计约束：
- *  - 阶段推断复用 lib/stages 的 deriveStages（单一事实源，已有 5 条单测），不另写一套口径；
+ *  - 阶段推断复用 lib/stages 的 useStages（单一事实源，已有 5 条单测），不另写一套口径；
  *  - 「下一步」由阶段推断得出而非硬编码文案，空项目也能给出正确的第一步；
  *  - 质量门状态只读客观分与所选标准（不引入新请求），标准缺失时显示「未评分」而非假绿。
  */
@@ -48,7 +48,7 @@ export function ProjectCockpit({
 }) {
   const hasContent = docs.some((d) => (d.content || '').trim().length > 0);
   const reviewedDocCount = docs.filter((d) => ['reviewing', 'polished', 'final'].includes(String(d.status))).length;
-  const stages: StageState[] = deriveStages({
+  const stages: StageState[] = useStages({
     project,
     overview,
     docCount: docs.length,

@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { Button, Badge, Card, Empty, Spinner, Input, Select } from './ui';
+import { Button, Badge, Card, Empty, EmptyState, SectionTitle, Spinner, Input, Select } from './ui';
 
 describe('Button', () => {
   it('renders children and fires onClick', async () => {
@@ -51,6 +51,32 @@ describe('Badge / Spinner / Empty', () => {
     render(<Empty text="暂无项目" hint="先创建一个项目" />);
     expect(screen.getByText('暂无项目')).toBeTruthy();
     expect(screen.getByText('先创建一个项目')).toBeTruthy();
+  });
+
+  it('EmptyState is the surface variant of Empty and keeps the action', () => {
+    render(
+      <EmptyState
+        title="还没有文档"
+        hint="先创建一篇"
+        action={<Button>新建文档</Button>}
+      />,
+    );
+    expect(screen.getByText('还没有文档')).toBeTruthy();
+    expect(screen.getByText('先创建一篇')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '新建文档' })).toBeTruthy();
+  });
+});
+
+describe('SectionTitle', () => {
+  it('renders description and right-side extra without duplicating markup', () => {
+    render(
+      <SectionTitle description="按文档状态统计" extra={<Button>查看全部</Button>}>
+        草稿状态分布
+      </SectionTitle>,
+    );
+    expect(screen.getByText('草稿状态分布')).toBeTruthy();
+    expect(screen.getByText('按文档状态统计')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '查看全部' })).toBeTruthy();
   });
 });
 
