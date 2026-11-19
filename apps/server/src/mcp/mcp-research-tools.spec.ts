@@ -14,6 +14,16 @@ describe('MCP research role tools', () => {
     expect(byName.has('research.expert')).toBe(true);
   });
 
+  it('exposes quality.history instead of leaving a profile-only phantom', () => {
+    expect(byName.has('quality.history')).toBe(true);
+    expect(byName.get('quality.history')!.inputSchema.required).toEqual(['documentId']);
+  });
+
+  it('exposes the approval-gated document snapshot tool', () => {
+    expect(byName.has('document.snapshot')).toBe(true);
+    expect(byName.get('document.snapshot')!.inputSchema.required).toEqual(['documentId']);
+  });
+
   it('resolves legacy tool names to canonical names', () => {
     expect(resolveMcpToolName('reference.search')).toBe('literature.search');
     expect(resolveMcpToolName('config.inspect')).toBe('config.snapshot');

@@ -821,6 +821,22 @@ export class McpService {
         },
       },
       {
+        name: 'document.snapshot',
+        description: '给文档创建一次版本快照（类似 git commit），用于在重大修改前保留可回退版本。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            documentId: { type: 'string', description: '文档 ID' },
+            commitMessage: { type: 'string', description: '快照说明，例如“投稿前定稿”' },
+          },
+          required: ['documentId'],
+        },
+        handler: async (args, user) => {
+          this.access.assertDocument(String(args.documentId), user);
+          return this.documents.createSnapshot(String(args.documentId), args.commitMessage ? String(args.commitMessage) : undefined);
+        },
+      },
+      {
         name: 'quality.audit',
         description: '对文档执行 7 维质量评分（客观规则 + LLM 参考），返回客观分/维度/硬失败/改进建议并落库。写完稿先自检。',
         inputSchema: {
@@ -842,6 +858,19 @@ export class McpService {
           required: ['projectId'],
         },
         handler: async (args) => this.quality.projectOverview(String(args.projectId)),
+      },
+      {
+        name: 'quality.history',
+        description: '读取某篇文档的历史质量评分（按时间倒序），用于观察多轮修改后的分数变化。',
+        inputSchema: {
+          type: 'object',
+          properties: { documentId: { type: 'string', description: '文档 ID' } },
+          required: ['documentId'],
+        },
+        handler: async (args, user) => {
+          this.access.assertDocument(String(args.documentId), user);
+          return this.quality.history(String(args.documentId));
+        },
       },
       {
         name: 'experiment.run',
