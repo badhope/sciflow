@@ -4,7 +4,7 @@ import { BookOpen, Beaker, FileText, FlaskConical, Gauge, Plus, Send, Workflow, 
 import { api } from '../api/client';
 import type { DashboardOverview, Project } from '../types';
 import { Button, Card, EmptyState, Skeleton, Badge, jsonText, SectionTitle, Textarea, errMsg } from '../components/ui';
-import { Donut, HBar, MetricCard } from '../components/charts';
+import { Donut, HBar } from '../components/charts';
 import { formatWordCount } from '../lib/format';
 import { qk } from '../lib/query-keys';
 import { useProjectDocs, useProjectRefs } from '../lib/queries';
@@ -14,6 +14,7 @@ import type { View } from '../App';
 import { ProjectCockpit, type QualityGateState } from './dashboard/ProjectCockpit';
 import { AgentOpsPanel } from './dashboard/AgentOpsPanel';
 import { ResearchBriefCard } from './dashboard/ResearchBriefCard';
+import { ProjectStatsBar } from './dashboard/ProjectStatsBar';
 
 export function DashboardPage({ project, onNavigate, openDoc }: {
   project: Project;
@@ -33,6 +34,7 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
   const overview: DashboardOverview | null = overviewQuery.data ?? null;
   const knowledgeCount = overview?.knowledgeCount ?? 0;
   const pipelineCount = overview?.pipelineCount ?? 0;
+  const experimentCount = overview?.experimentCount ?? 0;
   /**
    * 驾驶舱质量门数据（v2.0）：一次取「项目内全部文档最新客观分」与「当前评审标准」。
    * 两者都是只读接口，失败时降级为未评分状态，不阻塞首屏。
@@ -217,13 +219,14 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
         ))}
       </nav>
 
-      {/* 项目数据概览：MetricCard 网格 + 草稿状态分布 */}
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="论文草稿" value={docs.length} icon={<FileText size={14} />} hint={docs.length ? `${docs.length} 篇进行中` : '尚未创建草稿'} tone="brand" />
-        <MetricCard label="参考文献" value={refs.length} icon={<BookOpen size={14} />} hint={refs.length ? '已入库文献' : '文献库为空'} tone="slate" />
-        <MetricCard label="知识库资料" value={knowledgeCount} icon={<BookOpen size={14} />} hint="RAG 可问答资料数" tone="slate" />
-        <MetricCard label="流水线任务" value={pipelineCount} icon={<Workflow size={14} />} hint="历史全自动任务数" tone="slate" />
-      </div>
+      {/* 项目体征：四张 MetricCard 收成一条辅助信息，把首屏主权重留给驾驶舱 */}
+      <ProjectStatsBar
+        docCount={docs.length}
+        refCount={refs.length}
+        knowledgeCount={knowledgeCount}
+        pipelineCount={pipelineCount}
+        experimentCount={experimentCount}
+      />
 
       {/* 科研全链路：与上方指标同属「项目体征」，用 inset 表面弱化，避免两块白卡并列抢层级 */}
       <Card tone="inset" className="mb-6">
