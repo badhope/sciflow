@@ -6,6 +6,7 @@ import { useContext } from 'react';
 import { ToastContext } from '../App';
 import type { Doc, KnowledgeDoc, KnowledgeDocDetail, KnowledgeQueryResult, KnowledgeSource, Project, Reference } from '../types';
 import { Button, Card, ConfirmDialog, EmptyState, ErrorBox, Input, Modal, SectionTitle, Badge, Spinner, errMsg } from '../components/ui';
+import { DocumentSelect } from '../components/DocumentSelect';
 import { Donut, HBar } from '../components/charts';
 import { SemanticMap } from './knowledge/SemanticMap';
 import { useProjectKnowledge, useProjectRefs } from '../lib/queries';
@@ -201,16 +202,13 @@ function StudyReviewCard({ docs }: { docs: KnowledgeDoc[] }) {
         选一份资料，前端规则生成复习卡 + 思维导图（资料内问答）。已接入分块取数：挖空来自原文句子，思维导图优先用真实章节标题；无 AI key 也可用。
       </div>
       <div className="max-w-md">
-        <select
+        <DocumentSelect
+          className="w-full"
+          docs={docs.map((d) => ({ id: d.id, title: d.name }))}
           value={docId}
-          onChange={(e) => pickDoc(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-900 outline-none focus:border-teal-500"
-        >
-          <option value="">选择一份资料…</option>
-          {docs.map((d) => (
-            <option key={d.id} value={d.id}>{d.name}</option>
-          ))}
-        </select>
+          placeholder="选择一份资料…"
+          onChange={(id) => pickDoc(id ?? '')}
+        />
       </div>
 
       {loadingDetail && (
