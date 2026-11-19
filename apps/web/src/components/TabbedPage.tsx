@@ -1,8 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 /**
  * 一级入口内的二级 Tab：只做“壳”，不重写页面。
- * 旧页面各自保留完整的加载/错误边界；切换 Tab 时卸载，避免同屏跑两套重查询。
+ * 旧页面各自保留完整的加载/错误边界；首次访问才挂载，之后隐藏保活，避免首屏同跑两套重查询。
  */
 export function TabbedPage({
   name,
@@ -21,8 +21,19 @@ export function TabbedPage({
   const [local, setLocal] = useState(initialKey ?? tabs[0]?.key ?? '');
   const controlled = activeKey && tabs.some((t) => t.key === activeKey) ? activeKey : undefined;
   const active = controlled ?? local;
-  const current = tabs.find((t) => t.key === active) ?? tabs[0];
+
+  /**
+   * 保活挂载：只挂载“访问过”的 Tab，之后用 hidden 隐藏而不是卸载。
+   * 首屏不会同时拉起两个重页面；用户从写作切到评审再切回，文档/编辑器状态仍在。
+   */
+  const [mounted, setMounted] = useState<Set<string>>(() => new Set([active]));
+  useEffect(() => {
+    setMounted((prev) => (prev.has(active) ? prev : new Set(prev).add(active)));
+  }, [active]);
+  const visible = mounted.has(active) ? mounted : new Set([...mounted, active]);
+
   const select = (key: string) => {
+    setMounted((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
     setLocal(key);
     onChange?.(key);
   };
@@ -50,7 +61,15 @@ export function TabbedPage({
           </button>
         ))}
       </div>
-      <div className="min-h-0 flex-1">{current?.node}</div>
+      <div className="min-h-0 flex-1">
+        {tabs
+          .filter((t) => visible.has(t.key))
+          .map((t) => (
+            <div key={t.key} hidden={t.key !== active} aria-hidden={t.key !== active}>
+              {t.node}
+            </div>
+          ))}
+      </div>
     </div>
   );
 }

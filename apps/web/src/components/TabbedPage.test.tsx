@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { TabbedPage } from './TabbedPage';
 
@@ -19,7 +20,8 @@ describe('TabbedPage', () => {
     await userEvent.click(screen.getByRole('tab', { name: '知识库' }));
     expect(screen.getByRole('tab', { name: '知识库' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('知识内容')).toBeTruthy();
-    expect(screen.queryByText('文献内容')).toBeNull();
+    // 保活：旧 Tab 仍挂载但被隐藏，切回时状态不丢
+    expect(screen.getByText('文献内容').closest('[hidden]')).toBeTruthy();
   });
 
   it('honours initialKey when the route already carries a default tab', () => {
@@ -54,5 +56,30 @@ describe('TabbedPage controlled mode', () => {
     expect(screen.getByText('评审')).toBeTruthy();
     await userEvent.click(screen.getByRole('tab', { name: '论文写作' }));
     expect(onChange).toHaveBeenCalledWith('writing');
+  });
+});
+
+
+function StatefulTab() {
+  const [value, setValue] = useState('');
+  return <input aria-label="编辑内容" value={value} onChange={(e) => setValue(e.target.value)} />;
+}
+
+describe('TabbedPage keep-alive', () => {
+  it('preserves visited tab state when switching away and back', async () => {
+    render(
+      <TabbedPage
+        name="写作与评审"
+        tabs={[
+          { key: 'writing', label: '论文写作', node: <StatefulTab /> },
+          { key: 'quality', label: '质量评审', node: <div>评审内容</div> },
+        ]}
+      />,
+    );
+    await userEvent.type(screen.getByLabelText('编辑内容'), '未保存草稿');
+    await userEvent.click(screen.getByRole('tab', { name: '质量评审' }));
+    expect(screen.getByLabelText('编辑内容').closest('[hidden]')).toBeTruthy();
+    await userEvent.click(screen.getByRole('tab', { name: '论文写作' }));
+    expect((screen.getByLabelText('编辑内容') as HTMLInputElement).value).toBe('未保存草稿');
   });
 });
