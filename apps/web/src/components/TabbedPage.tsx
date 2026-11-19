@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { TabVisibilityProvider } from '../lib/tab-visibility';
 
 /**
@@ -33,6 +33,25 @@ export function TabbedPage({
   }, [active]);
   const visible = mounted.has(active) ? mounted : new Set([...mounted, active]);
 
+  /**
+   * 跨 Tab 滚动保活：hidden 只保 DOM，不保证浏览器保留每个内部滚动容器的 scrollTop。
+   * 用 scroll 捕获事件记录“哪个 Tab 的哪个元素滚到哪”，切回时按元素身份恢复。
+   * 只记录真正滚动过的元素，避免每次切换遍历整棵页面树。
+   */
+  const scrollPositions = useRef(new Map<string, Map<HTMLElement, number>>());
+  const rememberScroll = (key: string, el: HTMLElement | null) => {
+    if (!el) return;
+    const positions = scrollPositions.current.get(key) ?? new Map<HTMLElement, number>();
+    positions.set(el, el.scrollTop);
+    scrollPositions.current.set(key, positions);
+  };
+  useEffect(() => {
+    const positions = scrollPositions.current.get(active);
+    positions?.forEach((top, el) => {
+      if (el.isConnected && el.scrollTop !== top) el.scrollTop = top;
+    });
+  }, [active]);
+
   const select = (key: string) => {
     setMounted((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
     setLocal(key);
@@ -66,7 +85,12 @@ export function TabbedPage({
         {tabs
           .filter((t) => visible.has(t.key))
           .map((t) => (
-            <div key={t.key} hidden={t.key !== active} aria-hidden={t.key !== active}>
+            <div
+              key={t.key}
+              hidden={t.key !== active}
+              aria-hidden={t.key !== active}
+              onScrollCapture={(e) => rememberScroll(t.key, e.target as HTMLElement)}
+            >
               <TabVisibilityProvider active={t.key === active}>{t.node}</TabVisibilityProvider>
             </div>
           ))}

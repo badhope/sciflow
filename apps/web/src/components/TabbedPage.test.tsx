@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -106,5 +106,35 @@ describe('TabbedPage visibility context', () => {
     expect(screen.getByTestId('tab-probe')).toHaveTextContent('hidden');
     await userEvent.click(screen.getByRole('tab', { name: '研究计划' }));
     expect(screen.getByTestId('tab-probe')).toHaveTextContent('active');
+  });
+});
+
+describe('TabbedPage scroll keep-alive', () => {
+  it('restores the inner scroll position after switching away and back', async () => {
+    render(
+      <TabbedPage
+        name="写作与评审"
+        tabs={[
+          {
+            key: 'writing',
+            label: '论文写作',
+            node: (
+              <div data-testid="scroll-area" style={{ height: 80, overflowY: 'auto' }}>
+                <div style={{ height: 400 }}>长文</div>
+              </div>
+            ),
+          },
+          { key: 'quality', label: '质量评审', node: <div>评审内容</div> },
+        ]}
+      />,
+    );
+    const area = screen.getByTestId('scroll-area');
+    area.scrollTop = 120;
+    fireEvent.scroll(area);
+    await userEvent.click(screen.getByRole('tab', { name: '质量评审' }));
+    // 模拟浏览器在 hidden 后丢掉滚动位置；切回应恢复到记录值。
+    area.scrollTop = 0;
+    await userEvent.click(screen.getByRole('tab', { name: '论文写作' }));
+    expect(area.scrollTop).toBe(120);
   });
 });
