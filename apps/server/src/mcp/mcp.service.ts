@@ -19,6 +19,8 @@ import { QualityService } from '../research/quality.service';
 import { ExperimentsService } from '../experiments/experiments.service';
 import { BrowserService } from '../browser/browser.service';
 import { MemoryService } from '../memory/memory.service';
+import { evaluateWithCritic } from '../research-cycle/agents/critic.agent';
+import { reviewWithExpert } from '../research-cycle/agents/expert.agent';
 import type { AuthPayload } from '../auth/auth.service';
 
 /** MCP 工具定义（符合 Model Context Protocol 2026 的 Tool 结构：name/description/inputSchema） */
@@ -199,6 +201,65 @@ export class McpService {
           const missing = noProjectHint(args, ['title', 'content']);
           if (missing) return { error: missing };
           return this.ai.reviewPaper(String(args.title), String(args.content));
+        },
+      },
+      {
+        name: 'research.critic',
+        description: '研究评审（Critic）角色：只依据实验输出判定假设 supported/refuted/inconclusive，并给出证据引用与修订方向。只读、不写库；会调用一次 LLM。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            hypothesisStatement: { type: 'string', description: '本轮待检验的假设' },
+            predictions: { type: 'array', items: { type: 'string' }, description: '预期观察（可证伪的预测）' },
+            runOutput: { type: 'string', description: '实验 stdout/stderr 的真实输出片段' },
+            designSummary: { type: 'string', description: '本轮协议设计摘要（可选）' },
+            previousVerdict: { type: 'string', description: '上一轮判定（可选）' },
+            originalQuestion: { type: 'string', description: '原始研究问题，用于判断是否跑题（可选）' },
+          },
+          required: ['hypothesisStatement', 'runOutput'],
+        },
+        handler: async (args) => {
+          const missing = noProjectHint(args, ['hypothesisStatement', 'runOutput']);
+          if (missing) return { error: missing };
+          const predictions = Array.isArray(args.predictions) ? args.predictions.map((p: unknown) => String(p)) : [];
+          return evaluateWithCritic(this.ai, {
+            hypothesisStatement: String(args.hypothesisStatement),
+            predictions,
+            runOutput: String(args.runOutput),
+            designSummary: args.designSummary ? String(args.designSummary) : undefined,
+            previousVerdict: args.previousVerdict ? String(args.previousVerdict) : undefined,
+            originalQuestion: args.originalQuestion ? String(args.originalQuestion) : undefined,
+            context: 'mcp:research.critic',
+          });
+        },
+      },
+      {
+        name: 'research.expert',
+        description: '独立方法论专家（Expert）角色：审批研究协议是否可执行、可证伪、可核验，返回 approved / concerns / requiredChanges。只读、不写库；会调用一次 LLM。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            question: { type: 'string', description: '研究问题' },
+            hypothesisStatement: { type: 'string', description: '待检验假设' },
+            predictions: { type: 'array', items: { type: 'string' }, description: '预期观察' },
+            design: { type: 'object', additionalProperties: true, description: '协议设计对象：目标/变量/控制/样本/分析/步骤' },
+          },
+          required: ['question', 'hypothesisStatement', 'design'],
+        },
+        handler: async (args) => {
+          const missing = noProjectHint(args, ['question', 'hypothesisStatement', 'design']);
+          if (missing) return { error: missing };
+          const predictions = Array.isArray(args.predictions) ? args.predictions.map((p: unknown) => String(p)) : [];
+          const design = args.design && typeof args.design === 'object' && !Array.isArray(args.design)
+            ? (args.design as Record<string, unknown>)
+            : {};
+          return reviewWithExpert(this.ai, {
+            question: String(args.question),
+            hypothesisStatement: String(args.hypothesisStatement),
+            predictions,
+            design,
+            context: 'mcp:research.expert',
+          });
         },
       },
       {

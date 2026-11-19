@@ -28,6 +28,8 @@ describe('Agent 权限档', () => {
   it('strict 拒绝所有写入，只读工具放行', () => {
     expect(toolAllowedInMode('strict', 'literature.search')).toBe(true);
     expect(toolAllowedInMode('strict', 'config.preview')).toBe(true);
+    expect(toolAllowedInMode('strict', 'research.critic')).toBe(true);
+    expect(toolAllowedInMode('strict', 'research.expert')).toBe(true);
     expect(toolAllowedInMode('strict', 'config.upsert_role')).toBe(false);
     expect(toolAllowedInMode('strict', 'document.update')).toBe(false);
     expect(toolAllowedInMode('strict', 'experiment.run')).toBe(false);

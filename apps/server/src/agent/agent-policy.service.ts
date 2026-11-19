@@ -33,6 +33,8 @@ const READ_ONLY_TOOLS = new Set([
   'writing.polish',
   'writing.translate',
   'writing.review',
+  'research.critic',
+  'research.expert',
   'config.snapshot',
   'config.preview',
   'extension.list',

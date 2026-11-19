@@ -33,7 +33,8 @@ export type AgentToolGroup =
   | 'task'
   | 'config'
   | 'extension'
-  | 'chat';
+  | 'chat'
+  | 'research';
 
 /** 精确分组优先：同一前缀下读写工具必须分开（否则 research 会误拿 document.update） */
 const TOOL_GROUP_EXACT: Record<string, AgentToolGroup> = {
@@ -52,6 +53,8 @@ const TOOL_GROUP_EXACT: Record<string, AgentToolGroup> = {
   'experiment.list': 'experiment_read',
   'experiment.get': 'experiment_read',
   'experiment.run': 'experiment_write',
+  'research.critic': 'research',
+  'research.expert': 'research',
 };
 
 /** 前缀兜底：未登记的新工具按「写」处理，窄 profile 下不可见（安全默认） */
@@ -109,6 +112,7 @@ export const AGENT_TOOL_PROFILES: Record<AgentToolProfileId, AgentToolProfile> =
       'task',
       'config',
       'extension',
+      'research',
       'chat',
     ],
   },
@@ -125,6 +129,7 @@ export const AGENT_TOOL_PROFILES: Record<AgentToolProfileId, AgentToolProfile> =
       'experiment_read',
       'memory',
       'task',
+      'research',
       'chat',
     ],
   },
@@ -147,6 +152,7 @@ export const AGENT_TOOL_PROFILES: Record<AgentToolProfileId, AgentToolProfile> =
       'browser',
       'memory',
       'task',
+      'research',
       'chat',
     ],
   },
