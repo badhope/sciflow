@@ -75,4 +75,30 @@ describe('AgentOpsPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: /批准计划/ }));
     await waitFor(() => expect(decidePlanMock).toHaveBeenCalledWith('plan-1', true));
   });
+
+  it('显示生效中的计划、步数与 token 预算消耗', { timeout: 20000 }, async () => {
+    metricsMock.mockResolvedValue({
+      rangeDays: 7,
+      toolCalls: { total: 0, ok: 0, fail: 0, successRate: 0, avgMs: 0, p95Ms: 0 },
+      byTool: [],
+      byDay: [],
+      runs: { total: 0, done: 0, error: 0, running: 0, avgDurationMs: 0, totalTokens: 0 },
+    });
+    plansMock.mockResolvedValue({
+      plans: [{
+        id: 'plan-active', projectId: 'p-1', runId: null, title: '正在执行的计划', summary: '',
+        plan: {}, allowedTools: ['document.update'], status: 'approved',
+        maxSteps: 5, usedSteps: 3, budgetTokens: 100, usedTokens: 60, createdAt: 0, approvedAt: 1, expiresAt: Date.now() + 3600_000,
+      }],
+    });
+    approvalsMock.mockResolvedValue({ approvals: [] });
+    tasksMock.mockResolvedValue({ tasks: [], summary: { total: 0, completed: 0, inProgress: 0, pending: 0, percent: 0 } });
+
+    renderPanel();
+    expect(await screen.findByText('生效中')).toBeInTheDocument();
+    expect(screen.getByText('正在执行的计划')).toBeInTheDocument();
+    expect(screen.getByText('步数 3/5')).toBeInTheDocument();
+    expect(screen.getByText('预算 60 / 100 tokens')).toBeInTheDocument();
+    expect(screen.getByText('60%')).toBeInTheDocument();
+  });
 });

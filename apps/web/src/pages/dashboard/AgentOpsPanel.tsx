@@ -47,8 +47,13 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
   const recentRuns = metrics?.recentRuns ?? [];
   const tokenTrend = metrics?.byDay ?? [];
   const pendingPlans = (plansQuery.data?.plans ?? []).filter((p) => p.status === 'pending');
+  // 只展示已批准计划；过期/耗尽由后端状态机标记，不在前端用 Date.now 二次推断（避免 render 不纯）。
+  const activePlans = (plansQuery.data?.plans ?? []).filter((p) => p.status === 'approved');
   const approvals = approvalsQuery.data?.approvals ?? [];
   const summary = tasksQuery.data?.summary;
+  const fmtInt = (n: number) => n.toLocaleString('zh-CN');
+  const budgetText = (p: { budgetTokens: number; usedTokens: number }) =>
+    p.budgetTokens > 0 ? `${fmtInt(p.usedTokens)} / ${fmtInt(p.budgetTokens)} tokens` : '不限';
 
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: qk.agentPlans(projectId) });
@@ -159,6 +164,35 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      {activePlans.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {activePlans.slice(0, 2).map((p) => (
+            <div key={p.id} className="rounded-lg border border-teal-200 bg-teal-50/40 p-2.5 dark:border-teal-800 dark:bg-teal-950/20">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <ShieldCheck size={13} className="text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{p.title}</span>
+                <Badge tone="green">生效中</Badge>
+                <span className="text-[10px] text-slate-400">步数 {p.usedSteps}/{p.maxSteps}</span>
+                <span className="text-[10px] text-slate-400">预算 {budgetText(p)}</span>
+              </div>
+              {p.budgetTokens > 0 && (
+                <div className="mt-1.5 flex items-center gap-2">
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-teal-100 dark:bg-teal-900/40">
+                    <span
+                      className="block h-full rounded-full bg-teal-500 transition-[width]"
+                      style={{ width: `${Math.min(100, Math.round((p.usedTokens / p.budgetTokens) * 100))}%` }}
+                    />
+                  </span>
+                  <span className="v2-numeric text-[10px] text-slate-400">
+                    {Math.min(100, Math.round((p.usedTokens / p.budgetTokens) * 100))}%
+                  </span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {pendingPlans.length > 0 && (
         <div className="mt-3 space-y-2">
           {pendingPlans.slice(0, 3).map((p) => (
@@ -168,6 +202,7 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
                 <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{p.title}</span>
                 <Badge tone="amber">待批准</Badge>
                 <span className="text-[10px] text-slate-400">{p.usedSteps}/{p.maxSteps} 步</span>
+                <span className="text-[10px] text-slate-400">预算 {budgetText(p)}</span>
               </div>
               {p.summary && <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{p.summary}</p>}
               <div className="mt-1 flex flex-wrap gap-1">
