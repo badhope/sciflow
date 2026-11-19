@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Brain, Clock, Eye, Loader2, Plus, Trash2, Workflow, Zap } from 'lucide-react';
 import { api } from '../api/client';
+import { useTabActive } from '../lib/tab-visibility';
 import { useContext } from 'react';
 import { ToastContext } from '../App';
 import type { Outline, PipelineStep, PipelineTask, Project, ReactTraceStep } from '../types';
@@ -304,6 +305,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
 
   // 任务列表（React Query）+ 活动任务 3s 轮询（refetchInterval，busy 时才启用）
   const qc = useQueryClient();
+  const tabActive = useTabActive();
   const tasksQuery = useQuery({
     queryKey: ['pipe-tasks', project.id],
     queryFn: async () => (await api.pipeline.list(project.id)).map(normalize),
@@ -316,7 +318,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
     queryKey: ['pipe-task', activeIdEff],
     enabled: activeBusy,
     queryFn: () => api.pipeline.get(activeIdEff!),
-    refetchInterval: activeBusy ? 3000 : false,
+    refetchInterval: activeBusy && tabActive ? 3000 : false,
   });
   const active = activePollQuery.data ? normalize(activePollQuery.data) : activeBase;
   const refresh = async () => {

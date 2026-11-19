@@ -5,6 +5,7 @@ import { api } from '../../api/client';
 import type { ResearchCycleStatus } from '../../api/research-cycles';
 import { ToastContext } from '../../App';
 import { Badge, Button, Card, ErrorBox, Input, Spinner, errMsg } from '../../components/ui';
+import { useTabActive } from '../../lib/tab-visibility';
 import { CYCLE_STATE, CLAIM_STATUS, RUN_STATUS, labelOf, statusTone } from './labels';
 
 /**
@@ -26,6 +27,7 @@ export function ResearchCycleRunner({
   onChanged: () => void;
 }) {
   const qc = useQueryClient();
+  const tabActive = useTabActive();
   const toast = useContext(ToastContext);
   const [question, setQuestion] = useState('');
   /** 门禁模式：默认为人工审批（保守）；选择全自动时由独立 AI 专家审批 */
@@ -49,7 +51,7 @@ export function ResearchCycleRunner({
     refetchInterval: (q) => {
       const s = q.state.data as ResearchCycleStatus | undefined;
       const running = s && !['stopped', 'synthesize', 'blocked'].includes(s.state);
-      return running ? 3000 : false;
+      return tabActive && running ? 3000 : false;
     },
   });
   const status = statusQuery.data;

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { TabbedPage } from './TabbedPage';
+import { useTabActive } from '../lib/tab-visibility';
 
 describe('TabbedPage', () => {
   it('renders the first tab by default and switches without duplicating content', async () => {
@@ -81,5 +82,29 @@ describe('TabbedPage keep-alive', () => {
     expect(screen.getByLabelText('编辑内容').closest('[hidden]')).toBeTruthy();
     await userEvent.click(screen.getByRole('tab', { name: '论文写作' }));
     expect((screen.getByLabelText('编辑内容') as HTMLInputElement).value).toBe('未保存草稿');
+  });
+});
+
+
+function VisibilityProbe() {
+  return <span data-testid="tab-probe">{useTabActive() ? 'active' : 'hidden'}</span>;
+}
+
+describe('TabbedPage visibility context', () => {
+  it('tells hidden pages they are inactive so polling can pause', async () => {
+    render(
+      <TabbedPage
+        name="研究设计"
+        tabs={[
+          { key: 'programs', label: '研究计划', node: <VisibilityProbe /> },
+          { key: 'pipeline', label: '全自动流水线', node: <div>流水线内容</div> },
+        ]}
+      />,
+    );
+    expect(screen.getByTestId('tab-probe')).toHaveTextContent('active');
+    await userEvent.click(screen.getByRole('tab', { name: '全自动流水线' }));
+    expect(screen.getByTestId('tab-probe')).toHaveTextContent('hidden');
+    await userEvent.click(screen.getByRole('tab', { name: '研究计划' }));
+    expect(screen.getByTestId('tab-probe')).toHaveTextContent('active');
   });
 });

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { TabVisibilityProvider } from '../lib/tab-visibility';
 
 /**
  * 一级入口内的二级 Tab：只做“壳”，不重写页面。
@@ -66,7 +67,7 @@ export function TabbedPage({
           .filter((t) => visible.has(t.key))
           .map((t) => (
             <div key={t.key} hidden={t.key !== active} aria-hidden={t.key !== active}>
-              {t.node}
+              <TabVisibilityProvider active={t.key === active}>{t.node}</TabVisibilityProvider>
             </div>
           ))}
       </div>
