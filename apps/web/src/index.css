@@ -803,7 +803,7 @@ kbd {
 .metric-card__value { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; color: var(--foreground); }
 .metric-card__delta, .metric-card__hint { font-size: 11px; color: var(--muted-foreground); }
 
-/* ---- 功能入口紧凑导航条（替代 5 张等大卡片）---- */
+/* ---- 功能入口紧凑导航条（替代等大卡片）---- */
 .page-container .page-quicknav {
   display: flex;
   flex-wrap: wrap;
