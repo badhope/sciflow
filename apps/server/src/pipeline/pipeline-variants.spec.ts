@@ -68,6 +68,7 @@ async function createTask(topic: string): Promise<string> {
     currentStep: 'topic-verify', status: 'running',
     steps: JSON.stringify([
       { key: 'topic-verify', label: '主题验证', status: 'pending', retryCount: 0 },
+      { key: 'novelty-check', label: '新颖性预检', status: 'pending', retryCount: 0 },
       { key: 'literature', label: '文献调研', status: 'pending', retryCount: 0 },
       { key: 'outline', label: '大纲', status: 'pending', retryCount: 0 },
       { key: 'quality-gate', label: '质量门', status: 'pending', retryCount: 0 },
@@ -179,6 +180,29 @@ describe('流水线反共识大纲变体与研究深度', () => {
     const graph = buildPipelineGraph(deps);
     await graph.invoke({ taskId, task: db.select().from(pipelineTasks).where(eq(pipelineTasks.id, taskId)).get() as never }, { configurable: { thread_id: taskId } } as never);
     expect(calls).toBe(1);
+  });
+
+  it('新颖性预检全源不可达：输出代理提示与离线降级，不伪装成联网查新', async () => {
+    taskId = await createTask('境外源不可达');
+    const notice = '公开学术源全部不可达（OpenAlex / Crossref / arXiv）。国内网络直连境外 API 可能需要代理；可先改用本地文献库、DOI / BibTeX 导入。';
+    const deps = baseDeps({
+      noveltyCheck: async () => ({
+        offline: true,
+        basis: 'offline-fallback',
+        overlap: 12,
+        similar: [],
+        advice: '本地库未发现明显重复，学术库恢复联网后建议再复核一次',
+        notice,
+      }),
+    });
+    const graph = buildPipelineGraph(deps);
+    await graph.invoke({ taskId, task: db.select().from(pipelineTasks).where(eq(pipelineTasks.id, taskId)).get() as never }, { configurable: { thread_id: taskId } } as never);
+    const step = loadSteps(taskId).find((s) => s.key === 'novelty-check');
+    expect(step?.status).toBe('done');
+    expect(step?.output).toContain('公开学术源全部不可达');
+    expect(step?.output).toContain('可能需要代理');
+    expect(step?.output).toContain('离线降级');
+    expect(step?.output).not.toContain('选题可能较新');
   });
 
   it('notify 状态投影带起止时间戳：running 写 startedAt，done 写 endedAt（F-2.7 时间线数据源）', async () => {

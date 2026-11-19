@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.17.0] - 2026-11-20
+
+### Added
+
+- **境外学术源可达性与代理支持**：`/api/references/discover` 逐源返回 OpenAlex / Crossref / arXiv
+  的 `ok / success / failed / error`，整体状态为 `ok | degraded | offline | disabled`；网络失败不再
+  被静默当成「未命中」。前端文献页显示琥珀色提示，提供「重试」与「改用本地文献库」，并说明国内
+  直连境外 API 可能需要代理。
+- **代理配置**：学术检索优先走 `SCHOLAR_PROXY_URL`，其次复用 `HTTPS_PROXY` / `HTTP_PROXY`；
+  OpenAlex / Crossref 的 JSON 请求与 arXiv 的 Atom 请求使用同一代理通道，代理地址不写日志。
+- **流水线降级提示**：新颖性预检与文献补全在全源不可达时改用本地库做确定性降级判断，步骤输出与
+  产物研究说明会带上「可能需要代理 / 可改用本地库」的可行动提示，避免误报选题很新。
+
+### Fixed
+
+- 新颖性预检不再把「网络失败返回的空数组」当成「没有相近工作」；全部源不可达时明确标记
+  `offline-fallback`，部分源失败时提示结果可能不完整。
+
 ## [1.16.9] - 2026-11-20
 
 ### Fixed

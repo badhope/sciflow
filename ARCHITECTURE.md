@@ -394,7 +394,7 @@ packages/retrieval/  检索层（knowledge.service · embedding.service）——
 | `msw` | 3.0.3 | web 单测 API mock |
 | `@playwright/test` | 1.64.0 | E2E 冒烟（Electron/本地双模式各一条主路径） |
 | `promptfoo` | 0.124.1 | prompt 回归评估（仅 dev，禁入运行时） |
-| `@nestjs/swagger` + `openapi-typescript` | 12.0.2 / 7.13.0 | 契约先行：装饰器 → `openapi.json`（216 paths，v1.16.9，2026-11）→ `apps/web/src/api/openapi.d.ts`（`pnpm openapi:gen` 重建）；`pnpm openapi:check` 防漂移；openapi-fetch 未采用（取类型即可，client.ts 对外行为不变） |
+| `@nestjs/swagger` + `openapi-typescript` | 12.0.2 / 7.13.0 | 契约先行：装饰器 → `openapi.json`（216 paths，v1.17.0，2026-11）→ `apps/web/src/api/openapi.d.ts`（`pnpm openapi:gen` 重建）；`pnpm openapi:check` 防漂移；openapi-fetch 未采用（取类型即可，client.ts 对外行为不变） |
 
 CI 同步：`ci.yml` 增加 lint 步骤、web 测试步骤、`full_regression.py` 接入、promptfoo 评估可选 job。
 

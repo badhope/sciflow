@@ -18,7 +18,7 @@ import { buildPipelineGraph, type PipelineGraphDeps, type StepStatusWire } from 
 import type { Outline, PipelineTaskRow, ResearchPlan } from './pipeline-state';
 import { WebSearchService } from '../websearch/websearch.service';
 import { ConfigCenterService } from '../config/config-center.service';
-import { ScholarSearchService } from '../research/scholar-search.service';
+import { ScholarSearchService, summarizeScholarSources } from '../research/scholar-search.service';
 import { buildWebHits, isWebSearchEnabled } from './pipeline-websearch';
 import { normalizeKnScore, noveltyOverlap } from './pipeline-metrics';
 import { noveltyFallback } from './novelty-fallback';
@@ -132,14 +132,18 @@ export class PipelineService implements OnModuleInit {
         }
         // 内置学术检索（免 Key）：本地库为空/不足时用 OpenAlex + Crossref + arXiv 补真实文献元数据，
         // 否则全新项目的起草阶段完全没有参考文献，引用闭环必然为空（客观质量分被引用维度拖死）。
+        // 境外源不可达时必须留下可行动提示，不能静默当成「没搜到」。
+        let scholarNotice: string | null = null;
         if (this.scholar.isEnabled((k) => this.readSetting(k))) {
           try {
             const existingTitles = new Set([...seen.values()].map((h) => String(h.title || '').toLowerCase().trim()));
             // 英文检索词优先（OpenAlex/Crossref 对中文长句检索噪声大），主题串殿后兜底
             const kws = [...(plan.searchStrategy?.keywords || []).filter(Boolean), topic].filter(Boolean).slice(0, 4);
-            const scholarHits = await this.scholar.search(kws.map(String), 8);
+            const scholarOutcome = await this.scholar.searchWithStatus(kws.map(String), 8);
+            const scholarState = summarizeScholarSources(scholarOutcome.sources, scholarOutcome.hits.length);
+            if (scholarState.status !== 'ok') scholarNotice = scholarState.notice;
             let added = 0;
-            for (const h of scholarHits) {
+            for (const h of scholarOutcome.hits) {
               const key = h.doi ? `doi:${h.doi.toLowerCase()}` : `t:${String(h.title).toLowerCase().trim()}`;
               if (seen.has(key) || existingTitles.has(String(h.title).toLowerCase().trim())) continue;
               seen.set(key, {
@@ -183,13 +187,15 @@ export class PipelineService implements OnModuleInit {
           }
         }
         const webNote = webHits.length ? `\n联网检索补充 ${webHits.length} 条公开网页线索（仅作背景参考，未入库，引用前请自行核验）。` : '';
+        const scholarNote = scholarNotice ? `\n学术检索提示：${scholarNotice}` : '';
+        const notice = [scholarNotice, enriched.notice].filter((x): x is string => Boolean(x)).join('；') || null;
         return {
           libraryHits: enriched.libraryHits,
           knowledgeHits: enriched.knowledgeHits,
           webHits,
-          notice: enriched.notice,
+          notice,
           meta: enriched.meta,
-          summary: `检索到 ${totalFound} 条（文献 ${enriched.libraryHits.length} / 知识 ${enriched.knowledgeHits.length}）${webNote}\n${summary.slice(0, 500)}`,
+          summary: `检索到 ${totalFound} 条（文献 ${enriched.libraryHits.length} / 知识 ${enriched.knowledgeHits.length}）${webNote}${scholarNote}\n${summary.slice(0, 500)}`,
         };
       },
       notify: (taskId, key, status, output, retryCount, extra) => this.notify(taskId, key, status, output, retryCount, extra),
@@ -475,6 +481,8 @@ export class PipelineService implements OnModuleInit {
     overlap: number;
     similar: { title: string; year: number | null; venue: string; doi: string }[];
     advice: string;
+    /** 源可达性提示：部分/全部境外源不可达时进入流水线步骤输出与产物说明 */
+    notice?: string;
   }> {
     if (!this.scholar.isEnabled((k) => this.readSetting(k))) {
       // 学术检索关闭：不再沉默返回 skipped，改用本地库证据做确定性降级判断
@@ -482,16 +490,31 @@ export class PipelineService implements OnModuleInit {
       const fb = noveltyFallback({ topic, localTitles });
       return { ...fb, similar: [] };
     }
-    let hits: Awaited<ReturnType<typeof this.scholar.search>> = [];
+    let outcome: Awaited<ReturnType<typeof this.scholar.searchWithStatus>>;
     try {
-      hits = await this.scholar.search([topic], 8);
+      outcome = await this.scholar.searchWithStatus([topic], 8);
     } catch {
-      // 学术库不可达（离线/被墙/超时）：同样降级到本地证据，绝不假装查过
       const fb = noveltyFallback({ topic, localTitles: this.readLocalTitlesForNovelty(projectId) });
-      return { ...fb, similar: [] };
+      return { ...fb, similar: [], notice: '学术检索请求异常，已用本地库降级判断。' };
     }
+    const state = summarizeScholarSources(outcome.sources, outcome.hits.length);
+    // 全部源不可达：不能把空数组当成「未找到相近工作」，否则会误报选题很新
+    if (state.status === 'offline') {
+      const fb = noveltyFallback({ topic, localTitles: this.readLocalTitlesForNovelty(projectId) });
+      return { ...fb, similar: [], notice: state.notice };
+    }
+    const partialNotice = state.status === 'degraded' ? state.notice : undefined;
+    const hits = outcome.hits;
     if (!hits.length) {
-      return { skipped: false, overlap: 0, similar: [], advice: '学术库未找到相近工作，选题可能较新；建议再用 1-2 组同义词复核' };
+      return {
+        skipped: false,
+        overlap: 0,
+        similar: [],
+        advice: partialNotice
+          ? '部分学术源不可达，当前命中为空不能据此判断选题新颖；请配置代理后复核，或先用本地库做降级判断'
+          : '学术库未找到相近工作，选题可能较新；建议再用 1-2 组同义词复核',
+        notice: partialNotice,
+      };
     }
     const recent = hits.filter((h) => !h.year || h.year >= new Date().getFullYear() - 8);
     const pool = recent.length ? recent : hits;
@@ -507,7 +530,7 @@ export class PipelineService implements OnModuleInit {
         : best >= 40
           ? '重叠度中等：选题方向已有人做，需在引言明确差异化定位（方法/数据/场景/评价维度至少一项不同）'
           : '重叠度低：相近工作较少，注意确认是"真空白"还是"检索词未覆盖"';
-    return { overlap: best, similar, advice };
+    return { overlap: best, similar, advice, notice: partialNotice };
   }
 
   /** 本地库标题池（项目文献 + 知识库文档名）：新颖性离线降级的证据来源 */

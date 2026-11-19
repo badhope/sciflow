@@ -3767,6 +3767,58 @@ export interface components {
         AgentPlanResponseDto: {
             plan: components["schemas"]["AgentPlanDto"];
         };
+        DiscoveredReferenceDto: {
+            /** @description 标题 */
+            title: string;
+            /** @description 作者列表 */
+            authors: string[];
+            /** @description 发表年份 */
+            year: number | null;
+            /** @description 期刊/会议 */
+            venue: string;
+            /** @description DOI */
+            doi: string;
+            /** @description 原文链接 */
+            url: string;
+            /** @description 摘要 */
+            abstract: string;
+            /** @description 引用次数 */
+            citationCount: number;
+            /**
+             * @description 来源
+             * @example scholar
+             */
+            source: string;
+        };
+        ScholarSourceStatusDto: {
+            /**
+             * @description 来源
+             * @enum {string}
+             */
+            source: "openalex" | "crossref" | "arxiv";
+            /** @description 至少一次请求成功 */
+            ok: boolean;
+            /** @description 成功请求数 */
+            success: number;
+            /** @description 失败请求数 */
+            failed: number;
+            /** @description 失败原因（已归一化，不含内部堆栈） */
+            error?: string;
+        };
+        ReferenceDiscoverDto: {
+            /** @description 学术检索是否开启 */
+            enabled: boolean;
+            /**
+             * @description 结果状态：正常 / 部分源不可达 / 全部源不可达 / 功能关闭
+             * @example ok
+             * @enum {string}
+             */
+            status: "ok" | "degraded" | "offline" | "disabled";
+            hits: components["schemas"]["DiscoveredReferenceDto"][];
+            sources: components["schemas"]["ScholarSourceStatusDto"][];
+            /** @description 面向用户的提示（含代理与本地替代路径） */
+            notice: string;
+        };
         ReferenceGraphNodeDto: {
             /** @description 文献 ID */
             id: string;
@@ -4805,11 +4857,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ReferenceDiscoverDto"];
+                };
             };
         };
     };

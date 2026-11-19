@@ -69,9 +69,13 @@ export interface PipelineGraphDeps {
    */
   noveltyCheck(topic: string, projectId?: string): Promise<{
     skipped?: boolean;
+    offline?: boolean;
+    basis?: string;
+    specificity?: number;
     overlap: number;
     similar: { title: string; year: number | null; venue: string; doi: string }[];
     advice: string;
+    notice?: string;
   }>;
   /** 分章起草（服务层实现，内部并行；onProgress 用于逐节进度通知）。 */
   runDrafting(
@@ -137,15 +141,23 @@ export function buildPipelineGraph(deps: PipelineGraphDeps) {
         await deps.notify(s.taskId, 'novelty-check', 'done', '预检不可用（学术检索关闭或离线）');
         return {};
       }
+      // 全部境外源不可达：只能展示本地库降级结论，不能伪装成联网查新
+      if (result.offline) {
+        const output = `${result.notice ? `${result.notice} · ` : ''}离线降级：本地重叠度 ${result.overlap}% · ${result.advice}`;
+        await deps.notify(s.taskId, 'novelty-check', 'done', output);
+        return result.notice ? { noveltyNotice: `选题新颖性预检：${result.notice}` } : {};
+      }
       // 阈值语义：>=70% 高度重叠（同题概率高）；40-70% 有较多相近工作；<40% 相对新颖
       const level = result.overlap >= 70 ? '高' : result.overlap >= 40 ? '中' : '低';
       const top = result.similar.slice(0, 3).map((x) => `「${x.title}」${x.year ? `（${x.year}）` : ''}`).join('；');
-      const output = `重叠度 ${result.overlap}%（${level}）${top ? ` · 相近工作：${top}` : ''} · ${result.advice}`;
+      const output = `${result.notice ? `${result.notice} · ` : ''}重叠度 ${result.overlap}%（${level}）${top ? ` · 相近工作：${top}` : ''} · ${result.advice}`;
       await deps.notify(s.taskId, 'novelty-check', 'done', output);
-      // 高重叠时把提醒带进产物「研究说明」，避免"撞题"结论只存在于流水线日志里
-      return result.overlap >= 70
-        ? { noveltyNotice: `选题新颖性预检：与现有工作重叠度 ${result.overlap}%（高）。${result.advice}${top ? ` 相近工作：${top}` : ''}` }
-        : {};
+      // 高重叠或源降级时把提醒带进产物「研究说明」，避免结论只存在于流水线日志里
+      const noticeParts = [
+        result.notice,
+        result.overlap >= 70 ? `与现有工作重叠度 ${result.overlap}%（高）。${result.advice}${top ? ` 相近工作：${top}` : ''}` : null,
+      ].filter((x): x is string => Boolean(x));
+      return noticeParts.length ? { noveltyNotice: `选题新颖性预检：${noticeParts.join('；')}` } : {};
     })
     .addNode('literature', async (s: PipelineGraphState) => {
       if (!deps.stepEnabled('literature')) {

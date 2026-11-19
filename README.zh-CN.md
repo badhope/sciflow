@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![版本](https://img.shields.io/badge/version-1.16.9-black.svg)](CHANGELOG.md)
+[![版本](https://img.shields.io/badge/version-1.17.0-black.svg)](CHANGELOG.md)
 
 [English](README.md) · **简体中文**
 
@@ -146,7 +146,7 @@ flowchart LR
 
 ## 项目状态
 
-当前版本：**1.16.9**。自主研究循环与稿件流水线均已实现并有测试覆盖。已知限制：质量门是规则引擎，口径偏保守；自主循环的 PI/评审仍需要能力足够的模型；Python 沙箱是本地执行环境，不构成对恶意代码的安全边界。
+当前版本：**1.17.0**。自主研究循环与稿件流水线均已实现并有测试覆盖。已知限制：质量门是规则引擎，口径偏保守；自主循环的 PI/评审仍需要能力足够的模型；Python 沙箱是本地执行环境，不构成对恶意代码的安全边界。
 
 ## 许可证
 

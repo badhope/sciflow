@@ -11,6 +11,7 @@
  *  - 只写元数据（标题/作者/年份/期刊/DOI/摘要），不下载全文，不伪造字段。
  */
 import { Injectable, Logger } from '@nestjs/common';
+import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { XMLParser } from 'fast-xml-parser';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/database';
@@ -29,6 +30,86 @@ export interface ScholarHit {
   citationCount: number;
 }
 
+export type ScholarSourceName = 'openalex' | 'crossref' | 'arxiv';
+
+export interface ScholarSourceStatus {
+  source: ScholarSourceName;
+  /** 至少有一次请求成功；失败但其它查询成功时仍视为可达 */
+  ok: boolean;
+  success: number;
+  failed: number;
+  error?: string;
+}
+
+export interface ScholarSearchOutcome {
+  hits: ScholarHit[];
+  sources: ScholarSourceStatus[];
+}
+
+const SCHOLAR_SOURCE_LABELS: Record<ScholarSourceName, string> = {
+  openalex: 'OpenAlex',
+  crossref: 'Crossref',
+  arxiv: 'arXiv',
+};
+
+/**
+ * 把底层异常归一化成用户能理解的原因。
+ *
+ * 国内网络最容易遇到的是 DNS/连接被拒/超时；这里不输出内部堆栈或 URL，
+ * 只保留「网络不可达」「请求超时」「HTTP 429」这类可行动信息。
+ */
+export function classifyScholarSourceError(error: unknown): string {
+  const err = error as { name?: string; message?: string } | undefined;
+  const name = String(err?.name || '');
+  const message = String(err?.message || error || '');
+  if (name === 'AbortError' || name === 'TimeoutError' || /timeout|timed out/i.test(message)) {
+    return '请求超时';
+  }
+  const httpStatus = message.match(/HTTP\s+(\d{3})/i);
+  if (httpStatus) {
+    const status = Number(httpStatus[1]);
+    if (status === 429) return '请求被限流（HTTP 429）';
+    if (status === 401 || status === 403) return `请求被拒绝（HTTP ${status}）`;
+    if (status >= 500) return `服务端错误（HTTP ${status}）`;
+    return `请求失败（HTTP ${status}）`;
+  }
+  if (/fetch failed|network|ENOTFOUND|ECONNREFUSED|EAI_AGAIN|socket|TLS|certificate/i.test(message)) {
+    return '网络不可达';
+  }
+  return '请求失败';
+}
+
+/**
+ * 根据三源可达性生成用户提示。
+ *
+ * 境外公共学术 API 在国内网络可能需要代理；不能把「全部源失败」误报成
+ * 「没有检索到相关论文」，否则用户会不断换关键词而不知道是网络问题。
+ */
+export function summarizeScholarSources(
+  sources: ScholarSourceStatus[],
+  hitCount: number,
+): { status: 'ok' | 'degraded' | 'offline'; notice: string } {
+  const unreachable = sources.filter((s) => !s.ok).map((s) => SCHOLAR_SOURCE_LABELS[s.source]);
+  const partial = sources.filter((s) => s.ok && s.failed > 0).map((s) => SCHOLAR_SOURCE_LABELS[s.source]);
+  const degradedNames = [...new Set([...unreachable, ...partial])];
+  if (sources.length > 0 && !sources.some((s) => s.ok)) {
+    return {
+      status: 'offline',
+      notice: `公开学术源全部不可达（${degradedNames.join(' / ')}）。国内网络直连境外 API 可能需要代理；可先改用本地文献库、DOI / BibTeX 导入。`,
+    };
+  }
+  if (degradedNames.length > 0) {
+    return {
+      status: 'degraded',
+      notice: `部分公开学术源不可达（${degradedNames.join(' / ')}），已返回 ${hitCount} 条。国内网络直连境外 API 可能需要代理；可用本地库或 DOI / BibTeX 补充。`,
+    };
+  }
+  if (!hitCount) {
+    return { status: 'ok', notice: '未命中：换更具体的英文检索词通常效果更好' };
+  }
+  return { status: 'ok', notice: `命中 ${hitCount} 条（OpenAlex / Crossref / arXiv）` };
+}
+
 /** arXiv Atom 条目（removeNSPrefix 后标签为 title/author/name/published/doi/id/summary） */
 interface AtomEntry {
   title?: unknown;
@@ -41,11 +122,52 @@ interface AtomEntry {
 
 const UA = 'SciFlow/1.4 (+https://github.com/badhope/sciflow)';
 
-async function getJson(url: string, timeoutMs = 15_000): Promise<unknown> {
-  const res = await fetch(url, {
-    headers: { 'User-Agent': UA, Accept: 'application/json' },
+/**
+ * 学术 API 的可选代理。
+ *
+ * 国内网络直连 OpenAlex / Crossref / arXiv 可能超时；优先读显式 `SCHOLAR_PROXY_URL`，
+ * 其次复用标准 `HTTPS_PROXY` / `HTTP_PROXY`。代理 URL 只参与连接，不写日志。
+ */
+let proxyAgent: ProxyAgent | undefined;
+let proxyAgentUrl = '';
+function scholarProxyDispatcher(): ProxyAgent | undefined {
+  const proxyUrl = (
+    process.env.SCHOLAR_PROXY_URL ||
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy ||
+    ''
+  ).trim();
+  if (!proxyUrl) return undefined;
+  if (proxyAgent && proxyAgentUrl === proxyUrl) return proxyAgent;
+  try {
+    proxyAgent = new ProxyAgent(proxyUrl);
+    proxyAgentUrl = proxyUrl;
+    return proxyAgent;
+  } catch {
+    throw new Error('代理配置无效');
+  }
+}
+
+type ScholarHttpResponse = {
+  ok: boolean;
+  status: number;
+  json: () => Promise<unknown>;
+  text: () => Promise<string>;
+};
+
+async function scholarFetch(url: string, accept: string, timeoutMs = 15_000): Promise<ScholarHttpResponse> {
+  const dispatcher = scholarProxyDispatcher();
+  return undiciFetch(url, {
+    headers: { 'User-Agent': UA, Accept: accept },
     signal: AbortSignal.timeout(timeoutMs),
-  });
+    ...(dispatcher ? { dispatcher } : {}),
+  }) as unknown as Promise<ScholarHttpResponse>;
+}
+
+async function getJson(url: string, timeoutMs = 15_000): Promise<unknown> {
+  const res = await scholarFetch(url, 'application/json', timeoutMs);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -192,7 +314,7 @@ async function searchCrossref(query: string, limit: number): Promise<ScholarHit[
 /** arXiv：预印本（Atom XML，用 fast-xml-parser 解析；正则切 XML 在命名空间/CDATA/转义上不可靠） */
 async function searchArxiv(query: string, limit: number): Promise<ScholarHit[]> {
   const url = `http://export.arxiv.org/api/query?search_query=${encodeURIComponent(`all:${query}`)}&max_results=${limit}`;
-  const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(15_000) });
+  const res = await scholarFetch(url, 'application/atom+xml');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const xml = await res.text();
   const parser = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true, trimValues: true, textNodeName: '#text' });
@@ -255,14 +377,24 @@ export class ScholarSearchService {
   }
 
   /**
-   * 多关键词检索并合并去重（按 DOI / 规范化标题）。
-   * 任一源失败只记 warn，不影响其它源。
+   * 多关键词检索并合并去重（兼容旧调用方：只取命中结果）。
+   * 需要网络可达性时用 `searchWithStatus`。
+   */
+  async search(keywords: string[], perQuery = 8): Promise<ScholarHit[]> {
+    return (await this.searchWithStatus(keywords, perQuery)).hits;
+  }
+
+  /**
+   * 多关键词检索并返回三源可达性。
+   *
+   * 任一源失败只记 warn，不影响其它源；但不能把「网络失败」静默降级成
+   * 「未命中」，否则用户会误以为关键词不好。`sources` 供文献页提示代理/本地替代。
    * 相关性门禁：标题至少命中 1 个检索词 token，且标题+摘要合计命中 ≥2 个；
    * 按相关度降序、引用数作同分排序——引用数排序会引入大量高被引离题论文（实测事故）。
    */
-  async search(keywords: string[], perQuery = 8): Promise<ScholarHit[]> {
+  async searchWithStatus(keywords: string[], perQuery = 8): Promise<ScholarSearchOutcome> {
     const queries = keywords.map((k) => String(k || '').trim()).filter(Boolean).slice(0, 4);
-    if (!queries.length) return [];
+    if (!queries.length) return { hits: [], sources: [] };
     /**
      * 进程内 TTL 缓存（默认 10 分钟，SCHOLAR_CACHE_TTL_MS 可调，0=关闭）。
      *
@@ -284,13 +416,18 @@ export class ScholarSearchService {
       .map((q) => new Set(meaningfulTokens(q)))
       .filter((g) => g.size > 0);
     const seen = new Map<string, ScholarHit>();
+    const sourceAcc: Record<ScholarSourceName, { success: number; failed: number; error?: string }> = {
+      openalex: { success: 0, failed: 0 },
+      crossref: { success: 0, failed: 0 },
+      arxiv: { success: 0, failed: 0 },
+    };
     // 三个源 × 每个关键词**并行**（原实现按 query 串行：4 关键词 × 3 源 = 12 次串行往返）
     const perQueryResults = await Promise.all(
       queries.map(async (q) => {
         const tasks = [
-          searchOpenAlex(q, perQuery).catch((e: unknown) => { this.logger.warn(`OpenAlex 检索失败（${q}）：${String((e as Error)?.message || e)}`); return [] as ScholarHit[]; }),
-          searchCrossref(q, perQuery).catch((e: unknown) => { this.logger.warn(`Crossref 检索失败（${q}）：${String((e as Error)?.message || e)}`); return [] as ScholarHit[]; }),
-          searchArxiv(q, perQuery).catch((e: unknown) => { this.logger.warn(`arXiv 检索失败（${q}）：${String((e as Error)?.message || e)}`); return [] as ScholarHit[]; }),
+          this.runSource('openalex', q, () => searchOpenAlex(q, perQuery), sourceAcc),
+          this.runSource('crossref', q, () => searchCrossref(q, perQuery), sourceAcc),
+          this.runSource('arxiv', q, () => searchArxiv(q, perQuery), sourceAcc),
         ];
         return Promise.all(tasks);
       }),
@@ -306,27 +443,55 @@ export class ScholarSearchService {
         }
       }
     }
+    const sources: ScholarSourceStatus[] = (Object.keys(sourceAcc) as ScholarSourceName[]).map((source) => ({
+      source,
+      ok: sourceAcc[source].success > 0,
+      success: sourceAcc[source].success,
+      failed: sourceAcc[source].failed,
+      error: sourceAcc[source].error,
+    }));
     const scored = [...seen.values()]
       .map((h) => ({ h, ...relevanceOf(h, termSet), groups: groupCoverage(h, domainGroups) }))
       // 至少命中标题 1 个 token、合计 2 个 token，且跨过 ≥2 个检索词分组
       .filter((x) => x.titleHits >= 1 && x.titleHits + x.absHits >= 2 && x.groups >= Math.min(2, domainGroups.length));
     if (!scored.length) {
       this.logger.warn(`学术检索：${seen.size} 条原始命中全部未过相关性门禁（检索词 ${[...termSet].slice(0, 8).join(',')}）`);
-      this.remember(cacheKey, []);
-      return [];
+      const emptyOutcome = { hits: [], sources };
+      this.remember(cacheKey, emptyOutcome);
+      return emptyOutcome;
     }
     const result = scored
       .sort((a, b) => b.groups - a.groups || b.titleHits * 2 + b.absHits - (a.titleHits * 2 + a.absHits) || b.h.citationCount - a.h.citationCount)
       .slice(0, 20)
       .map((x) => x.h);
-    this.remember(cacheKey, result);
-    return result;
+    const outcome = { hits: result, sources };
+    this.remember(cacheKey, outcome);
+    return outcome;
+  }
+
+  /** 单源单次请求：成功/失败都只影响统计，不中断其它源 */
+  private async runSource(
+    source: ScholarSourceName,
+    query: string,
+    fn: () => Promise<ScholarHit[]>,
+    acc: Record<ScholarSourceName, { success: number; failed: number; error?: string }>,
+  ): Promise<ScholarHit[]> {
+    try {
+      const hits = await fn();
+      acc[source].success += 1;
+      return hits;
+    } catch (e: unknown) {
+      acc[source].failed += 1;
+      acc[source].error = classifyScholarSourceError(e);
+      this.logger.warn(`${SCHOLAR_SOURCE_LABELS[source]} 检索失败（${query}）：${String((e as Error)?.message || e)}`);
+      return [];
+    }
   }
 
   /** 搜索缓存（进程内 LRU 上限 200 条，避免长跑内存滞留） */
-  private readonly cache = new Map<string, { at: number; value: ScholarHit[] }>();
+  private readonly cache = new Map<string, { at: number; value: ScholarSearchOutcome }>();
 
-  private remember(key: string, value: ScholarHit[]): void {
+  private remember(key: string, value: ScholarSearchOutcome): void {
     const ttl = Number(process.env.SCHOLAR_CACHE_TTL_MS ?? 600_000);
     if (!(ttl > 0)) return;
     this.cache.set(key, { at: Date.now(), value });

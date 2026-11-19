@@ -21,7 +21,7 @@ import type {
   Reference,
   ReferenceGraph,
   ReferenceInput,
-  DiscoveredReference,
+  ReferenceDiscoverResult,
   ExperimentDesignRecord,
   ResearchBrief,
   ResearchBriefPatch,
@@ -45,9 +45,9 @@ export const research = {
   references: {
     search: (query: string, limit = 8, projectId?: string) =>
       request<Reference[]>(`/api/references/search`, { method: 'POST', body: JSON.stringify({ query, limit, projectId }) }),
-    /** 学术发现检索（OpenAlex/Crossref/arXiv，只返回元数据不入库） */
+    /** 学术发现检索（OpenAlex/Crossref/arXiv，只返回元数据不入库；含三源可达性） */
     discover: (query: string, limit = 10) =>
-      request<{ enabled: boolean; hits: DiscoveredReference[]; notice: string }>(`/api/references/discover`, {
+      request<ReferenceDiscoverResult>(`/api/references/discover`, {
         method: 'POST',
         body: JSON.stringify({ query, limit }),
       }),

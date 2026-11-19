@@ -288,6 +288,17 @@ curl -X POST http://127.0.0.1:3100/api/references/discover   -H 'content-type: a
 SCHOLAR_SEARCH=off
 ```
 
+**国内网络注意**：OpenAlex / Crossref / arXiv 是境外公共 API，中国大陆网络直连可能超时或被拒绝。发现接口会返回 `status`（`ok` / `degraded` / `offline` / `disabled`）与逐源 `sources[]`；文献页在 `offline` / `degraded` 时明确提示“可能需要代理”，并提供「重试」与「改用本地文献库」。网络不可达不是“没搜到”，不要只换关键词。可配置代理，或改用本地库 / DOI / BibTeX 导入：
+
+```bash
+# 仅学术检索走代理（优先于标准代理变量）
+SCHOLAR_PROXY_URL=http://127.0.0.1:7890
+# 也兼容标准变量
+HTTPS_PROXY=http://127.0.0.1:7890
+```
+
+流水线也会在源失败时降级为空结果，不阻塞成稿。
+
 流水线「新颖性预检」步骤在文献调研前执行：取近 8 年同题工作，算选题 token 覆盖率（objective，零 LLM），重叠度 ≥70% 时把提醒写进产物「研究说明」。可在设置页关闭该步骤；学术检索关闭时该步骤自动跳过（不影响流水线）。
 
 ## 质量检查器（确定性，v1.5）

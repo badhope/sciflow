@@ -79,7 +79,7 @@ export function ProjectCockpit({
           label: '检索并导入文献',
           view: 'evidence',
           tab: 'literature',
-          detail: '学术库免 Key 直查 OpenAlex / Crossref / arXiv，导入后自动去重入本地库',
+          detail: '公开学术源（OpenAlex / Crossref / arXiv）直查，境外 API 在国内可能需要代理；失败会提示，可改用本地库 / DOI / BibTeX',
         };
       case 'outline':
         return {

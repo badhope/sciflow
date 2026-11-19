@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef, type SortingState } from '@tanstack/react-table';
 import { ExtractionHeatmap } from './ExtractionHeatmap';
-import { BookOpenCheck, ChevronRight, FileDown, FlaskConical, Loader2, ShieldCheck, StickyNote, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, BookOpenCheck, ChevronRight, FileDown, FlaskConical, Loader2, ShieldCheck, StickyNote, Trash2, Upload } from 'lucide-react';
 import type { DiscoveredReference, EvidenceResult, PaperComparisonResult, Project, Reference, ReferenceGraph, DeepDiveResult, GapResult, ExtractedPaper, ExtractionField, ExtractionTableResult, ScreeningItem } from '../../types';
 import { Badge, Button, Card, CollapsibleCard, ConfirmDialog, Empty, ErrorBox, Input, Spinner, Textarea, jsonText, errMsg } from '../../components/ui';
 import { ChartEmpty, Donut, HBar } from '../../components/charts';
@@ -126,6 +126,8 @@ export function LiteratureTable(props: LiteratureTableProps) {
   /** 检索范围：本地库（离线 LIKE）或学术库（OpenAlex/Crossref/arXiv 在线元数据） */
   const [scope, setScope] = useState<'local' | 'scholar'>('local');
   const [discoverNotice, setDiscoverNotice] = useState('');
+  /** 学术源可达性：offline/degraded 时显示代理提示，避免把网络失败误报成「没搜到」 */
+  const [discoverStatus, setDiscoverStatus] = useState<'' | 'ok' | 'degraded' | 'offline' | 'disabled'>('');
   /** 学术库结果排序与年份过滤（命中 20 条时逐条翻找体验差；本地库结果不参与） */
   const [discoverSort, setDiscoverSort] = useState<'relevance' | 'year' | 'cited'>('relevance');
   const [discoverSince, setDiscoverSince] = useState('');
@@ -189,6 +191,7 @@ export function LiteratureTable(props: LiteratureTableProps) {
     setSearching(true);
     setError('');
     setDiscoverNotice('');
+    setDiscoverStatus('');
     try {
       if (scope === 'scholar') {
         const res = await api.references.discover(query.trim(), 10);
@@ -197,6 +200,7 @@ export function LiteratureTable(props: LiteratureTableProps) {
         setHits(res.hits.map((h) => ({ ...h, source: h.source || 'scholar' })));
         setImported(() => new Set(res.hits.filter((h) => localTitles.has(h.title.trim().toLowerCase())).map((h) => h.title)));
         setDiscoverNotice(res.notice);
+        setDiscoverStatus(res.status);
       } else {
         const results = await api.references.search(query.trim(), 8, project.id);
         setHits(results);
@@ -666,14 +670,14 @@ export function LiteratureTable(props: LiteratureTableProps) {
           <div role="tablist" aria-label="检索范围" className="ml-auto flex rounded-lg border border-slate-200 p-0.5 dark:border-slate-700">
             {([
               { id: 'local' as const, label: '本地文献库', hint: '离线检索已录入条目' },
-              { id: 'scholar' as const, label: '学术库检索', hint: '在线查找真实论文元数据（免 Key）' },
+              { id: 'scholar' as const, label: '学术库检索', hint: '在线查找公开论文元数据（境外 API 可能需要代理）' },
             ]).map((t) => (
               <button
                 key={t.id}
                 role="tab"
                 aria-selected={scope === t.id}
                 title={t.hint}
-                onClick={() => { setScope(t.id); setHits([]); setDiscoverNotice(''); setImported(() => new Set<string>()); }}
+                onClick={() => { setScope(t.id); setHits([]); setDiscoverNotice(''); setDiscoverStatus(''); setImported(() => new Set<string>()); }}
                 className={`rounded-md px-2.5 py-1 text-[11px] transition-colors ${
                   scope === t.id
                     ? 'bg-teal-600 font-medium text-white dark:bg-teal-500 dark:text-slate-900'
@@ -688,7 +692,7 @@ export function LiteratureTable(props: LiteratureTableProps) {
         <div className="flex gap-2 flex-wrap">
           <Input
             className="flex-1 min-w-52"
-            placeholder={scope === 'local' ? '在已录入的文献库中检索标题 / 作者 / 摘要，如：图神经网络' : '检索全球学术库，建议用英文关键词，如：heterophilic graph residual aggregation'}
+            placeholder={scope === 'local' ? '在已录入的文献库中检索标题 / 作者 / 摘要，如：图神经网络' : '检索公开学术库（境外 API，可能需要代理），建议用英文关键词，如：heterophilic graph residual aggregation'}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && search()}
@@ -703,9 +707,38 @@ export function LiteratureTable(props: LiteratureTableProps) {
         <div className="text-xs text-slate-400 dark:text-slate-500 mt-2">
           {scope === 'local'
             ? '本地文献库检索：离线可用，只查已录入条目。还没有文献？试试右上角「学术库检索」，或粘贴 DOI / 导入 BibTeX / 手动录入。'
-            : '学术库检索：实时查询 OpenAlex · Crossref · arXiv（只返回元数据，不下载全文、不入库；命中条目需点「导入」才进入本地库）。'}
-          {discoverNotice && <span className="ml-1 text-teal-600 dark:text-teal-400">{discoverNotice}</span>}
+            : '学术库检索：实时查询 OpenAlex · Crossref · arXiv（只返回元数据，不下载全文、不入库）。境外公共 API 在国内网络可能需要代理；访问失败会明确提示，可改用本地库 / DOI / BibTeX。'}
+          {discoverNotice && discoverStatus === 'ok' && (
+            <span className="ml-1 text-teal-600 dark:text-teal-400">{discoverNotice}</span>
+          )}
         </div>
+        {scope === 'scholar' && (discoverStatus === 'degraded' || discoverStatus === 'offline' || discoverStatus === 'disabled') && (
+          <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div>{discoverNotice}</div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                {discoverStatus !== 'disabled' && (
+                  <button
+                    type="button"
+                    onClick={() => void search()}
+                    disabled={searching}
+                    className="font-medium text-amber-900 underline underline-offset-2 disabled:opacity-50 dark:text-amber-100"
+                  >
+                    {searching ? '重试中…' : '重试'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setScope('local'); setHits([]); setDiscoverNotice(''); setDiscoverStatus(''); }}
+                  className="font-medium text-amber-900 underline underline-offset-2 dark:text-amber-100"
+                >
+                  改用本地文献库
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 手动添加表单 */}
         {showAdd && (

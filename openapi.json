@@ -666,8 +666,15 @@
         "operationId": "ReferencesController_discover",
         "parameters": [],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferenceDiscoverDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -5929,7 +5936,7 @@
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "1.16.9",
+    "version": "1.17.0",
     "contact": {}
   },
   "tags": [],
@@ -6753,6 +6760,142 @@
         },
         "required": [
           "plan"
+        ]
+      },
+      "DiscoveredReferenceDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "标题"
+          },
+          "authors": {
+            "description": "作者列表",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "year": {
+            "type": "number",
+            "description": "发表年份",
+            "nullable": true
+          },
+          "venue": {
+            "type": "string",
+            "description": "期刊/会议"
+          },
+          "doi": {
+            "type": "string",
+            "description": "DOI"
+          },
+          "url": {
+            "type": "string",
+            "description": "原文链接"
+          },
+          "abstract": {
+            "type": "string",
+            "description": "摘要"
+          },
+          "citationCount": {
+            "type": "number",
+            "description": "引用次数"
+          },
+          "source": {
+            "type": "string",
+            "description": "来源",
+            "example": "scholar"
+          }
+        },
+        "required": [
+          "title",
+          "authors",
+          "year",
+          "venue",
+          "doi",
+          "url",
+          "abstract",
+          "citationCount",
+          "source"
+        ]
+      },
+      "ScholarSourceStatusDto": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "来源",
+            "enum": [
+              "openalex",
+              "crossref",
+              "arxiv"
+            ]
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "至少一次请求成功"
+          },
+          "success": {
+            "type": "number",
+            "description": "成功请求数"
+          },
+          "failed": {
+            "type": "number",
+            "description": "失败请求数"
+          },
+          "error": {
+            "type": "string",
+            "description": "失败原因（已归一化，不含内部堆栈）"
+          }
+        },
+        "required": [
+          "source",
+          "ok",
+          "success",
+          "failed"
+        ]
+      },
+      "ReferenceDiscoverDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "学术检索是否开启"
+          },
+          "status": {
+            "type": "string",
+            "description": "结果状态：正常 / 部分源不可达 / 全部源不可达 / 功能关闭",
+            "enum": [
+              "ok",
+              "degraded",
+              "offline",
+              "disabled"
+            ],
+            "example": "ok"
+          },
+          "hits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiscoveredReferenceDto"
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScholarSourceStatusDto"
+            }
+          },
+          "notice": {
+            "type": "string",
+            "description": "面向用户的提示（含代理与本地替代路径）"
+          }
+        },
+        "required": [
+          "enabled",
+          "status",
+          "hits",
+          "sources",
+          "notice"
         ]
       },
       "ReferenceGraphNodeDto": {
