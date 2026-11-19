@@ -7,6 +7,7 @@ import { api } from '../api/client';
 import { ToastContext } from '../App';
 import type { Journal, JournalMatchResult, ParseEmailResult, Project, ReviewComment, SubmissionStatus, SubmissionTrack } from '../types';
 import { Badge, Button, Card, ConfirmDialog, ErrorBox, Input, Select, Spinner, Textarea, errMsg } from '../components/ui';
+import { DocumentSelect } from '../components/DocumentSelect';
 import { HBar } from '../components/charts';
 import { useProjectDocs } from '../lib/queries';
 
@@ -444,11 +445,12 @@ export function SubmissionPage({ project }: { project: Project }) {
           <div className="space-y-3">
             <div>
               <div className="text-xs text-slate-400 dark:text-slate-500 mb-1">选择项目内论文（自动带入标题与摘要）</div>
-              <Select
+              <DocumentSelect
                 className="w-full"
-                options={[{ value: '', label: '从项目中选择文档…' }, ...docs.map((d) => ({ value: d.id, label: d.title }))]}
+                docs={docs}
                 value={selDoc}
-                onChange={pickDoc}
+                placeholder="从项目中选择文档…"
+                onChange={(id) => pickDoc(id ?? '')}
               />
             </div>
             <Input placeholder="论文标题" value={title} onChange={(e) => setTitle(e.target.value)} />

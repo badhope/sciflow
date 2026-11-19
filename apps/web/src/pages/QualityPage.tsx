@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState, useContext } from 'react';
 import { AlertTriangle, CheckCircle2, Gauge, LayoutList, Loader2, ShieldCheck, Sparkles, ListChecks } from 'lucide-react';
 import { api } from '../api/client';
 import type { Project, QualityReport, CitationAudit, ObjectiveQualityReport, ProjectQualityOverview } from '../types';
-import { Badge, Button, Card, EmptyState, ErrorBox, Select, Spinner, jsonText, errMsg } from '../components/ui';
+import { Badge, Button, Card, EmptyState, ErrorBox, Spinner, jsonText, errMsg } from '../components/ui';
+import { DocumentSelect } from '../components/DocumentSelect';
 import { ToastContext } from '../App';
 import { HBar, LineChart, ProgressRing } from '../components/charts';
 import { QUALITY_DIMS } from './qualityDims';
@@ -299,11 +300,11 @@ export function QualityPage({ project }: { project: Project }) {
         <div className="flex items-center gap-2 flex-wrap">
           <Gauge size={16} className="text-teal-600 dark:text-teal-300" />
           <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 mr-2">选择文档进行 7 维质量评分</span>
-          <Select
+          <DocumentSelect
             className="w-full sm:w-64"
-            options={[{ value: '', label: '选择文档…' }, ...docs.map((d) => ({ value: d.id, label: d.title }))]}
+            docs={docs}
             value={docId}
-            onChange={(v: string) => { setDocId(v); setAudit(null); setReport(null); setSelectedHist(null); setObjective(null); }}
+            onChange={(id) => { setDocId(id ?? ''); setAudit(null); setReport(null); setSelectedHist(null); setObjective(null); }}
           />
           <Button onClick={doReview} disabled={scoring || !docId} aria-busy={scoring}>
             {scoring ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Sparkles size={15} aria-hidden="true" />} {scoring ? '评分中…' : '开始评分'}

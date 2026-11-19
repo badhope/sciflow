@@ -7,6 +7,7 @@ import {
 import { PIPELINE_STEPS } from '@sciflow/core/pipeline-steps';
 import { api } from '../api/client';
 import { AgentChatThread } from '../components/AgentChat';
+import { DocumentSelect } from '../components/DocumentSelect';
 import { TaskListPanel } from '../components/TaskListPanel';
 import { ApprovalDialog } from '../components/ApprovalDialog';
 import {
@@ -575,18 +576,13 @@ export function WorkspacePage({
     <div className="h-full flex flex-col gap-3">
       {/* 顶栏：文档流 & 流水线入口 */}
       <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
-        <select
-          className="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1.5 text-sm bg-white dark:bg-slate-900 outline-none max-w-[min(60vw,220px)] sm:max-w-[280px] min-w-0"
-          value={effectiveDocId ?? ''}
-          onChange={(e) => setDocId(e.target.value || null)}
-        >
-          <option value="">（未选择文档）</option>
-          {docs.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.title}
-            </option>
-          ))}
-        </select>
+        <DocumentSelect
+          className="max-w-[min(60vw,220px)] sm:max-w-[280px] min-w-0 px-2.5 py-1.5"
+          docs={docs}
+          value={effectiveDocId}
+          placeholder="（未选择文档）"
+          onChange={setDocId}
+        />
         <Button variant="outline" onClick={() => newDoc.mutate()} loading={newDoc.isPending} title="新建文档">
           <FilePlus2 size={14} /> 新建
         </Button>

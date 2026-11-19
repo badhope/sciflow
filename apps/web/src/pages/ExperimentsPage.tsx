@@ -6,7 +6,8 @@ import { qk } from '../lib/query-keys';
 import { useProjectDocs } from '../lib/queries';
 import { ToastContext } from '../App';
 import type { Doc, Experiment, Project } from '../types';
-import { Badge, Button, Card, ConfirmDialog, Empty, ErrorBox, Input, SectionTitle, Select, Textarea, errMsg } from '../components/ui';
+import { Badge, Button, Card, ConfirmDialog, Empty, ErrorBox, Input, SectionTitle, Textarea, errMsg } from '../components/ui';
+import { DocumentSelect } from '../components/DocumentSelect';
 import { ExperimentDesignCard } from './experiments/DesignCard';
 
 /* 输入引导（占位提示，不预填）——预填示例代码会被当成"真实数据"误提交/误留存（2026-11 治理） */
@@ -192,11 +193,12 @@ export function ExperimentsPage({ project }: { project: Project }) {
             </div>
             <div>
               <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">关联文档（可选）</div>
-              <Select
+              <DocumentSelect
                 className="w-full"
+                docs={docs}
                 value={documentId}
-                onChange={setDocumentId}
-                options={[{ value: '', label: '不关联文档' }, ...docs.map((d) => ({ value: d.id, label: d.title }))]}
+                placeholder="不关联文档"
+                onChange={(id) => setDocumentId(id ?? '')}
               />
             </div>
             <div>
