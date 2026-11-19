@@ -82,10 +82,24 @@ function Radar({ scores, compare }: { scores: Record<string, number>; compare?: 
   );
 }
 
-export function QualityPage({ project }: { project: Project }) {
+export function QualityPage({
+  project,
+  docId: controlledDocId,
+  onDocChange,
+}: {
+  project: Project;
+  /** 写作/评审合并页共享的当前文档；未传时保持原局部状态行为。 */
+  docId?: string | null;
+  onDocChange?: (id: string | null) => void;
+}) {
   const docsQuery = useProjectDocs(project.id);
   const docs = useMemo(() => docsQuery.data ?? [], [docsQuery.data]);
-  const [docId, setDocId] = useState<string>('');
+  const [docIdState, setDocIdState] = useState<string>('');
+  const docId = controlledDocId === undefined ? docIdState : controlledDocId ?? '';
+  const setDocId = (id: string) => {
+    setDocIdState(id);
+    onDocChange?.(id || null);
+  };
   const [scoring, setScoring] = useState(false);
   const [error, setError] = useState('');
   const [report, setReport] = useState<(QualityReport & { scoresObj: Record<string, number> }) | null>(null);
@@ -141,8 +155,8 @@ export function QualityPage({ project }: { project: Project }) {
    */
   // 文档列表走共享 hook；默认选中最新一篇（docs 升序，取最后一条）
   useEffect(() => {
-    if (!docId && docs.length) setDocId(docs[docs.length - 1].id);
-  }, [docId, docs]);
+    if (!docId && docs.length && controlledDocId === undefined) setDocId(docs[docs.length - 1].id);
+  }, [docId, docs, controlledDocId]);
 
   // 质量总览单独拉取；文档列表不再在 effect 里重复请求
   useEffect(() => {

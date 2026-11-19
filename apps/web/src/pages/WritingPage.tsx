@@ -53,9 +53,25 @@ function getEditorHandle() {
 const scoreColor = (v: number, good = 70, mid = 50) =>
   v >= good ? undefined : v >= mid ? 'var(--orange)' : 'var(--red)';
 
-export function WritingPage({ project, initialDocId }: { project: Project; initialDocId: string | null }) {
+export function WritingPage({
+  project,
+  initialDocId,
+  docId: controlledDocId,
+  onDocChange,
+}: {
+  project: Project;
+  initialDocId: string | null;
+  /** 写作/评审合并页共享的当前文档；未传时保持原局部状态行为。 */
+  docId?: string | null;
+  onDocChange?: (id: string | null) => void;
+}) {
   /* ============ 文档与内容状态 ============ */
-  const [docId, setDocId] = useState<string | null>(initialDocId);
+  const [docIdState, setDocIdState] = useState<string | null>(initialDocId);
+  const docId = controlledDocId === undefined ? docIdState : controlledDocId;
+  const setDocId = (id: string | null) => {
+    setDocIdState(id);
+    onDocChange?.(id);
+  };
   /** 已从远端同步到草稿的文档 id（渲染期同步守卫） */
   const [syncedDocId, setSyncedDocId] = useState<string | null>(null);
   const [doc, setDoc] = useState<Doc | null>(null);

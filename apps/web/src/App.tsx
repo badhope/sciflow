@@ -28,6 +28,7 @@ const BrowserPage = lazy(() => import('./pages/BrowserPage').then((m) => ({ defa
 const LongformPage = lazy(() => import('./pages/LongformPage').then((m) => ({ default: m.LongformPage })));
 const ResearchProgramsPage = lazy(() => import('./pages/ResearchProgramsPage').then((m) => ({ default: m.ResearchProgramsPage })));
 const WritingPage = lazy(() => import('./pages/WritingPage').then((m) => ({ default: m.WritingPage })));
+const WriteReviewPage = lazy(() => import('./pages/WriteReviewPage').then((m) => ({ default: m.WriteReviewPage })));
 const LiteraturePage = lazy(() => import('./pages/LiteraturePage').then((m) => ({ default: m.LiteraturePage })));
 const PipelinePage = lazy(() => import('./pages/PipelinePage').then((m) => ({ default: m.PipelinePage })));
 const QualityPage = lazy(() => import('./pages/QualityPage').then((m) => ({ default: m.QualityPage })));
@@ -243,23 +244,17 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
     ) : null,
   'write-review': ({ project, initialDocId, tab, onTabChange }) =>
     project ? (
-      <TabbedPage
-        name="写作与评审"
-        activeKey={tab ?? undefined}
-        onChange={onTabChange}
-        tabs={[
-          {
-            key: 'writing',
-            label: '论文写作',
-            node: <PageErrorBoundary pageName="论文写作"><SuspensePage name="论文写作"><WritingPage key={project.id} project={project} initialDocId={initialDocId} /></SuspensePage></PageErrorBoundary>,
-          },
-          {
-            key: 'quality',
-            label: '质量评审',
-            node: <PageErrorBoundary pageName="质量评分"><SuspensePage name="质量评分"><QualityPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary>,
-          },
-        ]}
-      />
+      <PageErrorBoundary pageName="写作与评审">
+        <SuspensePage name="写作与评审">
+          <WriteReviewPage
+            key={project.id}
+            project={project}
+            initialDocId={initialDocId}
+            tab={tab}
+            onTabChange={onTabChange ?? (() => undefined)}
+          />
+        </SuspensePage>
+      </PageErrorBoundary>
     ) : null,
   programs: ({ project }) =>
     project ? <PageErrorBoundary pageName="研究计划"><SuspensePage name="研究计划"><ResearchProgramsPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null,
