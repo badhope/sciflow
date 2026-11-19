@@ -24,6 +24,7 @@ import type {
   DiscoveredReference,
   ExperimentDesignRecord,
   ResearchBrief,
+  ResearchBriefPatch,
   ResearchDesignResult,
   ReviewComment,
   ScreeningItem,
@@ -35,7 +36,7 @@ import { friendlyError, request, u } from './core';
 export const research = {
   brief: {
     get: (projectId: string) => request<ResearchBrief>(`/api/projects/${projectId}/research-brief`),
-    update: (projectId: string, patch: Partial<Pick<ResearchBrief, 'question' | 'scope' | 'methods' | 'constraints' | 'successCriteria'>>) =>
+    update: (projectId: string, patch: ResearchBriefPatch) =>
       request<ResearchBrief>(`/api/projects/${projectId}/research-brief`, {
         method: 'PUT',
         body: JSON.stringify(patch),

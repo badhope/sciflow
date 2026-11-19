@@ -142,6 +142,37 @@
         ]
       }
     },
+    "/agent/metrics": {
+      "get": {
+        "operationId": "AgentHarnessController_getMetrics",
+        "parameters": [
+          {
+            "name": "days",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentHarness"
+        ]
+      }
+    },
     "/agent/tasks": {
       "get": {
         "operationId": "AgentHarnessController_listTasks",
@@ -263,6 +294,85 @@
     "/agent/approvals/{id}": {
       "post": {
         "operationId": "AgentHarnessController_decideApproval",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentHarness"
+        ]
+      }
+    },
+    "/agent/plans": {
+      "get": {
+        "operationId": "AgentHarnessController_listPlans",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentHarness"
+        ]
+      },
+      "post": {
+        "operationId": "AgentHarnessController_createPlan",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentHarness"
+        ]
+      }
+    },
+    "/agent/plans/{id}": {
+      "get": {
+        "operationId": "AgentHarnessController_getPlan",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AgentHarness"
+        ]
+      },
+      "post": {
+        "operationId": "AgentHarnessController_decidePlan",
         "parameters": [
           {
             "name": "id",
@@ -2218,88 +2328,6 @@
         ]
       }
     },
-    "/auth/register": {
-      "post": {
-        "operationId": "AuthController_register",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
-    "/auth/login": {
-      "post": {
-        "operationId": "AuthController_login",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
-    "/auth/me": {
-      "get": {
-        "operationId": "AuthController_me",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
-    "/web/search": {
-      "post": {
-        "operationId": "WebSearchController_search",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "WebSearch"
-        ]
-      }
-    },
-    "/web/config": {
-      "get": {
-        "operationId": "WebSearchController_config",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "WebSearch"
-        ]
-      },
-      "put": {
-        "operationId": "WebSearchController_saveConfig",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "WebSearch"
-        ]
-      }
-    },
     "/projects": {
       "get": {
         "operationId": "ProjectsController_list",
@@ -3049,6 +3077,664 @@
         ]
       }
     },
+    "/experiments/run": {
+      "post": {
+        "operationId": "ExperimentsController_run",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Experiments"
+        ]
+      }
+    },
+    "/experiments": {
+      "get": {
+        "operationId": "ExperimentsController_list",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Experiments"
+        ]
+      }
+    },
+    "/experiments/by-document/{documentId}": {
+      "get": {
+        "operationId": "ExperimentsController_byDocument",
+        "parameters": [
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Experiments"
+        ]
+      }
+    },
+    "/experiments/{id}": {
+      "get": {
+        "operationId": "ExperimentsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Experiments"
+        ]
+      },
+      "patch": {
+        "operationId": "ExperimentsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Experiments"
+        ]
+      },
+      "delete": {
+        "operationId": "ExperimentsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Experiments"
+        ]
+      }
+    },
+    "/browser/sessions": {
+      "get": {
+        "operationId": "BrowserController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      },
+      "post": {
+        "operationId": "BrowserController_open",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}": {
+      "delete": {
+        "operationId": "BrowserController_close",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/navigate": {
+      "post": {
+        "operationId": "BrowserController_navigate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/text": {
+      "get": {
+        "operationId": "BrowserController_text",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "maxChars",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/screenshot": {
+      "get": {
+        "operationId": "BrowserController_screenshot",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fullPage",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/elements": {
+      "get": {
+        "operationId": "BrowserController_elements",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/verify": {
+      "post": {
+        "operationId": "BrowserController_verify",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/click": {
+      "post": {
+        "operationId": "BrowserController_click",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/baselines": {
+      "get": {
+        "operationId": "BrowserController_baselines",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/baseline": {
+      "post": {
+        "operationId": "BrowserController_saveBaseline",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/visual-diff": {
+      "post": {
+        "operationId": "BrowserController_visualDiff",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/baselines/{name}": {
+      "delete": {
+        "operationId": "BrowserController_deleteBaseline",
+        "parameters": [
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/browser/sessions/{id}/fill": {
+      "post": {
+        "operationId": "BrowserController_fill",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Browser"
+        ]
+      }
+    },
+    "/memory": {
+      "post": {
+        "operationId": "MemoryController_add",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Memory"
+        ]
+      },
+      "get": {
+        "operationId": "MemoryController_list",
+        "parameters": [
+          {
+            "name": "type",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Memory"
+        ]
+      }
+    },
+    "/memory/{id}": {
+      "delete": {
+        "operationId": "MemoryController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Memory"
+        ]
+      }
+    },
+    "/projects/{projectId}/research-brief": {
+      "get": {
+        "operationId": "ResearchBriefController_get",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchBriefDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "ResearchBrief"
+        ]
+      },
+      "put": {
+        "operationId": "ResearchBriefController_update",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchBriefPatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchBriefDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "ResearchBrief"
+        ]
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "AuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/web/search": {
+      "post": {
+        "operationId": "WebSearchController_search",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSearch"
+        ]
+      }
+    },
+    "/web/config": {
+      "get": {
+        "operationId": "WebSearchController_config",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSearch"
+        ]
+      },
+      "put": {
+        "operationId": "WebSearchController_saveConfig",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "WebSearch"
+        ]
+      }
+    },
     "/pipeline": {
       "post": {
         "operationId": "PipelineController_create",
@@ -3265,80 +3951,6 @@
         },
         "tags": [
           "Chat"
-        ]
-      }
-    },
-    "/memory": {
-      "post": {
-        "operationId": "MemoryController_add",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Memory"
-        ]
-      },
-      "get": {
-        "operationId": "MemoryController_list",
-        "parameters": [
-          {
-            "name": "type",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "q",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Memory"
-        ]
-      }
-    },
-    "/memory/{id}": {
-      "delete": {
-        "operationId": "MemoryController_remove",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Memory"
         ]
       }
     },
@@ -4249,131 +4861,6 @@
         ]
       }
     },
-    "/experiments/run": {
-      "post": {
-        "operationId": "ExperimentsController_run",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Experiments"
-        ]
-      }
-    },
-    "/experiments": {
-      "get": {
-        "operationId": "ExperimentsController_list",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Experiments"
-        ]
-      }
-    },
-    "/experiments/by-document/{documentId}": {
-      "get": {
-        "operationId": "ExperimentsController_byDocument",
-        "parameters": [
-          {
-            "name": "documentId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Experiments"
-        ]
-      }
-    },
-    "/experiments/{id}": {
-      "get": {
-        "operationId": "ExperimentsController_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Experiments"
-        ]
-      },
-      "patch": {
-        "operationId": "ExperimentsController_update",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Experiments"
-        ]
-      },
-      "delete": {
-        "operationId": "ExperimentsController_remove",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Experiments"
-        ]
-      }
-    },
     "/longform/books": {
       "get": {
         "operationId": "LongformController_list",
@@ -4859,315 +5346,6 @@
         ]
       }
     },
-    "/browser/sessions": {
-      "get": {
-        "operationId": "BrowserController_list",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Browser"
-        ]
-      },
-      "post": {
-        "operationId": "BrowserController_open",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Browser"
-        ]
-      }
-    },
-    "/browser/sessions/{id}": {
-      "delete": {
-        "operationId": "BrowserController_close",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Browser"
-        ]
-      }
-    },
-    "/browser/sessions/{id}/navigate": {
-      "post": {
-        "operationId": "BrowserController_navigate",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Browser"
-        ]
-      }
-    },
-    "/browser/sessions/{id}/text": {
-      "get": {
-        "operationId": "BrowserController_text",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "maxChars",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Browser"
-        ]
-      }
-    },
-    "/browser/sessions/{id}/screenshot": {
-      "get": {
-        "operationId": "BrowserController_screenshot",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "fullPage",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Browser"
-        ]
-      }
-    },
-    "/browser/sessions/{id}/elements": {
-      "get": {
-        "operationId": "BrowserController_elements",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Browser"
-        ]
-      }
-    },
-    "/browser/sessions/{id}/verify": {
-      "post": {
-        "operationId": "BrowserController_verify",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Browser"
-        ]
-      }
-    },
-    "/browser/sessions/{id}/click": {
-      "post": {
-        "operationId": "BrowserController_click",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Browser"
-        ]
-      }
-    },
-    "/browser/baselines": {
-      "get": {
-        "operationId": "BrowserController_baselines",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Browser"
-        ]
-      }
-    },
-    "/browser/sessions/{id}/baseline": {
-      "post": {
-        "operationId": "BrowserController_saveBaseline",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Browser"
-        ]
-      }
-    },
-    "/browser/sessions/{id}/visual-diff": {
-      "post": {
-        "operationId": "BrowserController_visualDiff",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Browser"
-        ]
-      }
-    },
-    "/browser/baselines/{name}": {
-      "delete": {
-        "operationId": "BrowserController_deleteBaseline",
-        "parameters": [
-          {
-            "name": "name",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Browser"
-        ]
-      }
-    },
-    "/browser/sessions/{id}/fill": {
-      "post": {
-        "operationId": "BrowserController_fill",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Browser"
-        ]
-      }
-    },
     "/judgment/intent": {
       "post": {
         "operationId": "JudgmentController_intent",
@@ -5474,6 +5652,73 @@
   "servers": [],
   "components": {
     "schemas": {
+      "ResearchBriefDto": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "description": "项目 ID"
+          },
+          "question": {
+            "type": "string",
+            "description": "研究问题"
+          },
+          "scope": {
+            "type": "string",
+            "description": "范围与边界"
+          },
+          "methods": {
+            "type": "string",
+            "description": "方法与数据"
+          },
+          "constraints": {
+            "type": "string",
+            "description": "约束条件"
+          },
+          "successCriteria": {
+            "type": "string",
+            "description": "成功标准"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最后更新时间（毫秒时间戳；0 表示未设置）"
+          }
+        },
+        "required": [
+          "projectId",
+          "question",
+          "scope",
+          "methods",
+          "constraints",
+          "successCriteria",
+          "updatedAt"
+        ]
+      },
+      "ResearchBriefPatchDto": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "研究问题"
+          },
+          "scope": {
+            "type": "string",
+            "description": "范围与边界"
+          },
+          "methods": {
+            "type": "string",
+            "description": "方法与数据"
+          },
+          "constraints": {
+            "type": "string",
+            "description": "约束条件"
+          },
+          "successCriteria": {
+            "type": "string",
+            "description": "成功标准"
+          }
+        }
+      },
       "ChatRequestBody": {
         "type": "object",
         "properties": {

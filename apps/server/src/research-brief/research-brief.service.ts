@@ -3,16 +3,9 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/database';
 import { researchBriefs } from '../db/schema';
+import type { ResearchBriefDto } from './research-brief.dto';
 
-export interface ResearchBriefDto {
-  projectId: string;
-  question: string;
-  scope: string;
-  methods: string;
-  constraints: string;
-  successCriteria: string;
-  updatedAt: number;
-}
+export type { ResearchBriefDto };
 
 const patchSchema = z.object({
   question: z.string().max(3000).optional(),
