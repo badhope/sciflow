@@ -179,7 +179,7 @@ const PAGE_PADDING: Partial<Record<View, string>> = {
 interface PageRenderCtx {
   project: Project | null;
   openDoc: (id: string) => void;
-  onNavigate: (v: View) => void;
+  onNavigate: (v: View, tab?: string) => void;
   initialDocId: string | null;
   tab: string | null;
   onTabChange: (key: string) => void;

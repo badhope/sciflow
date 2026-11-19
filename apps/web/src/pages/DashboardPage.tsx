@@ -15,7 +15,7 @@ import { AgentOpsPanel } from './dashboard/AgentOpsPanel';
 
 export function DashboardPage({ project, onNavigate, openDoc }: {
   project: Project;
-  onNavigate: (v: View) => void;
+  onNavigate: (v: View, tab?: string) => void;
   openDoc: (id: string) => void;
 }) {
   const qc = useQueryClient();
@@ -110,11 +110,11 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
   };
 
   const entries = [
-    { label: '论文写作', desc: '大纲 · 起草 · 润色 · 翻译', icon: BookOpen, view: 'writing' as View },
-    { label: '文献调研', desc: '多源检索 · 综述 · 文献库', icon: FlaskConical, view: 'literature' as View },
+    { label: '论文写作', desc: '大纲 · 起草 · 润色 · 翻译', icon: BookOpen, view: 'write-review' as View, tab: 'writing' },
+    { label: '文献调研', desc: '多源检索 · 综述 · 文献库', icon: FlaskConical, view: 'evidence' as View, tab: 'literature' },
     { label: '实验记录', desc: '本机 Python 沙箱 · 出图留存', icon: Beaker, view: 'experiments' as View },
-    { label: '全自动流水线', desc: '主题 → 初稿 → 评分 → 定稿', icon: Workflow, view: 'pipeline' as View },
-    { label: '质量评分', desc: '7 维雷达评分与改进建议', icon: Gauge, view: 'quality' as View },
+    { label: '全自动流水线', desc: '主题 → 初稿 → 评分 → 定稿', icon: Workflow, view: 'design' as View, tab: 'pipeline' },
+    { label: '质量评分', desc: '7 维雷达评分与改进建议', icon: Gauge, view: 'write-review' as View, tab: 'quality' },
   ];
 
   return (
@@ -135,10 +135,10 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
             </p>
           </div>
           <div className="page-hero__actions">
-            <Button onClick={() => onNavigate('pipeline')} title="用主题一键生成初稿">
+            <Button onClick={() => onNavigate('design', 'pipeline')} title="用主题一键生成初稿">
               <Workflow size={14} /> 运行流水线
             </Button>
-            <Button variant="outline" onClick={() => onNavigate('writing')}>
+            <Button variant="outline" onClick={() => onNavigate('write-review', 'writing')}>
               <BookOpen size={14} /> 继续写作
             </Button>
           </div>
@@ -204,7 +204,7 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
           改为一行紧凑的「分段导航条」——功能一个不少，视觉权重降到辅助层。 */}
       <nav className="page-quicknav mb-6" aria-label="功能入口">
         {entries.map((item) => (
-          <button key={item.label} className="page-quicknav__item" onClick={() => onNavigate(item.view)}>
+          <button key={item.label} className="page-quicknav__item" onClick={() => onNavigate(item.view, item.tab)}>
             <item.icon size={14} aria-hidden="true" />
             <span>{item.label}</span>
           </button>
@@ -230,7 +230,7 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
         ) : (
           <div className="space-y-3">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-              <MiniStat label="待确认大纲" value={overview.pendingOutline} tone="amber" onClick={() => onNavigate('pipeline')} />
+              <MiniStat label="待确认大纲" value={overview.pendingOutline} tone="amber" onClick={() => onNavigate('design', 'pipeline')} />
               <MiniStat label="超期投稿" value={overview.overdueSubmissions.length} tone="red" onClick={() => onNavigate('submission')} />
               <MiniStat label="待处理审稿意见" value={overview.openReviewComments} tone="amber" />
               <MiniStat
@@ -343,7 +343,7 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
           title="还没有论文草稿"
           hint="新建一篇从空白开始，或到「全自动流水线」用主题一键生成初稿"
           action={
-            <Button onClick={() => onNavigate('pipeline')}>
+            <Button onClick={() => onNavigate('design', 'pipeline')}>
               <Workflow size={14} /> 去生成初稿
             </Button>
           }
