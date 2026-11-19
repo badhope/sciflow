@@ -35,6 +35,7 @@ const DEFAULT_ASK_PREFIXES = [
   'document.', // 改文档正文
   'project.', // 改项目结构
   'quality.', // 跑质量评审（模型成本 + 写评分）
+  'submission.', // 登记/改投稿台账
   'memory.', // 写项目记忆
   'browser.', // 打开/操作外部页面
   'config.', // 改全局配置

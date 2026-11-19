@@ -49,6 +49,7 @@ describe('Agent 工具作用域', () => {
     expect(profileAllowsTool(p, 'research.expert')).toBe(true);
     expect(profileAllowsTool(p, 'submission.match')).toBe(true);
     expect(profileAllowsTool(p, 'submission.track')).toBe(true);
+    expect(profileAllowsTool(p, 'submission.track.create')).toBe(false);
     expect(profileAllowsTool(p, 'document.update')).toBe(false);
     expect(profileAllowsTool(p, 'experiment.run')).toBe(false);
     expect(profileAllowsTool(p, 'config.upsert_role')).toBe(false);
@@ -61,6 +62,7 @@ describe('Agent 工具作用域', () => {
     expect(profileAllowsTool(p, 'writing.draft')).toBe(true);
     expect(profileAllowsTool(p, 'document.update')).toBe(true);
     expect(profileAllowsTool(p, 'experiment.run')).toBe(true);
+    expect(profileAllowsTool(p, 'submission.track.create')).toBe(true);
     expect(profileAllowsTool(p, 'browser.open')).toBe(true);
     expect(profileAllowsTool(p, 'config.snapshot')).toBe(false);
   });

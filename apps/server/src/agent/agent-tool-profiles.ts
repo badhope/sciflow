@@ -35,7 +35,8 @@ export type AgentToolGroup =
   | 'extension'
   | 'chat'
   | 'research'
-  | 'submission';
+  | 'submission'
+  | 'submission_write';
 /** 精确分组优先：同一前缀下读写工具必须分开（否则 research 会误拿 document.update） */
 const TOOL_GROUP_EXACT: Record<string, AgentToolGroup> = {
   'project.list': 'project_read',
@@ -62,6 +63,7 @@ const TOOL_GROUP_EXACT: Record<string, AgentToolGroup> = {
   'submission.reply': 'submission',
   'submission.track': 'submission',
   'submission.email': 'submission',
+  'submission.track.create': 'submission_write',
 };
 
 /** 前缀兜底：未登记的新工具按「写」处理，窄 profile 下不可见（安全默认） */
@@ -122,6 +124,7 @@ export const AGENT_TOOL_PROFILES: Record<AgentToolProfileId, AgentToolProfile> =
       'extension',
       'research',
       'submission',
+      'submission_write',
       'chat',
     ],
   },
@@ -164,6 +167,7 @@ export const AGENT_TOOL_PROFILES: Record<AgentToolProfileId, AgentToolProfile> =
       'task',
       'research',
       'submission',
+      'submission_write',
       'chat',
     ],
   },

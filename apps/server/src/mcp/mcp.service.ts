@@ -320,6 +320,44 @@ export class McpService {
         },
       },
       {
+        name: 'submission.track.create',
+        description: '登记一条投稿记录（写库）：创建期刊/稿号/状态台账并写首条状态事件。属于写操作，需用户审批；同项目重复登记前先查 submission.track。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: { type: 'string', description: '项目 ID' },
+            journalName: { type: 'string', description: '期刊名（必填）' },
+            journalId: { type: 'string', description: '期刊库 ID（可选）' },
+            documentId: { type: 'string', description: '关联文档 ID（可选）' },
+            title: { type: 'string', description: '稿件标题（可选）' },
+            currentStatus: { type: 'string', description: '初始状态，默认 submitted' },
+            submittedAt: { type: 'number', description: '投稿时间戳（毫秒，可选）' },
+            note: { type: 'string', description: '备注（可选）' },
+            previousSubmissionId: { type: 'string', description: '转投前一条记录 ID（可选）' },
+            revisionDeadline: { type: 'number', description: '修回截止时间戳（毫秒，可选）' },
+          },
+          required: ['projectId', 'journalName'],
+        },
+        handler: async (args, user) => {
+          const missing = noProjectHint(args, ['projectId', 'journalName']);
+          if (missing) return { error: missing };
+          this.access.assertProject(String(args.projectId), user);
+          if (args.documentId) this.access.assertDocument(String(args.documentId), user);
+          return this.submission.createTrack({
+            projectId: String(args.projectId),
+            journalName: String(args.journalName),
+            journalId: args.journalId ? String(args.journalId) : '',
+            documentId: args.documentId ? String(args.documentId) : '',
+            title: args.title ? String(args.title) : '',
+            currentStatus: args.currentStatus ? String(args.currentStatus) : 'submitted',
+            submittedAt: typeof args.submittedAt === 'number' ? args.submittedAt : undefined,
+            note: args.note ? String(args.note) : '',
+            previousSubmissionId: args.previousSubmissionId ? String(args.previousSubmissionId) : '',
+            revisionDeadline: typeof args.revisionDeadline === 'number' ? args.revisionDeadline : null,
+          });
+        },
+      },
+      {
         name: 'research.critic',
         description: '研究评审（Critic）角色：只依据实验输出判定假设 supported/refuted/inconclusive，并给出证据引用与修订方向。只读、不写库；会调用一次 LLM。',
         inputSchema: {

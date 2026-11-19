@@ -5,6 +5,7 @@ import { McpService } from './mcp.service';
 describe('MCP submission tools', () => {
   const submission = {
     matchJournals: vi.fn(async () => ({ journals: [] })),
+    createTrack: vi.fn(async () => ({ ok: true })),
     coverLetter: vi.fn(),
     replyReview: vi.fn(),
     listTracks: vi.fn(),
@@ -14,7 +15,7 @@ describe('MCP submission tools', () => {
   const byName = new Map(svc.list().map((t) => [t.name, t]));
 
   it('exposes the full submission tool surface', () => {
-    for (const name of ['submission.match', 'submission.cover', 'submission.reply', 'submission.track', 'submission.email']) {
+    for (const name of ['submission.match', 'submission.cover', 'submission.reply', 'submission.track', 'submission.email', 'submission.track.create']) {
       expect(byName.has(name)).toBe(true);
     }
   });
@@ -25,6 +26,7 @@ describe('MCP submission tools', () => {
     expect(byName.get('submission.reply')!.inputSchema.required).toEqual(['reviewComments']);
     expect(byName.get('submission.track')!.inputSchema.required).toEqual(['projectId']);
     expect(byName.get('submission.email')!.inputSchema.required).toEqual(['emailText']);
+    expect(byName.get('submission.track.create')!.inputSchema.required).toEqual(['projectId', 'journalName']);
   });
 
   it('routes submission.match to the service', async () => {

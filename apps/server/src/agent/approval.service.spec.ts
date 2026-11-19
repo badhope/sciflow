@@ -26,6 +26,8 @@ describe('ApprovalService', () => {
     expect(svc.needsApproval('quality.overview')).toBe(false);
     expect(svc.needsApproval('experiment.list')).toBe(false);
     expect(svc.needsApproval('browser.text')).toBe(false);
+    expect(svc.needsApproval('submission.match')).toBe(false);
+    expect(svc.needsApproval('submission.track')).toBe(false);
     expect(svc.needsApproval('memory.search')).toBe(false);
   });
 
@@ -38,6 +40,7 @@ describe('ApprovalService', () => {
     expect(svc.needsApproval('memory.add')).toBe(true);
     expect(svc.needsApproval('browser.open')).toBe(true);
     expect(svc.needsApproval('config.write')).toBe(true);
+    expect(svc.needsApproval('submission.track.create')).toBe(true);
   });
 
   it('登记后出现在待处理列表', () => {
