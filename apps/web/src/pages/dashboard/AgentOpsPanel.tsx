@@ -19,6 +19,27 @@ import { qk } from '../../lib/query-keys';
  *  - 工具指标与 run 指标都按项目过滤（llm_call_log 已补 project_id）；
  *  - 任何接口失败都降级为空态，不阻塞项目总览。
  */
+/** 计划工具白名单标签：待批与生效计划共用，避免两套切片/溢出逻辑。 */
+function ToolChips({ tools }: { tools: string[] }) {
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {tools.slice(0, 4).map((t) => (
+        <span key={t} className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-slate-500 dark:bg-slate-900/60 dark:text-slate-400">
+          {t}
+        </span>
+      ))}
+      {tools.length > 4 && <span className="text-[10px] text-slate-400">+{tools.length - 4}</span>}
+    </div>
+  );
+}
+
+/** 绝对有效期展示：不在 render 里调用 Date.now，避免 React 纯渲染规则与时间抖动。 */
+function formatExpiry(ts: number | null): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 export function AgentOpsPanel({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const toast = useContext(ToastContext);
@@ -174,6 +195,7 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
                 <Badge tone="green">生效中</Badge>
                 <span className="text-[10px] text-slate-400">步数 {p.usedSteps}/{p.maxSteps}</span>
                 <span className="text-[10px] text-slate-400">预算 {budgetText(p)}</span>
+                {p.expiresAt ? <span className="text-[10px] text-slate-400">有效至 {formatExpiry(p.expiresAt)}</span> : null}
               </div>
               {p.budgetTokens > 0 && (
                 <div className="mt-1.5 flex items-center gap-2">
@@ -188,6 +210,7 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
                   </span>
                 </div>
               )}
+              <ToolChips tools={p.allowedTools} />
             </div>
           ))}
         </div>
@@ -205,14 +228,7 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
                 <span className="text-[10px] text-slate-400">预算 {budgetText(p)}</span>
               </div>
               {p.summary && <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{p.summary}</p>}
-              <div className="mt-1 flex flex-wrap gap-1">
-                {p.allowedTools.slice(0, 4).map((t) => (
-                  <span key={t} className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-slate-500 dark:bg-slate-900/60 dark:text-slate-400">
-                    {t}
-                  </span>
-                ))}
-                {p.allowedTools.length > 4 && <span className="text-[10px] text-slate-400">+{p.allowedTools.length - 4}</span>}
-              </div>
+              <ToolChips tools={p.allowedTools} />
               <div className="mt-2 flex gap-1.5">
                 <Button className="h-7 px-2 text-[11px]" onClick={() => void decidePlan(p.id, true)} disabled={busy === p.id}>
                   <Check size={12} aria-hidden="true" /> 批准计划

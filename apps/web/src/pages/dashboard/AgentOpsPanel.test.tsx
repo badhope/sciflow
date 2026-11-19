@@ -100,5 +100,7 @@ describe('AgentOpsPanel', () => {
     expect(screen.getByText('步数 3/5')).toBeInTheDocument();
     expect(screen.getByText('预算 60 / 100 tokens')).toBeInTheDocument();
     expect(screen.getByText('60%')).toBeInTheDocument();
+    expect(screen.getByText('document.update')).toBeInTheDocument();
+    expect(screen.getByText(/有效至/)).toBeInTheDocument();
   });
 });
