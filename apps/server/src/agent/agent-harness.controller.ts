@@ -2,7 +2,9 @@ import { Body, Controller, Delete, Get, Param, Post, Query, Req, BadRequestExcep
 import { TaskListService, type TaskInput } from './task-list.service';
 import { ApprovalService } from './approval.service';
 import { PlanAuthorizationService } from './plan-authorization.service';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { AgentMetricsService } from './agent-metrics.service';
+import { AgentMetricsDto } from './agent-metrics.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -13,6 +15,7 @@ import type { AuthPayload } from '../auth/auth.service';
  *  - 模型（经 MCP 工具读写清单、请求审批）
  *  - 界面（轮询清单进度、弹出审批对话框）
  */
+@ApiTags('Agent')
 @Controller('agent')
 export class AgentHarnessController {
   constructor(
@@ -38,6 +41,7 @@ export class AgentHarnessController {
 
   /** Agent 观测指标：工具调用成功率/耗时/P95/按工具分布 + run 完成情况。 */
   @Get('metrics')
+  @ApiOkResponse({ type: AgentMetricsDto })
   getMetrics(
     @Query('days') days?: string,
     @Query('projectId') projectId?: string,

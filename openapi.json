@@ -165,11 +165,18 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMetricsDto"
+                }
+              }
+            }
           }
         },
         "tags": [
-          "AgentHarness"
+          "Agent"
         ]
       }
     },
@@ -200,7 +207,7 @@
           }
         },
         "tags": [
-          "AgentHarness"
+          "Agent"
         ]
       },
       "post": {
@@ -212,7 +219,7 @@
           }
         },
         "tags": [
-          "AgentHarness"
+          "Agent"
         ]
       },
       "delete": {
@@ -241,7 +248,7 @@
           }
         },
         "tags": [
-          "AgentHarness"
+          "Agent"
         ]
       }
     },
@@ -264,7 +271,7 @@
           }
         },
         "tags": [
-          "AgentHarness"
+          "Agent"
         ]
       }
     },
@@ -287,7 +294,7 @@
           }
         },
         "tags": [
-          "AgentHarness"
+          "Agent"
         ]
       }
     },
@@ -310,7 +317,7 @@
           }
         },
         "tags": [
-          "AgentHarness"
+          "Agent"
         ]
       }
     },
@@ -333,7 +340,7 @@
           }
         },
         "tags": [
-          "AgentHarness"
+          "Agent"
         ]
       },
       "post": {
@@ -345,7 +352,7 @@
           }
         },
         "tags": [
-          "AgentHarness"
+          "Agent"
         ]
       }
     },
@@ -368,7 +375,7 @@
           }
         },
         "tags": [
-          "AgentHarness"
+          "Agent"
         ]
       },
       "post": {
@@ -389,7 +396,7 @@
           }
         },
         "tags": [
-          "AgentHarness"
+          "Agent"
         ]
       }
     },
@@ -5852,6 +5859,240 @@
   "servers": [],
   "components": {
     "schemas": {
+      "AgentToolCallsSummaryDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "调用总次数"
+          },
+          "ok": {
+            "type": "number",
+            "description": "成功次数"
+          },
+          "fail": {
+            "type": "number",
+            "description": "失败次数"
+          },
+          "successRate": {
+            "type": "number",
+            "description": "成功率（0-100）"
+          },
+          "avgMs": {
+            "type": "number",
+            "description": "平均耗时（ms）"
+          },
+          "p95Ms": {
+            "type": "number",
+            "description": "P95 耗时（ms）"
+          }
+        },
+        "required": [
+          "total",
+          "ok",
+          "fail",
+          "successRate",
+          "avgMs",
+          "p95Ms"
+        ]
+      },
+      "AgentToolMetricDto": {
+        "type": "object",
+        "properties": {
+          "calls": {
+            "type": "number",
+            "description": "调用次数"
+          },
+          "ok": {
+            "type": "number",
+            "description": "成功次数"
+          },
+          "fail": {
+            "type": "number",
+            "description": "失败次数"
+          },
+          "successRate": {
+            "type": "number",
+            "description": "成功率（0-100）"
+          },
+          "avgMs": {
+            "type": "number",
+            "description": "平均耗时（ms）"
+          },
+          "p95Ms": {
+            "type": "number",
+            "description": "P95 耗时（ms）"
+          },
+          "tool": {
+            "type": "string",
+            "description": "工具名"
+          }
+        },
+        "required": [
+          "calls",
+          "ok",
+          "fail",
+          "successRate",
+          "avgMs",
+          "p95Ms",
+          "tool"
+        ]
+      },
+      "AgentDayMetricDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "日期 YYYY-MM-DD"
+          },
+          "calls": {
+            "type": "number",
+            "description": "工具调用次数"
+          },
+          "fail": {
+            "type": "number",
+            "description": "失败次数"
+          },
+          "tokens": {
+            "type": "number",
+            "description": "run token 合计"
+          }
+        },
+        "required": [
+          "date",
+          "calls",
+          "fail",
+          "tokens"
+        ]
+      },
+      "AgentRunSummaryDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "run 总数"
+          },
+          "done": {
+            "type": "number",
+            "description": "成功数"
+          },
+          "error": {
+            "type": "number",
+            "description": "失败数"
+          },
+          "running": {
+            "type": "number",
+            "description": "运行中数"
+          },
+          "avgDurationMs": {
+            "type": "number",
+            "description": "平均耗时（ms）"
+          },
+          "totalTokens": {
+            "type": "number",
+            "description": "token 合计"
+          }
+        },
+        "required": [
+          "total",
+          "done",
+          "error",
+          "running",
+          "avgDurationMs",
+          "totalTokens"
+        ]
+      },
+      "AgentRecentRunDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "run ID"
+          },
+          "source": {
+            "type": "string",
+            "description": "触发来源"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态"
+          },
+          "durationMs": {
+            "type": "number",
+            "description": "耗时（ms）"
+          },
+          "tokens": {
+            "type": "number",
+            "description": "token 合计"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "status",
+          "durationMs",
+          "tokens",
+          "createdAt"
+        ]
+      },
+      "AgentMetricsDto": {
+        "type": "object",
+        "properties": {
+          "rangeDays": {
+            "type": "number",
+            "description": "统计窗口天数"
+          },
+          "toolCalls": {
+            "description": "工具调用汇总",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentToolCallsSummaryDto"
+              }
+            ]
+          },
+          "byTool": {
+            "description": "按工具分布",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentToolMetricDto"
+            }
+          },
+          "byDay": {
+            "description": "按天分布",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentDayMetricDto"
+            }
+          },
+          "runs": {
+            "description": "run 汇总",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentRunSummaryDto"
+              }
+            ]
+          },
+          "recentRuns": {
+            "description": "最近 run",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentRecentRunDto"
+            }
+          }
+        },
+        "required": [
+          "rangeDays",
+          "toolCalls",
+          "byTool",
+          "byDay",
+          "runs",
+          "recentRuns"
+        ]
+      },
       "ReferenceGraphNodeDto": {
         "type": "object",
         "properties": {

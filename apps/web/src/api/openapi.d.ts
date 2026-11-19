@@ -3464,6 +3464,88 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AgentToolCallsSummaryDto: {
+            /** @description 调用总次数 */
+            total: number;
+            /** @description 成功次数 */
+            ok: number;
+            /** @description 失败次数 */
+            fail: number;
+            /** @description 成功率（0-100） */
+            successRate: number;
+            /** @description 平均耗时（ms） */
+            avgMs: number;
+            /** @description P95 耗时（ms） */
+            p95Ms: number;
+        };
+        AgentToolMetricDto: {
+            /** @description 调用次数 */
+            calls: number;
+            /** @description 成功次数 */
+            ok: number;
+            /** @description 失败次数 */
+            fail: number;
+            /** @description 成功率（0-100） */
+            successRate: number;
+            /** @description 平均耗时（ms） */
+            avgMs: number;
+            /** @description P95 耗时（ms） */
+            p95Ms: number;
+            /** @description 工具名 */
+            tool: string;
+        };
+        AgentDayMetricDto: {
+            /** @description 日期 YYYY-MM-DD */
+            date: string;
+            /** @description 工具调用次数 */
+            calls: number;
+            /** @description 失败次数 */
+            fail: number;
+            /** @description run token 合计 */
+            tokens: number;
+        };
+        AgentRunSummaryDto: {
+            /** @description run 总数 */
+            total: number;
+            /** @description 成功数 */
+            done: number;
+            /** @description 失败数 */
+            error: number;
+            /** @description 运行中数 */
+            running: number;
+            /** @description 平均耗时（ms） */
+            avgDurationMs: number;
+            /** @description token 合计 */
+            totalTokens: number;
+        };
+        AgentRecentRunDto: {
+            /** @description run ID */
+            id: string;
+            /** @description 触发来源 */
+            source: string;
+            /** @description 状态 */
+            status: string;
+            /** @description 耗时（ms） */
+            durationMs: number;
+            /** @description token 合计 */
+            tokens: number;
+            /** @description 创建时间 */
+            createdAt: number;
+        };
+        AgentMetricsDto: {
+            /** @description 统计窗口天数 */
+            rangeDays: number;
+            /** @description 工具调用汇总 */
+            toolCalls: components["schemas"]["AgentToolCallsSummaryDto"];
+            /** @description 按工具分布 */
+            byTool: components["schemas"]["AgentToolMetricDto"][];
+            /** @description 按天分布 */
+            byDay: components["schemas"]["AgentDayMetricDto"][];
+            /** @description run 汇总 */
+            runs: components["schemas"]["AgentRunSummaryDto"];
+            /** @description 最近 run */
+            recentRuns: components["schemas"]["AgentRecentRunDto"][];
+        };
         ReferenceGraphNodeDto: {
             /** @description 文献 ID */
             id: string;
@@ -4014,7 +4096,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentMetricsDto"];
+                };
             };
         };
     };

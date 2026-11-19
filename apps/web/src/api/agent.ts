@@ -1,3 +1,4 @@
+import type { components } from './openapi-types';
 import { request } from './core';
 
 /**
@@ -82,14 +83,8 @@ export interface AgentPlanItem {
 }
 
 /** Agent 指标 v0（工具调用 + run 状态聚合） */
-export interface AgentMetrics {
-  rangeDays: number;
-  toolCalls: { total: number; ok: number; fail: number; successRate: number; avgMs: number; p95Ms: number };
-  byTool: { tool: string; calls: number; ok: number; fail: number; successRate: number; avgMs: number; p95Ms: number }[];
-  byDay: { date: string; calls: number; fail: number; tokens: number }[];
-  runs: { total: number; done: number; error: number; running: number; avgDurationMs: number; totalTokens: number };
-  recentRuns: { id: string; source: string; status: string; durationMs: number; tokens: number; createdAt: number }[];
-}
+/** Agent 指标：类型来自 OpenAPI 生成 contract（AgentMetricsDto）。 */
+export type AgentMetrics = components['schemas']['AgentMetricsDto'];
 
 export interface ApprovalItem {
   id: string;
