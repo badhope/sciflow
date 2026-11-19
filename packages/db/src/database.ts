@@ -318,6 +318,7 @@ CREATE TABLE IF NOT EXISTS llm_call_log (
   id TEXT PRIMARY KEY,
   caller TEXT DEFAULT 'general',
   kind TEXT DEFAULT 'llm',
+  project_id TEXT DEFAULT '',
   model TEXT DEFAULT '',
   prompt_tokens INTEGER DEFAULT 0,
   completion_tokens INTEGER DEFAULT 0,
@@ -329,6 +330,7 @@ CREATE TABLE IF NOT EXISTS llm_call_log (
 );
 CREATE INDEX IF NOT EXISTS idx_llm_caller ON llm_call_log(caller);
 CREATE INDEX IF NOT EXISTS idx_llm_created ON llm_call_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_llm_project ON llm_call_log(project_id);
 
 -- 科研高级功能：系统综述筛选队列
 CREATE TABLE IF NOT EXISTS screening_queue (
@@ -835,6 +837,9 @@ ensureColumn('project', 'preface', "TEXT DEFAULT ''");
 ensureColumn('project', 'templates', "TEXT DEFAULT '[]'");
 // 调用类型：llm=模型调用，tool=工具调用（分开统计，避免工具污染 token 成本看板）
 ensureColumn('llm_call_log', 'kind', "TEXT DEFAULT 'llm'");
+// 项目级工具指标：旧库补列；空串表示全局/历史行
+ensureColumn('llm_call_log', 'project_id', "TEXT DEFAULT ''");
+sqlite.exec('CREATE INDEX IF NOT EXISTS idx_llm_project ON llm_call_log(project_id)');
 // 企业模式（AUTH_MODE=jwt）：项目归属，用于按用户隔离数据（防 IDOR）
 ensureColumn('project', 'owner_id', "TEXT DEFAULT ''");
 sqlite.exec('CREATE INDEX IF NOT EXISTS idx_project_owner ON project(owner_id)');

@@ -16,7 +16,7 @@ import { qk } from '../../lib/query-keys';
  *  - 新开一页会让用户在两处来回跳，且与工作台已有的任务面板重复。
  *
  * 数据边界：
- *  - 工具指标是实例级（llm_call_log 没有 project_id），run 指标按项目过滤；
+ *  - 工具指标与 run 指标都按项目过滤（llm_call_log 已补 project_id）；
  *  - 任何接口失败都降级为空态，不阻塞项目总览。
  */
 export function AgentOpsPanel({ projectId }: { projectId: string }) {

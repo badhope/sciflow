@@ -65,6 +65,33 @@ describe('AgentMetricsService', () => {
     const p1 = svc.get(7, 'p1');
     expect(p1.runs.total).toBe(2);
     expect(p1.runs.totalTokens).toBe(150);
+    expect(p1.recentRuns).toHaveLength(2);
+    expect(p1.recentRuns.every((r) => r.status === 'done' || r.status === 'error')).toBe(true);
+  });
+
+  it('工具指标按项目过滤，不再混入其他项目', () => {
+    const now = Date.now();
+    for (const [pid, tool] of [
+      ['p1', 'document.get'],
+      ['p1', 'document.get'],
+      ['p2', 'experiment.run'],
+    ] as const) {
+      db.insert(llmCallLogs)
+        .values({
+          id: randomUUID(),
+          caller: `tool:${tool}`,
+          kind: 'tool',
+          projectId: pid,
+          latencyMs: 10,
+          success: 1,
+          createdAt: now,
+        })
+        .run();
+    }
+    expect(svc.get(7).toolCalls.total).toBe(3);
+    const p1 = svc.get(7, 'p1');
+    expect(p1.toolCalls.total).toBe(2);
+    expect(p1.byTool.map((x) => x.tool)).toEqual(['document.get']);
   });
 
   it('days 被夹在 1..90', () => {

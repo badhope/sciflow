@@ -6,8 +6,8 @@ import { agentExecutions, llmCallLogs } from '../db/schema';
 /**
  * Agent 指标 v0：把已有的工具调用日志与执行记录汇总成可观测数据。
  *
- * 约束：llm_call_log 没有 project_id 列，工具指标目前是实例级（全局）；
- * agent_execution 有 project_id，可按项目过滤 run 指标。
+ * 作用域：llm_call_log 与 agent_execution 都带 project_id；传 projectId 时
+ * 工具指标与 run 指标都按项目过滤，空串表示历史/全局行。
  */
 export interface AgentToolMetric {
   tool: string;
@@ -71,7 +71,11 @@ export class AgentMetricsService {
         createdAt: llmCallLogs.createdAt,
       })
       .from(llmCallLogs)
-      .where(and(eq(llmCallLogs.kind, 'tool'), gte(llmCallLogs.createdAt, since)))
+      .where(and(
+        eq(llmCallLogs.kind, 'tool'),
+        gte(llmCallLogs.createdAt, since),
+        projectId ? eq(llmCallLogs.projectId, projectId) : undefined,
+      ))
       .all();
 
     const total = toolRows.length;

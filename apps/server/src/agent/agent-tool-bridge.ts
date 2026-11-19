@@ -469,7 +469,7 @@ export class AgentToolBridge {
         this.approvals.consume(approved.id);
       }
     }
-    return this.invoke(t.name, scoped, ctx.runId, ctx.user);
+    return this.invoke(t.name, scoped, ctx.runId, ctx.user, ctx.projectId);
   }
 
   /** 模型可能传 "config.snapshot" 或安全名 "config_snapshot"；统一回规范名 */
@@ -488,7 +488,7 @@ export class AgentToolBridge {
   }
 
   /** 执行一次工具调用（带超时、轨迹落库） */
-  private async invoke(name: string, args: Record<string, unknown>, runId?: string, user?: AuthPayload): Promise<unknown> {
+  private async invoke(name: string, args: Record<string, unknown>, runId?: string, user?: AuthPayload, projectId?: string): Promise<unknown> {
     const t0 = Date.now();
     let ok = true;
     let error: string | undefined;
@@ -519,7 +519,7 @@ export class AgentToolBridge {
       result = { error };
     }
     const durationMs = Date.now() - t0;
-    this.recordStep(runId, { name, args, ok, durationMs, error });
+    this.recordStep(runId, projectId, { name, args, ok, durationMs, error });
     this.logger.log(`[tool] ${name} ${ok ? 'ok' : 'fail'} ${durationMs}ms`);
     return result;
   }
@@ -531,7 +531,7 @@ export class AgentToolBridge {
    * - 无 runId（chat 会话）：写 llm_call_log（kind='tool'），供用量看板统计
    *   （chat 每次对话都是独立请求，不建 agent_execution，避免历史表被会话淹没）。
    */
-  private recordStep(runId: string | undefined, rec: AgentToolCallRecord): void {
+  private recordStep(runId: string | undefined, projectId: string | undefined, rec: AgentToolCallRecord): void {
     try {
       if (runId && this.trace) {
         this.trace.addStep(runId, {
@@ -551,6 +551,7 @@ export class AgentToolBridge {
           id: randomUUID(),
           caller: `tool:${rec.name}`,
           kind: 'tool',
+          projectId: projectId ?? '',
           model: runId ? `run:${runId.slice(0, 8)}` : '',
           promptTokens: 0,
           completionTokens: 0,

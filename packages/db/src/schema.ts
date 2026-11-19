@@ -304,6 +304,8 @@ export const llmCallLogs = sqliteTable('llm_call_log', {
   caller: text('caller').default('general'), // 调用方标识（pipeline/chat/orchestrator 等）
   /** 记录类型：llm=模型调用（计入 token 成本）；tool=工具调用（只计次数/耗时，无 token） */
   kind: text('kind').default('llm'),
+  /** 项目作用域；旧行/全局调用为空串，指标按项目过滤时只取匹配行 */
+  projectId: text('project_id').default(''),
   model: text('model').default(''),
   promptTokens: integer('prompt_tokens').default(0),
   completionTokens: integer('completion_tokens').default(0),
