@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { tool as aiTool, jsonSchema } from 'ai';
 import type { ToolSet } from 'ai';
 import { createHash } from 'node:crypto';
-import { McpService } from '../mcp/mcp.service';
+import { McpService, resolveMcpToolName } from '../mcp/mcp.service';
 import { TaskListService, type TaskInput } from './task-list.service';
 import { ApprovalService } from './approval.service';
 import { PlanAuthorizationService } from './plan-authorization.service';
@@ -479,7 +479,8 @@ export class AgentToolBridge {
     const raw = String(name || '').trim();
     if (!raw) return raw;
     const tools = this.mcp.list();
-    return tools.find((t) => t.name === raw)?.name ?? tools.find((t) => t.name.replace(/\./g, '_') === raw)?.name ?? raw;
+    const alias = resolveMcpToolName(raw);
+    return tools.find((t) => t.name === alias)?.name ?? tools.find((t) => t.name.replace(/\./g, '_') === raw)?.name ?? alias;
   }
 
   /** 与执行时一致的项目作用域参数（request_approval 与真正执行必须看到同一份 args） */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { McpService } from './mcp.service';
+import { McpService, resolveMcpToolName } from './mcp.service';
 
 /** 研究角色工具必须可被 MCP 客户端发现；handler 里的 AI 调用由 critic/expert 各自 spec 覆盖。 */
 describe('MCP research role tools', () => {
@@ -10,6 +10,13 @@ describe('MCP research role tools', () => {
   it('exposes research.critic / research.expert', () => {
     expect(byName.has('research.critic')).toBe(true);
     expect(byName.has('research.expert')).toBe(true);
+  });
+
+  it('resolves legacy tool names to canonical names', () => {
+    expect(resolveMcpToolName('reference.search')).toBe('literature.search');
+    expect(resolveMcpToolName('config.inspect')).toBe('config.snapshot');
+    expect(resolveMcpToolName('document.write')).toBe('document.update');
+    expect(resolveMcpToolName('document.get')).toBe('document.get');
   });
 
   it('requires the inputs the role prompts depend on', () => {

@@ -31,6 +31,32 @@ interface McpTool {
   handler: (args: Record<string, any>, user?: AuthPayload) => Promise<any>;
 }
 
+/**
+ * 旧工具名兼容表。
+ *
+ * `tools/list` 只暴露 canonical 名（避免 schema 翻倍、prompt token 膨胀），
+ * 但 `tools/call` 接受这些历史/别名名。典型场景：旧提示词、旧 MCP 客户端、
+ * 以及模型凭记忆写 `reference.search` / `config.inspect` 时仍能跑通。
+ */
+export const MCP_TOOL_ALIASES: Record<string, string> = {
+  'reference.search': 'literature.search',
+  'reference.summarize': 'literature.summarize',
+  'reference.extract': 'references.extract',
+  'reference.evidence': 'references.evidence',
+  'config.inspect': 'config.snapshot',
+  'config.status': 'config.snapshot',
+  'document.read': 'document.get',
+  'document.write': 'document.update',
+  'project.read': 'project.get',
+  'experiment.execute': 'experiment.run',
+  'quality.check': 'quality.audit',
+  'browser.read': 'browser.text',
+};
+
+export function resolveMcpToolName(name: string): string {
+  return MCP_TOOL_ALIASES[name] ?? name;
+}
+
 const noProjectHint = (args: Record<string, any>, required: string[]) => {
   const missing = required.filter((k) => args[k] === undefined || args[k] === null || args[k] === '');
   return missing.length ? `缺少必填参数：${missing.join(', ')}` : null;
@@ -851,7 +877,8 @@ export class McpService {
   }
 
   /** 调用工具（MCP tools/call 语义）：先过授权与参数 schema 校验（guardrail），再执行 */
-  async call(name: string, args: Record<string, any> = {}, user?: AuthPayload) {
+  async call(inputName: string, args: Record<string, any> = {}, user?: AuthPayload) {
+    const name = resolveMcpToolName(inputName);
     const tool = this.tools.find((t) => t.name === name);
     if (!tool) {
       throw new HttpException(`MCP 工具不存在: ${name}`, HttpStatus.NOT_FOUND);
