@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Brain, Clock, Eye, Loader2, Plus, Trash2, Workflow, Zap } from 'lucide-react';
 import { api } from '../api/client';
 import { useTabActive } from '../lib/tab-visibility';
+import { qk } from '../lib/query-keys';
 import { useContext } from 'react';
 import { ToastContext } from '../App';
 import type { Outline, PipelineStep, PipelineTask, Project, ReactTraceStep } from '../types';
@@ -307,8 +308,9 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
   const qc = useQueryClient();
   const tabActive = useTabActive();
   const tasksQuery = useQuery({
-    queryKey: ['pipe-tasks', project.id],
-    queryFn: async () => (await api.pipeline.list(project.id)).map(normalize),
+    queryKey: qk.pipeline(project.id),
+    queryFn: () => api.pipeline.list(project.id),
+    select: (rows) => rows.map(normalize),
   });
   const tasks: PipelineTask[] = tasksQuery.data ?? [];
   const activeIdEff = activeId && tasks.some((t) => t.id === activeId) ? activeId : (tasks[0]?.id ?? null);
@@ -322,7 +324,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
   });
   const active = activePollQuery.data ? normalize(activePollQuery.data) : activeBase;
   const refresh = async () => {
-    await qc.invalidateQueries({ queryKey: ['pipe-tasks', project.id] });
+    await qc.invalidateQueries({ queryKey: qk.pipeline(project.id) });
   };
 
   /** 研究计划（Planner 输出，存在 topic-verify 步骤的 output JSON 中） */

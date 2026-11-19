@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Bot, ChevronDown, ChevronUp, FileText, Loader2, MessageSquare, Send, Sparkles, Square, Wand2, Languages } from 'lucide-react';
 import { api } from '../api/client';
 import type { Doc, IntentResult, Project } from '../types';
 import { Card } from '../components/ui';
-import { MessageList } from '../components/MessageList';
+import { AgentChatThread } from '../components/AgentChat';
 import { useChatSession, type ChatMessage } from '../lib/chat-session';
 import { applyChatCommand, filterChatCommands, type ChatCommand } from '../lib/chat-commands';
 import { useAsyncAction } from '../lib/async';
@@ -44,12 +44,6 @@ export function ChatPanel({
   const [intent, setIntent] = useState<IntentResult | null>(null);
   const [input, setInput] = useState('');
   const [slashOpen, setSlashOpen] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, open]);
-
   /** 当前文档上下文（标题+大纲+正文摘要） */
   const docContext = () => {
     if (!doc) return undefined;
@@ -69,14 +63,6 @@ export function ChatPanel({
     setInput('');
     setSlashOpen(false);
     chat.send(text, { projectId: project.id, docContext: docContext() });
-  };
-
-  const copyMsg = async (i: number) => {
-    try {
-      await navigator.clipboard.writeText(messages[i].content);
-    } catch {
-      /* ignore */
-    }
   };
 
   const slashFiltered = filterChatCommands(input, 'doc', 4);
@@ -133,18 +119,14 @@ export function ChatPanel({
               <FileText size={11} /> 已关联：<span className="truncate">{doc.title}</span>
             </div>
           )}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
-            <MessageList
-              messages={messages}
-              streaming={busy}
-              onCopy={(i) => void copyMsg(i)}
-              onRetry={(i) => chat.retry(i, { projectId: project.id, docContext: docContext() })}
-              onContinue={(i) => chat.cont(i, { projectId: project.id, docContext: docContext() })}
-              onStop={chat.stop}
-              userBubble="plain"
-            />
-            <div ref={bottomRef} />
-          </div>
+          <AgentChatThread
+            messages={messages}
+            streaming={busy}
+            className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0"
+            onRetry={(i) => chat.retry(i, { projectId: project.id, docContext: docContext() })}
+            onContinue={(i) => chat.cont(i, { projectId: project.id, docContext: docContext() })}
+            onStop={chat.stop}
+          />
           {intent && (
             <div className="px-3 pb-1 shrink-0">
               <div className="text-[11px] bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 rounded-md px-2 py-1.5 flex items-center gap-1">

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { PIPELINE_STEPS } from '@sciflow/core/pipeline-steps';
 import { api } from '../api/client';
-import { MessageList } from '../components/MessageList';
+import { AgentChatThread } from '../components/AgentChat';
 import { TaskListPanel } from '../components/TaskListPanel';
 import { ApprovalDialog } from '../components/ApprovalDialog';
 import {
@@ -23,6 +23,7 @@ import { useHotkeys } from '../lib/hotkeys';
 import { useAsyncAction } from '../lib/async';
 import { useChatSession, parseFollowUps, FOLLOWUP_HINT, type ChatMessage, type SendOptions } from '../lib/chat-session';
 import { useProjectDocs, useProjectKnowledge, useProjectRefs } from '../lib/queries';
+import { useTabActive } from '../lib/tab-visibility';
 import { qk } from '../lib/query-keys';
 import { applyChatCommand, filterChatCommands, type ChatCommand } from '../lib/chat-commands';
 import { useAgentInbox } from '../lib/agent-inbox';
@@ -205,10 +206,12 @@ export function WorkspacePage({
    * 运行中的任务（尤其 awaiting_confirmation 等待确认大纲）会从界面消失，用户无法确认 → 流程卡死。
    * 这里按项目拉最近任务，若有 running/awaiting_confirmation 则接管显示。
    */
+  const tabActive = useTabActive();
   const activePipelineQuery = useQuery({
-    queryKey: ['pipeline-active', project.id],
+    queryKey: qk.pipeline(project.id),
     queryFn: () => api.pipeline.list(project.id),
-    refetchInterval: 5000,
+    // 隐藏 Tab 不轮询；同一项目只保留 qk.pipeline 这一份流水线列表缓存
+    refetchInterval: tabActive ? 5000 : false,
   });
   // 派生而非 effect：显式 taskId 优先，否则接管最近一个活跃任务（不在 effect 中 setState）
   const liveTask = (activePipelineQuery.data || [])
@@ -271,23 +274,6 @@ export function WorkspacePage({
   const activeDoc: Doc | undefined = docQuery.data;
 
   // ── 对话 ─────────────────────────────────────────────────
-  const scrollToBottom = useCallback(() => {
-    requestAnimationFrame(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight }));
-  }, []);
-
-  /** 消息变化即滚动到底（内核把流式增量也落到 messages，替代旧的逐回调滚动） */
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
-
-  /** 复制单条消息（勾选反馈由 MessageList 内部处理） */
-  const copyMsg = useCallback(async (i: number) => {
-    try {
-      await navigator.clipboard.writeText(messages[i].content);
-    } catch {
-      /* 剪贴板不可用（http 非安全上下文等）：静默失败不打断对话 */
-    }
-  }, [messages]);
 
   /** 当前文档上下文（预览文档正文片段） */
   const docContext = activeDoc && effectiveDocId
@@ -468,7 +454,7 @@ export function WorkspacePage({
       setShowRun(false);
       setTopic('');
       chat.append({ role: 'assistant', content: `已启动全自动流水线（主题：${t.topic}）。进度与确认操作见下方运行卡片。` });
-      scrollToBottom();
+      void qc.invalidateQueries({ queryKey: qk.pipeline(project.id) });
     },
   });
   const confirmOutline = useMutation({
@@ -758,8 +744,19 @@ export function WorkspacePage({
             </div>
           )}
 
-          <div ref={threadRef} data-testid="chat-thread" className="flex-1 overflow-y-auto p-3.5 space-y-3">
-            {messages.length === 0 && (
+          <AgentChatThread
+            containerRef={threadRef}
+            testId="chat-thread"
+            messages={messages}
+            streaming={streaming}
+            onRetry={(i) => chat.retry(i, chatOpts())}
+            onContinue={(i) => chat.cont(i, chatOpts())}
+            onStop={chat.stop}
+            onDelete={(i) => chat.remove(i)}
+            onCite={(src) => openCite(src)}
+            onSendToWriting={(i) => void sendWriting.run(i)}
+            onFollowUp={(f, i) => chat.send(f, { ...chatOpts(), baseMessages: messages.slice(0, i + 1) })}
+            empty={(
               <div className="pt-4">
                 <div className="flex flex-col items-center gap-2 text-center">
                   <div className="w-11 h-11 rounded-xl brand-logo flex items-center justify-center">
@@ -791,23 +788,8 @@ export function WorkspacePage({
                 </div>
               </div>
             )}
-            {/* 任务清单：模型规划的多步工作，进度可核 */}
-            <TaskListPanel tasks={tasksQuery.data?.tasks ?? []} summary={tasksQuery.data?.summary} />
-
-            <MessageList
-              messages={messages}
-              streaming={streaming}
-              onCopy={(i) => void copyMsg(i)}
-              onRetry={(i) => chat.retry(i, chatOpts())}
-              onContinue={(i) => chat.cont(i, chatOpts())}
-              onStop={chat.stop}
-              onDelete={(i) => chat.remove(i)}
-              onCite={(src) => openCite(src)}
-              onSendToWriting={(i) => void sendWriting.run(i)}
-              onFollowUp={(f, i) => chat.send(f, { ...chatOpts(), baseMessages: messages.slice(0, i + 1) })}
-              userBubble="plain"
-            />
-
+            header={<TaskListPanel tasks={tasksQuery.data?.tasks ?? []} summary={tasksQuery.data?.summary} />}
+          >
             {/* 流水线运行卡（内联在对话流） */}
             {task && (
               <div className="rounded-xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 shadow-sm p-3">
@@ -899,7 +881,7 @@ export function WorkspacePage({
                 {task.status === 'failed' && <div className="text-xs text-rose-500">{task.lastError || '执行失败'}</div>}
               </div>
             )}
-          </div>
+          </AgentChatThread>
 
           {/* 输入区 */}
           <div className="border-t border-slate-100 dark:border-slate-800 p-2.5 shrink-0 relative">
