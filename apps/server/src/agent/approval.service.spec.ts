@@ -21,12 +21,22 @@ describe('ApprovalService', () => {
     expect(svc.needsApproval('literature.search')).toBe(false);
     expect(svc.needsApproval('knowledge.query')).toBe(false);
     expect(svc.needsApproval('references.list')).toBe(false);
+    expect(svc.needsApproval('project.list')).toBe(false);
+    expect(svc.needsApproval('document.get')).toBe(false);
+    expect(svc.needsApproval('quality.overview')).toBe(false);
+    expect(svc.needsApproval('experiment.list')).toBe(false);
+    expect(svc.needsApproval('browser.text')).toBe(false);
+    expect(svc.needsApproval('memory.search')).toBe(false);
   });
 
   it('有副作用的工具需要审批', () => {
     expect(svc.needsApproval('experiment.run')).toBe(true);
     expect(svc.needsApproval('document.update')).toBe(true);
+    expect(svc.needsApproval('document.create')).toBe(true);
     expect(svc.needsApproval('project.delete')).toBe(true);
+    expect(svc.needsApproval('quality.audit')).toBe(true);
+    expect(svc.needsApproval('memory.add')).toBe(true);
+    expect(svc.needsApproval('browser.open')).toBe(true);
     expect(svc.needsApproval('config.write')).toBe(true);
   });
 

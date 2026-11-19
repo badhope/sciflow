@@ -6,9 +6,15 @@ import { ReferencesModule } from '../references/references.module';
 import { KnowledgeModule } from '../knowledge/knowledge.module';
 import { ConfigModule } from '../config/config.module';
 import { ExtensionsModule } from '../extensions/extensions.module';
+import { ProjectsModule } from '../projects/projects.module';
+import { DocumentsModule } from '../documents/documents.module';
+import { ResearchModule } from '../research/research.module';
+import { ExperimentsModule } from '../experiments/experiments.module';
+import { BrowserModule } from '../browser/browser.module';
+import { MemoryModule } from '../memory/memory.module';
 
 @Module({
-  imports: [AiModule, ReferencesModule, KnowledgeModule, ConfigModule, ExtensionsModule],
+  imports: [AiModule, ReferencesModule, KnowledgeModule, ConfigModule, ExtensionsModule, ProjectsModule, DocumentsModule, ResearchModule, ExperimentsModule, BrowserModule, MemoryModule],
   controllers: [McpController],
   providers: [McpService],
   exports: [McpService],

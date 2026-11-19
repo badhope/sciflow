@@ -88,6 +88,16 @@ jobs:
           # 必须与启动实例的 DATABASE_PATH 一致：否则脚本内 2 个依赖真实库的 check 会降级为 info
           SCIFLOW_DB_PATH: /tmp/sciflow_ci.db
         run: python3 scripts/full_regression.py
+      - name: API coverage (all mapped routes)
+        env:
+          SCIFLOW_BASE: http://127.0.0.1:3000
+          AI_MOCK: '1'
+          SCIFLOW_DB_PATH: /tmp/sciflow_ci.db
+        run: pnpm test:api
+      - name: Route probe (route inventory)
+        env:
+          SCIFLOW_BASE: http://127.0.0.1:3000
+        run: python3 scripts/route_probe.py
       - name: Config center monitor (19 checks)
         env:
           SCIFLOW_BASE: http://127.0.0.1:3000

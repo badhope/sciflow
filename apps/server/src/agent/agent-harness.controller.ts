@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, Req, BadRequestException } from '@nestjs/common';
 import { TaskListService, type TaskInput } from './task-list.service';
 import { ApprovalService } from './approval.service';
+import { PlanAuthorizationService } from './plan-authorization.service';
+import { AgentMetricsService } from './agent-metrics.service';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -17,6 +19,8 @@ export class AgentHarnessController {
     private readonly tasks: TaskListService,
     private readonly approvals: ApprovalService,
     private readonly access: ProjectAccessService,
+    private readonly plans: PlanAuthorizationService,
+    private readonly metrics: AgentMetricsService,
   ) {}
 
   /**
@@ -30,6 +34,18 @@ export class AgentHarnessController {
     }
     if (this.access.enforced) throw new BadRequestException('企业模式下必须指定 projectId');
     return undefined;
+  }
+
+  /** Agent 观测指标：工具调用成功率/耗时/P95/按工具分布 + run 完成情况。 */
+  @Get('metrics')
+  getMetrics(
+    @Query('days') days?: string,
+    @Query('projectId') projectId?: string,
+    @Req() req?: { user?: AuthPayload },
+  ) {
+    const pid = projectId ? this.scopedProject(projectId, req?.user) : undefined;
+    if (!projectId && this.access.enforced) this.access.assertAdmin(req?.user);
+    return this.metrics.get(Number(days) || 7, pid);
   }
 
   /** 读取任务清单（含进度摘要） */
@@ -82,5 +98,48 @@ export class AgentHarnessController {
   decideApproval(@Param('id') id: string, @Body() body: { approved: boolean }, @Req() req?: { user?: AuthPayload }) {
     this.access.assertToolApproval(id, req?.user);
     return { approval: this.approvals.decide(id, body.approved === true) };
+  }
+
+  /** 研究计划列表：项目内计划；无项目归属的全局计划企业模式仅管理员可看 */
+  @Get('plans')
+  listPlans(@Query('projectId') projectId?: string, @Req() req?: { user?: AuthPayload }) {
+    if (projectId) this.access.assertProject(projectId, req?.user);
+    else if (this.access.enforced) this.access.assertAdmin(req?.user);
+    return { plans: this.plans.list(projectId) };
+  }
+
+  /** 创建研究计划（模型经 request_research_plan 创建；界面也可直接建） */
+  @Post('plans')
+  createPlan(
+    @Body() body: { projectId?: string; title?: string; summary?: string; plan?: unknown; allowedTools?: string[]; maxSteps?: number; budgetTokens?: number },
+    @Req() req?: { user?: AuthPayload },
+  ) {
+    if (body.projectId) this.access.assertProject(body.projectId, req?.user);
+    else if (this.access.enforced) this.access.assertAdmin(req?.user);
+    return {
+      plan: this.plans.create({
+        projectId: body.projectId,
+        title: body.title || '未命名研究计划',
+        summary: body.summary,
+        plan: body.plan,
+        allowedTools: body.allowedTools,
+        maxSteps: body.maxSteps,
+        budgetTokens: body.budgetTokens,
+      }),
+    };
+  }
+
+  /** 读取单份计划（含预算/步数/白名单） */
+  @Get('plans/:id')
+  getPlan(@Param('id') id: string, @Req() req?: { user?: AuthPayload }) {
+    this.access.assertAgentPlan(id, req?.user);
+    return { plan: this.plans.get(id) };
+  }
+
+  /** 批准 / 拒绝研究计划：批准后计划内工具在步数/预算内自动放行 */
+  @Post('plans/:id')
+  decidePlan(@Param('id') id: string, @Body() body: { approved: boolean }, @Req() req?: { user?: AuthPayload }) {
+    this.access.assertAgentPlan(id, req?.user);
+    return { plan: this.plans.decide(id, body.approved === true) };
   }
 }

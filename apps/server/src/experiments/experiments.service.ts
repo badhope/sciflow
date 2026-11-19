@@ -255,7 +255,9 @@ export class ExperimentsService {
     const fileName =
       runtime === 'python' ? 'main.py' : runtime === 'node' ? 'main.cjs' : isWin ? 'main.bat' : 'main.sh';
     writeFileSync(path.join(workDir, fileName), code, 'utf-8');
-    const args = runtime === 'shell' ? (isWin ? ['/c', fileName] : ['-c', fileName]) : [fileName];
+    // POSIX 下 `sh -c main.sh` 会把 main.sh 当命令名去 PATH 查找，必然报
+    // `/bin/sh: 1: main.sh: not found`；直接 `sh main.sh` 才是「执行 cwd 下的脚本」。
+    const args = runtime === 'shell' ? (isWin ? ['/c', fileName] : [fileName]) : [fileName];
     const started = Date.now();
     let status: 'ok' | 'error' | 'timeout' = 'ok';
     let memoryKilled = false;

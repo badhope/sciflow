@@ -13,6 +13,12 @@ import { APP_VERSION } from '../common/version';
 import { ConfigCenterService } from '../config/config-center.service';
 import { ExtensionsService, assetKey } from '../extensions/extensions.service';
 import { ProjectAccessService } from '../common/project-access.service';
+import { ProjectsService } from '../projects/projects.service';
+import { DocumentsService } from '../documents/documents.service';
+import { QualityService } from '../research/quality.service';
+import { ExperimentsService } from '../experiments/experiments.service';
+import { BrowserService } from '../browser/browser.service';
+import { MemoryService } from '../memory/memory.service';
 import type { AuthPayload } from '../auth/auth.service';
 
 /** MCP 工具定义（符合 Model Context Protocol 2026 的 Tool 结构：name/description/inputSchema） */
@@ -20,7 +26,7 @@ interface McpTool {
   name: string;
   description: string;
   inputSchema: Record<string, any>;
-  handler: (args: Record<string, any>) => Promise<any>;
+  handler: (args: Record<string, any>, user?: AuthPayload) => Promise<any>;
 }
 
 const noProjectHint = (args: Record<string, any>, required: string[]) => {
@@ -59,6 +65,12 @@ export class McpService {
     private readonly config: ConfigCenterService,
     private readonly extensions: ExtensionsService,
     private readonly access: ProjectAccessService,
+    private readonly projects: ProjectsService,
+    private readonly documents: DocumentsService,
+    private readonly quality: QualityService,
+    private readonly experiments: ExperimentsService,
+    private readonly browser: BrowserService,
+    private readonly memory: MemoryService,
   ) {
     this.tools = [
       {
@@ -387,6 +399,299 @@ export class McpService {
         },
         handler: async (args) => this.extensions.generate(String(args.kind), String(args.brief)),
       },
+      // ── 科研执行面：项目 / 文档 / 质量 / 实验 / 浏览器 / 记忆 ──
+      // 这些工具补的是「Agent 能真正做研究」的最小闭环：
+      // 建文档 → 写正文 → 自检质量 → 跑实验 → 核验网页 → 记住失败/结论。
+      {
+        name: 'project.list',
+        description: '列出当前用户可访问的研究项目（id/名称/状态/更新时间）。用于确认当前项目上下文。',
+        inputSchema: { type: 'object', properties: {} },
+        handler: async (_args, user) =>
+          this.projects.list(this.access.ownerOf(user)).map((p) => ({
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            status: p.status,
+            updatedAt: p.updatedAt,
+          })),
+      },
+      {
+        name: 'project.get',
+        description: '读取单个研究项目的元数据（名称/描述/项目级提示词/模板）。不返回文档正文。',
+        inputSchema: {
+          type: 'object',
+          properties: { id: { type: 'string', description: '项目 ID' } },
+          required: ['id'],
+        },
+        handler: async (args) => this.projects.get(String(args.id)),
+      },
+      {
+        name: 'project.create',
+        description: '新建研究项目。仅在用户明确要开新项目时调用；已有项目上下文时不要重复建。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: '项目名称' },
+            description: { type: 'string', description: '项目描述/研究目标' },
+          },
+          required: ['name'],
+        },
+        handler: async (args, user) =>
+          this.projects.create({ name: String(args.name), description: String(args.description || '') }, this.access.ownerOf(user)),
+      },
+      {
+        name: 'project.update',
+        description: '更新项目元数据（名称/描述/项目级提示词/模板 JSON）。不改文档正文。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            name: { type: 'string' },
+            description: { type: 'string' },
+            preface: { type: 'string', description: '项目级系统提示词' },
+            templates: { type: 'string', description: '模板 JSON 数组字符串' },
+          },
+          required: ['id'],
+        },
+        handler: async (args) => {
+          const patch: Record<string, string> = {};
+          for (const k of ['name', 'description', 'preface', 'templates']) {
+            if (args[k] !== undefined) patch[k] = String(args[k]);
+          }
+          return this.projects.update(String(args.id), patch);
+        },
+      },
+      {
+        name: 'document.list',
+        description: '列出项目下的论文文档（id/标题/状态/版本/更新时间），用于找到要读写的稿件。',
+        inputSchema: {
+          type: 'object',
+          properties: { projectId: { type: 'string', description: '项目 ID' } },
+          required: ['projectId'],
+        },
+        handler: async (args) =>
+          this.documents.list(String(args.projectId)).map((d) => ({
+            id: d.id,
+            title: d.title,
+            status: d.status,
+            version: d.version,
+            updatedAt: d.updatedAt,
+            chars: String(d.content || '').length,
+          })),
+      },
+      {
+        name: 'document.get',
+        description: '读取一篇文档的完整内容（含正文/大纲/版本/状态）。写稿/审稿前先读，避免覆盖用户已有内容。',
+        inputSchema: {
+          type: 'object',
+          properties: { id: { type: 'string', description: '文档 ID' } },
+          required: ['id'],
+        },
+        handler: async (args) => this.documents.get(String(args.id)),
+      },
+      {
+        name: 'document.create',
+        description: '在项目下新建一篇论文文档。标题必填；正文从空开始，后续用 document.update 写入。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: { type: 'string' },
+            title: { type: 'string' },
+          },
+          required: ['projectId', 'title'],
+        },
+        handler: async (args) => this.documents.create(String(args.projectId), { title: String(args.title) }),
+      },
+      {
+        name: 'document.update',
+        description: '更新文档标题/正文/大纲/状态；正文变化会自动存历史版本。只传要改的字段，不要整篇重写。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: '文档 ID' },
+            title: { type: 'string' },
+            content: { type: 'string', description: '完整正文（只在确实要改正文时传）' },
+            outline: { type: 'string', description: '大纲 JSON 字符串' },
+            status: { type: 'string', description: 'draft/review/final 等' },
+            commitMessage: { type: 'string', description: '本次修改说明' },
+          },
+          required: ['id'],
+        },
+        handler: async (args) => {
+          const patch: Record<string, unknown> = {};
+          for (const k of ['title', 'content', 'outline', 'status', 'commitMessage']) {
+            if (args[k] !== undefined) patch[k] = String(args[k]);
+          }
+          return this.documents.update(String(args.id), patch);
+        },
+      },
+      {
+        name: 'quality.audit',
+        description: '对文档执行 7 维质量评分（客观规则 + LLM 参考），返回客观分/维度/硬失败/改进建议并落库。写完稿先自检。',
+        inputSchema: {
+          type: 'object',
+          properties: { documentId: { type: 'string', description: '要评审的文档 ID' } },
+          required: ['documentId'],
+        },
+        handler: async (args) => {
+          const doc = this.documents.get(String(args.documentId));
+          return this.quality.review(String(args.documentId), doc.title, String(doc.content || ''));
+        },
+      },
+      {
+        name: 'quality.overview',
+        description: '项目内全部文档的质量总览：按客观分升序返回最差优先，含是否达到当前评审标准及格线。',
+        inputSchema: {
+          type: 'object',
+          properties: { projectId: { type: 'string' } },
+          required: ['projectId'],
+        },
+        handler: async (args) => this.quality.projectOverview(String(args.projectId)),
+      },
+      {
+        name: 'experiment.run',
+        description: '在沙箱中运行 Python/Node/Shell 代码并落库（stdout/stderr/耗时/状态）。用于验证假设；失败后读 stderr 再改。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: { type: 'string' },
+            goal: { type: 'string', description: '这次实验要验证什么' },
+            code: { type: 'string', description: '要执行的代码' },
+            documentId: { type: 'string', description: '可选：关联到某篇文档' },
+            runtime: { type: 'string', enum: ['python', 'node', 'shell'], description: '缺省按代码特征推断' },
+          },
+          required: ['projectId', 'code'],
+        },
+        handler: async (args) => this.experiments.run(args),
+      },
+      {
+        name: 'experiment.list',
+        description: '列出项目下的实验记录（id/目标/运行时/状态/耗时/时间），用于回看失败与复现。',
+        inputSchema: {
+          type: 'object',
+          properties: { projectId: { type: 'string' } },
+          required: ['projectId'],
+        },
+        handler: async (args) =>
+          this.experiments.list(String(args.projectId)).map((e) => ({
+            id: e.id,
+            goal: e.goal,
+            runtime: e.runtime,
+            status: e.status,
+            runtimeMs: e.runtimeMs,
+            documentId: e.documentId,
+            updatedAt: e.updatedAt,
+          })),
+      },
+      {
+        name: 'experiment.get',
+        description: '读取单条实验记录（含 stdout/stderr/代码/结论），用于核对证据或失败修复。',
+        inputSchema: {
+          type: 'object',
+          properties: { id: { type: 'string' } },
+          required: ['id'],
+        },
+        handler: async (args) => this.experiments.get(String(args.id)),
+      },
+      {
+        name: 'browser.open',
+        description: '打开一个真实浏览器会话并访问 URL（SSRF 守卫）。用于核对网页/公开数据/自己生成的项目。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: { type: 'string', description: 'http(s) URL' },
+            projectId: { type: 'string', description: '可选：记录到哪个项目' },
+          },
+          required: ['url'],
+        },
+        handler: async (args) => this.browser.open(String(args.url)),
+      },
+      {
+        name: 'browser.text',
+        description: '读取当前浏览器页面的可见文本（默认 8000 字，最多 50000），用于摘要/核对 DOI/抓取公开数据。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: { type: 'string', description: 'browser.open 返回的会话 ID' },
+            maxChars: { type: 'number', description: '最大字符数，默认 8000' },
+          },
+          required: ['sessionId'],
+        },
+        handler: async (args) => this.browser.text(String(args.sessionId), Number(args.maxChars) || 8000),
+      },
+      {
+        name: 'browser.verify',
+        description: '对浏览器页面做断言（exists/text/count/visible/value/request/no-console-error/visual），返回逐条 ok/actual。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: { type: 'string' },
+            checks: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  type: { type: 'string', enum: ['exists', 'text', 'count', 'visible', 'value', 'request', 'no-console-error', 'visual'] },
+                  selector: { type: 'string' },
+                  expect: { type: ['string', 'number'] },
+                  label: { type: 'string' },
+                  urlIncludes: { type: 'string' },
+                  baseline: { type: 'string' },
+                  maxDiffRatio: { type: 'number' },
+                },
+                required: ['type'],
+              },
+            },
+          },
+          required: ['sessionId', 'checks'],
+        },
+        handler: async (args) => this.browser.verify(String(args.sessionId), args.checks as never),
+      },
+      {
+        name: 'browser.close',
+        description: '关闭浏览器会话，释放 Chromium 资源。任务结束或不再需要页面时调用。',
+        inputSchema: {
+          type: 'object',
+          properties: { sessionId: { type: 'string' } },
+          required: ['sessionId'],
+        },
+        handler: async (args) => this.browser.close(String(args.sessionId)),
+      },
+      {
+        name: 'memory.search',
+        description: '检索项目记忆（episodic 失败/结论、procedural 方法/偏好），用于避免重复踩坑。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: { type: 'string' },
+            q: { type: 'string', description: '检索关键词；空表示列最近记忆' },
+            type: { type: 'string', enum: ['episodic', 'procedural'], description: '可选类型过滤' },
+          },
+          required: ['projectId'],
+        },
+        handler: async (args) => this.memory.list(args.type as never, String(args.q || ''), String(args.projectId)),
+      },
+      {
+        name: 'memory.add',
+        description: '写入一条项目记忆。episodic 记录失败/结论，procedural 记录方法/用户偏好；写入前先提炼，不要贴原文。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: { type: 'string' },
+            type: { type: 'string', enum: ['episodic', 'procedural'] },
+            content: { type: 'string', description: '一条可复用的经验，尽量 ≤200 字' },
+            keywords: { type: 'array', items: { type: 'string' }, description: '3–8 个检索关键词' },
+          },
+          required: ['projectId', 'type', 'content'],
+        },
+        handler: async (args) =>
+          this.memory.add(
+            args.type as never,
+            String(args.content),
+            String(args.projectId),
+            Array.isArray(args.keywords) ? (args.keywords as unknown[]).map(String) : [],
+          ),
+      },
       {
         name: 'chat.answer',
         description: '科研问答：回答研究方法、概念、写作等问题',
@@ -425,6 +730,44 @@ export class McpService {
    */
   private assertToolAccess(name: string, args: Record<string, any>, user?: AuthPayload) {
     if (!this.access.enforced) return;
+    if (name === 'project.list' || name === 'project.create') return;
+    if (name === 'project.get' || name === 'project.update') {
+      this.access.assertProject(String(args?.id || ''), user);
+      return;
+    }
+    if (name === 'document.list' || name === 'document.create') {
+      this.access.assertProject(String(args?.projectId || ''), user);
+      return;
+    }
+    if (name === 'document.get' || name === 'document.update') {
+      this.access.assertDocument(String(args?.id || ''), user);
+      return;
+    }
+    if (name === 'quality.audit') {
+      this.access.assertDocument(String(args?.documentId || ''), user);
+      return;
+    }
+    if (name === 'quality.overview') {
+      this.access.assertProject(String(args?.projectId || ''), user);
+      return;
+    }
+    if (name === 'experiment.run' || name === 'experiment.list') {
+      this.access.assertProject(String(args?.projectId || ''), user);
+      return;
+    }
+    if (name === 'experiment.get') {
+      this.access.assertExperiment(String(args?.id || ''), user);
+      return;
+    }
+    if (name === 'memory.search' || name === 'memory.add') {
+      this.access.assertProject(String(args?.projectId || ''), user);
+      return;
+    }
+    if (name.startsWith('browser.')) {
+      const pid = String(args?.projectId || '');
+      if (pid) this.access.assertProject(pid, user);
+      return;
+    }
     if (name === 'literature.search') {
       const projectId = String(args?.projectId || '');
       if (!projectId) {
@@ -465,7 +808,7 @@ export class McpService {
       };
     }
     try {
-      const result = await tool.handler(parsed.data as Record<string, any>);
+      const result = await tool.handler(parsed.data as Record<string, any>, user);
       return { name, content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     } catch (e: any) {
       return {

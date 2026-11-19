@@ -16,6 +16,8 @@ import {
 } from '../components/ui';
 import { HBar } from '../components/charts';
 import { useHotkeys } from '../lib/hotkeys';
+import { useProjectDocs, useProjectRefs } from '../lib/queries';
+import { qk } from '../lib/query-keys';
 import { getWritingEditorHandle } from './writing/editor-handle';
 import { BottomTabs, ShellDrawer } from '../components/AppShell';
 // CodeMirror 6 与 react-markdown+KaTeX 是两个大依赖；写作页首屏只需要其中一半（编辑态或预览态）。
@@ -130,11 +132,11 @@ export function WritingPage({ project, initialDocId }: { project: Project; initi
 
   // 文档列表 + 文献库（React Query）
   const qc = useQueryClient();
-  const docsQuery = useQuery({ queryKey: ['docs', project.id], queryFn: () => api.documents.list(project.id) });
-  const refsQuery = useQuery({ queryKey: ['refs', project.id], queryFn: () => api.references.list(project.id), retry: 0 });
+  const docsQuery = useProjectDocs(project.id);
+  const refsQuery = useProjectRefs(project.id, { retry: 0 });
   const docs: Doc[] = useMemo(() => docsQuery.data ?? [], [docsQuery.data]);
   const refs: Reference[] = useMemo(() => refsQuery.data ?? [], [refsQuery.data]);
-  const loadDocs = () => qc.invalidateQueries({ queryKey: ['docs', project.id] });
+  const loadDocs = () => qc.invalidateQueries({ queryKey: qk.docs(project.id) });
   /**
    * 首选中为渲染期派生（React 官方「调整 state」模式，无 effect）。
    *  - `initialDocId` 来自 URL ?doc=：它在同项目内变化时（从工作台/总览点「完整编辑器」打开指定稿）

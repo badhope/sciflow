@@ -62,6 +62,35 @@ export interface TaskSummary {
 }
 
 /** 工具审批请求（harness：有副作用的操作先问用户） */
+/** 计划级授权（研究计划批准后，计划内工具在步数/预算内自动放行） */
+export interface AgentPlanItem {
+  id: string;
+  projectId: string | null;
+  runId: string | null;
+  title: string;
+  summary: string;
+  plan: unknown;
+  allowedTools: string[];
+  status: 'pending' | 'approved' | 'rejected' | 'expired' | 'exhausted';
+  maxSteps: number;
+  usedSteps: number;
+  budgetTokens: number;
+  usedTokens: number;
+  createdAt: number;
+  approvedAt: number | null;
+  expiresAt: number | null;
+}
+
+/** Agent 指标 v0（工具调用 + run 状态聚合） */
+export interface AgentMetrics {
+  rangeDays: number;
+  toolCalls: { total: number; ok: number; fail: number; successRate: number; avgMs: number; p95Ms: number };
+  byTool: { tool: string; calls: number; ok: number; fail: number; successRate: number; avgMs: number; p95Ms: number }[];
+  byDay: { date: string; calls: number; fail: number; tokens: number }[];
+  runs: { total: number; done: number; error: number; running: number; avgDurationMs: number; totalTokens: number };
+  recentRuns: { id: string; source: string; status: string; durationMs: number; tokens: number; createdAt: number }[];
+}
+
 export interface ApprovalItem {
   id: string;
   toolName: string;
@@ -98,6 +127,21 @@ export const agent = {
     request<{ approvals: ApprovalItem[] }>(
       `/api/agent/approvals${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`,
     ),
+
+  /** 研究计划列表 */
+  plans: (projectId: string) =>
+    request<{ plans: AgentPlanItem[] }>(`/api/agent/plans?projectId=${encodeURIComponent(projectId)}`),
+
+  /** 批准 / 拒绝研究计划 */
+  decidePlan: (id: string, approved: boolean) =>
+    request<{ plan: AgentPlanItem }>(`/api/agent/plans/${id}`, {
+      method: 'POST',
+      body: JSON.stringify({ approved }),
+    }),
+
+  /** Agent 指标（项目级 run 指标 + 实例级工具指标） */
+  metrics: (projectId: string, days = 7) =>
+    request<AgentMetrics>(`/api/agent/metrics?days=${days}&projectId=${encodeURIComponent(projectId)}`),
 
   /** 批准或拒绝 */
   decideApproval: (id: string, approved: boolean) =>

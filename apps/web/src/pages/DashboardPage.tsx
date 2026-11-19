@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Beaker, FileText, FlaskConical, Gauge, Plus, Workflow, Activity, ChevronDown, Clock3 } from 'lucide-react';
+import { BookOpen, Beaker, FileText, FlaskConical, Gauge, Plus, Workflow, ChevronDown } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardOverview, Project } from '../types';
 import { Button, Card, EmptyState, Skeleton, Badge, jsonText, SectionHeader, SectionTitle, Textarea, errMsg } from '../components/ui';
 import { Donut, HBar, MetricCard } from '../components/charts';
 import { formatWordCount } from '../lib/format';
+import { useProjectDocs, useProjectRefs } from '../lib/queries';
 import { useContext } from 'react';
 import { ToastContext } from '../App';
 import type { View } from '../App';
 import { ProjectCockpit, type QualityGateState } from './dashboard/ProjectCockpit';
+import { AgentOpsPanel } from './dashboard/AgentOpsPanel';
 
 export function DashboardPage({ project, onNavigate, openDoc }: {
   project: Project;
@@ -17,43 +19,18 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
   openDoc: (id: string) => void;
 }) {
   const qc = useQueryClient();
-  // 总览数据（React Query）：项目域聚合一次拉齐
-  const dashQuery = useQuery({
-    queryKey: ['dash', project.id],
-    queryFn: async () => {
-      const [d, r, k, p] = await Promise.all([
-        api.documents.list(project.id),
-        api.references.list(project.id),
-        api.knowledge.list(project.id).catch(() => [] as never[]),
-        api.pipeline.list(project.id).catch(() => [] as never[]),
-      ]);
-      return { docs: d, refs: r, knowledgeCount: k.length, pipelineCount: p.length };
-    },
-  });
-  const docs = dashQuery.data?.docs ?? [];
-  const refs = dashQuery.data?.refs ?? [];
-  const knowledgeCount = dashQuery.data?.knowledgeCount ?? 0;
-  const pipelineCount = dashQuery.data?.pipelineCount ?? 0;
-  const loading = dashQuery.isLoading;
-  /** Agent 执行追踪：执行历史 + Token 用量走势（接口未就绪时静默降级为空态） */
-  const agentQuery = useQuery({
-    queryKey: ['agent-trace', project.id],
-    queryFn: async () => {
-      const [exec, usage] = await Promise.all([
-        api.agent.executions(project.id, 6),
-        api.agent.usageTrend(project.id, 14),
-      ]);
-      return { executions: exec.executions ?? [], trend: usage.trend ?? [] };
-    },
-    retry: 0,
-    refetchInterval: 30000,
-  });
-  const agentExecs = agentQuery.data?.executions ?? [];
-  const agentTrend = agentQuery.data?.trend ?? [];
+  // 文档/文献走共享 hook（与写作/证据库同 key，不再单独拼 ['dash'] 全量查询）
+  const docsQuery = useProjectDocs(project.id);
+  const refsQuery = useProjectRefs(project.id, { retry: 0 });
+  const docs = docsQuery.data ?? [];
+  const refs = refsQuery.data ?? [];
+  const loading = docsQuery.isLoading || refsQuery.isLoading;
   const [newTitle, setNewTitle] = useState('');
   /** 科研全链路总览：后端未就绪/失败时为 null，前端降级为小字提示，不白屏 */
   const overviewQuery = useQuery({ queryKey: ['dash-overview', project.id], queryFn: () => api.dashboard.overview(project.id), retry: 0 });
   const overview: DashboardOverview | null = overviewQuery.data ?? null;
+  const knowledgeCount = overview?.knowledgeCount ?? 0;
+  const pipelineCount = overview?.pipelineCount ?? 0;
   /**
    * 驾驶舱质量门数据（v2.0）：一次取「项目内全部文档最新客观分」与「当前评审标准」。
    * 两者都是只读接口，失败时降级为未评分状态，不阻塞首屏。
@@ -216,6 +193,13 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
         onOpenDoc={openDoc}
       />
 
+      {/* Agent 运行：计划批准 / 单次审批 / 任务进度 / 工具指标 / 最近执行，紧跟驾驶舱之后 */}
+      <div className="mb-6">
+        <Card className="p-4">
+          <AgentOpsPanel projectId={project.id} />
+        </Card>
+      </div>
+
       {/* 功能入口：原为 5 张等大卡片（与草稿列表争主次，把主任务挤到首屏之外）。
           改为一行紧凑的「分段导航条」——功能一个不少，视觉权重降到辅助层。 */}
       <nav className="page-quicknav mb-6" aria-label="功能入口">
@@ -327,71 +311,6 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
           </div>
         </Card>
       )}
-
-      {/* Agent 执行追踪：观测性信息，用 inset 弱化，不与「草稿」等生产内容同权重 */}
-      <Card tone="inset" className="mb-6">
-        <SectionHeader
-          title={
-            <span className="flex items-center gap-1.5">
-              <Activity size={13} className="text-teal-600 dark:text-teal-400" aria-hidden="true" /> Agent 执行追踪
-            </span>
-          }
-          description="流水线/多智能体执行历史与 Token 用量走势"
-        />
-        {agentQuery.isLoading ? (
-          <div className="mt-3"><Skeleton className="h-20" /></div>
-        ) : (
-          <div className="mt-3 grid gap-4 md:grid-cols-2">
-            {/* 最近执行 */}
-            <div>
-              <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-400">最近执行</div>
-              {agentExecs.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-400 dark:border-slate-700">
-                  暂无执行记录——运行一次流水线后自动沉淀。
-                </div>
-              ) : (
-                <ul className="space-y-1.5">
-                  {agentExecs.map((ex) => (
-                    <li key={ex.id} className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-2.5 py-1.5 text-xs dark:border-slate-800 dark:bg-slate-800/40">
-                      <span
-                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                          ex.status === 'success' ? 'bg-emerald-500' : ex.status === 'failed' ? 'bg-rose-500' : ex.status === 'running' ? 'bg-amber-500 brand-breathe' : 'bg-slate-400'
-                        }`}
-                        aria-hidden="true"
-                      />
-                      <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">{ex.label || ex.source}</span>
-                      <span className="shrink-0 text-slate-400">
-                        {ex.totalTokens != null ? `${(ex.totalTokens / 1000).toFixed(1)}k tok` : ''}
-                      </span>
-                      <span className="flex shrink-0 items-center gap-0.5 text-[11px] text-slate-400">
-                        <Clock3 size={10} aria-hidden="true" />
-                        {new Date(ex.startedAt).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            {/* 用量走势 */}
-            <div>
-              <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-400">Token 用量（近 14 天）</div>
-              {agentTrend.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-400 dark:border-slate-700">
-                  暂无用量数据——Agent 执行后在此展示 Token 走势。
-                </div>
-              ) : (
-                <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-800/40">
-                  <HBar
-                    items={agentTrend.map((t) => ({ label: t.date.slice(5), value: t.tokens }))}
-                    formatValue={(v) => `${(v / 1000).toFixed(1)}k`}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </Card>
-
 
       <SectionTitle
         extra={

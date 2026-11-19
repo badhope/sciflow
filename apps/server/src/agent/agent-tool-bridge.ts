@@ -5,13 +5,14 @@ import { createHash } from 'node:crypto';
 import { McpService } from '../mcp/mcp.service';
 import { TaskListService, type TaskInput } from './task-list.service';
 import { ApprovalService } from './approval.service';
+import { PlanAuthorizationService } from './plan-authorization.service';
 import { AgentTraceService } from './agent-trace.service';
 import { db } from '../db/database';
 import { appSettings, llmCallLogs } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { envInt } from '../common/env';
-import { profileAllowsTool, resolveAgentToolProfile } from './agent-tool-profiles';
+import { profileAllowsTool, resolveAgentToolProfile, type AgentToolProfile } from './agent-tool-profiles';
 import { AgentPolicyService } from './agent-policy.service';
 import { redactSensitive, shouldRedactForMode } from '../common/redaction';
 import type { AuthPayload } from '../auth/auth.service';
@@ -36,10 +37,48 @@ export interface AgentToolCallRecord {
 
 const MAX_TOOL_CALLS = envInt('AGENT_MAX_TOOL_CALLS', 24, { min: 1, max: 100 });
 const TOOL_TIMEOUT_MS = envInt('AGENT_TOOL_TIMEOUT_MS', 20_000, { min: 1_000, max: 300_000 });
+/** 长任务工具单独放宽：质量评审/实验/浏览器打开/页面断言天然超过 20s。 */
+const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
+  'quality.audit': envInt('AGENT_TOOL_TIMEOUT_QUALITY_MS', 120_000, { min: 10_000, max: 600_000 }),
+  'experiment.run': envInt('AGENT_TOOL_TIMEOUT_EXPERIMENT_MS', 60_000, { min: 10_000, max: 600_000 }),
+  'browser.open': envInt('AGENT_TOOL_TIMEOUT_BROWSER_MS', 45_000, { min: 10_000, max: 600_000 }),
+  'browser.verify': envInt('AGENT_TOOL_TIMEOUT_BROWSER_MS', 45_000, { min: 10_000, max: 600_000 }),
+};
 /** 同一（工具，参数）组合在一次请求内的最大重复次数——超过即拒绝执行并要求模型换路径。
  *  这是 2026 生产事故榜第一名「失控循环」的重复检测护栏：次数上限拦不住
  *  「24 次以内反复调同一个工具刷同一批结果」的空转。 */
 const TOOL_REPEAT_LIMIT = envInt('AGENT_TOOL_REPEAT_LIMIT', 3, { min: 2, max: 20 });
+
+/** 工具暴露模式：full=直接暴露全部允许工具；dynamic=只暴露核心工具 + tool_search/tool_invoke。 */
+const TOOL_MODE: 'full' | 'dynamic' = process.env.AGENT_TOOL_MODE === 'dynamic' ? 'dynamic' : 'full';
+/** dynamic 模式下直接暴露的“高频只读/导航”工具；写操作一律走 tool_invoke，按需发现 schema。 */
+const DYNAMIC_CORE = new Set([
+  'literature.search',
+  'literature.summarize',
+  'knowledge.query',
+  'project.list',
+  'project.get',
+  'document.list',
+  'document.get',
+  'quality.overview',
+  'experiment.list',
+  'experiment.get',
+  'memory.search',
+  'chat.answer',
+]);
+
+type BridgeTool = ReturnType<McpService['list']>[number];
+
+/** 一次 buildToolSet 内的共享护栏状态：调用计数/重复检测/作用域。 */
+interface GuardCtx {
+  projectId?: string;
+  runId?: string;
+  user?: AuthPayload;
+  profile: AgentToolProfile;
+  skills: Set<string> | null;
+  calls: { n: number };
+  repeat: Map<string, number>;
+}
 
 /** 参数稳定序列化：键排序后再哈希，避免模型改写参数键序导致重复检测失效 */
 function toolCallKey(name: string, args: Record<string, unknown>): string {
@@ -66,6 +105,7 @@ export class AgentToolBridge {
     private readonly trace?: AgentTraceService,
     private readonly taskList?: TaskListService,
     private readonly approvals?: ApprovalService,
+    private readonly plans?: PlanAuthorizationService,
     private readonly policy?: AgentPolicyService,
   ) {}
 
@@ -115,22 +155,28 @@ export class AgentToolBridge {
    */
   buildToolSet(projectId?: string, runId?: string, opts?: { profile?: string; user?: AuthPayload }): ToolSet {
     const allow = new Set(
-      (process.env.AGENT_TOOLS_ALLOW || 'literature.search,literature.summarize,knowledge.query,outline.generate,writing.polish,writing.translate,writing.review,references.extract,references.evidence,chat.answer,config.snapshot,config.set_permission,config.upsert_role,config.upsert_constraint,config.delete_constraint,config.upsert_hook,config.apply_preset,config.preview,extension.list,extension.create,extension.toggle,extension.generate')
+      (process.env.AGENT_TOOLS_ALLOW || 'literature.search,literature.summarize,knowledge.query,outline.generate,writing.polish,writing.translate,writing.review,references.extract,references.evidence,project.list,project.get,project.create,project.update,document.list,document.get,document.create,document.update,quality.audit,quality.overview,experiment.run,experiment.list,experiment.get,browser.open,browser.text,browser.verify,browser.close,memory.search,memory.add,writing.draft,chat.answer,config.snapshot,config.set_permission,config.upsert_role,config.upsert_constraint,config.delete_constraint,config.upsert_hook,config.apply_preset,config.preview,extension.list,extension.create,extension.toggle,extension.generate')
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean),
     );
     const profile = resolveAgentToolProfile(opts?.profile);
-    let callCount = 0;
-    // 重复调用护栏：键 → 已出现次数（每次请求独立闭包，并发会话互不影响）
-    const repeatCounts = new Map<string, number>();
     const set: ToolSet = {};
-    const skills = this.enabledSkillKeys();
+    const ctx: GuardCtx = {
+      projectId,
+      runId,
+      user: opts?.user,
+      profile,
+      skills: this.enabledSkillKeys(),
+      calls: { n: 0 },
+      repeat: new Map<string, number>(),
+    };
     for (const t of this.mcp.list()) {
       if (!allow.has(t.name)) continue;
+      if (TOOL_MODE === 'dynamic' && !DYNAMIC_CORE.has(t.name)) continue;
       if (!profileAllowsTool(profile, t.name)) continue;
       if (this.policy && !this.policy.canUse(t.name)) continue;
-      if (!this.allowedBySkills(t.name, skills)) continue;
+      if (!this.allowedBySkills(t.name, ctx.skills)) continue;
       // 无项目上下文时不暴露「必须带 projectId」的工具：避免模型编造 projectId 跨项目取数
       const required = Array.isArray(t.inputSchema?.required) ? (t.inputSchema.required as string[]) : [];
       if (!projectId && required.includes('projectId')) continue;
@@ -139,47 +185,7 @@ export class AgentToolBridge {
       set[safeName] = aiTool({
         description: t.description,
         inputSchema: jsonSchema(t.inputSchema as Parameters<typeof jsonSchema>[0]),
-        execute: async (args: Record<string, unknown>) => {
-          callCount += 1;
-          if (callCount > MAX_TOOL_CALLS) {
-            return { error: `工具调用次数已达上限（${MAX_TOOL_CALLS} 次），请直接基于已有信息回答` };
-          }
-          // 权限档二次校验：buildToolSet 已过滤，但设置可能在会话中途被改；
-          // 执行侧必须再判一次，避免“先暴露后降档”绕过。
-          if (this.policy && !this.policy.canUse(t.name)) {
-            return { error: this.policy.denyReason(t.name) };
-          }
-          // 项目作用域：凡是 schema 里声明了 projectId 的工具，一律用当前会话的项目覆盖
-          const schemaProps = (t.inputSchema?.properties ?? {}) as Record<string, unknown>;
-          const scoped = projectId && 'projectId' in schemaProps ? { ...args, projectId } : args;
-          // 重复检测：同一（工具+参数）出现次数达上限即拒绝，给出可读原因让模型换路径
-          const key = toolCallKey(t.name, scoped);
-          const seen = (repeatCounts.get(key) ?? 0) + 1;
-          repeatCounts.set(key, seen);
-          if (seen > TOOL_REPEAT_LIMIT) {
-            return {
-              error: `该工具与相同参数已重复调用 ${seen - 1} 次（上限 ${TOOL_REPEAT_LIMIT}），结果不会变化。请换不同参数、改用其他工具，或直接基于已有信息回答`,
-            };
-          }
-          // 审批闸：有副作用的工具必须命中一条「已批准且参数一致」的记录才执行。
-          // 否则模型只要绕开 request_approval 直接调工具，审批就形同虚设。
-          if (this.approvals?.needsApproval(t.name)) {
-            const approved = this.approvals.findApproved({
-              toolName: t.name,
-              args: scoped,
-              projectId: projectId ?? null,
-              runId: runId ?? null,
-            });
-            if (!approved) {
-              return {
-                error: `工具 ${t.name} 需要用户批准后才能执行。请先调用 request_approval（toolName="${t.name}"，args 与此处一致），等待用户在界面批准后再调用本工具。`,
-              };
-            }
-            // 一次批准只执行一次：先消费，失败需重新申请（宁可多问一次，不可复用授权）
-            this.approvals.consume(approved.id);
-          }
-          return this.invoke(t.name, scoped, runId, opts?.user);
-        },
+        execute: async (args: Record<string, unknown>) => this.runGuarded(t, args, ctx),
       });
     }
     // ── 原生 harness 工具：不依赖 MCP 注册表，直接由模型驱动 ──
@@ -211,6 +217,17 @@ export class AgentToolBridge {
           const tasks = this.taskList!.replaceAll(args.tasks ?? [], projectId ?? null, runId ?? null);
           return { ok: true, count: tasks.length, summary: this.taskList!.summary(projectId ?? null, runId ?? null) };
         },
+      });
+    }
+    // 任务清单读取：update_todo_list 只写不读，模型无法在后续轮次核对进度。
+    if (this.taskList) {
+      set.task_list = aiTool({
+        description: '读取当前任务清单（含状态与进度摘要）。多步任务续跑/汇报前先读，避免重复劳动。',
+        inputSchema: jsonSchema({ type: 'object', properties: {} }),
+        execute: async () => ({
+          tasks: this.taskList!.list(projectId ?? null, runId ?? null),
+          summary: this.taskList!.summary(projectId ?? null, runId ?? null),
+        }),
       });
     }
     // 审批：有副作用的工具先问用户，拒绝时给出可读原因让模型换路径。
@@ -252,7 +269,207 @@ export class AgentToolBridge {
         },
       });
     }
+    // 计划级授权：模型提交一份「研究计划 + 工具白名单 + 步数/预算」，用户在界面批准后，
+    // 计划内工具自动放行。没有这个入口，模型只能逐个调 request_approval，长任务会变成点击地狱。
+    if (this.plans) {
+      set.request_research_plan = aiTool({
+        description:
+          '提交一份研究计划请求用户批准。计划内工具（allowedTools，canonical 名如 document.update）在步数/预算内自动放行；计划外仍逐次审批。批准后继续任务。',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: '计划标题，一句话' },
+            summary: { type: 'string', description: '计划摘要：问题/假设/协议/风险/成本' },
+            plan: { type: 'object', description: '结构化计划（问题/假设/协议/风险/预计产出）' },
+            allowedTools: {
+              type: 'array',
+              items: { type: 'string' },
+              description: '计划内自动放行的工具名（canonical，如 document.update/experiment.run）',
+            },
+            maxSteps: { type: 'number', description: '计划内最多工具调用步数，默认 12' },
+            budgetTokens: { type: 'number', description: '可选 token 预算，0 表示只记步数' },
+          },
+          required: ['title', 'allowedTools'],
+        }),
+        execute: async (args: {
+          title?: string;
+          summary?: string;
+          plan?: unknown;
+          allowedTools?: string[];
+          maxSteps?: number;
+          budgetTokens?: number;
+        }) => {
+          const known = new Set(this.mcp.list().map((t) => t.name));
+          const allowed = Array.from(
+            new Set(
+              (args.allowedTools ?? [])
+                .map((n) => this.canonicalToolName(String(n)))
+                .filter((n) => known.has(n) && (this.approvals?.needsApproval(n) ?? false)),
+            ),
+          );
+          if (!allowed.length) {
+            return {
+              error: '计划至少列出一个需要审批的工具（如 document.update/experiment.run/quality.audit）。只读工具不需要计划授权。',
+            };
+          }
+          const plan = this.plans!.create({
+            projectId: projectId ?? null,
+            runId: runId ?? null,
+            title: String(args.title || '研究计划'),
+            summary: String(args.summary || ''),
+            plan: args.plan ?? {},
+            allowedTools: allowed,
+            maxSteps: Number(args.maxSteps) || 12,
+            budgetTokens: Number(args.budgetTokens) || 0,
+          });
+          return {
+            planId: plan.id,
+            status: plan.status,
+            allowedTools: plan.allowedTools,
+            maxSteps: plan.maxSteps,
+            message: '计划已提交。用户在界面批准后，计划内工具会自动放行；批准前这些工具仍会被拒绝。',
+          };
+        },
+      });
+      set.get_research_plan = aiTool({
+        description: '读取研究计划状态与剩余步数；不传 planId 时返回当前项目最近 5 份计划。',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: { planId: { type: 'string', description: '可选：计划 ID' } },
+        }),
+        execute: async (args: { planId?: string }) => {
+          if (args.planId) return this.plans!.get(String(args.planId));
+          return { plans: this.plans!.list(projectId ?? null).slice(0, 5) };
+        },
+      });
+    }
+    // ── 动态工具面：先检索 schema，再通过 tool_invoke 执行 ──
+    // full 模式也会暴露 search（用于让模型发现“有哪些工具”），但工具本身已直接可调。
+    set.tool_search = aiTool({
+      description:
+        '检索当前会话真正可用的工具（名称/说明/入参 schema/是否需要审批）。dynamic 模式下，未直接暴露的工具必须先用本工具查到 schema，再调用 tool_invoke 执行。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: '关键词，例如“实验”“文档”“质量评审”；留空列出前 N 个' },
+          limit: { type: 'number', description: '返回上限，默认 8，最大 20' },
+        },
+      }),
+      execute: async (args: { query?: string; limit?: number }) => {
+        const q = String(args.query ?? '').trim().toLowerCase();
+        const limit = Math.min(Math.max(Number(args.limit) || 8, 1), 20);
+        const candidates = this.mcp.list().filter((t) => {
+          if (!allow.has(t.name)) return false;
+          if (!profileAllowsTool(ctx.profile, t.name)) return false;
+          if (this.policy && !this.policy.canUse(t.name)) return false;
+          if (!this.allowedBySkills(t.name, ctx.skills)) return false;
+          const required = Array.isArray(t.inputSchema?.required) ? (t.inputSchema.required as string[]) : [];
+          if (!projectId && required.includes('projectId')) return false;
+          return true;
+        });
+        const scored = candidates.map((t) => {
+          const name = t.name.toLowerCase();
+          const desc = String(t.description ?? '').toLowerCase();
+          const score = !q ? 0 : name === q ? 100 : name.includes(q) ? 60 : desc.includes(q) ? 30 : 0;
+          return { t, score };
+        });
+        const tools = scored
+          .filter((x) => (q ? x.score > 0 : true))
+          .sort((a, b) => b.score - a.score || a.t.name.localeCompare(b.t.name))
+          .slice(0, limit)
+          .map(({ t }) => ({
+            name: t.name,
+            description: t.description,
+            inputSchema: t.inputSchema,
+            requiresApproval: this.approvals?.needsApproval(t.name) ?? false,
+          }));
+        return {
+          mode: TOOL_MODE,
+          query: q,
+          count: tools.length,
+          tools,
+          hint:
+            TOOL_MODE === 'dynamic'
+              ? '用 tool_invoke({name, arguments}) 执行；写操作会走计划级/单次审批。'
+              : '这些工具已直接暴露，可直接调用；tool_invoke 仅作兜底。',
+        };
+      },
+    });
+    set.tool_invoke = aiTool({
+      description:
+        '按工具名执行一个 MCP 工具。用于 dynamic 模式下调用未直接暴露的工具；参数必须符合 tool_search 返回的 inputSchema。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: '工具名，例如 document.update' },
+          arguments: { type: 'object', description: '工具入参对象，严格按 schema 传' },
+        },
+        required: ['name'],
+      }),
+      execute: async (args: { name?: string; arguments?: Record<string, unknown> }) => {
+        const name = this.canonicalToolName(String(args?.name ?? ''));
+        const t = this.mcp.list().find((x) => x.name === name);
+        if (!t) return { error: `未知工具：${String(args?.name ?? '')}。请先调用 tool_search 查可用工具。` };
+        if (!allow.has(name)) return { error: `工具 ${name} 不在当前允许列表内。` };
+        if (args?.arguments && typeof args.arguments !== 'object') {
+          return { error: 'arguments 必须是对象；字符串请先解析为 JSON 对象。' };
+        }
+        return this.runGuarded(t, (args.arguments ?? {}) as Record<string, unknown>, ctx);
+      },
+    });
     return set;
+  }
+
+  /**
+   * 统一执行闸：直接暴露的工具与 tool_invoke 共用同一套护栏。
+   * 顺序：调用上限 → 权限档 → profile → 技能开关 → 项目作用域 → 重复检测 → 计划/单次审批 → 执行。
+   */
+  private async runGuarded(t: BridgeTool, args: Record<string, unknown>, ctx: GuardCtx): Promise<unknown> {
+    ctx.calls.n += 1;
+    if (ctx.calls.n > MAX_TOOL_CALLS) {
+      return { error: `工具调用次数已达上限（${MAX_TOOL_CALLS} 次），请直接基于已有信息回答` };
+    }
+    if (this.policy && !this.policy.canUse(t.name)) {
+      return { error: this.policy.denyReason(t.name) };
+    }
+    if (!profileAllowsTool(ctx.profile, t.name)) {
+      return { error: `当前工具档位不允许 ${t.name}；可换只读工具，或让用户切换工具档位。` };
+    }
+    if (!this.allowedBySkills(t.name, ctx.skills)) {
+      return { error: `工具 ${t.name} 已被当前技能开关停用。` };
+    }
+    const required = Array.isArray(t.inputSchema?.required) ? (t.inputSchema.required as string[]) : [];
+    if (!ctx.projectId && required.includes('projectId')) {
+      return { error: `工具 ${t.name} 需要项目上下文，但当前会话没有绑定项目。` };
+    }
+    const schemaProps = (t.inputSchema?.properties ?? {}) as Record<string, unknown>;
+    const scoped = ctx.projectId && 'projectId' in schemaProps ? { ...args, projectId: ctx.projectId } : args;
+    const key = toolCallKey(t.name, scoped);
+    const seen = (ctx.repeat.get(key) ?? 0) + 1;
+    ctx.repeat.set(key, seen);
+    if (seen > TOOL_REPEAT_LIMIT) {
+      return {
+        error: `该工具与相同参数已重复调用 ${seen - 1} 次（上限 ${TOOL_REPEAT_LIMIT}），结果不会变化。请换不同参数、改用其他工具，或直接基于已有信息回答`,
+      };
+    }
+    if (this.approvals?.needsApproval(t.name)) {
+      const plan = this.plans?.authorize(t.name, ctx.projectId ?? null, ctx.runId ?? null);
+      if (!plan) {
+        const approved = this.approvals.findApproved({
+          toolName: t.name,
+          args: scoped,
+          projectId: ctx.projectId ?? null,
+          runId: ctx.runId ?? null,
+        });
+        if (!approved) {
+          return {
+            error: `工具 ${t.name} 需要用户批准后才能执行。请先调用 request_research_plan（计划级授权）或 request_approval（单次授权），等待用户在界面批准后再调用本工具。`,
+          };
+        }
+        this.approvals.consume(approved.id);
+      }
+    }
+    return this.invoke(t.name, scoped, ctx.runId, ctx.user);
   }
 
   /** 模型可能传 "config.snapshot" 或安全名 "config_snapshot"；统一回规范名 */
@@ -278,10 +495,11 @@ export class AgentToolBridge {
     let result: unknown;
     try {
       // AbortSignal.timeout 自带清理，不会像 setTimeout 那样留下悬挂定时器
+      const timeoutMs = TOOL_TIMEOUT_OVERRIDES[name] ?? TOOL_TIMEOUT_MS;
       result = await Promise.race([
         this.mcp.call(name, args, user),
         new Promise((_, reject) => {
-          const timer = setTimeout(() => reject(new Error(`工具超时（${TOOL_TIMEOUT_MS}ms）`)), TOOL_TIMEOUT_MS);
+          const timer = setTimeout(() => reject(new Error(`工具超时（${timeoutMs}ms）`)), timeoutMs);
           timer.unref?.();
         }),
       ]);

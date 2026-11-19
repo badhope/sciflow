@@ -11,6 +11,7 @@ import {
   references,
   experiments,
   journals,
+  knowledgeDocs,
 } from '../db/schema';
 
 /** 投稿终态：不再做超期推断（与 submission.service 保持一致） */
@@ -49,6 +50,8 @@ export class DashboardService {
       const experimentCount = safe('experiments', () => this.countRows(experiments, scope), 0);
       const docCount = safe('documents', () => this.countRows(documents, scope), 0);
       const refCount = safe('references', () => this.countRows(references, scope), 0);
+      const knowledgeCount = safe('knowledge', () => this.countRows(knowledgeDocs, scope), 0);
+      const pipelineCount = safe('pipeline', () => this.countRows(pipelineTasks, scope), 0);
       const overdueSubmissions = safe('overdueSubmissions', () => this.overdueSubmissions(scope), []);
       const lowQualityDocs = safe('lowQualityDocs', () => this.lowQualityDocs(scope), []);
       return {
@@ -59,6 +62,8 @@ export class DashboardService {
         experimentCount,
         docCount,
         refCount,
+        knowledgeCount,
+        pipelineCount,
       };
     } catch {
       return {
@@ -69,6 +74,8 @@ export class DashboardService {
         experimentCount: 0,
         docCount: 0,
         refCount: 0,
+        knowledgeCount: 0,
+        pipelineCount: 0,
       };
     }
   }

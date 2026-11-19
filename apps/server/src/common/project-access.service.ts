@@ -16,6 +16,7 @@ import {
   qualityReports,
   agentTasks,
   toolApprovals,
+  agentPlans,
   researchPrograms,
   researchCycles,
   researchQuestions,
@@ -112,6 +113,15 @@ export class ProjectAccessService {
   assertToolApproval(approvalId: string, user?: AuthPayload) {
     const row = db.select().from(toolApprovals).where(eq(toolApprovals.id, approvalId)).get();
     if (!row) throw new NotFoundException('审批记录不存在');
+    if (row.projectId) this.assertProject(row.projectId, user);
+    else if (this.enforced) this.assertAdmin(user);
+    return row;
+  }
+
+  /** 断言研究计划可访问；无项目归属的全局计划企业模式仅 admin 可见 */
+  assertAgentPlan(planId: string, user?: AuthPayload) {
+    const row = db.select().from(agentPlans).where(eq(agentPlans.id, planId)).get();
+    if (!row) throw new NotFoundException('研究计划不存在');
     if (row.projectId) this.assertProject(row.projectId, user);
     else if (this.enforced) this.assertAdmin(user);
     return row;

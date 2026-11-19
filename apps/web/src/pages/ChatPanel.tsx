@@ -5,16 +5,10 @@ import type { Doc, IntentResult, Project } from '../types';
 import { Card } from '../components/ui';
 import { MessageList } from '../components/MessageList';
 import { useChatSession, type ChatMessage } from '../lib/chat-session';
+import { applyChatCommand, filterChatCommands, type ChatCommand } from '../lib/chat-commands';
 import { useAsyncAction } from '../lib/async';
 
 /** Slash 命令（窄栏精简版） */
-const SLASH_COMMANDS: { name: string; desc: string; template: string }[] = [
-  { name: '润色', desc: '提升学术表达', template: '请润色以下内容，提升学术表达质量：\n\n{{input}}' },
-  { name: '翻译英文', desc: '译为学术英文', template: '请将以下内容翻译为地道的学术英文：\n\n{{input}}' },
-  { name: '生成摘要', desc: '要点与关键词', template: '请为以下内容生成摘要与关键词：\n\n{{input}}' },
-  { name: '降重', desc: '改写降重', template: '请改写以下内容以降低重复率：\n\n{{input}}' },
-  { name: '补充引用', desc: '建议相关文献', template: '请针对以下内容建议可引用的文献并说明理由：\n\n{{input}}' },
-];
 
 type QuickAction = 'polish' | 'translate' | 'abstract';
 
@@ -85,10 +79,10 @@ export function ChatPanel({
     }
   };
 
-  const slashFiltered = input.startsWith('/') ? SLASH_COMMANDS.filter((c) => c.name.includes(input.slice(1))).slice(0, 4) : [];
+  const slashFiltered = filterChatCommands(input, 'doc', 4);
 
-  const applySlash = (c: (typeof SLASH_COMMANDS)[number]) => {
-    setInput(c.template.replace('{{input}}', ''));
+  const applySlash = (c: ChatCommand) => {
+    setInput(applyChatCommand(c));
     setSlashOpen(false);
   };
 

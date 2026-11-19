@@ -8,6 +8,8 @@ import type { Doc, KnowledgeDoc, KnowledgeDocDetail, KnowledgeQueryResult, Knowl
 import { Button, Card, ConfirmDialog, EmptyState, ErrorBox, Input, Modal, SectionTitle, Badge, Spinner, errMsg } from '../components/ui';
 import { Donut, HBar } from '../components/charts';
 import { SemanticMap } from './knowledge/SemanticMap';
+import { useProjectKnowledge, useProjectRefs } from '../lib/queries';
+import { qk } from '../lib/query-keys';
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -276,8 +278,8 @@ export function KnowledgePage({ project }: { project: Project }) {
 
   // 知识库文档列表 + 文献库（React Query）
   const qc = useQueryClient();
-  const kbDocsQuery = useQuery({ queryKey: ['kb-docs', project.id], queryFn: () => api.knowledge.list(project.id) });
-  const kbRefsQuery = useQuery({ queryKey: ['kb-refs', project.id], queryFn: () => api.references.list(project.id), retry: 0 });
+  const kbDocsQuery = useProjectKnowledge(project.id);
+  const kbRefsQuery = useProjectRefs(project.id, { retry: 0 });
   const mapQuery = useQuery({
     queryKey: ['kb-map', project.id],
     queryFn: () => api.knowledge.semanticMap(project.id),
@@ -288,8 +290,8 @@ export function KnowledgePage({ project }: { project: Project }) {
   const docs: KnowledgeDoc[] = useMemo(() => kbDocsQuery.data ?? [], [kbDocsQuery.data]);
   const refs: Reference[] = useMemo(() => kbRefsQuery.data ?? [], [kbRefsQuery.data]);
   const load = async () => {
-    await qc.invalidateQueries({ queryKey: ['kb-docs', project.id] });
-    await qc.invalidateQueries({ queryKey: ['kb-refs', project.id] });
+    await qc.invalidateQueries({ queryKey: qk.knowledge(project.id) });
+    await qc.invalidateQueries({ queryKey: qk.refs(project.id) });
   };
 
   /** 绑定/解除文献：referenceId 传 null 解除 */

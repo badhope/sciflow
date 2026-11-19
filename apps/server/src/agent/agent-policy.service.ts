@@ -36,9 +36,23 @@ const READ_ONLY_TOOLS = new Set([
   'config.snapshot',
   'config.preview',
   'extension.list',
+  'project.list',
+  'project.get',
+  'document.list',
+  'document.get',
+  'quality.latest',
+  'quality.overview',
+  'quality.history',
+  'experiment.list',
+  'experiment.get',
+  'browser.text',
+  'browser.verify',
+  'memory.search',
+  'memory.list',
+  'task.list',
 ]);
 
-const PROJECT_WRITE_PREFIXES = ['document.', 'project.', 'experiment.'];
+const PROJECT_WRITE_PREFIXES = ['document.', 'project.', 'experiment.', 'quality.', 'browser.', 'memory.'];
 const SYSTEM_WRITE_PREFIXES = ['config.', 'extension.'];
 
 function isProjectWrite(toolName: string): boolean {

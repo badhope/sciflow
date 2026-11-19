@@ -22,6 +22,10 @@ import { useSplitDrag } from '../lib/split-drag';
 import { useHotkeys } from '../lib/hotkeys';
 import { useAsyncAction } from '../lib/async';
 import { useChatSession, parseFollowUps, FOLLOWUP_HINT, type ChatMessage, type SendOptions } from '../lib/chat-session';
+import { useProjectDocs, useProjectKnowledge, useProjectRefs } from '../lib/queries';
+import { qk } from '../lib/query-keys';
+import { applyChatCommand, filterChatCommands, type ChatCommand } from '../lib/chat-commands';
+import { useAgentInbox } from '../lib/agent-inbox';
 import {
   createSession, deriveTitle, loadActiveSessionId, loadDraft, loadSessions, saveActiveSessionId, saveDraft, saveSessions,
   type ChatSession,
@@ -49,15 +53,6 @@ import { WritingPreview } from './writing/WritingPreview';
 const STEP_LABELS: Record<string, string> = Object.fromEntries(PIPELINE_STEPS.map((s) => [s.key, s.label]));
 
 /** Slash 快捷指令（对话直达高频科研动作） */
-const SLASH_COMMANDS: { name: string; desc: string; template: string }[] = [
-  { name: '润色', desc: '提升学术表达质量', template: '请润色以下内容，提升学术表达质量，保持原意：\n\n' },
-  { name: '翻译英文', desc: '翻译为地道学术英文', template: '请将以下内容翻译为地道的学术英文：\n\n' },
-  { name: '生成摘要', desc: '提取要点与关键词', template: '请为以下内容生成摘要（3-5 句话）与关键词列表：\n\n' },
-  { name: '生成大纲', desc: '围绕主题生成论文大纲', template: '请围绕以下主题生成一份论文大纲（章节+要点）：\n\n' },
-  { name: '降重', desc: '改写降低重复率', template: '请改写以下内容以降低与原文的重复率，保持原意与学术性：\n\n' },
-  { name: '补充引用', desc: '建议可引用文献与研究', template: '请针对以下内容，建议可引用的相关文献与研究并说明理由：\n\n' },
-  { name: '深入追问', desc: '就内容继续深挖', template: '请就以下内容进一步深入分析，给出更细致的论证：\n\n' },
-];
 
 export function WorkspacePage({
   project,
@@ -179,7 +174,7 @@ export function WorkspacePage({
   const [mentionActive, setMentionActive] = useState(0);
 
   // ── 数据层（React Query）──────────────────────────────────
-  const docsQuery = useQuery({ queryKey: ['docs', project.id], queryFn: () => api.documents.list(project.id) });
+  const docsQuery = useProjectDocs(project.id);
   // 服务端沉淀摘要（chat_session 落库）：点击注入为对话背景
   const [sessionContext, setSessionContext] = useState<string | null>(null);
   const summariesQuery = useQuery({
@@ -188,26 +183,22 @@ export function WorkspacePage({
     enabled: showSessionsPanel,
   });
   // 知识库清单（来源卡「引用进草稿」用）
-  const [kbByName, setKbByName] = useState<Map<string, KnowledgeDoc>>(new Map());
   const [citeSource, setCiteSource] = useState<ChatSource | null>(null);
   const [citing, setCiting] = useState(false);
   const docs: Doc[] = useMemo(() => docsQuery.data ?? [], [docsQuery.data]);
   // @ 提及数据源：文献与知识库资料（仅在需要时拉取，避免首屏多两个请求）
-  const refsQuery = useQuery({
-    queryKey: ['references', project.id],
-    queryFn: () => api.references.list(project.id),
-    staleTime: 60_000,
-  });
-  const kbDocsQuery = useQuery({
-    queryKey: ['knowledge-docs', project.id],
-    queryFn: () => api.knowledge.list(project.id),
-    staleTime: 60_000,
-  });
+  const refsQuery = useProjectRefs(project.id, { staleTime: 60_000 });
+  const kbDocsQuery = useProjectKnowledge(project.id, { staleTime: 60_000 });
 
   useEffect(() => {
     api.settings.get().then((s) => setModels(s.ai.models || [])).catch(() => undefined);
-    api.knowledge.list(project.id).then((list) => setKbByName(new Map(list.map((d) => [d.name, d])))).catch(() => undefined);
   }, [project.id]);
+
+  // 知识库名称 → 文档：从同一个 query 派生，避免再发一次 knowledge.list
+  const kbByName = useMemo<Map<string, KnowledgeDoc>>(
+    () => new Map((kbDocsQuery.data ?? []).map((d) => [d.name, d])),
+    [kbDocsQuery.data],
+  );
 
   /**
    * 恢复未完成流水线：taskId 此前只由本页「启动」按钮写入，刷新/切项目/重进页面后
@@ -236,24 +227,12 @@ export function WorkspacePage({
       return t.status === 'running' || t.status === 'awaiting_confirmation' ? 2500 : false;
     },
   });
-  // ── Harness：任务清单与工具审批（模型自主规划 + 危险操作确认）──
-  const tasksQuery = useQuery({
-    queryKey: ['agent-tasks', project.id],
-    queryFn: () => api.agent.tasks(project.id),
-    refetchInterval: 4000,
-  });
-  const approvalsQuery = useQuery({
-    queryKey: ['agent-approvals', project.id],
-    queryFn: () => api.agent.pendingApprovals(project.id),
-    refetchInterval: 3000,
+  // ── Harness：任务清单与工具审批（单一 hook；与驾驶舱共用 key/失效）──
+  const { tasksQuery, approvalsQuery, decideApproval } = useAgentInbox(project.id, {
+    tasksInterval: 4000,
+    approvalsInterval: 3000,
   });
   const pendingApproval = approvalsQuery.data?.approvals?.[0] ?? null;
-  const decideApproval = useMutation({
-    mutationFn: ({ id, approved }: { id: string; approved: boolean }) => api.agent.decideApproval(id, approved),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['agent-approvals', project.id] });
-    },
-  });
 
   const task: PipelineTask | undefined = taskQuery.data;
   /**
@@ -266,7 +245,7 @@ export function WorkspacePage({
   const effectiveDocId = docId ?? task?.documentId ?? initialDocId ?? docs[docs.length - 1]?.id ?? null;
   useEffect(() => {
     if (task?.documentId) {
-      void qc.invalidateQueries({ queryKey: ['docs', project.id] });
+      void qc.invalidateQueries({ queryKey: qk.docs(project.id) });
       void qc.invalidateQueries({ queryKey: ['doc', task.documentId] });
     }
   }, [task?.documentId, task?.status, project.id, qc]);
@@ -503,7 +482,7 @@ export function WorkspacePage({
     mutationFn: () => api.documents.create(project.id, '未命名论文'),
     onSuccess: (d) => {
       setDocId(d.id);
-      void qc.invalidateQueries({ queryKey: ['docs', project.id] });
+      void qc.invalidateQueries({ queryKey: qk.docs(project.id) });
     },
   });
 
@@ -546,7 +525,7 @@ export function WorkspacePage({
 
   const busy = task && (task.status === 'running' || task.status === 'awaiting_confirmation');
   const hasConversation = messages.some((m) => m.role === 'user');
-  const slashFiltered = input.startsWith('/') ? SLASH_COMMANDS.filter((c) => c.name.includes(input.slice(1))).slice(0, 5) : [];
+  const slashFiltered = filterChatCommands(input, 'workspace', 5);
 
   // @ 提及候选：文献 + 知识库资料 + 当前项目文档
   const mentionItems: MentionItem[] = useMemo(() => {
@@ -584,8 +563,8 @@ export function WorkspacePage({
   }, [activeDoc, refsQuery.data]);
   // slash 菜单为派生状态（输入 "/" 即出，Esc 仅记忆"本次已关闭"，输入变化即重置）
   const slashOpen = !slashDismissed && input.startsWith('/') && slashFiltered.length > 0;
-  const applySlash = (c: (typeof SLASH_COMMANDS)[number]) => {
-    setInput(c.template);
+  const applySlash = (c: ChatCommand) => {
+    setInput(applyChatCommand(c));
     setSlashActive(0);
     requestAnimationFrame(() => taRef.current?.focus());
   };

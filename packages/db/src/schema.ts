@@ -882,3 +882,28 @@ export const toolApprovals = sqliteTable('tool_approval', {
 
 export type ToolApproval = typeof toolApprovals.$inferSelect;
 
+/** 研究计划级授权（Agent 能力最大化的核心治理件）：
+ *  用户批准一份计划后，计划内工具在预算/步数内自动放行；计划外仍逐次审批。 */
+export const agentPlans = sqliteTable('agent_plan', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id'),
+  runId: text('run_id'),
+  title: text('title').notNull(),
+  summary: text('summary').default(''),
+  /** 结构化计划 JSON（问题/假设/协议/风险/成本） */
+  plan: text('plan').default('{}'),
+  /** 允许自动放行的工具名 JSON 数组（canonical name，如 document.update） */
+  allowedTools: text('allowed_tools').default('[]'),
+  /** pending | approved | rejected | expired | exhausted */
+  status: text('status').default('pending'),
+  maxSteps: integer('max_steps').default(12),
+  usedSteps: integer('used_steps').default(0),
+  budgetTokens: integer('budget_tokens').default(0),
+  usedTokens: integer('used_tokens').default(0),
+  createdAt: integer('created_at').notNull(),
+  approvedAt: integer('approved_at'),
+  expiresAt: integer('expires_at'),
+});
+
+export type AgentPlan = typeof agentPlans.$inferSelect;
+

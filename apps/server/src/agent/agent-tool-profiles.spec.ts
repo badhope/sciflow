@@ -42,15 +42,29 @@ describe('Agent 工具作用域', () => {
     expect(profileAllowsTool(p, 'literature.search')).toBe(true);
     expect(profileAllowsTool(p, 'knowledge.query')).toBe(true);
     expect(profileAllowsTool(p, 'references.extract')).toBe(true);
+    expect(profileAllowsTool(p, 'document.get')).toBe(true);
+    expect(profileAllowsTool(p, 'document.update')).toBe(false);
+    expect(profileAllowsTool(p, 'experiment.run')).toBe(false);
     expect(profileAllowsTool(p, 'config.upsert_role')).toBe(false);
     expect(profileAllowsTool(p, 'extension.create')).toBe(false);
     expect(profileAllowsTool(p, 'writing.draft')).toBe(false);
   });
 
-  it('experiment profile 可起草产物，但仍不能改配置中心', () => {
+  it('experiment profile 可执行实验与写文档，但仍不能改配置中心', () => {
     const p = AGENT_TOOL_PROFILES.experiment;
     expect(profileAllowsTool(p, 'writing.draft')).toBe(true);
+    expect(profileAllowsTool(p, 'document.update')).toBe(true);
+    expect(profileAllowsTool(p, 'experiment.run')).toBe(true);
+    expect(profileAllowsTool(p, 'browser.open')).toBe(true);
     expect(profileAllowsTool(p, 'config.snapshot')).toBe(false);
+  });
+
+  it('full profile 覆盖质量/实验/浏览器/记忆工具', () => {
+    const p = AGENT_TOOL_PROFILES.full;
+    expect(profileAllowsTool(p, 'quality.audit')).toBe(true);
+    expect(profileAllowsTool(p, 'experiment.run')).toBe(true);
+    expect(profileAllowsTool(p, 'browser.verify')).toBe(true);
+    expect(profileAllowsTool(p, 'memory.add')).toBe(true);
   });
 
   it('config profile 只暴露配置中心写入口', () => {

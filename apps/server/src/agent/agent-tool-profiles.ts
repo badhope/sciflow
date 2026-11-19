@@ -1,36 +1,73 @@
 /**
  * Agent 工具作用域（profile）：按调用场景收窄暴露给模型的工具面。
  *
- * 为什么需要（两条独立理由）：
- *  1. 成本：工具 schema 每一步都要随请求重发。实测 llm_call_log：同一 chat 入口
- *     无工具时 prompt_tokens≈1.9k，带 24 个工具时≈10.0–10.9k，单步多付约 8k。
- *     工具循环（maxSteps=12）每步重复付费，自主循环会把倍数再放大。
+ * 为什么需要：
+ *  1. 成本：工具 schema 每一步都要随请求重发。实测同一 chat 入口无工具时
+ *     prompt_tokens≈1.9k，带 24 个工具时≈10.0–10.9k；工具循环会把倍数放大。
  *  2. 边界：自主科研要求「模型能做什么」可控。PI/实验者/评审者需要的工具面不同，
- *     全量暴露既浪费预算，也把配置中心的写入口暴露给实验角色。
+ *     全量暴露既浪费预算，也把配置中心写入口暴露给实验角色。
  *
  * 纪律：
- *  - profile 只收窄不放宽。最终工具集 = AGENT_TOOLS_ALLOW ∩ 技能开关 ∩ profile。
+ *  - profile 只收窄不放宽。最终工具集 = AGENT_TOOLS_ALLOW ∩ 技能开关 ∩ profile ∩ access。
  *  - 默认 profile = full，与既有行为完全一致；不做静默能力削减。
- *  - 未登记的工具前缀在窄 profile 下默认不可见（新增工具不会自动泄漏进研究角色）。
+ *  - 读写分组：project/document/quality/experiment 各自拆 read/write，
+ *    研究角色只拿 read，实验角色才拿 write；未知新工具按 write 处理（安全默认）。
  */
 export type AgentToolProfileId = 'full' | 'research' | 'experiment' | 'config';
 
-/** 工具前缀分组。新增工具若不属于任何分组，只能在 full 下可见。 */
 export type AgentToolGroup =
   | 'literature'
   | 'knowledge'
   | 'references'
   | 'writing'
+  | 'project_read'
+  | 'project_write'
+  | 'document_read'
+  | 'document_write'
+  | 'quality_read'
+  | 'quality_write'
+  | 'experiment_read'
+  | 'experiment_write'
+  | 'browser'
+  | 'memory'
+  | 'task'
   | 'config'
   | 'extension'
   | 'chat';
 
+/** 精确分组优先：同一前缀下读写工具必须分开（否则 research 会误拿 document.update） */
+const TOOL_GROUP_EXACT: Record<string, AgentToolGroup> = {
+  'project.list': 'project_read',
+  'project.get': 'project_read',
+  'project.create': 'project_write',
+  'project.update': 'project_write',
+  'document.list': 'document_read',
+  'document.get': 'document_read',
+  'document.create': 'document_write',
+  'document.update': 'document_write',
+  'quality.latest': 'quality_read',
+  'quality.overview': 'quality_read',
+  'quality.history': 'quality_read',
+  'quality.audit': 'quality_write',
+  'experiment.list': 'experiment_read',
+  'experiment.get': 'experiment_read',
+  'experiment.run': 'experiment_write',
+};
+
+/** 前缀兜底：未登记的新工具按「写」处理，窄 profile 下不可见（安全默认） */
 const TOOL_GROUP_PREFIX: Record<string, AgentToolGroup> = {
   'literature.': 'literature',
   'knowledge.': 'knowledge',
   'references.': 'references',
   'outline.': 'writing',
   'writing.': 'writing',
+  'project.': 'project_write',
+  'document.': 'document_write',
+  'quality.': 'quality_write',
+  'experiment.': 'experiment_write',
+  'browser.': 'browser',
+  'memory.': 'memory',
+  'task.': 'task',
   'config.': 'config',
   'extension.': 'extension',
   'chat.': 'chat',
@@ -45,26 +82,73 @@ export interface AgentToolProfile {
 
 /**
  * 场景定义。
- * - research：只读科研面（检索/知识/引用抽取/问答）——PI、评审者用，不能写配置。
- * - experiment：只读科研面 + 起草产物——实验者可写文档草稿，仍不能改配置中心。
- * - config：配置中心写入口（角色/约束/钩子/权限/扩展）——配置场景专用。
+ * - research：只读科研面（检索/知识/引用/项目与文档读取/质量读取/实验读取/记忆）——PI、评审者用。
+ * - experiment：科研只读 + 项目内写入 + 实验执行 + 浏览器——实验者用。
+ * - config：配置中心写入口——配置场景专用。
  * - full：全量（默认，等价于既有行为）。
  */
 export const AGENT_TOOL_PROFILES: Record<AgentToolProfileId, AgentToolProfile> = {
   full: {
     id: 'full',
     label: '全量工具',
-    groups: ['literature', 'knowledge', 'references', 'writing', 'config', 'extension', 'chat'],
+    groups: [
+      'literature',
+      'knowledge',
+      'references',
+      'writing',
+      'project_read',
+      'project_write',
+      'document_read',
+      'document_write',
+      'quality_read',
+      'quality_write',
+      'experiment_read',
+      'experiment_write',
+      'browser',
+      'memory',
+      'task',
+      'config',
+      'extension',
+      'chat',
+    ],
   },
   research: {
     id: 'research',
     label: '科研只读',
-    groups: ['literature', 'knowledge', 'references', 'chat'],
+    groups: [
+      'literature',
+      'knowledge',
+      'references',
+      'project_read',
+      'document_read',
+      'quality_read',
+      'experiment_read',
+      'memory',
+      'task',
+      'chat',
+    ],
   },
   experiment: {
     id: 'experiment',
     label: '实验执行',
-    groups: ['literature', 'knowledge', 'references', 'writing', 'chat'],
+    groups: [
+      'literature',
+      'knowledge',
+      'references',
+      'writing',
+      'project_read',
+      'project_write',
+      'document_read',
+      'document_write',
+      'quality_read',
+      'quality_write',
+      'experiment_read',
+      'experiment_write',
+      'browser',
+      'memory',
+      'task',
+      'chat',
+    ],
   },
   config: {
     id: 'config',
@@ -86,8 +170,10 @@ export function resolveAgentToolProfile(explicit?: string): AgentToolProfile {
   return AGENT_TOOL_PROFILES[isAgentToolProfileId(id) ? id : 'full'];
 }
 
-/** 工具名所属分组；未登记前缀返回 null（窄 profile 下不可见）。 */
+/** 工具名所属分组；先精确匹配，再前缀兜底；未登记返回 null。 */
 export function agentToolGroup(toolName: string): AgentToolGroup | null {
+  const exact = TOOL_GROUP_EXACT[toolName];
+  if (exact) return exact;
   const prefix = Object.keys(TOOL_GROUP_PREFIX).find((p) => toolName.startsWith(p));
   return prefix ? TOOL_GROUP_PREFIX[prefix] : null;
 }

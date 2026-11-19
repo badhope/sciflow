@@ -767,6 +767,27 @@ CREATE TABLE IF NOT EXISTS tool_approval (
   decided_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_tool_approval_status ON tool_approval(status, created_at DESC);
+
+
+CREATE TABLE IF NOT EXISTS agent_plan (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  run_id TEXT,
+  title TEXT NOT NULL,
+  summary TEXT DEFAULT '',
+  plan TEXT DEFAULT '{}',
+  allowed_tools TEXT DEFAULT '[]',
+  status TEXT DEFAULT 'pending',
+  max_steps INTEGER DEFAULT 12,
+  used_steps INTEGER DEFAULT 0,
+  budget_tokens INTEGER DEFAULT 0,
+  used_tokens INTEGER DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  approved_at INTEGER,
+  expires_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_agent_plan_project ON agent_plan(project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_plan_status ON agent_plan(status, approved_at DESC);
 `);
 
 /** 轻量迁移：为旧库补齐新列（CREATE TABLE IF NOT EXISTS 不会修改已有表） */

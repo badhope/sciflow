@@ -944,6 +944,9 @@ export interface DashboardOverview {
   experimentCount: number;
   docCount: number;
   refCount: number;
+  /** v2.1：知识库/流水线计数并入 overview，避免驾驶舱为取 length 拉全量列表 */
+  knowledgeCount?: number;
+  pipelineCount?: number;
 }
 
 /** B-4.3 引用体检结果（/api/documents/:id/citation-audit） */

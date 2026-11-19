@@ -34,6 +34,9 @@ const DEFAULT_ASK_PREFIXES = [
   'experiment.', // 跑本机代码
   'document.', // 改文档正文
   'project.', // 改项目结构
+  'quality.', // 跑质量评审（模型成本 + 写评分）
+  'memory.', // 写项目记忆
+  'browser.', // 打开/操作外部页面
   'config.', // 改全局配置
   'extension.', // 改扩展/技能
 ];
@@ -46,6 +49,20 @@ const READ_ONLY_TOOLS = new Set([
   'config.snapshot',
   'config.preview',
   'extension.list',
+  'project.list',
+  'project.get',
+  'document.list',
+  'document.get',
+  'quality.latest',
+  'quality.overview',
+  'quality.history',
+  'experiment.list',
+  'experiment.get',
+  'browser.text',
+  'browser.verify',
+  'memory.search',
+  'memory.list',
+  'task.list',
 ]);
 
 /** 待确认请求的超时：超时视为拒绝，避免模型无限等待 */
