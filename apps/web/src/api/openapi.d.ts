@@ -3464,6 +3464,48 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ReferenceDto: {
+            /** @description 文献 ID */
+            id: string;
+            /** @description 所属项目 ID */
+            projectId: string;
+            /** @description 标题 */
+            title: string;
+            /** @description 作者 JSON 字符串或作者列表文本 */
+            authors: string;
+            /** @description 发表年份 */
+            year: number | null;
+            /** @description 期刊/会议 */
+            venue: string;
+            /** @description DOI */
+            doi: string;
+            /** @description 链接 */
+            url: string;
+            /** @description 摘要 */
+            abstract: string;
+            /**
+             * @description 来源
+             * @example manual
+             */
+            source: string;
+            /** @description 标签 JSON 字符串 */
+            tags: string;
+            /** @description 引用次数 */
+            citationCount: number;
+            /** @description 入库时间（毫秒时间戳） */
+            createdAt: number;
+            /**
+             * @description 阅读状态
+             * @enum {string}
+             */
+            readingStatus?: "unread" | "reading" | "read" | "cited";
+            /** @description 阅读笔记 */
+            notes?: string;
+            /** @description 标题归一化指纹（项目内去重） */
+            fingerprint?: string;
+            /** @description 重复文献指向的已有文献 ID */
+            isDuplicateOf?: string;
+        };
         ProjectDto: {
             /** @description 项目 ID */
             id: string;
@@ -3507,6 +3549,48 @@ export interface components {
              * @example draft
              */
             status: string;
+            /** @description 创建时间（毫秒时间戳） */
+            createdAt: number;
+            /** @description 更新时间（毫秒时间戳） */
+            updatedAt: number;
+        };
+        ExperimentDto: {
+            /** @description 实验 ID */
+            id: string;
+            /** @description 所属项目 ID */
+            projectId: string;
+            /** @description 关联文档 ID */
+            documentId: string | null;
+            /** @description 实验目的/假设 */
+            goal: string;
+            /** @description 提交的源码 */
+            code: string;
+            /**
+             * @description 运行时
+             * @enum {string}
+             */
+            runtime: "python" | "node" | "shell";
+            /** @description 标准输出（可能已截断） */
+            stdout: string;
+            /** @description 标准错误（可能已截断） */
+            stderr: string;
+            /** @description stdout 是否被截断 */
+            stdoutTruncated: boolean;
+            /** @description stderr 是否被截断 */
+            stderrTruncated: boolean;
+            /** @description matplotlib 出图（base64 data URL） */
+            figures: string[];
+            /** @description 实验结论（人工回填） */
+            conclusion: string;
+            /** @description 运行耗时（毫秒） */
+            runtimeMs: number;
+            /**
+             * @description 运行状态
+             * @enum {string}
+             */
+            status: "ok" | "error" | "timeout";
+            /** @description 本次运行是否启用 RSS 内存监控（仅 run 响应） */
+            memoryMonitored?: boolean;
             /** @description 创建时间（毫秒时间戳） */
             createdAt: number;
             /** @description 更新时间（毫秒时间戳） */
@@ -4190,11 +4274,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ReferenceDto"];
+                };
             };
         };
     };
@@ -4343,7 +4429,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ReferenceDto"];
+                };
             };
         };
     };
@@ -4381,7 +4469,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ReferenceDto"];
+                };
             };
         };
     };
@@ -6516,11 +6606,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ExperimentDto"];
+                };
             };
         };
     };
@@ -6539,7 +6631,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ExperimentDto"][];
+                };
             };
         };
     };
@@ -6558,7 +6652,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ExperimentDto"][];
+                };
             };
         };
     };
@@ -6577,7 +6673,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ExperimentDto"];
+                };
             };
         };
     };
@@ -6615,7 +6713,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ExperimentDto"];
+                };
             };
         };
     };

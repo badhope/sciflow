@@ -1,10 +1,13 @@
 import { HttpCode, Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, Header, Req, BadRequestException, NotFoundException } from '@nestjs/common';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ReferencesService, PaperHit } from './references.service';
+import { ReferenceDto } from './references.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import { ScholarSearchService } from '../research/scholar-search.service';
 import type { AuthPayload } from '../auth/auth.service';
 import { paginate } from '../common/paginate';
 
+@ApiTags('References')
 @Controller('references')
 export class ReferencesController {
   constructor(
@@ -108,6 +111,7 @@ export class ReferencesController {
   }
 
   @Get(':id')
+  @ApiOkResponse({ type: ReferenceDto })
   get(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
     this.access.assertReference(id, req.user);
     return this.references.get(id);
@@ -115,6 +119,7 @@ export class ReferencesController {
 
   /** 单条入库 */
   @Post()
+  @ApiOkResponse({ type: ReferenceDto })
   create(@Body() body: { projectId: string; hit: Partial<PaperHit> & { title: string } }, @Req() req: { user?: AuthPayload }) {
     this.access.assertProject(body.projectId, req.user);
     return this.references.create(body.projectId, body.hit);
@@ -159,6 +164,7 @@ export class ReferencesController {
 
   /** 更新阅读状态 / 标签 / 文献笔记 */
   @Patch(':id')
+  @ApiOkResponse({ type: ReferenceDto })
   update(@Param('id') id: string, @Body() body: { readingStatus?: string; tags?: string; notes?: string | null }, @Req() req: { user?: AuthPayload }) {
     this.access.assertReference(id, req.user);
     return this.references.update(id, body);

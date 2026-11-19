@@ -142,27 +142,11 @@ export interface Outline {
   sections: OutlineSection[];
 }
 
-export interface Reference {
-  id: string;
-  projectId: string;
-  title: string;
-  authors: string;
-  year: number | null;
-  venue: string;
-  doi: string;
-  url: string;
-  abstract: string;
-  source: string;
-  tags: string;
-  citationCount: number;
-  createdAt: number;
-  /** 科研高级功能扩展字段（后端返回） */
-  readingStatus?: 'unread' | 'reading' | 'read' | 'cited';
-  /** 阅读笔记（差距#11：读后想法，可本地编辑落库） */
-  notes?: string;
-  fingerprint?: string;
-  isDuplicateOf?: string;
-}
+/**
+ * 文献：类型来自 OpenAPI 生成 contract（ReferenceDto）。
+ * 文献库、写作引用、投稿选刊共用同一字段源。
+ */
+export type Reference = components['schemas']['ReferenceDto'];
 
 /** 学术库发现检索的结果（未入库：无 id/projectId/createdAt，需走导入接口才成为 Reference） */
 export type DiscoveredReference = {
@@ -786,28 +770,11 @@ export interface WebProject {
   updatedAt: number;
 }
 
-export interface Experiment {
-  id: string;
-  projectId: string;
-  documentId: string | null;
-  goal: string;
-  code: string;
-  /** 运行时：python（默认）| node | shell */
-  runtime?: 'python' | 'node' | 'shell';
-  stdout: string;
-  stderr: string;
-  stdoutTruncated: boolean;
-  stderrTruncated: boolean;
-  /** matplotlib 产出的 png（base64 data URL） */
-  figures: string[];
-  conclusion: string;
-  runtimeMs: number;
-  status: 'ok' | 'error' | 'timeout';
-  /** 运行时字段（不入库）：本次执行是否启用了 /proc RSS 内存监控 */
-  memoryMonitored?: boolean;
-  createdAt: number;
-  updatedAt: number;
-}
+/**
+ * 实验记录：类型来自 OpenAPI 生成 contract（ExperimentDto）。
+ * 实验页与写作页实验回流共用。
+ */
+export type Experiment = components['schemas']['ExperimentDto'];
 
 /* =====================================================================
  * 投稿流程状态跟踪（13 状态码 + 事件流 + 周期推断）
