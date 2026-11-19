@@ -70,9 +70,15 @@ export function deriveStages(input: StageInput): StageState[] {
 
 const VIEW_TO_STAGE: Record<string, StageKey> = {
   workspace: 'research',
+  dashboard: 'research',
+  design: 'research',
+  evidence: 'literature',
   literature: 'literature',
+  knowledge: 'literature',
+  experiments: 'research',
   pipeline: 'outline',
   writing: 'draft',
+  'write-review': 'draft',
   quality: 'review',
   submission: 'submit',
 };

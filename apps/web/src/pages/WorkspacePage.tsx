@@ -390,7 +390,7 @@ export function WorkspacePage({
       const firstLine = messages[i].content.split('\n').find((l) => l.trim())?.trim() || '';
       const doc = await api.documents.create(project.id, `${firstLine.slice(0, 20) || '聊天摘录'}（聊天摘录）`);
       await api.documents.update(doc.id, { content: messages[i].content });
-      window.location.hash = `/writing?doc=${doc.id}`;
+      window.location.hash = `/write-review?doc=${doc.id}`;
     },
     { onError: (message) => setError(message) },
   );

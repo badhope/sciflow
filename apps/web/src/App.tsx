@@ -5,7 +5,7 @@ import { PageErrorBoundary } from './components/PageErrorBoundary';
 import { Download, Upload } from 'lucide-react';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import {
-  BookOpen, Brain, Beaker, LayoutDashboard, Plus, Pencil, RefreshCw, Search, Send, Settings, Trash2, Workflow, BookMarked, ChevronRight, Command, Sun, Moon, Monitor, XCircle as XCircleIcon, Gauge, Library, LayoutGrid, Menu as MenuIcon, Target, Code2, Compass,
+  BookOpen, Brain, Beaker, LayoutDashboard, Plus, Pencil, RefreshCw, Search, Send, Settings, Trash2, ChevronRight, Command, Sun, Moon, Monitor, XCircle as XCircleIcon, Library, LayoutGrid, Menu as MenuIcon, Target, Code2, Compass,
 } from 'lucide-react';
 import { api } from './api/client';
 import { isNetworkError } from './api/core';
@@ -16,6 +16,7 @@ import { AuthGate } from './components/AuthGate';
 import { AppShell, ShellNavGroup, ShellNavItem, useAppShell } from './components/AppShell';
 import { BrandLockup } from './components/BrandMark';
 import { StageBar } from './components/StageBar';
+import { TabbedPage } from './components/TabbedPage';
 import { buildCommands, filterCommands } from './lib/commands';
 import { useHotkeys } from './lib/hotkeys';
 import { Button, Input, Modal, Spinner, ErrorBox, ToastViewport, ConfirmDialog, downloadText, type ToastItem, type ToastKind } from './components/ui';
@@ -57,6 +58,9 @@ const SuspensePage = ({ children, name = '页面' }: { children: ReactNode; name
 export type View =
   | 'workspace'
   | 'dashboard'
+  | 'design'
+  | 'evidence'
+  | 'write-review'
   | 'programs'
   | 'writing'
   | 'longform'
@@ -75,12 +79,15 @@ export type View =
 /** 平台修饰键显示文案（Windows 上不显示 ⌘） */
 const MOD_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 
-const VIEW_KEYS: readonly View[] = ['workspace', 'dashboard', 'programs', 'writing', 'longform', 'websandbox', 'literature', 'experiments', 'pipeline', 'quality', 'submission', 'knowledge', 'memory', 'browser', 'settings'];
+const VIEW_KEYS: readonly View[] = ['workspace', 'dashboard', 'design', 'evidence', 'write-review', 'programs', 'writing', 'longform', 'websandbox', 'literature', 'experiments', 'pipeline', 'quality', 'submission', 'knowledge', 'memory', 'browser', 'settings'];
 
 /** 功能导航分组（大厂式：按工作流分组，设置独立收纳到底部） */
 const VIEW_LABELS: Record<View, string> = {
   workspace: '工作台',
-  dashboard: '项目总览',
+  dashboard: '项目驾驶舱',
+  design: '研究设计',
+  evidence: '证据库',
+  'write-review': '写作与评审',
   programs: '研究计划',
   writing: '论文写作',
   longform: '长篇写作',
@@ -103,47 +110,37 @@ const VIEW_LABELS: Record<View, string> = {
  *  · 旧结构把本项目真正的差异化能力（全自动流水线）折进默认收起的「自动化」组，等于把卖点藏起来；
  *  · 工作台/写作/文献/知识库四个平级入口，用户看不出「先做什么」；
  *  · 质量评分与投稿辅助被归进「自动化」，而它们其实是稿件的后续阶段。
- * 新结构收敛为 4 段叙事，每段对应研究的一个真实阶段，段内按阶段顺序排列，
- * 用户从上往下走即可；工具类页面（实验/记忆）不占主流程位置。
+ * 新结构收敛为 6 个一级入口（驾驶舱 / 研究设计 / 证据库 / 实验与验证 / 写作与评审 / 投稿），
+ * 工具箱承载长篇、Web、浏览器、记忆；用户从上往下走即可，不再面对 15 个平级按钮。
  */
 const NAV_GROUPS: { label: string; hint: string; defaultCollapsed?: boolean; items: { key: View; label: string; icon: typeof LayoutDashboard }[] }[] = [
   {
-    label: '立项与选题',
-    hint: '确定要研究什么',
+    label: '研究流程',
+    hint: '问题 → 证据 → 验证',
     items: [
-      { key: 'workspace', label: VIEW_LABELS.workspace, icon: LayoutDashboard },
       { key: 'dashboard', label: VIEW_LABELS.dashboard, icon: LayoutGrid },
-      { key: 'programs', label: VIEW_LABELS.programs, icon: Target },
-    ],
-  },
-  {
-    label: '读文献与做实验',
-    hint: '找证据、跑验证',
-    items: [
-      { key: 'literature', label: VIEW_LABELS.literature, icon: Library },
-      { key: 'knowledge', label: VIEW_LABELS.knowledge, icon: BookMarked },
+      { key: 'design', label: VIEW_LABELS.design, icon: Target },
+      { key: 'evidence', label: VIEW_LABELS.evidence, icon: Library },
       { key: 'experiments', label: VIEW_LABELS.experiments, icon: Beaker },
     ],
   },
   {
-    label: '写稿与过检',
-    hint: '成稿、查质量',
+    label: '产出',
+    hint: '成稿 → 过检 → 投稿',
     items: [
-      { key: 'pipeline', label: VIEW_LABELS.pipeline, icon: Workflow },
-      { key: 'writing', label: VIEW_LABELS.writing, icon: BookOpen },
-      { key: 'longform', label: VIEW_LABELS.longform, icon: BookOpen },
-      { key: 'websandbox', label: VIEW_LABELS.websandbox, icon: Code2 },
-      { key: 'quality', label: VIEW_LABELS.quality, icon: Gauge },
+      { key: 'write-review', label: VIEW_LABELS['write-review'], icon: BookOpen },
+      { key: 'submission', label: VIEW_LABELS.submission, icon: Send },
     ],
   },
   {
-    label: '投稿与复盘',
-    hint: '送出去、留存经验',
+    label: '工具箱',
+    hint: '长篇 / Web / 浏览器 / 记忆',
     defaultCollapsed: true,
     items: [
-      { key: 'submission', label: VIEW_LABELS.submission, icon: Send },
-      { key: 'memory', label: VIEW_LABELS.memory, icon: Brain },
+      { key: 'longform', label: VIEW_LABELS.longform, icon: BookOpen },
+      { key: 'websandbox', label: VIEW_LABELS.websandbox, icon: Code2 },
       { key: 'browser', label: VIEW_LABELS.browser, icon: Compass },
+      { key: 'memory', label: VIEW_LABELS.memory, icon: Brain },
     ],
   },
 ];
@@ -153,10 +150,12 @@ const NAV_GROUPS: { label: string; hint: string; defaultCollapsed?: boolean; ite
  * 让用户随时知道自己处在科研生命周期的哪一段，而不是面对 12 个平级按钮。
  */
 const VIEW_STAGE: Record<View, number> = {
-  workspace: 0, dashboard: 0, programs: 0,
-  literature: 1, knowledge: 1, experiments: 1,
-  pipeline: 2, writing: 2, longform: 2, websandbox: 2, quality: 2,
-  submission: 3, memory: 3, browser: 3,
+  dashboard: 0, design: 0, evidence: 0, experiments: 0,
+  'write-review': 1, submission: 1,
+  longform: 2, websandbox: 2, browser: 2, memory: 2,
+  // 兼容旧深链：这些页面不再出现在一级导航，但路由与阶段高亮仍有效
+  workspace: 0, programs: 0, literature: 0, knowledge: 0,
+  pipeline: 1, writing: 1, quality: 1,
   settings: -1,
 };
 
@@ -165,6 +164,9 @@ const VIEW_STAGE: Record<View, number> = {
 const PAGE_PADDING: Partial<Record<View, string>> = {
   workspace: 'p-3 sm:p-4',
   writing: 'p-2 sm:p-3',
+  design: 'p-3 sm:p-4',
+  evidence: 'p-3 sm:p-4',
+  'write-review': 'p-2 sm:p-3',
 };
 
 /** 主题上下文（暗色模式，2026 桌面工具标配） */
@@ -191,6 +193,60 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
   settings: () => <PageErrorBoundary pageName="设置"><SuspensePage name="设置"><SettingsPage /></SuspensePage></PageErrorBoundary>,
   dashboard: ({ project, onNavigate, openDoc }) =>
     project ? <PageErrorBoundary pageName="工作台"><SuspensePage name="项目总览"><DashboardPage project={project} onNavigate={onNavigate} openDoc={openDoc} /></SuspensePage></PageErrorBoundary> : null,
+  design: ({ project, openDoc }) =>
+    project ? (
+      <TabbedPage
+        name="研究设计"
+        tabs={[
+          {
+            key: 'programs',
+            label: '研究计划',
+            node: <PageErrorBoundary pageName="研究计划"><SuspensePage name="研究计划"><ResearchProgramsPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary>,
+          },
+          {
+            key: 'pipeline',
+            label: '全自动流水线',
+            node: <PageErrorBoundary pageName="全自动流水线"><SuspensePage name="全自动流水线"><PipelinePage key={project.id} project={project} onOpenDoc={openDoc} /></SuspensePage></PageErrorBoundary>,
+          },
+        ]}
+      />
+    ) : null,
+  evidence: ({ project }) =>
+    project ? (
+      <TabbedPage
+        name="证据库"
+        tabs={[
+          {
+            key: 'literature',
+            label: '文献库',
+            node: <PageErrorBoundary pageName="文献调研"><SuspensePage name="文献调研"><LiteraturePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary>,
+          },
+          {
+            key: 'knowledge',
+            label: '知识库',
+            node: <PageErrorBoundary pageName="知识库"><SuspensePage name="知识库"><KnowledgePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary>,
+          },
+        ]}
+      />
+    ) : null,
+  'write-review': ({ project, initialDocId }) =>
+    project ? (
+      <TabbedPage
+        name="写作与评审"
+        tabs={[
+          {
+            key: 'writing',
+            label: '论文写作',
+            node: <PageErrorBoundary pageName="论文写作"><SuspensePage name="论文写作"><WritingPage key={project.id} project={project} initialDocId={initialDocId} /></SuspensePage></PageErrorBoundary>,
+          },
+          {
+            key: 'quality',
+            label: '质量评审',
+            node: <PageErrorBoundary pageName="质量评分"><SuspensePage name="质量评分"><QualityPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary>,
+          },
+        ]}
+      />
+    ) : null,
   programs: ({ project }) =>
     project ? <PageErrorBoundary pageName="研究计划"><SuspensePage name="研究计划"><ResearchProgramsPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null,
   writing: ({ project, initialDocId }) =>
@@ -319,8 +375,8 @@ function AppInner() {
   }, [toast, qc, selectProject]);
 
   // 路由化：pathname 决定当前视图（hash 路由，刷新/分享/深链不丢状态）；无效路径兜底工作台
-  const rawView = (location.pathname.replace(/^\//, '') || 'workspace') as View;
-  const view: View = VIEW_KEYS.includes(rawView) ? rawView : 'workspace';
+  const rawView = (location.pathname.replace(/^\//, '') || 'dashboard') as View;
+  const view: View = VIEW_KEYS.includes(rawView) ? rawView : 'dashboard';
   const selectedDocId = searchParams.get('doc');
   const setView = useCallback(
     (v: View) => {
@@ -598,7 +654,7 @@ function AppInner() {
                   </ol>
                 </div>
               ) : (
-                <>{PAGE_RENDERERS[view]({ project: currentProject, openDoc: (id: string) => navigate(`/writing?doc=${id}`), onNavigate: setView, initialDocId: selectedDocId })}</>
+                <>{PAGE_RENDERERS[view]({ project: currentProject, openDoc: (id: string) => navigate(`/write-review?doc=${id}`), onNavigate: setView, initialDocId: selectedDocId })}</>
               )}
             </div>
           </AppShell>
@@ -1018,10 +1074,10 @@ function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onCl
  */
 function MobileTabBar({ view, onSelect }: { view: View; onSelect: (v: View) => void }) {
   const items: { key: View | 'more'; label: string; icon: typeof LayoutDashboard }[] = [
-    { key: 'workspace', label: '工作台', icon: LayoutDashboard },
-    { key: 'literature', label: '文献', icon: Library },
-    { key: 'pipeline', label: '流水线', icon: Workflow },
-    { key: 'writing', label: '写作', icon: BookOpen },
+    { key: 'dashboard', label: '驾驶舱', icon: LayoutGrid },
+    { key: 'design', label: '设计', icon: Target },
+    { key: 'evidence', label: '证据', icon: Library },
+    { key: 'write-review', label: '写作', icon: BookOpen },
     { key: 'more', label: '更多', icon: MenuIcon },
   ];
   return (
@@ -1084,7 +1140,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 /** 已知视图路径（与 VIEW_KEYS 对齐）：用于把裸路径 `/writing` 归一成 hash 路由 */
-const BARE_ROUTES = new Set(['workspace','dashboard','pipeline','writing','quality','literature','knowledge','experiments','submission','memory','settings']);
+const BARE_ROUTES = new Set(['workspace','dashboard','design','evidence','write-review','pipeline','writing','quality','literature','knowledge','experiments','submission','memory','settings']);
 
 /**
  * 裸路径兼容：HashRouter 只认 `#/writing`，而用户/文档/收藏夹常写 `/writing`。
