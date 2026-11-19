@@ -26,6 +26,9 @@ export default defineConfig({
   },
   test: {
     environment: 'happy-dom',
+    // 每个测试文件单独建 happy-dom 环境，38 个文件时环境创建占总时长约 45%。
+    // vmThreads 按 worker 复用 VM 环境，同时保留文件级隔离；先小范围验证再全量。
+    pool: 'vmThreads',
     globals: true,
     setupFiles: ['./src/test-setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
