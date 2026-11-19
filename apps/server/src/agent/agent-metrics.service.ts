@@ -1,13 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { and, desc, eq, gte } from 'drizzle-orm';
 import { db } from '../db/database';
-import { agentExecutions, llmCallLogs } from '../db/schema';
+import { agentExecutions, agentSteps, llmCallLogs } from '../db/schema';
 
 /**
  * Agent 指标 v0：把已有的工具调用日志与执行记录汇总成可观测数据。
  *
  * 作用域：llm_call_log 与 agent_execution 都带 project_id；传 projectId 时
  * 工具指标与 run 指标都按项目过滤，空串表示历史/全局行。
+ * 工具口径：chat 工具写 llm_call_log，流水线图内工具写 agent_step，两者合并统计。
  */
 export interface AgentToolMetric {
   tool: string;
@@ -78,13 +79,40 @@ export class AgentMetricsService {
       ))
       .all();
 
-    const total = toolRows.length;
-    const ok = toolRows.filter((r) => r.success === 1).length;
-    const latencies = toolRows.map((r) => r.latencyMs ?? 0);
+    // 流水线图内的工具调用写 agent_step（带 runId），chat 工具调用写 llm_call_log。
+    // 两边必须合并统计，否则「Agent 工具成功率」只看到聊天的一半，流水线跑得越多越失真。
+    const pipelineToolRows = db
+      .select({
+        toolName: agentSteps.toolName,
+        latencyMs: agentSteps.durationMs,
+        status: agentSteps.status,
+        createdAt: agentSteps.createdAt,
+      })
+      .from(agentSteps)
+      .innerJoin(agentExecutions, eq(agentSteps.runId, agentExecutions.id))
+      .where(and(
+        eq(agentSteps.kind, 'tool'),
+        gte(agentSteps.createdAt, since),
+        projectId ? eq(agentExecutions.projectId, projectId) : undefined,
+      ))
+      .all();
+    const toolRowsAll = [
+      ...toolRows,
+      ...pipelineToolRows.map((r) => ({
+        caller: `tool:${String(r.toolName ?? '')}`,
+        latencyMs: r.latencyMs,
+        success: r.status === 'ok' ? 1 : 0,
+        createdAt: r.createdAt,
+      })),
+    ];
+
+    const total = toolRowsAll.length;
+    const ok = toolRowsAll.filter((r) => r.success === 1).length;
+    const latencies = toolRowsAll.map((r) => r.latencyMs ?? 0);
     const avgMs = total ? Math.round(latencies.reduce((a, b) => a + b, 0) / total) : 0;
 
     const byToolMap = new Map<string, { calls: number; ok: number; fail: number; latencies: number[] }>();
-    for (const r of toolRows) {
+    for (const r of toolRowsAll) {
       const name = String(r.caller ?? '').replace(/^tool:/, '') || 'unknown';
       const m = byToolMap.get(name) ?? { calls: 0, ok: 0, fail: 0, latencies: [] };
       m.calls += 1;
@@ -130,7 +158,7 @@ export class AgentMetricsService {
     // 按天：工具调用 + 失败；tokens 取 run 记录（工具日志本身没有 token）
     const dayMap = new Map<string, { calls: number; fail: number; tokens: number }>();
     const dayKey = (ts: number) => new Date(ts).toISOString().slice(0, 10);
-    for (const r of toolRows) {
+    for (const r of toolRowsAll) {
       const k = dayKey(r.createdAt ?? since);
       const m = dayMap.get(k) ?? { calls: 0, fail: 0, tokens: 0 };
       m.calls += 1;

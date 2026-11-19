@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
-import { agentExecutions, llmCallLogs } from '../db/schema';
+import { agentExecutions, agentSteps, llmCallLogs } from '../db/schema';
 import { AgentMetricsService } from './agent-metrics.service';
 
 const svc = new AgentMetricsService();
 
 beforeEach(() => {
   db.delete(llmCallLogs).run();
+  db.delete(agentSteps).run();
   db.delete(agentExecutions).run();
 });
 
@@ -92,6 +93,38 @@ describe('AgentMetricsService', () => {
     const p1 = svc.get(7, 'p1');
     expect(p1.toolCalls.total).toBe(2);
     expect(p1.byTool.map((x) => x.tool)).toEqual(['document.get']);
+  });
+
+  it('把流水线 agent_step 的工具调用合并进工具指标，并按项目过滤', () => {
+    const now = Date.now();
+    for (const [pid, tool, status] of [
+      ['p1', 'document.get', 'ok'],
+      ['p2', 'experiment.run', 'error'],
+    ] as const) {
+      const runId = randomUUID();
+      db.insert(agentExecutions)
+        .values({ id: runId, projectId: pid, source: 'pipeline', status: 'done', createdAt: now })
+        .run();
+      db.insert(agentSteps)
+        .values({
+          id: randomUUID(),
+          runId,
+          seq: 1,
+          kind: 'tool',
+          title: `tool:${tool}`,
+          toolName: tool,
+          durationMs: 40,
+          status,
+          createdAt: now,
+        })
+        .run();
+    }
+    expect(svc.get(7).toolCalls.total).toBe(2);
+    const p1 = svc.get(7, 'p1');
+    expect(p1.toolCalls.total).toBe(1);
+    expect(p1.byTool[0]).toMatchObject({ tool: 'document.get', calls: 1, ok: 1, fail: 0 });
+    const p2 = svc.get(7, 'p2');
+    expect(p2.byTool[0]).toMatchObject({ tool: 'experiment.run', calls: 1, ok: 0, fail: 1 });
   });
 
   it('days 被夹在 1..90', () => {
