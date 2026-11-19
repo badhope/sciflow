@@ -99,7 +99,9 @@ async function main() {
   }
   const projectId = await seed();
 
-  const browser = await chromium.launch();
+  // 允许在 CI / 云主机上复用系统 Chromium（Playwright 自带浏览器未安装时仍可跑）
+  const executablePath = process.env.CHROMIUM_EXECUTABLE_PATH?.trim() || undefined;
+  const browser = await chromium.launch({ executablePath });
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
   const errors = [];

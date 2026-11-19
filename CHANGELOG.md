@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.16.9] - 2026-11-20
+
+### Fixed
+
+- **界面截图脚本支持复用系统 Chromium**：`scripts/capture-ui.mjs` 读取 `CHROMIUM_EXECUTABLE_PATH`，
+  Playwright 自带浏览器未安装的 CI / 云主机也能完成真实页面截图验收；文档补充调用方式。
+  本机实测 15 张浅色 + 3 张深色截图全部通过，0 页面错误。
+
 ## [1.16.8] - 2026-11-16
 
 首个可发布版本。1.16.0–1.16.7 的开发过程没有逐版记录，这里合并为一份面向使用者的说明：

@@ -316,6 +316,22 @@ curl http://127.0.0.1:3100/api/documents/<id>/objective-audit
 
 流水线里「质量门」步骤可用步骤开关整体停用（停用后不评分直接放行，仅用于调试）；客观检查器本身随时可通过 CLI/API/前端单独运行。
 
+## 界面截图验收（真实浏览器）
+
+`scripts/capture-ui.mjs` 会自启 mock 后端、写入临时 SQLite 种子项目，逐页断言关键内容并截图；默认输出 `docs/screenshots`，也可指定 `--out`：
+
+```bash
+node scripts/capture-ui.mjs --out /tmp/sciflow-shots
+```
+
+默认使用 Playwright 自带 Chromium。CI / 云主机未安装对应版本时，可复用系统 Chromium：
+
+```bash
+CHROMIUM_EXECUTABLE_PATH=/usr/local/bin/chromium node scripts/capture-ui.mjs --out /tmp/sciflow-shots
+```
+
+脚本覆盖 15 个浅色页面 + 3 个深色页面；任一页面断言失败会直接报错，适合放进发布前验收。
+
 ## CLI headless 全流程（一条命令出论文）
 
 后端已启动时，CLI 可无人值守跑完整流水线：
