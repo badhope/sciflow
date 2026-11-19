@@ -43,7 +43,7 @@ describe('ProjectCockpit', () => {
     expect(screen.getByText(/阶段 0\/6 完成 · 当前：/)).toBeTruthy();
     expect(screen.getByText('运行一次流水线')).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: /前往选题阶段/ }));
-    expect(onNavigate).toHaveBeenCalledWith('pipeline');
+    expect(onNavigate).toHaveBeenCalledWith('design', 'pipeline');
   });
 
   it('有正文但无评分：阶段推进到评审，质量门显示「未评分」而不是假绿', () => {

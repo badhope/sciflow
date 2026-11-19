@@ -62,12 +62,13 @@ export function ProjectCockpit({
   const doneCount = stages.filter((s) => s.done).length;
 
   /** 下一步动作：由当前阶段派生，给出可点击的具体动作而不是形容词 */
-  const nextAction = (): { label: string; view: View; detail: string } => {
+  const nextAction = (): { label: string; view: View; tab?: string; detail: string } => {
     switch (current.key) {
       case 'research':
         return {
-          label: docs.length === 0 ? '运行一次流水线' : '回到工作台继续对话',
-          view: docs.length === 0 ? 'pipeline' : 'workspace',
+          label: docs.length === 0 ? '运行一次流水线' : '继续写作',
+          view: docs.length === 0 ? 'design' : 'write-review',
+          tab: docs.length === 0 ? 'pipeline' : 'writing',
           detail:
             docs.length === 0
               ? '输入研究主题，自动完成选题验证 → 文献调研 → 大纲 → 起草 → 质量门'
@@ -76,21 +77,24 @@ export function ProjectCockpit({
       case 'literature':
         return {
           label: '检索并导入文献',
-          view: 'literature',
+          view: 'evidence',
+          tab: 'literature',
           detail: '学术库免 Key 直查 OpenAlex / Crossref / arXiv，导入后自动去重入本地库',
         };
       case 'outline':
         return {
           label: '确认章节大纲',
-          view: 'pipeline',
+          view: 'design',
+          tab: 'pipeline',
           detail: '大纲需人工确认后才进入起草；可切换「反共识变体」对比不同组织方式',
         };
       case 'draft':
-        return { label: '继续起草与润色', view: 'writing', detail: '分章起草，起草前自动注入文献池与项目写作偏好' };
+        return { label: '继续起草与润色', view: 'write-review', tab: 'writing', detail: '分章起草，起草前自动注入文献池与项目写作偏好' };
       case 'review':
         return {
           label: '跑质量门并回炉',
-          view: 'quality',
+          view: 'write-review',
+          tab: 'quality',
           detail: gate.passScore ? `当前标准「${gate.standardLabel}」及格 ${gate.passScore} 分` : '按所选标准判定，未达标自动回炉',
         };
       default:
@@ -144,7 +148,7 @@ export function ProjectCockpit({
           <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-teal-700 dark:text-teal-300">下一步</div>
           <div className="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">{next.label}</div>
           <p className="mb-3 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{next.detail}</p>
-          <Button onClick={() => onNavigate(next.view)} className="text-xs">
+          <Button onClick={() => onNavigate(next.view, next.tab)} className="text-xs">
             <Workflow size={13} aria-hidden="true" /> 前往{current.label}阶段
           </Button>
         </div>

@@ -2,7 +2,6 @@ import { Component, Suspense, lazy, useCallback, useContext, useEffect, useMemo,
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { HashRouter, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { PageErrorBoundary } from './components/PageErrorBoundary';
-import { EvidenceSummary } from './components/EvidenceSummary';
 import { Download, Upload } from 'lucide-react';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import {
@@ -17,13 +16,14 @@ import { AuthGate } from './components/AuthGate';
 import { AppShell, ShellNavGroup, ShellNavItem, useAppShell } from './components/AppShell';
 import { BrandLockup } from './components/BrandMark';
 import { StageBar } from './components/StageBar';
-import { TabbedPage } from './components/TabbedPage';
 import { buildCommands, filterCommands } from './lib/commands';
 import { canonicalHref } from './lib/view-aliases';
 import { useHotkeys } from './lib/hotkeys';
 import { Button, Input, Modal, Spinner, ErrorBox, ToastViewport, ConfirmDialog, downloadText, type ToastItem, type ToastKind } from './components/ui';
 // 路由级代码分割：所有页面懒加载（首屏只加载当前视图，大厂 SPA 标准）
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const DesignPage = lazy(() => import('./pages/DesignPage').then((m) => ({ default: m.DesignPage })));
+const EvidencePage = lazy(() => import('./pages/EvidencePage').then((m) => ({ default: m.EvidencePage })));
 const WebSandboxPage = lazy(() => import('./pages/WebSandboxPage').then((m) => ({ default: m.WebSandboxPage })));
 const BrowserPage = lazy(() => import('./pages/BrowserPage').then((m) => ({ default: m.BrowserPage })));
 const LongformPage = lazy(() => import('./pages/LongformPage').then((m) => ({ default: m.LongformPage })));
@@ -201,48 +201,19 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
     project ? <PageErrorBoundary pageName="工作台"><SuspensePage name="项目总览"><DashboardPage project={project} onNavigate={onNavigate} openDoc={openDoc} /></SuspensePage></PageErrorBoundary> : null,
   design: ({ project, openDoc, tab, onTabChange }) =>
     project ? (
-      <TabbedPage
-        name="研究设计"
-        activeKey={tab ?? undefined}
-        onChange={onTabChange}
-        tabs={[
-          {
-            key: 'programs',
-            label: '研究计划',
-            node: <PageErrorBoundary pageName="研究计划"><SuspensePage name="研究计划"><ResearchProgramsPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary>,
-          },
-          {
-            key: 'pipeline',
-            label: '全自动流水线',
-            node: <PageErrorBoundary pageName="全自动流水线"><SuspensePage name="全自动流水线"><PipelinePage key={project.id} project={project} onOpenDoc={openDoc} /></SuspensePage></PageErrorBoundary>,
-          },
-        ]}
-      />
+      <PageErrorBoundary pageName="研究设计">
+        <SuspensePage name="研究设计">
+          <DesignPage key={project.id} project={project} openDoc={openDoc} tab={tab} onTabChange={onTabChange ?? (() => undefined)} />
+        </SuspensePage>
+      </PageErrorBoundary>
     ) : null,
   evidence: ({ project, tab, onTabChange }) =>
     project ? (
-      <div className="flex h-full min-h-0 flex-col">
-        <EvidenceSummary project={project} />
-        <div className="min-h-0 flex-1">
-          <TabbedPage
-            name="证据库"
-            activeKey={tab ?? undefined}
-            onChange={onTabChange}
-            tabs={[
-              {
-                key: 'literature',
-                label: '文献库',
-                node: <PageErrorBoundary pageName="文献调研"><SuspensePage name="文献调研"><LiteraturePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary>,
-              },
-              {
-                key: 'knowledge',
-                label: '知识库',
-                node: <PageErrorBoundary pageName="知识库"><SuspensePage name="知识库"><KnowledgePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary>,
-              },
-            ]}
-          />
-        </div>
-      </div>
+      <PageErrorBoundary pageName="证据库">
+        <SuspensePage name="证据库">
+          <EvidencePage key={project.id} project={project} tab={tab} onTabChange={onTabChange ?? (() => undefined)} />
+        </SuspensePage>
+      </PageErrorBoundary>
     ) : null,
   'write-review': ({ project, initialDocId, tab, onTabChange, onDocChange }) =>
     project ? (
