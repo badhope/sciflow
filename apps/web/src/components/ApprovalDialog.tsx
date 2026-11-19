@@ -14,7 +14,7 @@ export interface ApprovalRequest {
   toolName: string;
   args: string;
   reason: string;
-  status: 'pending' | 'approved' | 'rejected' | 'expired';
+  status: 'pending' | 'approved' | 'rejected' | 'expired' | 'consumed';
   createdAt: number;
 }
 

@@ -7,93 +7,22 @@ import { request } from './core';
  * 执行列表、单次步骤链与 Token 用量走势。本地/企业模式均可访问。
  */
 
-export interface AgentExecution {
-  id: string;
-  projectId: string;
-  /** 触发来源（pipeline / mcp / manual） */
-  source: string;
-  /** 执行标签或目标描述 */
-  label: string;
-  status: 'running' | 'success' | 'failed' | 'stopped';
-  startedAt: number;
-  finishedAt?: number | null;
-  totalTokens?: number | null;
-}
-
-export interface AgentStep {
-  id: string;
-  runId: string;
-  index: number;
-  tool?: string | null;
-  summary: string;
-  tokens?: number | null;
-  status: string;
-  createdAt: number;
-}
-
-export interface AgentRunDetail extends AgentExecution {
-  steps: AgentStep[];
-}
+export type AgentExecution = components['schemas']['AgentExecutionDto'];
+export type AgentStep = components['schemas']['AgentStepDto'];
+export type AgentRunDetail = components['schemas']['AgentRunDetailDto'];
 
 /** Token 用量点：类型来自 OpenAPI 生成 contract（TokenUsagePointDto）。 */
 export type TokenUsagePoint = components['schemas']['TokenUsagePointDto'];
 
 
-/** 任务清单条目（harness：模型把多步工作显式列出，用户可核进度） */
-export interface TaskItem {
-  id: string;
-  content: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-  priority: 'high' | 'medium' | 'low';
-  seq: number;
-  group: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface TaskSummary {
-  total: number;
-  completed: number;
-  inProgress: number;
-  pending: number;
-  percent: number;
-}
-
-/** 工具审批请求（harness：有副作用的操作先问用户） */
-/** 计划级授权（研究计划批准后，计划内工具在步数/预算内自动放行） */
-export interface AgentPlanItem {
-  id: string;
-  projectId: string | null;
-  runId: string | null;
-  title: string;
-  summary: string;
-  plan: unknown;
-  allowedTools: string[];
-  status: 'pending' | 'approved' | 'rejected' | 'expired' | 'exhausted';
-  maxSteps: number;
-  usedSteps: number;
-  budgetTokens: number;
-  usedTokens: number;
-  createdAt: number;
-  approvedAt: number | null;
-  expiresAt: number | null;
-}
+export type TaskItem = components['schemas']['TaskItemDto'];
+export type TaskSummary = components['schemas']['TaskSummaryDto'];
+export type AgentPlanItem = components['schemas']['AgentPlanDto'];
+export type ApprovalItem = components['schemas']['AgentApprovalDto'];
 
 /** Agent 指标 v0（工具调用 + run 状态聚合） */
 /** Agent 指标：类型来自 OpenAPI 生成 contract（AgentMetricsDto）。 */
 export type AgentMetrics = components['schemas']['AgentMetricsDto'];
-
-export interface ApprovalItem {
-  id: string;
-  toolName: string;
-  args: string;
-  reason: string;
-  status: 'pending' | 'approved' | 'rejected' | 'expired';
-  projectId: string | null;
-  runId: string | null;
-  createdAt: number;
-  decidedAt: number | null;
-}
 
 export const agent = {
   /** 项目 Agent 执行历史列表 */

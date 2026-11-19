@@ -3464,6 +3464,103 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AgentExecutionDto: {
+            /** @description 执行 ID */
+            id: string;
+            /** @description 项目 ID */
+            projectId: string;
+            /**
+             * @description 触发来源
+             * @example chat
+             */
+            source: string;
+            /** @description 用户原始输入 */
+            input: string;
+            /** @description 最终输出摘要 */
+            outputSummary: string;
+            /** @description 总耗时（ms） */
+            durationMs: number;
+            /** @description 总 token */
+            totalTokens: number;
+            /**
+             * @description 状态
+             * @example running
+             */
+            status: string;
+            /** @description 错误信息 */
+            error: string;
+            /** @description 模型名 */
+            model: string;
+            /** @description 创建时间 */
+            createdAt: number;
+        };
+        AgentExecutionListDto: {
+            /** @description 执行记录 */
+            executions: components["schemas"]["AgentExecutionDto"][];
+        };
+        AgentStepDto: {
+            /** @description 步骤 ID */
+            id: string;
+            /** @description 所属执行 ID */
+            runId: string;
+            /** @description 步骤序号 */
+            seq: number;
+            /** @description 步骤类型 */
+            kind: string;
+            /** @description 步骤标题 */
+            title: string;
+            /** @description 输入（截断） */
+            input: string;
+            /** @description 输出（截断） */
+            output: string;
+            /** @description 耗时（ms） */
+            durationMs: number;
+            /** @description token */
+            tokens: number;
+            /** @description 工具名（kind=tool） */
+            toolName: string;
+            /**
+             * @description 状态
+             * @example ok
+             */
+            status: string;
+            /** @description 错误信息 */
+            error: string;
+            /** @description 创建时间 */
+            createdAt: number;
+        };
+        AgentRunDetailDto: {
+            /** @description 执行 ID */
+            id: string;
+            /** @description 项目 ID */
+            projectId: string;
+            /**
+             * @description 触发来源
+             * @example chat
+             */
+            source: string;
+            /** @description 用户原始输入 */
+            input: string;
+            /** @description 最终输出摘要 */
+            outputSummary: string;
+            /** @description 总耗时（ms） */
+            durationMs: number;
+            /** @description 总 token */
+            totalTokens: number;
+            /**
+             * @description 状态
+             * @example running
+             */
+            status: string;
+            /** @description 错误信息 */
+            error: string;
+            /** @description 模型名 */
+            model: string;
+            /** @description 创建时间 */
+            createdAt: number;
+            /** @description 步骤链 */
+            steps: components["schemas"]["AgentStepDto"][];
+        };
         TokenUsagePointDto: {
             /** @description 日期 YYYY-MM-DD */
             date: string;
@@ -3557,6 +3654,118 @@ export interface components {
             runs: components["schemas"]["AgentRunSummaryDto"];
             /** @description 最近 run */
             recentRuns: components["schemas"]["AgentRecentRunDto"][];
+        };
+        TaskItemDto: {
+            /** @description 任务 ID */
+            id: string;
+            /** @description 任务内容 */
+            content: string;
+            /**
+             * @description 状态
+             * @enum {string}
+             */
+            status: "pending" | "in_progress" | "completed" | "cancelled";
+            /**
+             * @description 优先级
+             * @enum {string}
+             */
+            priority: "high" | "medium" | "low";
+            /** @description 序号 */
+            seq: number;
+            /** @description 分组 */
+            group: string;
+            /** @description 创建时间 */
+            createdAt: number;
+            /** @description 更新时间 */
+            updatedAt: number;
+        };
+        TaskSummaryDto: {
+            /** @description 总数 */
+            total: number;
+            /** @description 已完成 */
+            completed: number;
+            /** @description 进行中 */
+            inProgress: number;
+            /** @description 待开始 */
+            pending: number;
+            /** @description 完成百分比 */
+            percent: number;
+        };
+        TaskListDto: {
+            tasks: components["schemas"]["TaskItemDto"][];
+            summary: components["schemas"]["TaskSummaryDto"];
+        };
+        AgentApprovalDto: {
+            /** @description 审批 ID */
+            id: string;
+            /** @description 工具名 */
+            toolName: string;
+            /** @description 参数 JSON */
+            args: string;
+            /** @description 需要批准的原因 */
+            reason: string;
+            /**
+             * @description 状态
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "rejected" | "expired" | "consumed";
+            /** @description 项目 ID */
+            projectId: string | null;
+            /** @description run ID */
+            runId: string | null;
+            /** @description 创建时间 */
+            createdAt: number;
+            /** @description 决定时间 */
+            decidedAt: number | null;
+        };
+        AgentApprovalListDto: {
+            approvals: components["schemas"]["AgentApprovalDto"][];
+        };
+        AgentApprovalDecisionDto: {
+            approval: components["schemas"]["AgentApprovalDto"] | null;
+        };
+        AgentPlanDto: {
+            /** @description 计划 ID */
+            id: string;
+            /** @description 项目 ID */
+            projectId: string | null;
+            /** @description run ID */
+            runId: string | null;
+            /** @description 标题 */
+            title: string;
+            /** @description 摘要 */
+            summary: string;
+            /** @description 结构化计划 */
+            plan: {
+                [key: string]: unknown;
+            } | null;
+            /** @description 允许自动放行的工具白名单 */
+            allowedTools: string[];
+            /**
+             * @description 状态
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "rejected" | "expired" | "exhausted";
+            /** @description 步数上限 */
+            maxSteps: number;
+            /** @description 已用步数 */
+            usedSteps: number;
+            /** @description token 预算（0=不限） */
+            budgetTokens: number;
+            /** @description 已用 token */
+            usedTokens: number;
+            /** @description 创建时间 */
+            createdAt: number;
+            /** @description 批准时间 */
+            approvedAt: number | null;
+            /** @description 有效期 */
+            expiresAt: number | null;
+        };
+        AgentPlanListDto: {
+            plans: components["schemas"]["AgentPlanDto"][];
+        };
+        AgentPlanResponseDto: {
+            plan: components["schemas"]["AgentPlanDto"];
         };
         ReferenceGraphNodeDto: {
             /** @description 文献 ID */
@@ -4074,7 +4283,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentExecutionListDto"];
+                };
             };
         };
     };
@@ -4093,7 +4304,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentRunDetailDto"];
+                };
             };
         };
     };
@@ -4174,7 +4387,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TaskListDto"];
+                };
             };
         };
     };
@@ -4249,7 +4464,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentApprovalListDto"];
+                };
             };
         };
     };
@@ -4264,11 +4481,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentApprovalDecisionDto"];
+                };
             };
         };
     };
@@ -4287,7 +4506,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentPlanListDto"];
+                };
             };
         };
     };
@@ -4300,11 +4521,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentPlanResponseDto"];
+                };
             };
         };
     };
@@ -4323,7 +4546,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentPlanResponseDto"];
+                };
             };
         };
     };
@@ -4338,11 +4563,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentPlanResponseDto"];
+                };
             };
         };
     };

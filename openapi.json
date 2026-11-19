@@ -66,7 +66,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentExecutionListDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -89,7 +96,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunDetailDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -210,7 +224,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskListDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -297,7 +318,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentApprovalListDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -319,8 +347,15 @@
           }
         ],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentApprovalDecisionDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -343,7 +378,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentPlanListDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -354,8 +396,15 @@
         "operationId": "AgentHarnessController_createPlan",
         "parameters": [],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentPlanResponseDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -378,7 +427,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentPlanResponseDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -398,8 +454,15 @@
           }
         ],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentPlanResponseDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -5873,6 +5936,230 @@
   "servers": [],
   "components": {
     "schemas": {
+      "AgentExecutionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "执行 ID"
+          },
+          "projectId": {
+            "type": "string",
+            "description": "项目 ID"
+          },
+          "source": {
+            "type": "string",
+            "description": "触发来源",
+            "example": "chat"
+          },
+          "input": {
+            "type": "string",
+            "description": "用户原始输入"
+          },
+          "outputSummary": {
+            "type": "string",
+            "description": "最终输出摘要"
+          },
+          "durationMs": {
+            "type": "number",
+            "description": "总耗时（ms）"
+          },
+          "totalTokens": {
+            "type": "number",
+            "description": "总 token"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态",
+            "example": "running"
+          },
+          "error": {
+            "type": "string",
+            "description": "错误信息"
+          },
+          "model": {
+            "type": "string",
+            "description": "模型名"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "source",
+          "input",
+          "outputSummary",
+          "durationMs",
+          "totalTokens",
+          "status",
+          "error",
+          "model",
+          "createdAt"
+        ]
+      },
+      "AgentExecutionListDto": {
+        "type": "object",
+        "properties": {
+          "executions": {
+            "description": "执行记录",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentExecutionDto"
+            }
+          }
+        },
+        "required": [
+          "executions"
+        ]
+      },
+      "AgentStepDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "步骤 ID"
+          },
+          "runId": {
+            "type": "string",
+            "description": "所属执行 ID"
+          },
+          "seq": {
+            "type": "number",
+            "description": "步骤序号"
+          },
+          "kind": {
+            "type": "string",
+            "description": "步骤类型"
+          },
+          "title": {
+            "type": "string",
+            "description": "步骤标题"
+          },
+          "input": {
+            "type": "string",
+            "description": "输入（截断）"
+          },
+          "output": {
+            "type": "string",
+            "description": "输出（截断）"
+          },
+          "durationMs": {
+            "type": "number",
+            "description": "耗时（ms）"
+          },
+          "tokens": {
+            "type": "number",
+            "description": "token"
+          },
+          "toolName": {
+            "type": "string",
+            "description": "工具名（kind=tool）"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态",
+            "example": "ok"
+          },
+          "error": {
+            "type": "string",
+            "description": "错误信息"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间"
+          }
+        },
+        "required": [
+          "id",
+          "runId",
+          "seq",
+          "kind",
+          "title",
+          "input",
+          "output",
+          "durationMs",
+          "tokens",
+          "toolName",
+          "status",
+          "error",
+          "createdAt"
+        ]
+      },
+      "AgentRunDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "执行 ID"
+          },
+          "projectId": {
+            "type": "string",
+            "description": "项目 ID"
+          },
+          "source": {
+            "type": "string",
+            "description": "触发来源",
+            "example": "chat"
+          },
+          "input": {
+            "type": "string",
+            "description": "用户原始输入"
+          },
+          "outputSummary": {
+            "type": "string",
+            "description": "最终输出摘要"
+          },
+          "durationMs": {
+            "type": "number",
+            "description": "总耗时（ms）"
+          },
+          "totalTokens": {
+            "type": "number",
+            "description": "总 token"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态",
+            "example": "running"
+          },
+          "error": {
+            "type": "string",
+            "description": "错误信息"
+          },
+          "model": {
+            "type": "string",
+            "description": "模型名"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间"
+          },
+          "steps": {
+            "description": "步骤链",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentStepDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "source",
+          "input",
+          "outputSummary",
+          "durationMs",
+          "totalTokens",
+          "status",
+          "error",
+          "model",
+          "createdAt",
+          "steps"
+        ]
+      },
       "TokenUsagePointDto": {
         "type": "object",
         "properties": {
@@ -6142,6 +6429,330 @@
           "byDay",
           "runs",
           "recentRuns"
+        ]
+      },
+      "TaskItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "任务 ID"
+          },
+          "content": {
+            "type": "string",
+            "description": "任务内容"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "priority": {
+            "type": "string",
+            "description": "优先级",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "seq": {
+            "type": "number",
+            "description": "序号"
+          },
+          "group": {
+            "type": "string",
+            "description": "分组"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "更新时间"
+          }
+        },
+        "required": [
+          "id",
+          "content",
+          "status",
+          "priority",
+          "seq",
+          "group",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "TaskSummaryDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总数"
+          },
+          "completed": {
+            "type": "number",
+            "description": "已完成"
+          },
+          "inProgress": {
+            "type": "number",
+            "description": "进行中"
+          },
+          "pending": {
+            "type": "number",
+            "description": "待开始"
+          },
+          "percent": {
+            "type": "number",
+            "description": "完成百分比"
+          }
+        },
+        "required": [
+          "total",
+          "completed",
+          "inProgress",
+          "pending",
+          "percent"
+        ]
+      },
+      "TaskListDto": {
+        "type": "object",
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskItemDto"
+            }
+          },
+          "summary": {
+            "$ref": "#/components/schemas/TaskSummaryDto"
+          }
+        },
+        "required": [
+          "tasks",
+          "summary"
+        ]
+      },
+      "AgentApprovalDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "审批 ID"
+          },
+          "toolName": {
+            "type": "string",
+            "description": "工具名"
+          },
+          "args": {
+            "type": "string",
+            "description": "参数 JSON"
+          },
+          "reason": {
+            "type": "string",
+            "description": "需要批准的原因"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "expired",
+              "consumed"
+            ]
+          },
+          "projectId": {
+            "type": "string",
+            "description": "项目 ID",
+            "nullable": true
+          },
+          "runId": {
+            "type": "string",
+            "description": "run ID",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间"
+          },
+          "decidedAt": {
+            "type": "number",
+            "description": "决定时间",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "toolName",
+          "args",
+          "reason",
+          "status",
+          "projectId",
+          "runId",
+          "createdAt",
+          "decidedAt"
+        ]
+      },
+      "AgentApprovalListDto": {
+        "type": "object",
+        "properties": {
+          "approvals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentApprovalDto"
+            }
+          }
+        },
+        "required": [
+          "approvals"
+        ]
+      },
+      "AgentApprovalDecisionDto": {
+        "type": "object",
+        "properties": {
+          "approval": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentApprovalDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "approval"
+        ]
+      },
+      "AgentPlanDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "计划 ID"
+          },
+          "projectId": {
+            "type": "string",
+            "description": "项目 ID",
+            "nullable": true
+          },
+          "runId": {
+            "type": "string",
+            "description": "run ID",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "description": "标题"
+          },
+          "summary": {
+            "type": "string",
+            "description": "摘要"
+          },
+          "plan": {
+            "type": "object",
+            "description": "结构化计划",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "allowedTools": {
+            "description": "允许自动放行的工具白名单",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "description": "状态",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "expired",
+              "exhausted"
+            ]
+          },
+          "maxSteps": {
+            "type": "number",
+            "description": "步数上限"
+          },
+          "usedSteps": {
+            "type": "number",
+            "description": "已用步数"
+          },
+          "budgetTokens": {
+            "type": "number",
+            "description": "token 预算（0=不限）"
+          },
+          "usedTokens": {
+            "type": "number",
+            "description": "已用 token"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间"
+          },
+          "approvedAt": {
+            "type": "number",
+            "description": "批准时间",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "number",
+            "description": "有效期",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "runId",
+          "title",
+          "summary",
+          "plan",
+          "allowedTools",
+          "status",
+          "maxSteps",
+          "usedSteps",
+          "budgetTokens",
+          "usedTokens",
+          "createdAt",
+          "approvedAt",
+          "expiresAt"
+        ]
+      },
+      "AgentPlanListDto": {
+        "type": "object",
+        "properties": {
+          "plans": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentPlanDto"
+            }
+          }
+        },
+        "required": [
+          "plans"
+        ]
+      },
+      "AgentPlanResponseDto": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/AgentPlanDto"
+          }
+        },
+        "required": [
+          "plan"
         ]
       },
       "ReferenceGraphNodeDto": {

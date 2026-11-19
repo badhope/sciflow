@@ -6,6 +6,7 @@ import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nest
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { AgentTraceService } from './agent-trace.service';
 import { AgentUsageTrendDto } from './token-usage.dto';
+import { AgentExecutionListDto, AgentRunDetailDto } from './agent-api.dto';
 import { OtelExportService } from './otel-export.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectAccessService } from '../common/project-access.service';
@@ -28,6 +29,7 @@ export class AgentTraceController {
 
   /** 项目 Agent 执行历史列表 */
   @Get('executions')
+  @ApiOkResponse({ type: AgentExecutionListDto })
   listExecutions(@Query('projectId') projectId: string, @Req() req?: { user?: AuthPayload }, @Query('limit') limit?: string) {
     if (!projectId) return { error: 'projectId required' };
     this.access.assertProject(projectId, req?.user);
@@ -36,6 +38,7 @@ export class AgentTraceController {
 
   /** 单次执行详情（含步骤链） */
   @Get('runs/:id')
+  @ApiOkResponse({ type: AgentRunDetailDto })
   getRun(@Param('id') id: string, @Req() req?: { user?: AuthPayload }) {
     this.access.assertAgentExecution(id, req?.user);
     const detail = this.trace.getRunDetail(id);

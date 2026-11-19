@@ -5,6 +5,13 @@ import { PlanAuthorizationService } from './plan-authorization.service';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { AgentMetricsService } from './agent-metrics.service';
 import { AgentMetricsDto } from './agent-metrics.dto';
+import {
+  AgentApprovalDecisionDto,
+  AgentApprovalListDto,
+  AgentPlanListDto,
+  AgentPlanResponseDto,
+  TaskListDto,
+} from './agent-api.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -54,6 +61,7 @@ export class AgentHarnessController {
 
   /** 读取任务清单（含进度摘要） */
   @Get('tasks')
+  @ApiOkResponse({ type: TaskListDto })
   listTasks(@Query('projectId') projectId?: string, @Query('runId') runId?: string, @Req() req?: { user?: AuthPayload }) {
     const pid = this.scopedProject(projectId, req?.user);
     return {
@@ -91,6 +99,7 @@ export class AgentHarnessController {
 
   /** 待处理审批：带项目则校验项目；不带项目时企业模式仅管理员可看全局 */
   @Get('approvals')
+  @ApiOkResponse({ type: AgentApprovalListDto })
   pendingApprovals(@Query('projectId') projectId?: string, @Req() req?: { user?: AuthPayload }) {
     if (projectId) this.access.assertProject(projectId, req?.user);
     else if (this.access.enforced) this.access.assertAdmin(req?.user);
@@ -99,6 +108,7 @@ export class AgentHarnessController {
 
   /** 批准或拒绝：审批记录必须属于当前用户的项目，全局审批仅管理员 */
   @Post('approvals/:id')
+  @ApiOkResponse({ type: AgentApprovalDecisionDto })
   decideApproval(@Param('id') id: string, @Body() body: { approved: boolean }, @Req() req?: { user?: AuthPayload }) {
     this.access.assertToolApproval(id, req?.user);
     return { approval: this.approvals.decide(id, body.approved === true) };
@@ -106,6 +116,7 @@ export class AgentHarnessController {
 
   /** 研究计划列表：项目内计划；无项目归属的全局计划企业模式仅管理员可看 */
   @Get('plans')
+  @ApiOkResponse({ type: AgentPlanListDto })
   listPlans(@Query('projectId') projectId?: string, @Req() req?: { user?: AuthPayload }) {
     if (projectId) this.access.assertProject(projectId, req?.user);
     else if (this.access.enforced) this.access.assertAdmin(req?.user);
@@ -114,6 +125,7 @@ export class AgentHarnessController {
 
   /** 创建研究计划（模型经 request_research_plan 创建；界面也可直接建） */
   @Post('plans')
+  @ApiOkResponse({ type: AgentPlanResponseDto })
   createPlan(
     @Body() body: { projectId?: string; title?: string; summary?: string; plan?: unknown; allowedTools?: string[]; maxSteps?: number; budgetTokens?: number },
     @Req() req?: { user?: AuthPayload },
@@ -135,6 +147,7 @@ export class AgentHarnessController {
 
   /** 读取单份计划（含预算/步数/白名单） */
   @Get('plans/:id')
+  @ApiOkResponse({ type: AgentPlanResponseDto })
   getPlan(@Param('id') id: string, @Req() req?: { user?: AuthPayload }) {
     this.access.assertAgentPlan(id, req?.user);
     return { plan: this.plans.get(id) };
@@ -142,6 +155,7 @@ export class AgentHarnessController {
 
   /** 批准 / 拒绝研究计划：批准后计划内工具在步数/预算内自动放行 */
   @Post('plans/:id')
+  @ApiOkResponse({ type: AgentPlanResponseDto })
   decidePlan(@Param('id') id: string, @Body() body: { approved: boolean }, @Req() req?: { user?: AuthPayload }) {
     this.access.assertAgentPlan(id, req?.user);
     return { plan: this.plans.decide(id, body.approved === true) };
