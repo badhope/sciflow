@@ -1,5 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query, Req } from '@nestjs/common';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { WebSandboxService } from './web-sandbox.service';
+import { WebProjectDto } from './web-sandbox.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -9,6 +11,7 @@ import type { AuthPayload } from '../auth/auth.service';
  * 每个步骤独立端点，前端可以逐步展示日志与状态；也提供 run-all 一键跑通。
  * 预览只监听 127.0.0.1，返回 URL 供前端 iframe 展示。
  */
+@ApiTags('WebProjects')
 @Controller('web-projects')
 export class WebSandboxController {
   constructor(
@@ -22,12 +25,14 @@ export class WebSandboxController {
   }
 
   @Get()
+  @ApiOkResponse({ type: [WebProjectDto] })
   list(@Query('projectId') projectId: string, @Req() req: { user?: AuthPayload }) {
     this.access.assertProject(projectId, req.user);
     return this.sandbox.list(projectId);
   }
 
   @Post()
+  @ApiOkResponse({ type: WebProjectDto })
   create(
     @Body() body: { projectId: string; name: string; template?: string },
     @Req() req: { user?: AuthPayload },
@@ -37,6 +42,7 @@ export class WebSandboxController {
   }
 
   @Get(':id')
+  @ApiOkResponse({ type: WebProjectDto })
   get(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
     const row = this.sandbox.get(id);
     this.access.assertProject(row.projectId, req.user);

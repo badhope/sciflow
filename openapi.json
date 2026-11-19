@@ -778,7 +778,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferenceGraphDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -5206,7 +5213,7 @@
           }
         },
         "tags": [
-          "WebSandbox"
+          "WebProjects"
         ]
       }
     },
@@ -5225,23 +5232,40 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WebProjectDto"
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
-          "WebSandbox"
+          "WebProjects"
         ]
       },
       "post": {
         "operationId": "WebSandboxController_create",
         "parameters": [],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebProjectDto"
+                }
+              }
+            }
           }
         },
         "tags": [
-          "WebSandbox"
+          "WebProjects"
         ]
       }
     },
@@ -5260,11 +5284,18 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebProjectDto"
+                }
+              }
+            }
           }
         },
         "tags": [
-          "WebSandbox"
+          "WebProjects"
         ]
       },
       "delete": {
@@ -5285,7 +5316,7 @@
           }
         },
         "tags": [
-          "WebSandbox"
+          "WebProjects"
         ]
       }
     },
@@ -5308,7 +5339,7 @@
           }
         },
         "tags": [
-          "WebSandbox"
+          "WebProjects"
         ]
       }
     },
@@ -5331,7 +5362,7 @@
           }
         },
         "tags": [
-          "WebSandbox"
+          "WebProjects"
         ]
       }
     },
@@ -5362,7 +5393,7 @@
           }
         },
         "tags": [
-          "WebSandbox"
+          "WebProjects"
         ]
       },
       "put": {
@@ -5383,7 +5414,7 @@
           }
         },
         "tags": [
-          "WebSandbox"
+          "WebProjects"
         ]
       },
       "delete": {
@@ -5412,7 +5443,7 @@
           }
         },
         "tags": [
-          "WebSandbox"
+          "WebProjects"
         ]
       }
     },
@@ -5435,7 +5466,7 @@
           }
         },
         "tags": [
-          "WebSandbox"
+          "WebProjects"
         ]
       }
     },
@@ -5458,7 +5489,7 @@
           }
         },
         "tags": [
-          "WebSandbox"
+          "WebProjects"
         ]
       }
     },
@@ -5481,7 +5512,7 @@
           }
         },
         "tags": [
-          "WebSandbox"
+          "WebProjects"
         ]
       }
     },
@@ -5504,7 +5535,7 @@
           }
         },
         "tags": [
-          "WebSandbox"
+          "WebProjects"
         ]
       }
     },
@@ -5814,6 +5845,107 @@
   "servers": [],
   "components": {
     "schemas": {
+      "ReferenceGraphNodeDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "文献 ID"
+          },
+          "title": {
+            "type": "string",
+            "description": "标题"
+          },
+          "year": {
+            "type": "number",
+            "description": "年份",
+            "nullable": true
+          },
+          "venue": {
+            "type": "string",
+            "description": "期刊/会议"
+          },
+          "citationCount": {
+            "type": "number",
+            "description": "引用次数"
+          },
+          "tags": {
+            "description": "标签",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "readingStatus": {
+            "type": "string",
+            "description": "阅读状态",
+            "example": "unread"
+          },
+          "isDuplicateOf": {
+            "type": "string",
+            "description": "重复指向的文献 ID"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "year",
+          "venue",
+          "citationCount",
+          "tags"
+        ]
+      },
+      "ReferenceGraphEdgeDto": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "string",
+            "description": "节点 A ID"
+          },
+          "b": {
+            "type": "string",
+            "description": "节点 B ID"
+          },
+          "weight": {
+            "type": "number",
+            "description": "共引文档数 / 重复边权重"
+          },
+          "type": {
+            "type": "string",
+            "description": "边类型",
+            "enum": [
+              "co-cite",
+              "dup"
+            ]
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "weight"
+        ]
+      },
+      "ReferenceGraphDto": {
+        "type": "object",
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReferenceGraphNodeDto"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReferenceGraphEdgeDto"
+            }
+          }
+        },
+        "required": [
+          "nodes",
+          "edges"
+        ]
+      },
       "ReferenceDto": {
         "type": "object",
         "properties": {
@@ -6516,6 +6648,81 @@
         },
         "required": [
           "message"
+        ]
+      },
+      "WebProjectDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Web 项目 ID"
+          },
+          "projectId": {
+            "type": "string",
+            "description": "所属项目 ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Web 项目名"
+          },
+          "template": {
+            "type": "string",
+            "description": "模板",
+            "example": "static"
+          },
+          "workDir": {
+            "type": "string",
+            "description": "沙箱工作目录"
+          },
+          "status": {
+            "type": "string",
+            "description": "状态",
+            "example": "created"
+          },
+          "previewPort": {
+            "type": "number",
+            "description": "预览端口（未启动为 null）",
+            "nullable": true
+          },
+          "previewUrl": {
+            "type": "string",
+            "description": "预览 URL"
+          },
+          "installLog": {
+            "type": "string",
+            "description": "安装日志（截断）"
+          },
+          "buildLog": {
+            "type": "string",
+            "description": "构建日志（截断）"
+          },
+          "error": {
+            "type": "string",
+            "description": "错误信息"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "更新时间"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "name",
+          "template",
+          "workDir",
+          "status",
+          "previewPort",
+          "previewUrl",
+          "installLog",
+          "buildLog",
+          "error",
+          "createdAt",
+          "updatedAt"
         ]
       }
     }

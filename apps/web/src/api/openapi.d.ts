@@ -3464,6 +3464,44 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ReferenceGraphNodeDto: {
+            /** @description 文献 ID */
+            id: string;
+            /** @description 标题 */
+            title: string;
+            /** @description 年份 */
+            year: number | null;
+            /** @description 期刊/会议 */
+            venue: string;
+            /** @description 引用次数 */
+            citationCount: number;
+            /** @description 标签 */
+            tags: string[];
+            /**
+             * @description 阅读状态
+             * @example unread
+             */
+            readingStatus?: string;
+            /** @description 重复指向的文献 ID */
+            isDuplicateOf?: string;
+        };
+        ReferenceGraphEdgeDto: {
+            /** @description 节点 A ID */
+            a: string;
+            /** @description 节点 B ID */
+            b: string;
+            /** @description 共引文档数 / 重复边权重 */
+            weight: number;
+            /**
+             * @description 边类型
+             * @enum {string}
+             */
+            type?: "co-cite" | "dup";
+        };
+        ReferenceGraphDto: {
+            nodes: components["schemas"]["ReferenceGraphNodeDto"][];
+            edges: components["schemas"]["ReferenceGraphEdgeDto"][];
+        };
         ReferenceDto: {
             /** @description 文献 ID */
             id: string;
@@ -3747,6 +3785,40 @@ export interface components {
             enableThinking?: boolean;
             /** @description 本轮强制联网搜索（输入区「联网」开关，按轮生效） */
             webSearch?: boolean;
+        };
+        WebProjectDto: {
+            /** @description Web 项目 ID */
+            id: string;
+            /** @description 所属项目 ID */
+            projectId: string;
+            /** @description Web 项目名 */
+            name: string;
+            /**
+             * @description 模板
+             * @example static
+             */
+            template: string;
+            /** @description 沙箱工作目录 */
+            workDir: string;
+            /**
+             * @description 状态
+             * @example created
+             */
+            status: string;
+            /** @description 预览端口（未启动为 null） */
+            previewPort: number | null;
+            /** @description 预览 URL */
+            previewUrl: string;
+            /** @description 安装日志（截断） */
+            installLog: string;
+            /** @description 构建日志（截断） */
+            buildLog: string;
+            /** @description 错误信息 */
+            error: string;
+            /** @description 创建时间 */
+            createdAt: number;
+            /** @description 更新时间 */
+            updatedAt: number;
         };
     };
     responses: never;
@@ -4495,7 +4567,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ReferenceGraphDto"];
+                };
             };
         };
     };
@@ -8540,7 +8614,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WebProjectDto"][];
+                };
             };
         };
     };
@@ -8553,11 +8629,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WebProjectDto"];
+                };
             };
         };
     };
@@ -8576,7 +8654,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["WebProjectDto"];
+                };
             };
         };
     };

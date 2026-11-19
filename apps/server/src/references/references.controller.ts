@@ -2,6 +2,7 @@ import { HttpCode, Controller, Get, Post, Put, Patch, Delete, Body, Param, Query
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ReferencesService, PaperHit } from './references.service';
 import { ReferenceDto } from './references.dto';
+import { ReferenceGraphDto } from './reference-graph.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import { ScholarSearchService } from '../research/scholar-search.service';
 import type { AuthPayload } from '../auth/auth.service';
@@ -97,6 +98,7 @@ export class ReferencesController {
 
   /** 引用网络图聚合（共引边 + 去重边），须声明在 :id 之前 */
   @Get('graph')
+  @ApiOkResponse({ type: ReferenceGraphDto })
   graph(@Query('projectId') projectId: string, @Req() req: { user?: AuthPayload }) {
     this.access.assertProject(projectId, req.user);
     return this.references.graph(projectId);

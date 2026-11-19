@@ -741,22 +741,8 @@ export interface JournalMatchResult {
 }
 
 /** 轻量实验沙箱：本机 python3 执行记录 */
-/** Web 项目沙箱记录 */
-export interface WebProject {
-  id: string;
-  projectId: string;
-  name: string;
-  template: string;
-  workDir: string;
-  status: string;
-  previewPort: number | null;
-  previewUrl: string;
-  installLog: string;
-  buildLog: string;
-  error: string;
-  createdAt: number;
-  updatedAt: number;
-}
+/** Web 项目沙箱记录：类型来自 OpenAPI 生成 contract（WebProjectDto）。 */
+export type WebProject = components['schemas']['WebProjectDto'];
 
 /**
  * 实验记录：类型来自 OpenAPI 生成 contract（ExperimentDto）。
@@ -793,29 +779,14 @@ export interface ParseEmailResult {
  * ===================================================================== */
 
 /** 引用网络节点（后端聚合，供前端力导向布局） */
-export interface GraphNode {
-  id: string;
-  title: string;
-  year: number | null;
-  venue: string;
-  citationCount: number;
-  tags: string[];
-  readingStatus?: string;
-  isDuplicateOf?: string;
-}
+/** 引用网络节点：类型来自 OpenAPI 生成 contract（ReferenceGraphNodeDto）。 */
+export type GraphNode = components['schemas']['ReferenceGraphNodeDto'];
 
-/** 引用网络边：a/b 为节点 id，weight=共引文档数（dup 边固定高亮） */
-export interface GraphEdge {
-  a: string;
-  b: string;
-  weight: number;
-  type?: 'co-cite' | 'dup';
-}
+/** 引用网络边：类型来自 OpenAPI 生成 contract（ReferenceGraphEdgeDto）。 */
+export type GraphEdge = components['schemas']['ReferenceGraphEdgeDto'];
 
-export interface ReferenceGraph {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-}
+/** 引用网络聚合：类型来自 OpenAPI 生成 contract（ReferenceGraphDto）。 */
+export type ReferenceGraph = components['schemas']['ReferenceGraphDto'];
 
 /** BibTeX 导入结果 */
 export interface BibtexImportResult {
