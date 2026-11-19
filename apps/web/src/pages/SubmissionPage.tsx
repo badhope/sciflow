@@ -476,11 +476,12 @@ export function SubmissionPage({ project }: { project: Project }) {
           <div className="space-y-3">
             <div>
               <div className="text-xs text-slate-400 dark:text-slate-500 mb-1">关联项目内文档（自动带出已记录的审稿意见）</div>
-              <Select
+              <DocumentSelect
                 className="w-full"
-                options={[{ value: '', label: '不关联文档，手动粘贴审稿意见…' }, ...docs.map((d) => ({ value: d.id, label: d.title }))]}
+                docs={docs}
+                placeholder="不关联文档，手动粘贴审稿意见…"
                 value={selDoc}
-                onChange={pickDoc}
+                onChange={(id) => pickDoc(id ?? '')}
               />
             </div>
 
@@ -553,10 +554,11 @@ export function SubmissionPage({ project }: { project: Project }) {
           <div className="space-y-3">
             <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">登记新投稿</div>
             <div className="grid sm:grid-cols-2 gap-2">
-              <Select
-                options={[{ value: '', label: '不关联文档' }, ...docs.map((d) => ({ value: d.id, label: d.title }))]}
+              <DocumentSelect
+                docs={docs}
+                placeholder="不关联文档"
                 value={regForm.docId}
-                onChange={(v) => setRegForm((f) => ({ ...f, docId: v }))}
+                onChange={(id) => setRegForm((f) => ({ ...f, docId: id ?? '' }))}
               />
               <Select
                 options={[{ value: '', label: '期刊库选择（可选）…' }, ...lib.map((j) => ({ value: j.id, label: j.name }))]}
