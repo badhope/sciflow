@@ -24,25 +24,37 @@ export function WriteReviewPage({
   initialDocId,
   tab,
   onTabChange,
+  onDocChange,
 }: {
   project: Project;
   initialDocId: string | null;
   tab?: string | null;
   onTabChange: (tab: string) => void;
+  /** 文档选择同步回 URL；刷新/分享仍停在同一篇。 */
+  onDocChange?: (id: string | null) => void;
 }) {
   const docsQuery = useProjectDocs(project.id);
   const docs = docsQuery.data ?? [];
-  const [docId, setDocId] = useState<string | null>(initialDocId);
+  const [docId, setDocIdState] = useState<string | null>(initialDocId);
 
-  // URL ?doc= 优先；从工作台/总览点「完整编辑器」时同步过来。
+  // URL ?doc= 是唯一外部来源；完整编辑器/刷新/分享都从这里同步。
   useEffect(() => {
-    if (initialDocId) setDocId(initialDocId);
+    setDocIdState(initialDocId);
   }, [initialDocId]);
 
   // 没有 URL 指定时默认选最新一篇；列表按 updatedAt 升序，取最后一条。
   useEffect(() => {
-    if (!docId && docs.length > 0) setDocId(docs[docs.length - 1].id);
-  }, [docId, docs]);
+    if (!docId && docs.length > 0) {
+      const latest = docs[docs.length - 1].id;
+      setDocIdState(latest);
+      onDocChange?.(latest);
+    }
+  }, [docId, docs, onDocChange]);
+
+  const selectDoc = (id: string | null) => {
+    setDocIdState(id);
+    onDocChange?.(id);
+  };
 
   return (
     <TabbedPage
@@ -56,7 +68,7 @@ export function WriteReviewPage({
           node: (
             <PageErrorBoundary pageName="论文写作">
               <Suspense fallback={<PageFallback name="论文写作" />}>
-                <WritingPage key={project.id} project={project} initialDocId={initialDocId} docId={docId} onDocChange={setDocId} />
+                <WritingPage key={project.id} project={project} initialDocId={initialDocId} docId={docId} onDocChange={selectDoc} />
               </Suspense>
             </PageErrorBoundary>
           ),
@@ -67,7 +79,7 @@ export function WriteReviewPage({
           node: (
             <PageErrorBoundary pageName="质量评分">
               <Suspense fallback={<PageFallback name="质量评分" />}>
-                <QualityPage key={project.id} project={project} docId={docId} onDocChange={setDocId} />
+                <QualityPage key={project.id} project={project} docId={docId} onDocChange={selectDoc} />
               </Suspense>
             </PageErrorBoundary>
           ),

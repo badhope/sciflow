@@ -25,10 +25,12 @@ const project = { id: 'p1', name: '测试项目' } as Project;
 
 describe('WriteReviewPage', () => {
   it('shares the selected document across writing and quality tabs', async () => {
-    render(<WriteReviewPage project={project} initialDocId={null} onTabChange={vi.fn()} />);
+    const onDocChange = vi.fn();
+    render(<WriteReviewPage project={project} initialDocId={null} onTabChange={vi.fn()} onDocChange={onDocChange} />);
     expect(await screen.findByText('写作当前：d2')).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: '选择论文 A' }));
     expect(await screen.findByText('写作当前：d1')).toBeTruthy();
+    expect(onDocChange).toHaveBeenLastCalledWith('d1');
     await userEvent.click(screen.getByRole('tab', { name: '质量评审' }));
     expect(await screen.findByText('评审当前：d1')).toBeTruthy();
   });

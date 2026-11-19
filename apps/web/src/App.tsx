@@ -183,6 +183,7 @@ interface PageRenderCtx {
   initialDocId: string | null;
   tab: string | null;
   onTabChange: (key: string) => void;
+  onDocChange: (id: string | null) => void;
 }
 const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
   workspace: ({ project, openDoc, initialDocId }) =>
@@ -242,7 +243,7 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
         </div>
       </div>
     ) : null,
-  'write-review': ({ project, initialDocId, tab, onTabChange }) =>
+  'write-review': ({ project, initialDocId, tab, onTabChange, onDocChange }) =>
     project ? (
       <PageErrorBoundary pageName="写作与评审">
         <SuspensePage name="写作与评审">
@@ -252,6 +253,7 @@ const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
             initialDocId={initialDocId}
             tab={tab}
             onTabChange={onTabChange ?? (() => undefined)}
+            onDocChange={onDocChange}
           />
         </SuspensePage>
       </PageErrorBoundary>
@@ -398,6 +400,15 @@ function AppInner() {
     (key: string) => {
       const next = new URLSearchParams(searchParams);
       next.set('tab', key);
+      navigate(`/${view}?${next.toString()}`);
+    },
+    [navigate, searchParams, view],
+  );
+  const setDocParam = useCallback(
+    (id: string | null) => {
+      const next = new URLSearchParams(searchParams);
+      if (id) next.set('doc', id);
+      else next.delete('doc');
       navigate(`/${view}?${next.toString()}`);
     },
     [navigate, searchParams, view],
@@ -679,7 +690,7 @@ function AppInner() {
                   </ol>
                 </div>
               ) : (
-                <>{PAGE_RENDERERS[view]({ project: currentProject, openDoc: (id: string) => navigate(`/write-review?tab=writing&doc=${id}`), onNavigate: setView, initialDocId: selectedDocId, tab: selectedTab, onTabChange: setTab })}</>
+                <>{PAGE_RENDERERS[view]({ project: currentProject, openDoc: (id: string) => navigate(`/write-review?tab=writing&doc=${id}`), onNavigate: setView, initialDocId: selectedDocId, tab: selectedTab, onTabChange: setTab, onDocChange: setDocParam })}</>
               )}
             </div>
           </AppShell>
