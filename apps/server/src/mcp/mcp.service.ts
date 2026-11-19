@@ -21,6 +21,8 @@ import { BrowserService } from '../browser/browser.service';
 import { MemoryService } from '../memory/memory.service';
 import { evaluateWithCritic } from '../research-cycle/agents/critic.agent';
 import { reviewWithExpert } from '../research-cycle/agents/expert.agent';
+import { planWithPi } from '../research-cycle/agents/pi.agent';
+import { designExperiment } from '../research-cycle/agents/experimenter.agent';
 import type { AuthPayload } from '../auth/auth.service';
 
 /** MCP 工具定义（符合 Model Context Protocol 2026 的 Tool 结构：name/description/inputSchema） */
@@ -256,6 +258,86 @@ export class McpService {
             previousVerdict: args.previousVerdict ? String(args.previousVerdict) : undefined,
             originalQuestion: args.originalQuestion ? String(args.originalQuestion) : undefined,
             context: 'mcp:research.critic',
+          });
+        },
+      },
+      {
+        name: 'research.plan',
+        description: 'PI（首席研究员）角色：把研究问题转成可证伪假设 + 可执行协议（变量/控制/样本/分析/步骤）。只读、不写库；会调用一次 LLM。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            question: { type: 'string', description: '要研究的问题' },
+            iteration: { type: 'number', description: '第几轮修订（从 0 开始）' },
+            priorFeedback: { type: 'string', description: '上一轮评审反馈（首轮可省略）' },
+            priorVerdict: { type: 'string', description: '上一轮结论（首轮可省略）' },
+            literature: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  year: { type: 'number' },
+                  venue: { type: 'string' },
+                  doi: { type: 'string' },
+                },
+                required: ['title'],
+              },
+              description: '检索到的文献线索（仅作背景，最多取 6 条）',
+            },
+          },
+          required: ['question'],
+        },
+        handler: async (args) => {
+          const missing = noProjectHint(args, ['question']);
+          if (missing) return { error: missing };
+          const literature = Array.isArray(args.literature)
+            ? args.literature
+                .filter((x: unknown) => x && typeof x === 'object')
+                .map((x: any) => ({
+                  title: String(x.title || ''),
+                  year: x.year === undefined ? null : Number(x.year),
+                  venue: String(x.venue || ''),
+                  doi: String(x.doi || ''),
+                }))
+                .filter((x) => x.title)
+            : [];
+          return planWithPi(this.ai, {
+            question: String(args.question),
+            iteration: Math.max(0, Number(args.iteration) || 0),
+            priorFeedback: args.priorFeedback ? String(args.priorFeedback) : undefined,
+            priorVerdict: args.priorVerdict ? String(args.priorVerdict) : undefined,
+            literature,
+            context: 'mcp:research.plan',
+          });
+        },
+      },
+      {
+        name: 'research.experiment',
+        description: 'Experimenter 角色：把假设与协议翻译成可执行 Python 实验脚本（含输出采集约定）。只生成代码、不执行；要运行请另调 experiment.run（需审批）。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            hypothesisStatement: { type: 'string' },
+            predictions: { type: 'array', items: { type: 'string' } },
+            design: { type: 'object', additionalProperties: true, description: '协议设计对象：目标/变量/控制/样本/分析/步骤' },
+            previousError: { type: 'string', description: '上一次运行失败的 stderr（可选，用于修复脚本）' },
+          },
+          required: ['hypothesisStatement', 'design'],
+        },
+        handler: async (args) => {
+          const missing = noProjectHint(args, ['hypothesisStatement', 'design']);
+          if (missing) return { error: missing };
+          const predictions = Array.isArray(args.predictions) ? args.predictions.map((p: unknown) => String(p)) : [];
+          const design = args.design && typeof args.design === 'object' && !Array.isArray(args.design)
+            ? (args.design as Record<string, unknown>)
+            : {};
+          return designExperiment(this.ai, {
+            hypothesisStatement: String(args.hypothesisStatement),
+            predictions,
+            design,
+            previousError: args.previousError ? String(args.previousError) : undefined,
+            context: 'mcp:research.experiment',
           });
         },
       },

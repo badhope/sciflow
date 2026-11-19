@@ -8,6 +8,8 @@ describe('MCP research role tools', () => {
   const byName = new Map(tools.map((t) => [t.name, t]));
 
   it('exposes research.critic / research.expert', () => {
+    expect(byName.has('research.plan')).toBe(true);
+    expect(byName.has('research.experiment')).toBe(true);
     expect(byName.has('research.critic')).toBe(true);
     expect(byName.has('research.expert')).toBe(true);
   });
@@ -20,6 +22,8 @@ describe('MCP research role tools', () => {
   });
 
   it('requires the inputs the role prompts depend on', () => {
+    expect(byName.get('research.plan')!.inputSchema.required).toEqual(['question']);
+    expect(byName.get('research.experiment')!.inputSchema.required).toEqual(['hypothesisStatement', 'design']);
     expect(byName.get('research.critic')!.inputSchema.required).toEqual(['hypothesisStatement', 'runOutput']);
     expect(byName.get('research.expert')!.inputSchema.required).toEqual(['question', 'hypothesisStatement', 'design']);
   });

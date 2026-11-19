@@ -43,6 +43,8 @@ describe('Agent 工具作用域', () => {
     expect(profileAllowsTool(p, 'knowledge.query')).toBe(true);
     expect(profileAllowsTool(p, 'references.extract')).toBe(true);
     expect(profileAllowsTool(p, 'document.get')).toBe(true);
+    expect(profileAllowsTool(p, 'research.plan')).toBe(true);
+    expect(profileAllowsTool(p, 'research.experiment')).toBe(true);
     expect(profileAllowsTool(p, 'research.critic')).toBe(true);
     expect(profileAllowsTool(p, 'research.expert')).toBe(true);
     expect(profileAllowsTool(p, 'document.update')).toBe(false);
