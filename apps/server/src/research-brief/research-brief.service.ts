@@ -84,7 +84,8 @@ export class ResearchBriefService {
    */
   render(projectId: string): string {
     const brief = this.get(projectId);
-    if (!brief.question && !brief.scope && !brief.methods && !brief.constraints && !brief.successCriteria) return '';
+    const values = [brief.question, brief.scope, brief.methods, brief.constraints, brief.successCriteria];
+    if (!values.some((value) => value.trim())) return '';
     const lines: string[] = ['项目研究 Brief（Agent 必须遵守的上下文）：'];
     const add = (label: string, value: string) => {
       const text = value.trim();
