@@ -20,6 +20,7 @@ import { ExperimentsService } from '../experiments/experiments.service';
 import { BrowserService } from '../browser/browser.service';
 import { MemoryService } from '../memory/memory.service';
 import { SubmissionService } from '../research/submission.service';
+import { NoveltyService } from '../research/novelty.service';
 import { ResearchBriefService } from '../research-brief/research-brief.service';
 import { evaluateWithCritic } from '../research-cycle/agents/critic.agent';
 import { reviewWithExpert } from '../research-cycle/agents/expert.agent';
@@ -105,6 +106,7 @@ export class McpService {
     private readonly memory: MemoryService,
     private readonly submission: SubmissionService,
     private readonly brief: ResearchBriefService,
+    private readonly novelty: NoveltyService,
   ) {
     this.tools = [
       {
@@ -128,6 +130,21 @@ export class McpService {
             args.projectId ? String(args.projectId) : undefined,
           );
         },
+      },
+      {
+        name: 'research.novelty',
+        description: '选题查新（立项前）：用 OpenAlex/Crossref/arXiv 检索相近工作，并结合本项目文献库计算重叠度。返回状态、重叠度、相近工作、建议与逐源可达性；境外源不可达时明确提示代理/本地降级。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: { type: 'string', description: '项目 ID；用于离线降级时只读本项目文献库' },
+            topic: { type: 'string', description: '选题原文，中文/英文均可' },
+            searchQuery: { type: 'string', description: '可选英文检索词；中文选题建议补充' },
+          },
+          required: ['projectId', 'topic'],
+        },
+        handler: async (args) =>
+          this.novelty.check(String(args.topic), String(args.projectId), args.searchQuery ? String(args.searchQuery) : undefined),
       },
       {
         name: 'literature.summarize',
@@ -1213,6 +1230,10 @@ export class McpService {
         throw new HttpException('企业模式下 literature.search 需要 projectId', HttpStatus.BAD_REQUEST);
       }
       this.access.assertProject(projectId, user);
+      return;
+    }
+    if (name === 'research.novelty') {
+      this.access.assertProject(String(args?.projectId || ''), user);
       return;
     }
     if (name === 'knowledge.query') {

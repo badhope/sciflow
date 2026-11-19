@@ -14,6 +14,11 @@ describe('MCP research role tools', () => {
     expect(byName.has('research.expert')).toBe(true);
   });
 
+  it('exposes standalone novelty check for the pre-project stage', () => {
+    expect(byName.has('research.novelty')).toBe(true);
+    expect(byName.get('research.novelty')!.inputSchema.required).toEqual(['projectId', 'topic']);
+  });
+
   it('exposes quality.history instead of leaving a profile-only phantom', () => {
     expect(byName.has('quality.history')).toBe(true);
     expect(byName.get('quality.history')!.inputSchema.required).toEqual(['documentId']);

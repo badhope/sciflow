@@ -13,6 +13,7 @@ import type {
   KnowledgeDocDetail,
   KnowledgeQueryResult,
   KnowledgeSearchHit,
+  NoveltyCheckResult,
   PaperComparisonResult,
   PipelineStepConfig,
   QualityReport,
@@ -128,6 +129,12 @@ export const research = {
       }>(`/api/knowledge/${projectId}/map?limit=${limit}`),
   },
   research: {
+    /** 选题查新：OpenAlex/Crossref/arXiv + 本项目本地库降级；立项前独立调用 */
+    noveltyCheck: (projectId: string, topic: string, searchQuery?: string) =>
+      request<NoveltyCheckResult>('/api/research/novelty-check', {
+        method: 'POST',
+        body: JSON.stringify({ projectId, topic, searchQuery }),
+      }),
     designReview: (idea: string, papers: { title: string; year?: number | null; venue?: string; abstract?: string }[]) =>
       request<ResearchDesignResult>(`/api/research/design-review`, { method: 'POST', body: JSON.stringify({ idea, papers }) }),
     comparison: (papers: { title: string; year?: number | null; venue?: string; abstract?: string }[]) =>

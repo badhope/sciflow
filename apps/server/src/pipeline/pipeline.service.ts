@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import pLimit from 'p-limit';
 import { Command } from '@langchain/langgraph';
 import { db } from '../db/database';
-import { pipelineTasks, documents, pipelineConfigs, appSettings, projects, llmCallLogs, references } from '../db/schema';
+import { pipelineTasks, documents, pipelineConfigs, appSettings, projects, llmCallLogs } from '../db/schema';
 import { AiService } from '../ai/ai.service';
 import { ReferencesService, PaperHit } from '../references/references.service';
 import { parseJson, parseStringList } from '../common/json-guard';
@@ -20,8 +20,8 @@ import { WebSearchService } from '../websearch/websearch.service';
 import { ConfigCenterService } from '../config/config-center.service';
 import { ScholarSearchService, summarizeScholarSources } from '../research/scholar-search.service';
 import { buildWebHits, isWebSearchEnabled } from './pipeline-websearch';
-import { normalizeKnScore, noveltyOverlap } from './pipeline-metrics';
-import { noveltyFallback } from './novelty-fallback';
+import { normalizeKnScore } from './pipeline-metrics';
+import { NoveltyService } from '../research/novelty.service';
 import { envInt } from '../common/env';
 
 /** UI 步骤条（单一来源：packages/core/pipeline-steps） */
@@ -90,6 +90,7 @@ export class PipelineService implements OnModuleInit {
     private readonly websearch: WebSearchService,
     private readonly config: ConfigCenterService,
     private readonly scholar: ScholarSearchService,
+    private readonly novelty: NoveltyService,
   ) {}
 
   onModuleInit() {
@@ -473,82 +474,9 @@ export class PipelineService implements OnModuleInit {
    *  - 不写库：预检结果只进步骤输出与（高重叠时）产物研究说明，避免污染参考文献池。
    *  - 只取近 8 年：科研选题撞车主要发生在近期工作，老论文不影响新颖性判断。
    */
-  private async noveltyCheck(topic: string, projectId?: string): Promise<{
-    skipped?: boolean;
-    offline?: boolean;
-    basis?: string;
-    specificity?: number;
-    overlap: number;
-    similar: { title: string; year: number | null; venue: string; doi: string }[];
-    advice: string;
-    /** 源可达性提示：部分/全部境外源不可达时进入流水线步骤输出与产物说明 */
-    notice?: string;
-  }> {
-    if (!this.scholar.isEnabled((k) => this.readSetting(k))) {
-      // 学术检索关闭：不再沉默返回 skipped，改用本地库证据做确定性降级判断
-      const localTitles = this.readLocalTitlesForNovelty(projectId);
-      const fb = noveltyFallback({ topic, localTitles });
-      return { ...fb, similar: [] };
-    }
-    let outcome: Awaited<ReturnType<typeof this.scholar.searchWithStatus>>;
-    try {
-      outcome = await this.scholar.searchWithStatus([topic], 8);
-    } catch {
-      const fb = noveltyFallback({ topic, localTitles: this.readLocalTitlesForNovelty(projectId) });
-      return { ...fb, similar: [], notice: '学术检索请求异常，已用本地库降级判断。' };
-    }
-    const state = summarizeScholarSources(outcome.sources, outcome.hits.length);
-    // 全部源不可达：不能把空数组当成「未找到相近工作」，否则会误报选题很新
-    if (state.status === 'offline') {
-      const fb = noveltyFallback({ topic, localTitles: this.readLocalTitlesForNovelty(projectId) });
-      return { ...fb, similar: [], notice: state.notice };
-    }
-    const partialNotice = state.status === 'degraded' ? state.notice : undefined;
-    const hits = outcome.hits;
-    if (!hits.length) {
-      return {
-        skipped: false,
-        overlap: 0,
-        similar: [],
-        advice: partialNotice
-          ? '部分学术源不可达，当前命中为空不能据此判断选题新颖；请配置代理后复核，或先用本地库做降级判断'
-          : '学术库未找到相近工作，选题可能较新；建议再用 1-2 组同义词复核',
-        notice: partialNotice,
-      };
-    }
-    const recent = hits.filter((h) => !h.year || h.year >= new Date().getFullYear() - 8);
-    const pool = recent.length ? recent : hits;
-    // 重叠度口径收敛到纯函数（pipeline-metrics.noveltyOverlap，含单测）：以选题 token 为分母，
-    // 取最相近一篇标题的覆盖率，避免长标题把同题论文摊薄成"较新颖"的假绿灯。
-    const best = noveltyOverlap(topic, pool.map((h) => h.title));
-    const similar = pool
-      .slice(0, 5)
-      .map((h) => ({ title: h.title, year: h.year, venue: h.venue, doi: h.doi }));
-    const advice =
-      best >= 70
-        ? '重叠度高：建议把研究问题收窄到具体子问题/新数据集/新评估协议，或在大纲里显式对比这几篇并说明增量'
-        : best >= 40
-          ? '重叠度中等：选题方向已有人做，需在引言明确差异化定位（方法/数据/场景/评价维度至少一项不同）'
-          : '重叠度低：相近工作较少，注意确认是"真空白"还是"检索词未覆盖"';
-    return { overlap: best, similar, advice, notice: partialNotice };
-  }
-
-  /** 本地库标题池（项目文献 + 知识库文档名）：新颖性离线降级的证据来源 */
-  /**
-   * 离线降级用的本地标题池。
-   *
-   * 必须按项目过滤：历史实现读全库 references，导致 A 项目的文献压低 B 项目的新颖性评分，
-   * 企业模式下还构成跨项目数据泄露。
-   */
-  private readLocalTitlesForNovelty(projectId?: string): string[] {
-    try {
-      const rows = projectId
-        ? db.select({ title: references.title }).from(references).where(eq(references.projectId, projectId)).all()
-        : db.select({ title: references.title }).from(references).all();
-      return rows.map((r) => r.title || '').filter(Boolean);
-    } catch {
-      return [];
-    }
+  /** 选题查新：与 POST /api/research/novelty-check 共用 NoveltyService，避免两套口径。 */
+  private async noveltyCheck(topic: string, projectId?: string) {
+    return this.novelty.check(topic, projectId);
   }
 
   private stepEnabled(key: string): boolean {

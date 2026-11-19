@@ -62,7 +62,7 @@ function overlapWithLocal(topic: string, titles: string[]): number {
 }
 
 /** 特异性 0-100：命中越多具体限定语、越少纯通用词，越具体。 */
-function specificityOf(topic: string): number {
+export function specificityOf(topic: string): number {
   const tokens = tokenize(topic);
   if (!tokens.length) return 0;
   const generic = tokens.filter((t) => GENERIC_TERMS.includes(t)).length;

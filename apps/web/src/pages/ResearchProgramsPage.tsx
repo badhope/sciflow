@@ -23,6 +23,7 @@ import {
 } from './programs/labels';
 import { QuestionBlock } from './programs/HypothesisProtocols';
 import { ClaimEvidence } from './programs/ClaimEvidence';
+import { NoveltyCheckCard } from './programs/NoveltyCheckCard';
 import { RunCreator } from './programs/RunCreator';
 import { ResearchCycleRunner } from './programs/ResearchCycleRunner';
 
@@ -210,12 +211,22 @@ export function ResearchProgramsPage({ project }: { project: Project }) {
         </Button>
       </div>
 
-      <Card className="p-4">
+      <NoveltyCheckCard
+        projectId={project.id}
+        suggestedTopic={active?.title}
+        onUseTopic={(t) => {
+          setTitle(t);
+          document.getElementById('new-program-title')?.focus();
+          document.getElementById('new-program-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }}
+      />
+
+      <Card id="new-program-card" className="p-4">
         <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
           <FlaskConical size={16} className="text-teal-600" /> 新建研究计划
         </div>
         <div className="grid gap-3 md:grid-cols-[1.2fr_2fr_auto]">
-          <Input placeholder="标题，如：图神经网络复现" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <Input id="new-program-title" placeholder="标题，如：图神经网络复现" value={title} onChange={(e) => setTitle(e.target.value)} />
           <Input placeholder="研究目标（可选）" value={goal} onChange={(e) => setGoal(e.target.value)} />
           <div className="flex flex-wrap items-center gap-2">
             <Select options={AUTONOMY} value={autonomy} onChange={setAutonomy} ariaLabel="自主等级" />

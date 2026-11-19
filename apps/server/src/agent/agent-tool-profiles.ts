@@ -57,6 +57,7 @@ const TOOL_GROUP_EXACT: Record<string, AgentToolGroup> = {
   'experiment.list': 'experiment_read',
   'experiment.get': 'experiment_read',
   'experiment.run': 'experiment_write',
+  'research.novelty': 'research',
   'research.plan': 'research',
   'research.experiment': 'research',
   'research.critic': 'research',

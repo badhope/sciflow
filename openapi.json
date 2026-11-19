@@ -1187,6 +1187,37 @@
         ]
       }
     },
+    "/research/novelty-check": {
+      "post": {
+        "operationId": "ResearchController_noveltyCheck",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoveltyCheckRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoveltyCheckDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
     "/research/design-review": {
       "post": {
         "operationId": "ResearchController_designReview",
@@ -5936,7 +5967,7 @@
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "1.17.0",
+    "version": "1.18.0",
     "contact": {}
   },
   "tags": [],
@@ -7093,6 +7124,147 @@
           "tags",
           "citationCount",
           "createdAt"
+        ]
+      },
+      "NoveltyCheckRequestDto": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "description": "项目 ID"
+          },
+          "topic": {
+            "type": "string",
+            "description": "选题原文（中文/英文均可）"
+          },
+          "searchQuery": {
+            "type": "string",
+            "description": "可选英文检索词；中文选题建议补充，提高境外学术源命中率"
+          }
+        },
+        "required": [
+          "projectId",
+          "topic"
+        ]
+      },
+      "NoveltySimilarWorkDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "标题"
+          },
+          "year": {
+            "type": "number",
+            "description": "发表年份",
+            "nullable": true
+          },
+          "venue": {
+            "type": "string",
+            "description": "期刊/会议"
+          },
+          "doi": {
+            "type": "string",
+            "description": "DOI"
+          },
+          "url": {
+            "type": "string",
+            "description": "原文链接"
+          },
+          "source": {
+            "type": "string",
+            "description": "来源",
+            "example": "openalex"
+          },
+          "citationCount": {
+            "type": "number",
+            "description": "引用次数"
+          }
+        },
+        "required": [
+          "title",
+          "year",
+          "venue",
+          "doi",
+          "url",
+          "source",
+          "citationCount"
+        ]
+      },
+      "NoveltyCheckDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "结果状态",
+            "enum": [
+              "ok",
+              "degraded",
+              "offline",
+              "disabled"
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "学术检索是否开启"
+          },
+          "offline": {
+            "type": "boolean",
+            "description": "是否使用本地库离线降级"
+          },
+          "basis": {
+            "type": "string",
+            "description": "结论依据",
+            "enum": [
+              "scholar",
+              "offline-fallback"
+            ]
+          },
+          "overlap": {
+            "type": "number",
+            "description": "选题与最相近工作的 token 重叠度（0-100）"
+          },
+          "specificity": {
+            "type": "number",
+            "description": "选题特异性（0-100）"
+          },
+          "similar": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NoveltySimilarWorkDto"
+            }
+          },
+          "advice": {
+            "type": "string",
+            "description": "可行动建议"
+          },
+          "notice": {
+            "type": "string",
+            "description": "源不可达/功能关闭时的提示；正常查新为空串"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScholarSourceStatusDto"
+            }
+          },
+          "hitCount": {
+            "type": "number",
+            "description": "本次学术源命中总数（未去重前）"
+          }
+        },
+        "required": [
+          "status",
+          "enabled",
+          "offline",
+          "basis",
+          "overlap",
+          "specificity",
+          "similar",
+          "advice",
+          "notice",
+          "sources",
+          "hitCount"
         ]
       },
       "ProjectQualityOverviewItemDto": {

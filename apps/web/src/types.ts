@@ -163,6 +163,7 @@ export type DiscoveredReference = {
 
 /** 学术发现检索结果：含三源可达性，前端据此区分「没搜到」与「网络不可达」 */
 export type ReferenceDiscoverResult = components['schemas']['ReferenceDiscoverDto'];
+export type NoveltyCheckResult = components['schemas']['NoveltyCheckDto'];
 
 /** 文献录入入参（authors 兼容数组与 JSON 字符串两种形态） */
 export type ReferenceInput = {

@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.18.0] - 2026-11-20
+
+### Added
+
+- **立项前选题查新（独立入口）**：把原先只存在于全自动流水线里的新颖性预检抽成可复用能力。
+  研究设计页新增「选题查新」卡片：输入选题与可选英文检索词即可查相近工作，返回重叠度、
+  特异性、命中数、逐源可达性与相近工作列表；结果可直接打开 DOI / arXiv 原文。
+- **统一口径**：新增 `NoveltyService` 与 `POST /api/research/novelty-check`，联网查新、
+  三源可达性、离线降级、重叠度与相近工作由独立 API、Agent 工具和研究流水线共用一套实现。
+  中文选题可配合英文检索词比对，避免只用中文与英文标题匹配导致重叠度恒为 0。
+- **Agent 工具 `research.novelty`**：模型可在立项前主动查新，参数为 `projectId / topic /
+  searchQuery?`；已登记到科研只读 profile，并纳入默认工具白名单与 120s 长任务超时。
+- **离线可行动提示**：境外源不可达时，卡片显示本地库降级结果与「可能需要代理 / 可用本地库或
+  DOI / BibTeX 补充」，不把网络失败误报成「没有相近工作」。
+
 ## [1.17.0] - 2026-11-20
 
 ### Added

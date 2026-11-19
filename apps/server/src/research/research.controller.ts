@@ -1,5 +1,8 @@
 import { BadRequestException, Body, Controller, Get, Post, Patch, Delete, Param, Query, HttpException, HttpStatus, Req } from '@nestjs/common';
+import { ApiOkResponse } from '@nestjs/swagger';
 import { ResearchService } from './research.service';
+import { NoveltyService } from './novelty.service';
+import { NoveltyCheckDto, NoveltyCheckRequestDto } from './novelty.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -12,6 +15,7 @@ import type { AuthPayload } from '../auth/auth.service';
 export class ResearchController {
   constructor(
     private readonly research: ResearchService,
+    private readonly novelty: NoveltyService,
     private readonly access: ProjectAccessService,
   ) {}
 
@@ -21,6 +25,15 @@ export class ResearchController {
       throw new HttpException(result.error, HttpStatus.BAD_REQUEST);
     }
     return result;
+  }
+
+  /** 选题查新：立项前单独跑，复用流水线的三源可达性/重叠度/离线降级口径 */
+  @Post('novelty-check')
+  @ApiOkResponse({ type: NoveltyCheckDto })
+  async noveltyCheck(@Body() body: NoveltyCheckRequestDto, @Req() req: { user?: AuthPayload }) {
+    this.access.assertProject(body?.projectId, req.user);
+    if (!body?.topic?.trim()) throw new BadRequestException('topic 不能为空');
+    return this.novelty.check(body.topic.trim(), body.projectId, body.searchQuery?.trim());
   }
 
   @Post('design-review')

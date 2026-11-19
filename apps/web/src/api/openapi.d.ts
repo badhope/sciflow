@@ -692,6 +692,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/research/novelty-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ResearchController_noveltyCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/research/design-review": {
         parameters: {
             query?: never;
@@ -3899,6 +3915,61 @@ export interface components {
             /** @description 重复文献指向的已有文献 ID */
             isDuplicateOf?: string;
         };
+        NoveltyCheckRequestDto: {
+            /** @description 项目 ID */
+            projectId: string;
+            /** @description 选题原文（中文/英文均可） */
+            topic: string;
+            /** @description 可选英文检索词；中文选题建议补充，提高境外学术源命中率 */
+            searchQuery?: string;
+        };
+        NoveltySimilarWorkDto: {
+            /** @description 标题 */
+            title: string;
+            /** @description 发表年份 */
+            year: number | null;
+            /** @description 期刊/会议 */
+            venue: string;
+            /** @description DOI */
+            doi: string;
+            /** @description 原文链接 */
+            url: string;
+            /**
+             * @description 来源
+             * @example openalex
+             */
+            source: string;
+            /** @description 引用次数 */
+            citationCount: number;
+        };
+        NoveltyCheckDto: {
+            /**
+             * @description 结果状态
+             * @enum {string}
+             */
+            status: "ok" | "degraded" | "offline" | "disabled";
+            /** @description 学术检索是否开启 */
+            enabled: boolean;
+            /** @description 是否使用本地库离线降级 */
+            offline: boolean;
+            /**
+             * @description 结论依据
+             * @enum {string}
+             */
+            basis: "scholar" | "offline-fallback";
+            /** @description 选题与最相近工作的 token 重叠度（0-100） */
+            overlap: number;
+            /** @description 选题特异性（0-100） */
+            specificity: number;
+            similar: components["schemas"]["NoveltySimilarWorkDto"][];
+            /** @description 可行动建议 */
+            advice: string;
+            /** @description 源不可达/功能关闭时的提示；正常查新为空串 */
+            notice: string;
+            sources: components["schemas"]["ScholarSourceStatusDto"][];
+            /** @description 本次学术源命中总数（未去重前） */
+            hitCount: number;
+        };
         ProjectQualityOverviewItemDto: {
             /** @description 文档 ID */
             documentId: string;
@@ -5339,6 +5410,29 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    ResearchController_noveltyCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoveltyCheckRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoveltyCheckDto"];
+                };
             };
         };
     };
