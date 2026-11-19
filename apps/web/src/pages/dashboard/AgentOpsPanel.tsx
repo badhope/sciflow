@@ -46,13 +46,13 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
   const [busy, setBusy] = useState<string | null>(null);
 
   const metricsQuery = useQuery({
-    queryKey: ['agent-metrics', projectId],
+    queryKey: qk.agentMetrics(projectId),
     queryFn: () => api.agent.metrics(projectId, 7),
     retry: 0,
     refetchInterval: 30_000,
   });
   const plansQuery = useQuery({
-    queryKey: ['agent-plans', projectId],
+    queryKey: qk.agentPlans(projectId),
     queryFn: () => api.agent.plans(projectId),
     retry: 0,
     refetchInterval: 15_000,
