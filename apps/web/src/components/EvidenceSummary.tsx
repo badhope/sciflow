@@ -1,4 +1,4 @@
-import { BookOpen, Library, Link2 } from 'lucide-react';
+import { BookOpen, Library } from 'lucide-react';
 import type { Project } from '../types';
 import { useProjectKnowledge, useProjectRefs } from '../lib/queries';
 import { Card } from './ui';
@@ -27,9 +27,6 @@ export function EvidenceSummary({ project }: { project: Project }) {
       </span>
       <span className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
         <BookOpen size={12} aria-hidden="true" /> 资料 <b className="text-slate-700 dark:text-slate-200">{count(knowledge?.length)}</b> 份
-      </span>
-      <span className="ml-auto hidden items-center gap-1 text-[11px] text-slate-400 sm:flex">
-        <Link2 size={11} aria-hidden="true" /> 文献与资料共用同一项目上下文
       </span>
     </Card>
   );

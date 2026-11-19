@@ -19,6 +19,7 @@ import { BrandLockup } from './components/BrandMark';
 import { StageBar } from './components/StageBar';
 import { TabbedPage } from './components/TabbedPage';
 import { buildCommands, filterCommands } from './lib/commands';
+import { canonicalHref } from './lib/view-aliases';
 import { useHotkeys } from './lib/hotkeys';
 import { Button, Input, Modal, Spinner, ErrorBox, ToastViewport, ConfirmDialog, downloadText, type ToastItem, type ToastKind } from './components/ui';
 // 路由级代码分割：所有页面懒加载（首屏只加载当前视图，大厂 SPA 标准）
@@ -392,9 +393,10 @@ function AppInner() {
   const selectedTab = searchParams.get('tab');
   const setView = useCallback(
     (v: View) => {
-      navigate(`/${v}`);
+      const href = canonicalHref(v, null, selectedDocId);
+      navigate(href ?? `/${v}`);
     },
-    [navigate],
+    [navigate, selectedDocId],
   );
   const setTab = useCallback(
     (key: string) => {
@@ -416,10 +418,17 @@ function AppInner() {
   );
   const navigateTo = useCallback(
     (v: View, tab?: string) => {
-      navigate(`/${v}${tab ? `?tab=${tab}` : ''}`);
+      const href = canonicalHref(v, tab, selectedDocId);
+      navigate(href ?? `/${v}${tab ? `?tab=${tab}` : ''}`);
     },
-    [navigate],
+    [navigate, selectedDocId],
   );
+
+  // 旧深链归一：程序化导航已走 setView/navigateTo，这里兜住用户直接输入/收藏的旧 URL。
+  useEffect(() => {
+    const href = canonicalHref(view, selectedTab, selectedDocId);
+    if (href) navigate(href, { replace: true });
+  }, [view, selectedTab, selectedDocId, navigate]);
 
   useEffect(() => {
     try { localStorage.setItem('sciflow-theme', themeMode); } catch { /* 隐私模式 */ }

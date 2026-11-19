@@ -95,7 +95,9 @@ export function QualityPage({
   const docsQuery = useProjectDocs(project.id);
   const docs = useMemo(() => docsQuery.data ?? [], [docsQuery.data]);
   const [docIdState, setDocIdState] = useState<string>('');
-  const docId = controlledDocId === undefined ? docIdState : controlledDocId ?? '';
+  // 未受控时默认最新一篇（docs 升序取最后一条）；派生而不是 effect 写入，避免多一次渲染和状态分叉。
+  const latestDocId = docs.length > 0 ? docs[docs.length - 1].id : '';
+  const docId = controlledDocId === undefined ? docIdState || latestDocId : controlledDocId ?? '';
   const setDocId = (id: string) => {
     setDocIdState(id);
     onDocChange?.(id || null);
@@ -150,13 +152,9 @@ export function QualityPage({
 
   /**
    * 加载文档列表与总览。
-   * 默认选中最新一篇：docs 按 updatedAt 升序，docs[0] 是最旧的——与 WorkspacePage /
-   * WritingPage 同类 bug（那两处已修，本页漏了），会导致刚改完的稿子不在默认选中里。
+   * 默认选中最新一篇：docs 按 updatedAt 升序，docs[0] 是最旧的；用派生 id 兜底，
+   * 不在 effect 里写一遍状态，避免旧稿被默认选中后又触发额外渲染。
    */
-  // 文档列表走共享 hook；默认选中最新一篇（docs 升序，取最后一条）
-  useEffect(() => {
-    if (!docId && docs.length && controlledDocId === undefined) setDocId(docs[docs.length - 1].id);
-  }, [docId, docs, controlledDocId]);
 
   // 质量总览单独拉取；文档列表不再在 effect 里重复请求
   useEffect(() => {

@@ -35,25 +35,20 @@ export function WriteReviewPage({
 }) {
   const docsQuery = useProjectDocs(project.id);
   const docs = docsQuery.data ?? [];
-  const [docId, setDocIdState] = useState<string | null>(initialDocId);
+  const latestDocId = docs.length > 0 ? docs[docs.length - 1].id : null;
+  const [pickedDocId, setPickedDocId] = useState<string | null>(null);
 
-  // URL ?doc= 是唯一外部来源；完整编辑器/刷新/分享都从这里同步。
-  useEffect(() => {
-    setDocIdState(initialDocId);
-  }, [initialDocId]);
+  // URL ?doc= 是唯一外部来源；没有 URL 时用本地选择/最新一篇兜底。
+  // 不再用 effect 把 URL 写回 state，避免切换 Tab 时多一轮渲染和状态分叉。
+  const docId = initialDocId ?? pickedDocId ?? latestDocId;
 
-  // 没有 URL 指定时默认选最新一篇；列表按 updatedAt 升序，取最后一条。
-  // 默认选择也写回 URL（App 用 replace 更新，不会堆历史）；刷新/分享仍停在同一篇。
+  // 默认选最新一篇时把 URL 回填（App replace，不堆历史）；只导航，不写 state。
   useEffect(() => {
-    if (!docId && docs.length > 0) {
-      const latest = docs[docs.length - 1].id;
-      setDocIdState(latest);
-      onDocChange?.(latest);
-    }
-  }, [docId, docs, onDocChange]);
+    if (!initialDocId && latestDocId) onDocChange?.(latestDocId);
+  }, [initialDocId, latestDocId, onDocChange]);
 
   const selectDoc = (id: string | null) => {
-    setDocIdState(id);
+    setPickedDocId(id);
     onDocChange?.(id);
   };
 

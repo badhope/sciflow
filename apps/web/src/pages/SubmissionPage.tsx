@@ -99,11 +99,8 @@ export function SubmissionPage({ project }: { project: Project }) {
   // 任务2：每条投稿关联文档的 open 审稿意见数（预取，用于「从审稿意见记录事件」按钮禁用态）
   const toast = useContext(ToastContext);
 
-  // 文档列表走共享 hook；失败时保留页面级错误提示
-  useEffect(() => {
-    if (docsQuery.error) setLoadErr(errMsg(docsQuery.error));
-  }, [docsQuery.error]);
-
+  // 文档列表走共享 hook；错误直接派生，不再用 effect 同步一份重复错误状态。
+  const docsError = docsQuery.error ? errMsg(docsQuery.error) : '';
   // 期刊库加载
   useEffect(() => {
     api.submission.listJournals().then(setLib).catch((e) => { setLib([]); setLoadErr(errMsg(e)); });
@@ -419,7 +416,7 @@ export function SubmissionPage({ project }: { project: Project }) {
 
   return (
     <>
-      <ErrorBox message={loadErr} />
+      <ErrorBox message={loadErr || docsError} />
     <div className="page-container">
       <div className="flex gap-1 mb-4 border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
         {TABS.map((t) => (

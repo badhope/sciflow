@@ -15,6 +15,5 @@ describe('EvidenceSummary', () => {
     render(<EvidenceSummary project={project} />);
     expect(screen.getByText('2')).toBeTruthy();
     expect(screen.getByText('1')).toBeTruthy();
-    expect(screen.getByText(/文献与资料共用同一项目上下文/)).toBeTruthy();
   });
 });

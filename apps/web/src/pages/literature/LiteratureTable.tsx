@@ -799,7 +799,7 @@ export function LiteratureTable(props: LiteratureTableProps) {
       <Card className="p-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-            <FlaskConical size={14} /> 文献库（{refs.length} 条）
+            <FlaskConical size={14} /> 文献库
           </span>
           {selectedRefs.size > 0 && (
             <Badge tone="teal">已选 {selectedRefs.size} 篇（可用于对比）</Badge>
@@ -853,7 +853,7 @@ export function LiteratureTable(props: LiteratureTableProps) {
               <summary>
                 <ChevronRight size={13} className="v2-disclosure__chevron" aria-hidden="true" />
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                  库内概览 · {refs.length} 篇
+                  库内概览
                   <span className="ml-2 font-normal text-slate-400 dark:text-slate-500">年份 / 来源分布与高被引</span>
                 </span>
               </summary>

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState, type ChangeEvent } from 'react';
+import { useContext, useState, type ChangeEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Save, Target, X } from 'lucide-react';
 import { api } from '../../api/client';
@@ -14,7 +14,6 @@ type BriefDraft = {
   successCriteria: string;
 };
 
-const EMPTY: BriefDraft = { question: '', scope: '', methods: '', constraints: '', successCriteria: '' };
 
 function pick(data: Partial<BriefDraft> | undefined): BriefDraft {
   return {
@@ -35,20 +34,15 @@ export function ResearchBriefCard({ projectId }: { projectId: string }) {
     queryFn: () => api.brief.get(projectId),
     retry: 0,
   });
-  const [draft, setDraft] = useState<BriefDraft>(EMPTY);
-  const [loaded, setLoaded] = useState(false);
+  // 编辑态用本地草稿；未编辑时直接从 query 派生，避免 effect 把服务端数据再同步一遍。
+  const [draftState, setDraftState] = useState<BriefDraft | null>(null);
+  const draft = draftState ?? pick(query.data);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (!query.data || loaded) return;
-    setDraft(pick(query.data));
-    setLoaded(true);
-  }, [query.data, loaded]);
-
   const filled = Object.values(draft).some((v) => v.trim());
   const set = (key: keyof BriefDraft) => (e: ChangeEvent<HTMLTextAreaElement>) =>
-    setDraft((prev) => ({ ...prev, [key]: e.target.value }));
+    setDraftState((prev) => ({ ...(prev ?? draft), [key]: e.target.value }));
 
   const save = async () => {
     if (saving) return;
@@ -62,7 +56,7 @@ export function ResearchBriefCard({ projectId }: { projectId: string }) {
         successCriteria: draft.successCriteria.trim(),
       });
       qc.setQueryData(qk.brief(projectId), saved);
-      setDraft(pick(saved));
+      setDraftState(null);
       setEditing(false);
       toast('success', '研究 Brief 已保存，后续对话与研究计划会自动读取');
     } catch (e: unknown) {
@@ -73,7 +67,7 @@ export function ResearchBriefCard({ projectId }: { projectId: string }) {
   };
 
   const cancel = () => {
-    setDraft(pick(query.data));
+    setDraftState(null);
     setEditing(false);
   };
 

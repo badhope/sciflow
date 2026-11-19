@@ -527,7 +527,7 @@ export function KnowledgePage({ project }: { project: Project }) {
 
         {/* 资料列表 */}
         <div className="mt-4">
-          <div className="text-xs text-slate-400 dark:text-slate-500 mb-2">知识库（{docs.length} 份资料）</div>
+          <div className="text-xs text-slate-400 dark:text-slate-500 mb-2">资料列表</div>
           {docs.length === 0 ? (
             <EmptyState illustration="knowledge" title="知识库还没有资料" hint="上传 PDF / Markdown / 文本后即可基于资料提问" />
           ) : (

@@ -29,6 +29,8 @@ export function TabbedPage({
    */
   const [mounted, setMounted] = useState<Set<string>>(() => new Set([active]));
   useEffect(() => {
+    // 新访问的 Tab 需要记入保活集合；这是一次挂载记录，不是从 props 派生业务状态。
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 首次访问的 Tab 只挂载一次，之后 hidden 保活
     setMounted((prev) => (prev.has(active) ? prev : new Set(prev).add(active)));
   }, [active]);
   const visible = mounted.has(active) ? mounted : new Set([...mounted, active]);
