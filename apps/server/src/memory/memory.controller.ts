@@ -25,18 +25,17 @@ export class MemoryController {
 
   /** 记忆列表：?type=procedural|episodic&q=关键词&projectId=项目ID */
   @Get()
-  list(@Query('type') type?: string, @Query('q') q?: string, @Query('projectId') projectId?: string, @Req() req?: { user?: AuthPayload }) {
+  async list(@Query('type') type?: string, @Query('q') q?: string, @Query('projectId') projectId?: string, @Req() req?: { user?: AuthPayload }) {
     if (projectId) this.access.assertProject(projectId, req?.user);
     else if (this.access.enforced) {
       // 企业模式禁止「不带项目」拉全库记忆（含他人研究摘要）；程序记忆无项目归属，按创建者隔离不可行，
       // 因此这里要求显式 projectId，前端记忆页始终带 projectId。
       this.access.deny('企业模式必须指定 projectId');
     }
-    return this.memory.list(
-      type === 'procedural' || type === 'episodic' ? type : undefined,
-      q,
-      projectId,
-    );
+    const normalizedType = type === 'procedural' || type === 'episodic' ? type : undefined;
+    // 有项目上下文 + 查询词时走语义召回；否则保持原有列表语义。
+    if (projectId && q?.trim()) return this.memory.recall(projectId, q, 20, normalizedType);
+    return this.memory.list(normalizedType, q, projectId);
   }
 
   @Delete(':id')

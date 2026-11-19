@@ -104,9 +104,11 @@ export class ChatService {
       /* preface / brief 不可用时忽略 */
     }
     try {
-      const mems = this.memory.list(undefined, undefined, projectId).slice(0, 4);
+      const mems = projectId ? await this.memory.recall(projectId, question || '', 4) : [];
       if (mems.length) {
-        parts.push(`项目记忆（历史经验）：\n${mems.map((m) => `- [${m.type === 'procedural' ? '写作偏好' : '历史经验'}] ${m.content.slice(0, 400)}`).join('\n')}`);
+        const label = (m: (typeof mems)[number]) =>
+          m.type === 'procedural' ? '写作偏好' : m.match === 'semantic' || m.match === 'hybrid' ? '语义相关经验' : '历史经验';
+        parts.push(`项目记忆（历史经验）：\n${mems.map((m) => `- [${label(m)}] ${m.content.slice(0, 400)}`).join('\n')}`);
       }
     } catch {
       /* 记忆不可用时忽略 */

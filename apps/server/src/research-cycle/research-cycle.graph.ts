@@ -45,7 +45,7 @@ export interface ResearchCycleGraphDeps {
   };
   /** 三个角色智能体（LLM；测试可注入桩） */
   agents: {
-    plan(input: { question: string; priorFeedback?: string; priorVerdict?: string; iteration: number; cycleId: string; literature?: LiteratureRef[]; brief?: string }): Promise<PiPlan>;
+    plan(input: { question: string; priorFeedback?: string; priorVerdict?: string; iteration: number; cycleId: string; literature?: LiteratureRef[]; brief?: string; memory?: string }): Promise<PiPlan>;
     design(input: {
       hypothesisStatement: string;
       predictions: string[];
@@ -83,6 +83,8 @@ export interface ResearchCycleGraphDeps {
   }>;
   /** 项目研究 Brief：返回已渲染的紧凑上下文；无则空串 */
   brief?(projectId: string): string;
+  /** 记忆语义召回：返回紧凑历史经验；无则空串 */
+  memory?(projectId: string, query: string): Promise<string> | string;
   /** 文献检索（OpenAlex/Crossref/arXiv）；失败由调用方降级为空列表，不得阻塞循环 */
   literatureSearch(input: { query: string; limit?: number }): Promise<LiteratureRef[]>;
   /** 程序自主等级（L0-L5）；L3+ 自动批准协议 */
@@ -171,10 +173,12 @@ export function buildResearchCycleGraph(
       let lastError = '';
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
+          const memory = await deps.memory?.(s.projectId, question);
           plan = await deps.agents.plan({
             question,
             literature,
             brief: deps.brief?.(s.projectId) ?? '',
+            memory: memory ?? '',
             priorFeedback:
               [
                 s.lastFeedback,

@@ -168,6 +168,8 @@ export const memoryLogs = sqliteTable('memory_log', {
   projectId: text('project_id'),
   content: text('content').notNull(),
   keywords: text('keywords').default('[]'), // JSON: string[]
+  /** 语义召回向量（384 维 float32 BLOB；未配置嵌入后端时为空，召回自动降级字面匹配） */
+  embedding: blob('embedding'),
   createdAt: integer('created_at').notNull(),
 });
 

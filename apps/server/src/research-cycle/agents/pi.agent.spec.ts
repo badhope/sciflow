@@ -9,12 +9,14 @@ describe('PI brief injection', () => {
       question: '低资源分类',
       iteration: 0,
       brief: '项目研究 Brief：\n研究问题：低资源分类\n约束：单卡 24G\n成功标准：F1 +2',
+      memory: '上次实验样本太少导致方差过大',
     });
     const messages = completeStructured.mock.calls[0][0] as { role: string; content: string }[];
     const user = messages.find((m) => m.role === 'user')!;
     expect(user.content).toContain('项目研究 Brief');
     expect(user.content).toContain('单卡 24G');
     expect(user.content).toContain('F1 +2');
+    expect(user.content).toContain('样本太少');
   });
 
   it('没有 Brief 时不产生空提示块', async () => {

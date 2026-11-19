@@ -434,9 +434,14 @@ export class McpService {
           const projectId = args.projectId ? String(args.projectId) : '';
           if (projectId) this.access.assertProject(projectId, user);
           const brief = projectId ? this.brief.render(projectId) : '';
+          const experiences = projectId
+            ? await this.memory.recall(projectId, String(args.question), 4)
+            : [];
+          const memory = experiences.map((m) => `- ${m.content}`).join('\n');
           return planWithPi(this.ai, {
             question: String(args.question),
             brief,
+            memory,
             iteration: Math.max(0, Number(args.iteration) || 0),
             priorFeedback: args.priorFeedback ? String(args.priorFeedback) : undefined,
             priorVerdict: args.priorVerdict ? String(args.priorVerdict) : undefined,
@@ -1045,7 +1050,7 @@ export class McpService {
       },
       {
         name: 'memory.search',
-        description: '检索项目记忆（episodic 失败/结论、procedural 方法/偏好），用于避免重复踩坑。',
+        description: '检索项目记忆（episodic 失败/结论、procedural 方法/偏好）：有嵌入后端时按语义召回，否则字面匹配；用于避免重复踩坑。',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1055,7 +1060,13 @@ export class McpService {
           },
           required: ['projectId'],
         },
-        handler: async (args) => this.memory.list(args.type as never, String(args.q || ''), String(args.projectId)),
+        handler: async (args) => {
+          const projectId = String(args.projectId);
+          const q = String(args.q || '').trim();
+          const type = args.type === 'episodic' || args.type === 'procedural' ? args.type : undefined;
+          if (q) return this.memory.recall(projectId, q, 10, type);
+          return this.memory.list(type, '', projectId).slice(0, 10);
+        },
       },
       {
         name: 'memory.add',

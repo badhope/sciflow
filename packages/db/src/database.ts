@@ -185,6 +185,7 @@ CREATE TABLE IF NOT EXISTS memory_log (
   project_id TEXT,
   content TEXT NOT NULL,
   keywords TEXT DEFAULT '[]',
+  embedding BLOB,
   created_at INTEGER NOT NULL
 );
 
@@ -801,6 +802,8 @@ CREATE TABLE IF NOT EXISTS agent_plan (
 CREATE INDEX IF NOT EXISTS idx_agent_plan_project ON agent_plan(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_agent_plan_status ON agent_plan(status, approved_at DESC);
 `);
+
+ensureColumn('memory_log', 'embedding', 'BLOB');
 
 /** 轻量迁移：为旧库补齐新列（CREATE TABLE IF NOT EXISTS 不会修改已有表） */
 function ensureColumn(table: string, column: string, ddl: string) {

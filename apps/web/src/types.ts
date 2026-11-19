@@ -687,6 +687,10 @@ export interface MemoryItem {
   content: string;
   keywords: string[];
   createdAt: number;
+  /** 语义召回分数（仅带 q 查询时由后端返回；列表接口为 0） */
+  score?: number;
+  /** semantic | lexical | hybrid | recent */
+  match?: 'semantic' | 'lexical' | 'hybrid' | 'recent';
 }
 
 export interface McpToolInfo {

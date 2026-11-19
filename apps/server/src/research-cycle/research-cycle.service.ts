@@ -10,6 +10,7 @@ import { AgentTraceService } from '../agent/agent-trace.service';
 import { AiService } from '../ai/ai.service';
 import { ScholarSearchService } from '../research/scholar-search.service';
 import { ResearchBriefService } from '../research-brief/research-brief.service';
+import { MemoryService } from '../memory/memory.service';
 import { buildResearchCycleGraph } from './research-cycle.graph';
 import { planWithPi } from './agents/pi.agent';
 import { designExperiment } from './agents/experimenter.agent';
@@ -42,6 +43,7 @@ export class ResearchCycleService {
     private readonly trace: AgentTraceService,
     private readonly scholar: ScholarSearchService,
     private readonly brief?: ResearchBriefService,
+    private readonly memory?: MemoryService,
   ) {
     this.graph = buildResearchCycleGraph({
       programs: {
@@ -79,6 +81,10 @@ export class ResearchCycleService {
       // 文献检索：失败由 graph 降级为空列表；这里只做「服务结果 → 紧凑引用」映射，
       // 摘要不进提示词/checkpoint，避免 token 与状态膨胀。
       brief: (projectId) => this.brief?.render(projectId) ?? '',
+      memory: async (projectId, query) => {
+        const hits = await this.memory?.recall(projectId, query, 4);
+        return hits?.length ? hits.map((m) => `- ${m.content}`).join('\n') : '';
+      },
       literatureSearch: async ({ query, limit }) => {
         const hits = await this.scholar.search([query], limit ?? 6);
         return hits.slice(0, limit ?? 6).map((h) => ({

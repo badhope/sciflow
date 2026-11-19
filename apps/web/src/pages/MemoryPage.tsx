@@ -117,7 +117,7 @@ export function MemoryPage({ project }: { project: Project }) {
           <Brain size={16} className="text-teal-600 dark:text-teal-300" /> 记忆中心
         </div>
         <div className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-3">
-          情景记忆自动沉淀每次完成的研究任务；程序记忆保存写作风格指令，起草时自动注入
+          情景记忆自动沉淀每次完成的研究任务；程序记忆保存写作风格指令，起草时自动注入。配置嵌入后端后，搜索走语义召回。
         </div>
         <div className="flex flex-wrap gap-2">
           <div className="flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 p-1">
@@ -261,6 +261,7 @@ export function MemoryPage({ project }: { project: Project }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <Badge tone={typeTone(m.type)}>{m.type === 'procedural' ? '程序记忆' : '情景记忆'}</Badge>
+                  {q && (m.match === 'semantic' || m.match === 'hybrid') && <Badge tone="green">语义命中</Badge>}
                   <span className="text-[11px] text-slate-400 dark:text-slate-500">{new Date(m.createdAt).toLocaleString()}</span>
                   {m.keywords.map((k) => (
                     <span key={k} className="text-[11px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded px-1.5 py-0.5">

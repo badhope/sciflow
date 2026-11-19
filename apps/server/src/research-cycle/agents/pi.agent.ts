@@ -38,6 +38,8 @@ export interface PiPlanInput {
   iteration: number;
   /** 项目研究 Brief（用户维护的研究契约；无项目上下文时为空） */
   brief?: string;
+  /** 相关历史经验（记忆语义召回；无命中时为空） */
+  memory?: string;
   /** 检索到的文献线索（仅作背景；无命中时为空） */
   literature?: { title: string; year: number | null; venue: string; doi: string }[];
   /** LLM 调用归集标签（按循环维度统计 token 用） */
@@ -58,6 +60,11 @@ const PI_SYSTEM = [
 ].join('\n');
 
 /** 文献线索块：只给标题/年份/载体的紧凑列表，控制 token 且便于模型引用 */
+function memoryBlock(memory: string | undefined): string {
+  const text = memory?.trim();
+  return text ? `\n\n【相关历史经验（仅作参考，不得当作实验证据）】\n${text.slice(0, 1600)}` : '';
+}
+
 function briefBlock(brief: string | undefined): string {
   const text = brief?.trim();
   return text ? `\n\n【项目研究 Brief（必须遵守的范围/约束/成功标准）】\n${text.slice(0, 2400)}` : '';
@@ -84,6 +91,7 @@ export async function planWithPi(ai: AiService, input: PiPlanInput): Promise<PiP
         '请先在 questionEcho 里逐字复述上面的研究问题，再给出假设与协议。',
         '假设与协议必须只针对这个研究问题，不得替换成别的主题。',
         briefBlock(input.brief),
+        memoryBlock(input.memory),
         literatureBlock(input.literature),
         feedbackBlock,
       ].join('\n'),
