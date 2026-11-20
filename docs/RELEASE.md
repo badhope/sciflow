@@ -15,6 +15,11 @@ This repository follows [Semantic Versioning](https://semver.org/) and keeps a
 Every workspace package carries the same version as the root `package.json`.
 Releases are tagged `vX.Y.Z` on `main` and are annotated.
 
+## Mirrors and CI
+
+GitHub Actions is the only CI system. Gitee and GitCode are `main` mirrors:
+keep them fast-forwarded from GitHub, but do not add a second CI stack there.
+
 ## Cutting a release
 
 1. **Freeze the tree.** Confirm `main` is green on CI and the working tree is clean.

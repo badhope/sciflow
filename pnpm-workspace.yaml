@@ -66,7 +66,7 @@ overrides:
   postcss-selector-parser: ^7.1.6
   # diff：公告 >=6.0.0 <8.0.3（唯一消费者是本项目自身声明的 ^8.0.4）
   'diff@>=6.0.0 <8.0.3': ^8.0.4
-  basic-ftp: ^6.2.1
+  basic-ftp: 6.2.4
   # katex：项目统一钉到 0.18.9；rehype/remark/mermaid 运行验证通过，消除旧 0.16 传递副本告警。
   # simple-git 系列：node-llama-cpp 声明 ^3.36.0，此处强制升到已修复的 4.x
   # （本项目仅用其 embedding 推理，不触及 git 克隆路径；升级后以构建+回归验证）
@@ -74,7 +74,7 @@ overrides:
   '@simple-git/argv-parser': ^2.0.1
   # extract-zip：公告给出 >=2.0.2，但 npm 上 2.0.1 已是最新发布版（无可升级目标），
   # electron 自身依赖 ^2.0.1；待上游发版后再钉（当前风险=构建期解压路径，非运行时代码路径）
-  # node-forge / sprintf-js：保留上游兼容说明；本轮 node-forge 已锁到 1.4.2，audit 无 high/critical。
+  # node-forge / sprintf-js：保留上游兼容说明；本轮 node-forge 已锁到 1.4.3。
   # body-parser / multer：Nest 与 MCP 共享 Express 链路，强制使用已修复补丁线
   body-parser: ^2.4.0
   multer: ^2.5.0
@@ -90,7 +90,12 @@ overrides:
   # 按同 major 定点补丁钉版，不跨大版本替换。
   'mongoose@>=9.0.0 <9.11.4': ^9.11.4
   # node-forge：promptfoo 的 jks-js 传递依赖，锁到当前已发布的安全版本
-  node-forge: ^1.4.1
+  node-forge: 1.4.3
+  # hono / @hono/node-server：promptfoo 与 MCP SDK 的 HTTP 传输链，按公告修复版钉版
+  hono: 4.13.19
+  '@hono/node-server': 2.1.9
+  # fast-xml-parser：apps/server 直接依赖，同时供 Azure XML 传递链
+  fast-xml-parser: 5.12.1
   # Azure Identity：promptfoo / Azure AI Projects 均接受 4.14.x，消除 MSAL Node <7.1 的高危传递依赖
   '@azure/identity': ^4.14.1
   # promptfoo 仍直接声明 7.0.x，强制补到已修复的 MSAL Node 7.1.x

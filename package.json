@@ -1,6 +1,6 @@
 {
   "name": "sciflow",
-  "version": "1.19.7",
+  "version": "1.19.8",
   "private": true,
   "description": "SciFlow - 本地优先的自主科研平台：多智能体研究循环（人工或 AI 专家审批）+ 确定性质量门 + 引用三级可追溯 + 可复现稿件流水线",
   "scripts": {
@@ -42,7 +42,7 @@
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.13.0",
     "prettier": "^3.9.10",
-    "promptfoo": "^0.125.1",
+    "promptfoo": "^0.126.0",
     "typescript-eslint": "^8.71.2"
   },
   "homepage": "https://badhope.github.io/sciflow/",

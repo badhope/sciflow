@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.19.8] - 2026-11-20
+
+### Security
+
+- 清空 Dependabot 的 12 个 open alert：`hono` 升到 `4.13.19`，`@hono/node-server` 升到 `2.1.9`，`basic-ftp` 升到 `6.2.4`，`node-forge` 升到 `1.4.3`，`fast-xml-parser` 升到 `5.12.1`；`promptfoo` 从 `0.125.1` 升到 `0.126.0`。
+- 补丁通过 `pnpm-workspace.yaml` 的定点 overrides 固定，避免传递依赖回退；`apps/server` 的直接依赖同步升级。`pnpm audit --registry=https://registry.npmjs.org` 返回 0 漏洞。
+
+### Changed
+
+- 明确 CI 边界：GitHub Actions 是唯一 CI；Gitee / GitCode 只做 `main` 镜像，不接平台 CI。
+
+### Tests
+
+- 服务端 114 文件 / 802 测试、Web 44 文件 / 240 测试通过；typecheck、lint、web build、chunk budget、OpenAPI 生成/check 通过；`promptfoo 0.126.0` CLI 可正常启动。
+
 ## [1.19.7] - 2026-11-20
 
 ### Fixed

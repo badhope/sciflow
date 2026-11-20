@@ -1,6 +1,6 @@
 {
   "name": "@sciflow/server",
-  "version": "1.19.7",
+  "version": "1.19.8",
   "private": true,
   "scripts": {
     "dev": "node --watch dist/apps/server/src/main.js",
@@ -39,7 +39,7 @@
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.45.3",
     "eventsource-parser": "1.1.2",
-    "fast-xml-parser": "5.11.2",
+    "fast-xml-parser": "5.12.1",
     "fflate": "0.8.3",
     "helmet": "^8.3.0",
     "js-yaml": "5.5.0",
