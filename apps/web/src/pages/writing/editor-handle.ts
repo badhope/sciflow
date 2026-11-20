@@ -11,6 +11,10 @@ export interface WritingEditorHandle {
   getCursor(): number | null;
   /** 聚焦并把光标放到指定位置 */
   setCursor(pos: number): void;
+  /** 选中指定区间（用于审稿意见逐句定位）；编辑器未挂载时为空操作 */
+  setSelection(from: number, to?: number): void;
+  /** 读取当前选区；无选区或未挂载返回 null */
+  getSelection(): { from: number; to: number; text: string } | null;
   /** 撤销一步（编辑器未挂载时为空操作） */
   undo?: () => void;
   /** 重做一步（编辑器未挂载时为空操作） */

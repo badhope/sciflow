@@ -709,6 +709,10 @@ export interface ReviewComment {
   status: 'open' | 'resolved' | 'deferred';
   responseText: string;
   sectionRef: string;
+  /** 段落级锚点：选中的原文与正文偏移；旧数据/无锚点为空 */
+  quote: string;
+  anchorStart: number | null;
+  anchorEnd: number | null;
   createdAt: number;
   updatedAt: number;
 }

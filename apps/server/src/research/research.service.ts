@@ -4,6 +4,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
 import { reviewComments, documents, researchDesigns, projects } from '../db/schema';
+import { resolveReviewAnchor, type ReviewAnchor } from './review-anchor';
 import { AiService } from '../ai/ai.service';
 import * as prompts from '../ai/prompts';
 
@@ -191,14 +192,24 @@ export class ResearchService {
 
   // ---------- 审稿意见闭环 ----------
 
-  /** 批量录入审稿意见 */
-  addReviewComments(documentId: string, comments: { reviewer: string; commentText: string; category?: string }[]) {
+  /** 批量录入审稿意见（可带段落级引文锚点） */
+  addReviewComments(
+    documentId: string,
+    comments: { reviewer: string; commentText: string; category?: string; quote?: string; anchorStart?: number | null }[],
+  ) {
     if (!documentId) throw new BadRequestException('documentId 必填');
+    const doc = db.select({ content: documents.content }).from(documents).where(eq(documents.id, documentId)).get();
+    if (!doc) throw new NotFoundException('文档不存在');
     const now = Date.now();
-    const created: any[] = [];
+    const rows: any[] = [];
     for (const c of comments || []) {
       if (!c.commentText?.trim()) continue;
-      const row = {
+      let anchor: ReviewAnchor | null = null;
+      if (c.quote?.trim()) {
+        anchor = resolveReviewAnchor(doc.content || '', c.quote, c.anchorStart);
+        if (!anchor) throw new BadRequestException('引文无法在正文中唯一定位，请重新选中原文');
+      }
+      rows.push({
         id: randomUUID(),
         documentId,
         reviewer: c.reviewer?.trim() || 'reviewer',
@@ -207,13 +218,15 @@ export class ResearchService {
         status: 'open' as const,
         responseText: '',
         sectionRef: '',
+        quote: anchor?.quote || '',
+        anchorStart: anchor?.start ?? null,
+        anchorEnd: anchor?.end ?? null,
         createdAt: now,
         updatedAt: now,
-      };
-      db.insert(reviewComments).values(row).run();
-      created.push(row);
+      });
     }
-    return created;
+    for (const row of rows) db.insert(reviewComments).values(row).run();
+    return rows;
   }
 
   /** 列出某文档的全部审稿意见 */
@@ -226,8 +239,11 @@ export class ResearchService {
       .all();
   }
 
-  /** 更新单条意见状态 / 回复 / 分类 */
-  updateReviewComment(id: string, patch: { status?: string; responseText?: string; category?: string }) {
+  /** 更新单条意见状态 / 回复 / 分类 / 引文锚点 */
+  updateReviewComment(
+    id: string,
+    patch: { status?: string; responseText?: string; category?: string; quote?: string; anchorStart?: number | null },
+  ) {
     const existing = db.select().from(reviewComments).where(eq(reviewComments.id, id)).get();
     if (!existing) throw new NotFoundException('审稿意见不存在');
     const set: Record<string, unknown> = { updatedAt: Date.now() };
@@ -237,6 +253,15 @@ export class ResearchService {
     }
     if (patch.responseText !== undefined) set.responseText = patch.responseText;
     if (patch.category !== undefined) set.category = patch.category;
+    if (patch.quote !== undefined) {
+      const doc = db.select({ content: documents.content }).from(documents).where(eq(documents.id, existing.documentId)).get();
+      if (!doc) throw new NotFoundException('文档不存在');
+      const anchor = patch.quote.trim() ? resolveReviewAnchor(doc.content || '', patch.quote, patch.anchorStart) : null;
+      if (patch.quote.trim() && !anchor) throw new BadRequestException('引文无法在正文中唯一定位，请重新选中原文');
+      set.quote = anchor?.quote || '';
+      set.anchorStart = anchor?.start ?? null;
+      set.anchorEnd = anchor?.end ?? null;
+    }
     db.update(reviewComments).set(set).where(eq(reviewComments.id, id)).run();
     return db.select().from(reviewComments).where(eq(reviewComments.id, id)).get();
   }

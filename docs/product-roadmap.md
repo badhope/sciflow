@@ -1,6 +1,6 @@
 # Product roadmap
 
-Last reviewed: 2026-11-20 · Current release: **1.19.3**
+Last reviewed: 2026-11-20 · Current release: **1.19.4**
 
 This document states what exists today, what is deliberately out of scope, and
 what is planned next. It is the single source of truth for product scope; the
@@ -76,6 +76,7 @@ decision not to build it.
 | Agent | Tool approval | Shipped | Side-effecting tools pause with a readable reason |
 | Quality | Evidence chain view | Shipped | Question to traceable entry, with broken links named |
 | Quality | Structured quality feedback | Shipped | Each feedback line is mapped to a section, a severity (blocker/major/minor) and a dimension, then written into review comments so issues are actionable and locatable |
+| Quality | Paragraph-level review anchor | Shipped | A review comment stores the exact selected quote plus its offsets in the manuscript; the writing page can jump back and select the original text. Stale or ambiguous quotes are rejected instead of guessed |
 | Quality | Untrusted-content defense | Shipped | External text is sanitized (invisible Unicode stripped, fence smuggling neutralized) and scanned for six injection signal classes before it reaches a prompt |
 | Operations | OTLP trace export | Shipped | Persisted traces export as OTLP/HTTP-JSON with `gen_ai.*` attributes to any collector; zero overhead when unset |
 | Operations | List pagination | Shipped | Documents and references accept optional `limit`/`offset`; requests without them keep the old full-list behaviour |
@@ -102,13 +103,10 @@ decision not to build it.
 
 Ordered by value to a researcher, not by implementation ease.
 
-1. **Paragraph-level anchor for review comments.** A review comment should be
-   pinned to a paragraph (not just a section), so the reply and the revision can
-   cite the exact sentence under dispute.
-2. **Plan-item execution queue.** Revision plans can be executed one section at
+1. **Plan-item execution queue.** Revision plans can be executed one section at
    a time today; queueing a whole plan and running it unattended with per-item
    diffs is the natural next step.
-3. **Full-text retrieval for PDFs beyond chunk boundaries.** Chunk-level RAG is
+2. **Full-text retrieval for PDFs beyond chunk boundaries.** Chunk-level RAG is
    solid; cross-chunk reasoning over long method sections is the remaining gap.
 
 ## How this document is maintained

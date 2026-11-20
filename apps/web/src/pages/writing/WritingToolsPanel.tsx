@@ -44,6 +44,10 @@ export interface WritingToolsPanelProps {
   commentsLoading: boolean;
   onGenerateLetter: () => void;
   onImportComments: () => void;
+  /** 从编辑器当前选区新建一条带原文锚点的意见 */
+  onStartNewComment: () => void;
+  /** 把意见定位回正文原文 */
+  onLocateComment: (c: ReviewComment) => void;
   generatingLetter: boolean;
   importingComments: boolean;
   onChangeCommentStatus: (c: ReviewComment, status: 'open' | 'resolved' | 'deferred') => void;
@@ -89,6 +93,8 @@ const COMMENT_STATUS: Record<string, { label: string; tone: 'amber' | 'green' | 
   deferred: { label: '暂缓', tone: 'slate' },
 };
 
+const quotePreview = (s: string, max = 52) => (s.length > max ? `${s.slice(0, max)}…` : s);
+
 export function WritingToolsPanel(props: WritingToolsPanelProps) {
   const {
     aiBusy,
@@ -99,7 +105,7 @@ export function WritingToolsPanel(props: WritingToolsPanelProps) {
     polishResult, onApplyPolished, onDismissPolish,
     reviewResult, onRunReview,
     reviewComments, commentsOpen, onToggleComments, commentsLoading,
-    onGenerateLetter, onImportComments, generatingLetter, importingComments,
+    onGenerateLetter, onImportComments, onStartNewComment, onLocateComment, generatingLetter, importingComments,
     onChangeCommentStatus, replyId, replyDraft, onReplyDraft, onStartReply, onCancelReply, onSaveReply, savingReply, onRemoveComment, letter,
     qualityReport, qualityScores, scoreColor,
     objectiveReport, objectiveLoading, objectiveError, onRunObjectiveAudit,
@@ -247,12 +253,15 @@ export function WritingToolsPanel(props: WritingToolsPanelProps) {
         </button>
         {commentsOpen && (
           <div className="space-y-2 text-xs">
-            <div className="flex gap-1.5">
-              <Button variant="outline" className="text-xs flex-1" onClick={onGenerateLetter} disabled={aiBusy || generatingLetter || reviewComments.length === 0}>
-                {generatingLetter ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} aria-hidden="true" />} 生成回复信
+            <div className="grid grid-cols-2 gap-1.5">
+              <Button variant="outline" className="text-xs" onClick={onStartNewComment} disabled={aiBusy}>
+                <MessageSquare size={12} aria-hidden="true" /> 从选区新建
               </Button>
-              <Button variant="outline" className="text-xs flex-1" onClick={onImportComments} disabled={aiBusy || importingComments || !reviewResult}>
+              <Button variant="outline" className="text-xs" onClick={onImportComments} disabled={aiBusy || importingComments || !reviewResult}>
                 {importingComments ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} aria-hidden="true" />} 导入模拟评审
+              </Button>
+              <Button variant="outline" className="col-span-2 text-xs" onClick={onGenerateLetter} disabled={aiBusy || generatingLetter || reviewComments.length === 0}>
+                {generatingLetter ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} aria-hidden="true" />} 生成回复信
               </Button>
             </div>
             {commentsLoading ? <Spinner /> : reviewComments.length === 0 ? (
@@ -270,6 +279,15 @@ export function WritingToolsPanel(props: WritingToolsPanelProps) {
                           <Trash2 size={11} aria-hidden="true" />
                         </button>
                       </div>
+                      {c.quote && (
+                        <button
+                          className="mb-1.5 block w-full rounded border-l-2 border-teal-400 bg-teal-50/60 px-1.5 py-1 text-left text-[11px] leading-snug text-teal-800 hover:bg-teal-100 dark:bg-teal-900/15 dark:text-teal-200"
+                          title="定位到正文原文"
+                          onClick={() => onLocateComment(c)}
+                        >
+                          原文：{quotePreview(c.quote)}
+                        </button>
+                      )}
                       <div className="mb-1.5 leading-relaxed">{c.commentText}</div>
                       <div className="mb-1.5 flex gap-1">
                         {(['open', 'resolved', 'deferred'] as const).map((st) => (

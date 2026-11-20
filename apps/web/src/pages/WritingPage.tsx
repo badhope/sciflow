@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ChevronRight, FileText, ListTree, Loader2, Plus, Sparkles, Trash2,
+  ChevronRight, FileText, ListTree, Loader2, MessageSquare, Plus, Sparkles, Trash2,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { ChatPanel } from './ChatPanel';
@@ -11,7 +11,7 @@ import type {
 } from '../types';
 import type { VersionSnapshot } from './VersionDiffModal';
 import {
-  Button, Card, ConfirmDialog, Empty, ErrorBox, Input, Modal, errMsg,
+  Button, Card, ConfirmDialog, Empty, ErrorBox, Input, Modal, Textarea, errMsg,
   downloadBase64, downloadText, jsonText,
 } from '../components/ui';
 import { HBar } from '../components/charts';
@@ -105,6 +105,12 @@ export function WritingPage({
   const [letter, setLetter] = useState<string | null>(null);
   const [generatingLetter, setGeneratingLetter] = useState(false);
   const [importingComments, setImportingComments] = useState(false);
+  /** 段落级锚点：从编辑器选区新建意见 */
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [commentQuote, setCommentQuote] = useState('');
+  const [commentAnchorStart, setCommentAnchorStart] = useState<number | null>(null);
+  const [creatingComment, setCreatingComment] = useState(false);
 
   /* ============ 引用管理状态 ============ */
   const [citations, setCitations] = useState<CitationRow[]>([]);
@@ -644,6 +650,79 @@ export function WritingPage({
     }
   };
 
+  const startCommentFromSelection = () => {
+    if (editorMode === 'preview') {
+      toast('info', '请切到编辑或分栏模式，先在正文里选中一段原文');
+      return;
+    }
+    const selection = getWritingEditorHandle()?.getSelection();
+    const quote = selection?.text.trim() || '';
+    if (!selection || quote.length < 2) {
+      toast('info', '先在正文里选中要钉住的那句话或整段');
+      return;
+    }
+    setCommentQuote(quote);
+    setCommentAnchorStart(selection.from + selection.text.indexOf(quote));
+    setCommentDraft('');
+    setCommentDialogOpen(true);
+  };
+
+  const createAnchoredComment = async () => {
+    if (!docId) return;
+    const text = commentDraft.trim();
+    if (!text) {
+      toast('error', '请填写审稿意见内容');
+      return;
+    }
+    setCreatingComment(true);
+    try {
+      const added = await api.research.addReviewComments(docId, [
+        {
+          reviewer: '我',
+          commentText: text,
+          category: 'manual',
+          quote: commentQuote,
+          anchorStart: commentAnchorStart,
+        },
+      ]);
+      setReviewComments((s) => [...s, ...added]);
+      setCommentsOpen(true);
+      setCommentDialogOpen(false);
+      setCommentDraft('');
+      setCommentQuote('');
+      setCommentAnchorStart(null);
+      toast('success', '已添加带原文锚点的审稿意见');
+    } catch (e: unknown) {
+      setError(errMsg(e));
+    } finally {
+      setCreatingComment(false);
+    }
+  };
+
+  const locateComment = (c: ReviewComment) => {
+    if (!c.quote) return;
+    const start = content.indexOf(c.quote);
+    if (start < 0) {
+      toast('error', '这条意见的原文已不在当前正文中，锚点已失效');
+      return;
+    }
+    let attempts = 0;
+    const apply = () => {
+      const handle = getWritingEditorHandle();
+      if (!handle) {
+        if (attempts++ < 8) window.setTimeout(apply, 120);
+        return;
+      }
+      handle.setSelection(start, start + c.quote.length);
+    };
+    if (editorMode === 'preview') {
+      setEditorMode('split');
+      window.setTimeout(apply, 160);
+    } else {
+      apply();
+    }
+  };
+
   const generateResponseLetter = async () => {
     setGeneratingLetter(true);
     setError('');
@@ -707,6 +786,32 @@ export function WritingPage({
         <Button onClick={createDoc} disabled={creatingDoc || !newDocTitle.trim()}>
           {creatingDoc ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} 创建
         </Button>
+      </div>
+    </Modal>
+  );
+
+  const commentDialog = (
+    <Modal open={commentDialogOpen} title="从选区新建审稿意见" onClose={() => setCommentDialogOpen(false)} width="max-w-lg">
+      <div className="space-y-3">
+        {commentQuote && (
+          <div className="rounded-lg border-l-2 border-teal-500 bg-teal-50/60 px-3 py-2 text-xs leading-relaxed text-teal-900 dark:bg-teal-900/15 dark:text-teal-200">
+            <div className="mb-1 font-medium text-teal-700 dark:text-teal-300">将钉住这段原文</div>
+            <div className="max-h-24 overflow-y-auto whitespace-pre-wrap">{commentQuote}</div>
+          </div>
+        )}
+        <Textarea
+          rows={4}
+          placeholder="这条意见针对选中原文的什么问题？修改后要达成什么？"
+          value={commentDraft}
+          onChange={(e) => setCommentDraft(e.target.value)}
+          autoFocus
+        />
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setCommentDialogOpen(false)}>取消</Button>
+          <Button onClick={createAnchoredComment} disabled={creatingComment || !commentDraft.trim()}>
+            {creatingComment ? <Loader2 size={14} className="animate-spin" /> : <MessageSquare size={14} />} 添加意见
+          </Button>
+        </div>
       </div>
     </Modal>
   );
@@ -960,6 +1065,8 @@ export function WritingPage({
                 commentsLoading={commentsLoading}
                 onGenerateLetter={generateResponseLetter}
                 onImportComments={importFromSimulatedReview}
+                onStartNewComment={startCommentFromSelection}
+                onLocateComment={locateComment}
                 generatingLetter={generatingLetter}
                 importingComments={importingComments}
                 onChangeCommentStatus={changeCommentStatus}
@@ -1016,6 +1123,8 @@ export function WritingPage({
 
       {/* 新建文档弹窗（空态与主界面共用） */}
       {newDocDialog}
+      {/* 从选区新建审稿意见 */}
+      {commentDialog}
 
       {/* 版本左右栏 Diff（独立 lazy chunk，打开时才加载）：两栏对比 + 命名 + 恢复 */}
       <Suspense fallback={null}>

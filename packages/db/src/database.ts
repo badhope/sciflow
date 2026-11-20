@@ -389,6 +389,9 @@ CREATE TABLE IF NOT EXISTS review_comment (
   status TEXT DEFAULT 'open',
   response_text TEXT DEFAULT '',
   section_ref TEXT DEFAULT '',
+  quote TEXT DEFAULT '',
+  anchor_start INTEGER,
+  anchor_end INTEGER,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -873,6 +876,9 @@ ensureColumn('quality_report', 'llm_score', 'INTEGER');
 ensureColumn('quality_report', 'llm_scores', "TEXT DEFAULT '{}'");
 ensureColumn('quality_report', 'expert_score', 'INTEGER');
 ensureColumn('quality_report', 'expert_status', "TEXT DEFAULT 'unreviewed'");
+ensureColumn('review_comment', 'quote', "TEXT DEFAULT ''");
+ensureColumn('review_comment', 'anchor_start', 'INTEGER');
+ensureColumn('review_comment', 'anchor_end', 'INTEGER');
 // 配置中心 v1.3：钩子唯一性（同名同事件同类型只允许一条，防重复注入）+ 审计只追加（触发器兜底）
 try {
   sqlite.exec('CREATE UNIQUE INDEX IF NOT EXISTS ux_config_hook_name_event_type ON config_hook(name, event, type)');

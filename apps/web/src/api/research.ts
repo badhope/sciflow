@@ -143,9 +143,9 @@ export const research = {
       request<SimulatedReviewResult>(`/api/research/review`, { method: 'POST', body: JSON.stringify({ title, content }) }),
     /* —— 审稿意见闭环 —— */
     reviewComments: (documentId: string) => request<ReviewComment[]>(`/api/research/review-comments?documentId=${documentId}`),
-    addReviewComments: (documentId: string, comments: { reviewer: string; commentText: string; category?: string }[]) =>
+    addReviewComments: (documentId: string, comments: { reviewer: string; commentText: string; category?: string; quote?: string; anchorStart?: number | null }[]) =>
       request<ReviewComment[]>('/api/research/review-comments', { method: 'POST', body: JSON.stringify({ documentId, comments }) }),
-    updateReviewComment: (id: string, patch: Partial<{ status: string; responseText: string; category: string }>) =>
+    updateReviewComment: (id: string, patch: Partial<{ status: string; responseText: string; category: string; quote: string; anchorStart: number | null }>) =>
       request<ReviewComment>(`/api/research/review-comments/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
     removeReviewComment: (id: string) => request<{ ok: boolean }>(`/api/research/review-comments/${id}`, { method: 'DELETE' }),
     responseLetter: (documentId: string) =>

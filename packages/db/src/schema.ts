@@ -392,6 +392,11 @@ export const reviewComments = sqliteTable('review_comment', {
   status: text('status').default('open'), // open | resolved | deferred
   responseText: text('response_text').default(''),
   sectionRef: text('section_ref').default(''),
+  /** 段落级锚点：审稿意见选中的原文（精确引文，最多 4000 字符） */
+  quote: text('quote').default(''),
+  /** 引文在文档正文中的起止偏移；无法唯一定位时为空 */
+  anchorStart: integer('anchor_start'),
+  anchorEnd: integer('anchor_end'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });

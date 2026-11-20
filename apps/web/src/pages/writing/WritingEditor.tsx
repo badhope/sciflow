@@ -72,6 +72,22 @@ export function WritingEditor({
         view.focus();
         view.dispatch({ selection: { anchor: pos } });
       },
+      setSelection: (from: number, to = from) => {
+        const view = cmRef.current?.view;
+        if (!view) return;
+        view.focus();
+        view.dispatch({
+          selection: { anchor: from, head: to },
+          scrollIntoView: true,
+        });
+      },
+      getSelection: () => {
+        const view = cmRef.current?.view;
+        if (!view) return null;
+        const { from, to } = view.state.selection.main;
+        if (from === to) return null;
+        return { from, to, text: view.state.sliceDoc(from, to) };
+      },
       undo: () => {
         const view = cmRef.current?.view;
         if (view) undo(view);

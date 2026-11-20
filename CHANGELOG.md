@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.19.4] - 2026-11-20
+
+### Added
+
+- **段落级审稿锚点**：审稿意见可携带编辑器选中的精确原文与正文偏移，写作页点击「原文」即可跳回并选中对应句子/段落；引文过期、在正文中重复出现且无精确选区时拒绝写入，不猜位置。
+  新增 `review_anchor` 表字段 `quote` / `anchor_start` / `anchor_end`，旧库自动补列；`POST/PATCH /api/research/review-comments` 接受 `quote` 与 `anchorStart`。
+
+### Tests
+
+- 新增 `review-anchor.spec.ts`（5 条）与 `review-comments.service.spec.ts`（3 条），覆盖唯一定位、重复引文消歧、过期引文拒绝、空引文清理。
+- 服务端 109 文件 / 783 测试通过；Web 44 文件 / 240 测试通过；typecheck、lint 通过。
+
 ## [1.19.3] - 2026-11-20
 
 ### Changed

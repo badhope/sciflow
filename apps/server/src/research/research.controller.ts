@@ -84,9 +84,12 @@ export class ResearchController {
 
   /* —— 审稿意见闭环 —— */
 
-  /** 批量录入审稿意见 */
+  /** 批量录入审稿意见（可带段落级引文锚点） */
   @Post('review-comments')
-  addReviewComments(@Body() body: { documentId: string; comments: { reviewer: string; commentText: string; category?: string }[] }, @Req() req: { user?: AuthPayload }) {
+  addReviewComments(
+    @Body() body: { documentId: string; comments: { reviewer: string; commentText: string; category?: string; quote?: string; anchorStart?: number | null }[] },
+    @Req() req: { user?: AuthPayload },
+  ) {
     this.access.assertDocument(body?.documentId, req.user);
     return this.research.addReviewComments(body.documentId, body.comments || []);
   }
@@ -100,7 +103,11 @@ export class ResearchController {
 
   /** 更新单条意见 */
   @Patch('review-comments/:id')
-  updateReviewComment(@Param('id') id: string, @Body() body: { status?: string; responseText?: string; category?: string }, @Req() req: { user?: AuthPayload }) {
+  updateReviewComment(
+    @Param('id') id: string,
+    @Body() body: { status?: string; responseText?: string; category?: string; quote?: string; anchorStart?: number | null },
+    @Req() req: { user?: AuthPayload },
+  ) {
     this.access.assertReviewComment(id, req.user);
     return this.research.updateReviewComment(id, body);
   }
