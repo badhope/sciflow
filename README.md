@@ -1,56 +1,35 @@
 # SciFlow
 
-**A local-first research platform that runs an autonomous research loop and a manuscript pipeline — with deterministic gates that refuse to pass work they cannot verify.**
+**A local-first research workbench that turns an idea into a verified manuscript — with a deterministic quality gate and citations you can trace.**
 
 [![CI](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/Node-%E2%89%A520%20(CI%2022)-339933.svg)](package.json)
-[![pnpm](https://img.shields.io/badge/pnpm-11.7.0-f69220.svg)](package.json)
-[![Version](https://img.shields.io/badge/version-1.19.3-black.svg)](CHANGELOG.md)
 
 **English** · [简体中文](README.zh-CN.md)
 
----
+SciFlow keeps the research chain on your own machine: one SQLite file, your model endpoint, no hosted account. It is built for researchers who want a fast working tool, not another platform to manage.
 
-## Why it is different
+## What it does
 
-| | |
-|---|---|
-| **Autonomous research loop** | Program → Cycle → Question → Hypothesis → Protocol → Run → Claim → Evidence. PI, Experimenter, Critic and an independent Expert reviewer are separate LLM agents. Every protocol passes a gate before execution: human approval, or fully automatic approval by the Expert agent. |
-| **Deterministic quality gate** | Seven dimensions scored by rules with a stable fingerprint — same text, same score. The gate is the acceptance criterion; the LLM score is reference only. Below threshold triggers targeted revision, not a reroll. |
-| **Citations you can trace** | Every `[n]` anchor resolves to a citation row and then to a reference row. Ghost anchors, orphan entries, broken numbering and duplicate DOIs are reported by number. An empty reference pool forbids citation markers outright. |
-| **Evidence, not prose** | Claims are stored with stance, strength and verbatim quotes from experiment stdout. The Critic cannot mark `supported` without a matching `supports` evidence item. |
-| **Web project sandbox** | Create a project in an isolated directory, `npm install`, build, and preview it on loopback. Two built-in templates (zero-dependency static, React + Vite); logs and status per step; one-click run. |
-| **Built-in browser** | Real Chromium on the server: navigate any site, read visible text, capture screenshots, list interactive elements, click and fill, and **assert page expectations** (`exists` / `visible` / `count` / `text` / `value` / `request` / `no-console-error` / `visual`) so a built page can be accepted or rejected by machine. The `visual` check diffs the page against a saved baseline (pixelmatch) and reports the exact changed-pixel ratio plus a diff image, so restyling cannot silently break a page. |
-| **Long-form writing** | Book → volume → chapter, generated one chapter at a time. Each chapter is stored independently, a failed chapter retries once then the batch continues, and cross-chapter continuity rides on compressed summaries — so length is not bounded by the context window. A built-in consistency checker reports entity gaps and suspected renames deterministically. |
-| **Manuscript pipeline** | Topic validation → literature survey → outline gate → section drafting → quality gate → polish → citation formatting. Checkpoints after every step; restart-safe. |
-| **Grounded retrieval** | SQLite FTS5 + sqlite-vec, RRF fusion and MMR; OpenAlex / Crossref / arXiv search with relevance gating and TTL cache. Literature hits enter the research loop as background, never as fabricated citations. |
-| **Open by design** | MCP server and client, OpenAI-compatible / Anthropic / Gemini protocols, local Ollama or GGUF, desktop app, headless CLI, JWT mode for shared deployments. |
+- **Research loop with real evidence.** PI, experimenter, critic and independent reviewer are separate agents. Protocols pause for human approval, or for an expert agent in automatic mode. Claims need verbatim evidence from a real run.
+- **Manuscript pipeline.** Topic check, literature survey, outline gate, section drafting, quality review and citation formatting. Every step writes a checkpoint, so a run can resume after a restart.
+- **Quality you can trust.** Seven dimensions are scored by rules with a stable fingerprint. The gate decides pass or fail; the model score is only a reference. A failed draft gets targeted revision, not a reroll.
+- **Citations that resolve.** Each `[n]` anchor points to a citation row and then to a reference. Ghost anchors, orphans, broken numbering and duplicate DOIs are reported. An empty library blocks citation markers.
+- **Submission ready.** Readiness checks, journal templates, cover letter, referenced figures and a deterministic package in one download.
 
-## What a complete run produces
+## Start
 
-A verified run on 2026-11-13 with a real model produced a 10,834-character manuscript from 20 retrieved references: 18 citation anchors, 18 citation rows, 0 ghost anchors, objective quality 97/100. The autonomous loop separately produced a supported claim backed by 5 verbatim evidence items from a sandboxed Monte Carlo experiment.
-
-## Quick start
-
-Requires Node ≥ 20 (CI uses 22) and pnpm 11.7.0.
+Requires Node 20+ and pnpm.
 
 ```bash
-git clone https://gitcode.com/badhope/sciflow.git
+git clone https://github.com/Morningstar202604/sciflow.git
 cd sciflow
 pnpm install
-pnpm doctor
-cp apps/server/.env.example apps/server/.env
-# set AI_BASE_URL, AI_API_KEY, AI_MODEL in apps/server/.env
-pnpm build
-pnpm start
+cp apps/server/.env.example apps/server/.env   # set AI_BASE_URL, AI_API_KEY, AI_MODEL
+pnpm build && pnpm start
 ```
 
-Open `http://localhost:3000`. For frontend development use `pnpm dev:web`.
-
-### Run without an API key
-
-The deterministic mock gateway exercises the whole pipeline locally:
+Open `http://localhost:3000`. To try the full pipeline without a model key:
 
 ```bash
 AI_MOCK=1 DATABASE_PATH=/tmp/sciflow_demo.db PORT=3000 \
@@ -58,95 +37,20 @@ AI_MOCK=1 DATABASE_PATH=/tmp/sciflow_demo.db PORT=3000 \
 node scripts/seed-demo.mjs
 ```
 
-### Desktop and Docker
-
-```bash
-pnpm build && pnpm icons && pnpm desktop:dev   # Electron
-pnpm desktop:dist                              # installer in apps/desktop/release/
-docker compose up --build                      # development
-docker compose -f docker-compose.prod.yml up --build
-```
-
-## Verification
-
-Every number below comes from a command run on the current tree (2026-11-13).
-
-| Check | Command | Result |
-|---|---|---|
-| Server unit/integration | `pnpm --filter @sciflow/server test` | 91 files, 703 tests |
-| Web unit | `pnpm --filter @sciflow/web test` | 29 files, 201 tests |
-| Desktop unit | `pnpm --filter @sciflow/desktop test` | 1 file, 5 tests |
-| Types / build | `pnpm -r typecheck` · `pnpm -r build` | clean |
-| Long-form live run | `POST /api/longform/books/:id/write` | 2 chapters, 1,254 chars, summaries chained |
-| Browser UI sweep | `npx playwright test e2e/ui-sweep.spec.ts` | 4 passed (incl. long-form page) |
-| Settings interaction | `npx playwright test e2e/settings-interaction.spec.ts` | 2 passed |
-| Long-form E2E | `npx playwright test e2e/longform.spec.ts` | 1 passed |
-| API coverage (27 modules) | `pnpm test:api` | 105/105 passed |
-| Screenshot sweep | `pnpm capture:ui` | 15 light + 3 dark, 0 page errors |
-| AI access policy | `pnpm --filter @sciflow/server test -- agent-policy` | 7 passed |
-| Real-model manuscript run | pipeline API, 2026-11-13 | 20 refs, 10,834 chars, 18 anchors, 0 ghost, objective 97 |
-| Real-model research loop | cycle `50a629be` | supported/90, 5 verified evidence items |
-
-## Architecture
-
-```mermaid
-flowchart LR
-  U[Researcher] --> W[React 19 web]
-  U --> D[Electron desktop]
-  U --> C[Headless CLI]
-  W --> S[NestJS server]
-  D --> S
-  C --> S
-  S --> P[Manuscript pipeline<br/>LangGraph + checkpoints]
-  S --> R[Research loop<br/>PI · Experimenter · Critic · Expert]
-  S --> AI[AI transport<br/>OpenAI-compatible · Anthropic · Gemini · local]
-  S --> DB[(SQLite<br/>FTS5 + sqlite-vec)]
-  S --> M[MCP server / client]
-  R --> E[Python sandbox]
-```
-
-| Package | Stack |
-|---|---|
-| `apps/server` | NestJS 11 · Drizzle · better-sqlite3 (WAL) · AI SDK v7 · LangGraph · MCP SDK |
-| `apps/web` | React 19 · Vite 8 · TanStack Query/Table · Recharts · CodeMirror 6 |
-| `apps/desktop` | Electron 42 · embedded server · electron-builder |
-| `packages/core` | Quality audit · citation audit · address policy · pipeline steps |
-| `packages/ai` | Transport · model catalog · guarded outbound · fallback · mock gateway |
-| `packages/db` | Schema · migrations · secret encryption |
-| `packages/retrieval` | Vector + full-text retrieval · RRF · MMR · embeddings |
-
-Sandbox runtimes: Python, Node and shell scripts all run in the same isolated temp-dir runner (timeout, memory guard, output truncation). Research data chain: `ResearchProgram → ResearchCycle → ResearchQuestion → ResearchHypothesis → ResearchProtocol → ResearchRun → ResearchClaim → ResearchEvidence`. Manuscript chain: `Project → Document (versioned) → Citation → Reference`.
-
-## Configuration
-
-All settings live in `apps/server/.env`; the settings page covers the same options with a connection test and model discovery.
-
-| Variable | Purpose |
-|---|---|
-| `AI_BASE_URL` · `AI_API_KEY` · `AI_MODEL` | Primary model endpoint |
-| `AI_PROTOCOL` | `openai-compatible` (default), `anthropic`, `gemini` |
-| `AI_MODEL_FAST` · `AI_MODEL_STRONG` | Tier routing |
-| `AI_RPM_CAP` | Requests-per-minute ceiling |
-| `DATABASE_PATH` | SQLite file location |
-| `AUTH_MODE` | `none` locally, `jwt` for shared deployments |
-| `ALLOW_PRIVATE_OUTBOUND` | Permit loopback/RFC1918 for local model servers |
-
-See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
+Desktop and Docker builds are documented in [`docs/DESKTOP.md`](docs/DESKTOP.md) and [`docs/deployment.md`](docs/deployment.md).
 
 ## Documentation
 
-| Document | Contents |
-|---|---|
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Module boundaries, data flow, contracts |
-| [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Model, search, auth and CLI configuration |
-| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Health probes, backup/restore, failure modes |
-| [`docs/deployment.md`](docs/deployment.md) | Docker and desktop packaging |
-| [`SECURITY.md`](SECURITY.md) | Threat model and disclosure |
-| [`CHANGELOG.md`](CHANGELOG.md) | Release history |
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — module boundaries and data flow
+- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) — model, search, auth and CLI settings
+- [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — health, backup and failure handling
+- [`docs/README.md`](docs/README.md) — documentation index
+- [`docs/product-roadmap.md`](docs/product-roadmap.md) — what is shipped and what is deliberately out of scope
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) · [`CHANGELOG.md`](CHANGELOG.md)
 
-## Status
+## Limits
 
-Current release: **1.19.3**. The autonomous research loop and the manuscript pipeline are both real and covered by tests. Known limits: the quality gate is rule-based and intentionally conservative; autonomous runs need a capable model for the PI/Critic roles; the Python sandbox is local and is not a security boundary for hostile code.
+The quality gate is rule-based and conservative. Autonomous runs need a capable model for the PI and critic roles. The Python sandbox is a local runner, not a security boundary for hostile code.
 
 ## License
 
