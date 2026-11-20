@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.19.11] - 2026-11-20
+
+### Fixed
+
+- **阶段条与驾驶舱共用查询缓存**：`stage-docs` / `stage-overview` / `stage-subs` 三组私有 key 并入 `qk.docs` / `qk.dashboardOverview` / `qk.dashboardSubmissions`。创建、删除文档或更新投稿后，阶段条与驾驶舱同步失效，不再各存一份缓存、出现最长 30 秒的旧进度。
+- **记忆中心默认重复拉取**：无筛选时列表本身就是全量，`memory-all` 概览查询改为仅在启用类型/关键词筛选时请求；默认首屏不再对同一接口发两次请求。
+
 ## [1.19.10] - 2026-11-20
 
 ### Changed

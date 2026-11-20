@@ -40,6 +40,28 @@ percentages:
 | OpenAPI paths | 227 |
 | First-screen JS budget | 416.6 KB raw / 127.9 KB gzip |
 
+## 1.19.11 query-cache consolidation verification
+
+The 1.19.11 patch removes the last duplicate read paths found in the second pass:
+the stage bar and dashboard now share one query key per endpoint, and the memory
+centre no longer requests the full list twice when no filter is active. Locally
+verified:
+
+| Gate | Result |
+|---|---|
+| ESLint | pass |
+| Server / web typecheck | pass |
+| Server unit tests | 114 files / 809 passed |
+| Web unit tests | 45 files / 243 passed |
+| Workspace build | pass |
+| OpenAPI generation | 227 paths, generated files clean |
+
+E2E remains delegated to the GitHub Actions workflow; this patch does not claim a
+new full-regression run beyond the gates listed above.
+
+Coverage is tracked as a diagnostic, not as a release condition. Behavioural
+assertions and regression cases are the contract.
+
 ## 1.19.10 consolidation verification
 
 The 1.19.10 patch is a navigation and code-path consolidation. Locally verified:

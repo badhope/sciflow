@@ -22,10 +22,20 @@ export function MemoryPage({ project }: { project: Project }) {
 
   // 记忆列表 + 概览（React Query；筛选变化即换 queryKey）
   const qc = useQueryClient();
+  const needsAll = !!type || !!q;
   const itemsQuery = useQuery({ queryKey: ['memory', project.id, type, q], queryFn: () => api.memory.list(type, q, project.id) });
-  const overviewQuery = useQuery({ queryKey: ['memory-all', project.id], queryFn: () => api.memory.list('', '', project.id), retry: 0 });
-  const items: MemoryItem[] = itemsQuery.data ?? [];
-  const allItems: MemoryItem[] = useMemo(() => overviewQuery.data ?? [], [overviewQuery.data]);
+  // 默认无筛选时列表本身就是全量，概览不再重复请求同一接口
+  const overviewQuery = useQuery({
+    queryKey: ['memory-all', project.id],
+    queryFn: () => api.memory.list('', '', project.id),
+    enabled: needsAll,
+    retry: 0,
+  });
+  const items: MemoryItem[] = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
+  const allItems: MemoryItem[] = useMemo(
+    () => (needsAll ? overviewQuery.data ?? [] : items),
+    [needsAll, overviewQuery.data, items],
+  );
   const loading = itemsQuery.isLoading;
   const listError = itemsQuery.error ? errMsg(itemsQuery.error) : '';
   const refresh = () => {

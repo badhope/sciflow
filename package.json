@@ -1,6 +1,6 @@
 {
   "name": "sciflow",
-  "version": "1.19.10",
+  "version": "1.19.11",
   "private": true,
   "description": "Local-first research workbench for literature, writing, review, and submission, with a deterministic quality gate and traceable citations.",
   "scripts": {

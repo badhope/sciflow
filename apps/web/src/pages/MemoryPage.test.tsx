@@ -43,15 +43,10 @@ describe('记忆中心：项目作用域', () => {
     listMock.mockResolvedValue([]);
   });
 
-  it('列表与概览请求都带 projectId', { timeout: 20000 }, async () => {
+  it('默认只请求一次列表且带 projectId（不重复拉全量概览）', { timeout: 20000 }, async () => {
     await renderPage();
-    await waitFor(() => expect(listMock).toHaveBeenCalled());
-    const calls = listMock.mock.calls;
-    // 至少两条：明细查询 + 概览聚合
-    expect(calls.length).toBeGreaterThanOrEqual(2);
-    for (const args of calls) {
-      expect(args[2]).toBe('p-42');
-    }
+    await waitFor(() => expect(listMock).toHaveBeenCalledTimes(1));
+    expect(listMock.mock.calls[0][2]).toBe('p-42');
   });
 
   it('空态给出「记忆从哪来」说明（不是只有一行「还没有记忆」）', { timeout: 20000 }, async () => {

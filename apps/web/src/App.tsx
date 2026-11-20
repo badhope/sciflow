@@ -16,6 +16,7 @@ import { AppShell, ShellNavGroup, ShellNavItem, useAppShell } from './components
 import { BrandLockup } from './components/BrandMark';
 import { StageBar } from './components/StageBar';
 import { buildCommands, filterCommands } from './lib/commands';
+import { qk } from './lib/query-keys';
 import { canonicalHref } from './lib/view-aliases';
 import { useHotkeys } from './lib/hotkeys';
 import { Button, Input, Modal, Spinner, ErrorBox, ToastViewport, ConfirmDialog, downloadText, type ToastItem, type ToastKind } from './components/ui';
@@ -433,22 +434,22 @@ function AppInner() {
   // 选中项目为派生：显式选择 > 列表首个（不在 effect 里写 state）
   const currentProjectId = pickedProjectId && projects.some((p) => p.id === pickedProjectId) ? pickedProjectId : (projects[0]?.id ?? null);
 
-  // 阶段条数据（项目级）：文档/概览/投稿三项，缺失即降级为「不做完成度推断」
+  // 阶段条数据（项目级）：与驾驶舱/文档页共用同一组 query key，创建/删除文档后失效同步
   const stageDocsQuery = useQuery({
-    queryKey: ['stage-docs', currentProjectId],
+    queryKey: qk.docs(currentProjectId ?? ''),
     queryFn: () => api.documents.list(currentProjectId!),
     enabled: !!currentProjectId && view !== 'settings',
     staleTime: 30_000,
   });
   const stageOverviewQuery = useQuery({
-    queryKey: ['stage-overview', currentProjectId],
+    queryKey: qk.dashboardOverview(currentProjectId ?? ''),
     queryFn: () => api.dashboard.overview(currentProjectId ?? undefined),
     enabled: !!currentProjectId && view !== 'settings',
     retry: 0,
     staleTime: 30_000,
   });
   const stageSubsQuery = useQuery({
-    queryKey: ['stage-subs', currentProjectId],
+    queryKey: qk.dashboardSubmissions(currentProjectId ?? ''),
     queryFn: () => api.submission.listTracks(currentProjectId!),
     enabled: !!currentProjectId && view !== 'settings',
     retry: 0,
