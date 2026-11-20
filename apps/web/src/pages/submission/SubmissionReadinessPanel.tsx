@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Download, RefreshCw, XCircle } from 'lucide-react';
 import { api } from '../../api/client';
-import { Badge, Button, Empty, ErrorBox, Spinner, downloadBase64, errMsg } from '../../components/ui';
+import { Badge, Button, Empty, ErrorBox, Input, Select, Spinner, downloadBase64, errMsg } from '../../components/ui';
 import { DocumentSelect } from '../../components/DocumentSelect';
 import type { Doc, SubmissionReadiness } from '../../types';
 
@@ -27,6 +27,8 @@ export function SubmissionReadinessPanel({ projectId, docs }: { projectId: strin
   const [pkgBusy, setPkgBusy] = useState(false);
   const [pkgMessage, setPkgMessage] = useState('');
   const [pkgError, setPkgError] = useState('');
+  const [journal, setJournal] = useState('');
+  const [template, setTemplate] = useState('generic');
   const query = useQuery({
     queryKey: ['submission-readiness', projectId, docId],
     queryFn: () => api.submission.readiness(projectId, docId),
@@ -34,6 +36,23 @@ export function SubmissionReadinessPanel({ projectId, docs }: { projectId: strin
   });
   const data = query.data;
   const error = query.error ? errMsg(query.error) : '';
+  const qc = useQueryClient();
+  const standardQuery = useQuery({
+    queryKey: ['project-quality-standard', projectId],
+    queryFn: () => api.projects.qualityStandard(projectId),
+    enabled: Boolean(projectId),
+  });
+  const templatesQuery = useQuery({
+    queryKey: ['submission-templates'],
+    queryFn: () => api.submission.templates(),
+  });
+  const setStandard = useMutation({
+    mutationFn: (value: string) => api.projects.setQualityStandard(projectId, value),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['project-quality-standard', projectId] });
+      await query.refetch();
+    },
+  });
 
   const downloadPackage = async () => {
     if (!docId) return;
@@ -41,9 +60,11 @@ export function SubmissionReadinessPanel({ projectId, docs }: { projectId: strin
     setPkgError('');
     setPkgMessage('');
     try {
-      const pkg = await api.submission.package(projectId, docId);
+      const pkg = await api.submission.package(projectId, docId, { journal, template });
       downloadBase64(pkg.filename, pkg.base64, 'application/zip');
-      setPkgMessage(`已生成 ${pkg.filename}（${Math.max(1, Math.round(pkg.size / 1024))} KB）：${pkg.files.map((f) => f.name).join(' / ')}`);
+      setPkgMessage(
+        `已生成 ${pkg.filename}（${Math.max(1, Math.round(pkg.size / 1024))} KB，${pkg.template.label}${pkg.figures.length ? `，图表 ${pkg.figures.length} 张` : ''}）：${pkg.files.map((f) => f.name).join(' / ')}`,
+      );
     } catch (e) {
       setPkgError(errMsg(e));
     } finally {
@@ -85,6 +106,58 @@ export function SubmissionReadinessPanel({ projectId, docs }: { projectId: strin
           ariaLabel="投稿文档"
         />
       </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+        <span>本项目评审标准</span>
+        <Select
+          ariaLabel="项目评审标准"
+          className="!py-1.5"
+          value={standardQuery.data?.key ?? 'standard'}
+          onChange={(v) => setStandard.mutate(v)}
+          options={[
+            { value: 'draft', label: '草稿迭代 · 70 分' },
+            { value: 'standard', label: 'SCI 通用期刊 · 80 分' },
+            { value: 'conference', label: '会议论文 · 78 分' },
+            { value: 'review', label: '综述 · 80 分' },
+            { value: 'strict', label: '顶刊 · 85 分' },
+          ]}
+        />
+        {standardQuery.data && (
+          <Badge tone={standardQuery.data.source === 'project' ? 'teal' : 'slate'}>
+            {standardQuery.data.source === 'project' ? '项目级' : standardQuery.data.source === 'global' ? '继承全局' : '默认'}
+          </Badge>
+        )}
+        {setStandard.isPending && <span>保存中…</span>}
+        {setStandard.error && <span className="text-rose-600">{errMsg(setStandard.error)}</span>}
+      </div>
+
+      {docId && (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <label className="text-xs text-slate-500 dark:text-slate-400">
+            目标期刊（写进 Cover Letter，可留空）
+            <Input
+              value={journal}
+              onChange={(e) => setJournal(e.target.value)}
+              placeholder="例如 Journal of Graph Research"
+              className="mt-1 !py-1.5"
+              aria-label="目标期刊"
+            />
+          </label>
+          <label className="text-xs text-slate-500 dark:text-slate-400">
+            排版模板
+            <Select
+              ariaLabel="投稿排版模板"
+              className="mt-1 w-full !py-1.5"
+              value={template}
+              onChange={setTemplate}
+              options={(templatesQuery.data ?? [{ key: 'generic', label: '通用中文投稿', note: '' }]).map((t) => ({
+                value: t.key,
+                label: t.label,
+              }))}
+            />
+          </label>
+        </div>
+      )}
 
       {!docId && <Empty compact text="先选择一篇项目文档" hint="检查不会修改稿件，只给出阻塞项与提醒。" />}
       {query.isLoading && <Spinner label="检查投稿材料…" />}
@@ -160,7 +233,7 @@ export function SubmissionReadinessPanel({ projectId, docs }: { projectId: strin
 
           <p className="text-[11px] leading-5 text-slate-400">
             这是投稿前的确定性自检，不替代期刊编辑初审；「提醒」不阻塞提交，「阻塞」建议先补齐再投。
-            投稿包含 `manuscript.docx` / `references.bib` / `submission-checklist.md` / `manifest.json`；阻塞态也可下载，清单会保留阻塞项。
+            投稿包含 `manuscript.docx` / `cover-letter.md` / `references.bib` / `submission-checklist.md` / `figures/` / `manifest.json`；阻塞态也可下载，清单会保留阻塞项。
           </p>
         </div>
       )}

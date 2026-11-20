@@ -1,5 +1,27 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+export class SubmissionPackageFigureDto {
+  @ApiProperty({ description: '包内路径（figures/figure-01.png）' })
+  name!: string;
+
+  @ApiProperty({ description: '图表说明' })
+  caption!: string;
+
+  @ApiProperty({ description: 'PNG 字节数' })
+  bytes!: number;
+}
+
+export class SubmissionTemplateDto {
+  @ApiProperty({ enum: ['generic', 'ieee', 'elsevier', 'springer', 'nature'] })
+  key!: string;
+
+  @ApiProperty()
+  label!: string;
+
+  @ApiProperty({ description: '字体/字号/行距说明' })
+  note!: string;
+}
+
 export class SubmissionPackageFileDto {
   @ApiProperty({ description: '包内文件名' })
   name!: string;
@@ -44,4 +66,13 @@ export class SubmissionPackageDto {
 
   @ApiProperty()
   warnCount!: number;
+
+  @ApiProperty({ description: '目标期刊（未填写为空串）' })
+  journal!: string;
+
+  @ApiProperty({ type: SubmissionTemplateDto })
+  template!: SubmissionTemplateDto;
+
+  @ApiProperty({ type: [SubmissionPackageFigureDto] })
+  figures!: SubmissionPackageFigureDto[];
 }

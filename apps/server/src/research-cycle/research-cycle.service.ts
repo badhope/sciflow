@@ -1,5 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { Command } from '@langchain/langgraph';
+import type { Command } from '@langchain/langgraph';
 import { like, sql } from 'drizzle-orm';
 import { db, sqlite } from '../db/database';
 import { llmCallLogs } from '../db/schema';
@@ -11,11 +11,6 @@ import { AiService } from '../ai/ai.service';
 import { ScholarSearchService } from '../research/scholar-search.service';
 import { ResearchBriefService } from '../research-brief/research-brief.service';
 import { MemoryService } from '../memory/memory.service';
-import { buildResearchCycleGraph } from './research-cycle.graph';
-import { planWithPi } from './agents/pi.agent';
-import { designExperiment } from './agents/experimenter.agent';
-import { evaluateWithCritic } from './agents/critic.agent';
-import { reviewWithExpert } from './agents/expert.agent';
 import { envInt } from '../common/env';
 
 /**
@@ -31,7 +26,8 @@ import { envInt } from '../common/env';
 @Injectable()
 export class ResearchCycleService {
   private readonly logger = new Logger(ResearchCycleService.name);
-  private graph!: ReturnType<typeof buildResearchCycleGraph>;
+  private graph: { invoke(input: never, cfg: never): Promise<unknown> } | null = null;
+  private graphDeps!: Parameters<typeof import('./research-cycle.graph').buildResearchCycleGraph>[0];
   /** 正在运行的循环（防止同项目并发跑两个循环互相烧 token） */
   private readonly running = new Set<string>();
 
@@ -45,7 +41,7 @@ export class ResearchCycleService {
     private readonly brief?: ResearchBriefService,
     private readonly memory?: MemoryService,
   ) {
-    this.graph = buildResearchCycleGraph({
+    this.graphDeps = ({
       programs: {
         getProgram: (programId) => this.programs.getProgram(programId),
         listProtocols: (hypothesisId) => this.programs.listProtocols(hypothesisId),
@@ -68,14 +64,15 @@ export class ResearchCycleService {
         addEvidence: (claimId, input) => this.records.addEvidence(claimId, input),
       },
       agents: {
-        plan: (input) =>
-          planWithPi(this.ai, { ...input, context: `research-cycle:${input.cycleId}:pi` }),
-        design: (input) =>
-          designExperiment(this.ai, { ...input, context: `research-cycle:${input.cycleId}:experimenter` }),
-        evaluate: (input) =>
-          evaluateWithCritic(this.ai, { ...input, context: `research-cycle:${input.cycleId}:critic` }),
-        expertReview: (input) =>
-          reviewWithExpert(this.ai, { ...input, context: `research-cycle:${input.cycleId}:expert` }),
+        // 智能体按需加载：langgraph / 角色 prompt 只在真正跑循环时进内存。
+        plan: async (input) =>
+          (await import('./agents/pi.agent')).planWithPi(this.ai, { ...input, context: `research-cycle:${input.cycleId}:pi` }),
+        design: async (input) =>
+          (await import('./agents/experimenter.agent')).designExperiment(this.ai, { ...input, context: `research-cycle:${input.cycleId}:experimenter` }),
+        evaluate: async (input) =>
+          (await import('./agents/critic.agent')).evaluateWithCritic(this.ai, { ...input, context: `research-cycle:${input.cycleId}:critic` }),
+        expertReview: async (input) =>
+          (await import('./agents/expert.agent')).reviewWithExpert(this.ai, { ...input, context: `research-cycle:${input.cycleId}:expert` }),
       },
       runExperiment: (input) => this.experiments.run(input),
       // 文献检索：失败由 graph 降级为空列表；这里只做「服务结果 → 紧凑引用」映射，
@@ -153,13 +150,14 @@ export class ResearchCycleService {
   }
 
   /** 人工审批后恢复循环（协议已批准的走 DB 状态；显式 false 表示驳回并终止本轮） */
-  resume(cycleId: string, decision: { approved?: boolean } = {}) {
+  async resume(cycleId: string, decision: { approved?: boolean } = {}) {
     const cycle = this.programs.getCycle(cycleId);
     const program = this.programs.getProgram(cycle.programId);
     if (this.running.has(cycle.programId)) {
       throw new BadRequestException('该研究项目已有循环在运行');
     }
     this.running.add(cycle.programId);
+    const { Command } = await import('@langchain/langgraph');
     void this.invoke(cycle.id, program.projectId, new Command({ resume: { approved: decision.approved !== false } }));
     return this.status(cycleId);
   }
@@ -197,6 +195,15 @@ export class ResearchCycleService {
 
   // ─── 图调用 ─────────────────────────────────────────────────────────
 
+  /** 图按需构建：@langchain/langgraph 冷导入约 4s，只有真正跑循环时才加载。 */
+  private async getGraph(): Promise<{ invoke(input: never, cfg: never): Promise<unknown> }> {
+    if (!this.graph) {
+      const { buildResearchCycleGraph } = await import('./research-cycle.graph');
+      this.graph = buildResearchCycleGraph(this.graphDeps) as unknown as { invoke(input: never, cfg: never): Promise<unknown> };
+    }
+    return this.graph;
+  }
+
   private async invoke(
     cycleId: string,
     projectId: string,
@@ -212,7 +219,8 @@ export class ResearchCycleService {
         input: `自主研究循环 ${cycleId.slice(0, 8)}`,
         model: this.ai.config.model,
       });
-      const result = await this.graph.invoke(input as never, cfg as never);
+      const graph = await this.getGraph();
+      const result = await graph.invoke(input as never, cfg as never);
       const interrupts = (result as { __interrupt__?: unknown[] } | undefined)?.__interrupt__;
       if (interrupts && interrupts.length > 0) {
         this.programs.updateCycle(cycleId, { state: 'awaiting_approval', summary: '等待人工审批研究协议' });

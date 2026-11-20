@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger, OnModuleIni
 import { eq, and, sql, gte } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import pLimit from 'p-limit';
-import { Command } from '@langchain/langgraph';
+import type { Command } from '@langchain/langgraph';
 import { db } from '../db/database';
 import { pipelineTasks, documents, pipelineConfigs, appSettings, projects, llmCallLogs } from '../db/schema';
 import { AiService } from '../ai/ai.service';
@@ -14,7 +14,7 @@ import { KnowledgeService } from '../knowledge/knowledge.service';
 import { CitationRenderer } from './citation-renderer';
 import { AgentTraceService } from '../agent/agent-trace.service';
 import { reflexionLogs } from '../db/schema';
-import { buildPipelineGraph, type PipelineGraphDeps, type StepStatusWire } from './pipeline.graph';
+import type { PipelineGraphDeps, StepStatusWire } from './pipeline.graph';
 import type { Outline, PipelineTaskRow, ResearchPlan } from './pipeline-state';
 import { WebSearchService } from '../websearch/websearch.service';
 import { ConfigCenterService } from '../config/config-center.service';
@@ -72,7 +72,8 @@ export function applyStepWire(
 export class PipelineService implements OnModuleInit {
   private readonly logger = new Logger(PipelineService.name);
   private readonly citationRenderer = new CitationRenderer(db);
-  private graph!: ReturnType<typeof buildPipelineGraph>;
+  private graph: { invoke(input: never, cfg: never): Promise<unknown> } | null = null;
+  private graphDeps!: PipelineGraphDeps;
   private readonly draftingLimit = pLimit(envInt('AI_DRAFT_CONCURRENCY', 3, { min: 1, max: 20 }));
 
   /** taskId → agent_execution runId（每次图调用一次执行记录，断点续跑开新记录） */
@@ -207,7 +208,7 @@ export class PipelineService implements OnModuleInit {
       noveltyCheck: (topic, projectId) => this.noveltyCheck(topic, projectId),
       logger: this.logger,
     };
-    this.graph = buildPipelineGraph(deps);
+    this.graphDeps = deps;
   }
 
   // ─── 公开 API（controller 调用） ──────────────────────────────
@@ -318,6 +319,7 @@ export class PipelineService implements OnModuleInit {
     const outline = editedOutline || parseJson<Outline>(outlineStep?.output, { title: task.topic, sections: [] });
     await this.notify(taskId, 'outline', 'done', JSON.stringify(outline));
     this.setStatus(taskId, 'running', 'quality-gate');
+    const { Command } = await import('@langchain/langgraph');
     void this.invokeGraph(taskId, new Command({ resume: { edited: outline } }));
     return this.get(taskId);
   }
@@ -391,8 +393,19 @@ export class PipelineService implements OnModuleInit {
   }
 
   // ─── 图调用（统一错误处理与终态投影） ──────────────────────────
+  /** 图按需构建：@langchain/langgraph 冷导入约 4s，只有真正跑流水线时才加载。 */
+  private async getGraph(): Promise<{ invoke(input: never, cfg: never): Promise<unknown> }> {
+    if (!this.graph) {
+      const { buildPipelineGraph } = await import('./pipeline.graph');
+      this.graph = buildPipelineGraph(this.graphDeps) as unknown as { invoke(input: never, cfg: never): Promise<unknown> };
+    }
+    return this.graph;
+  }
+
   private async invokeGraph(taskId: string, input: { taskId: string; task: PipelineTaskRow } | Command | null) {
-    const resume = input instanceof Command;
+    // Command 按需加载：不能用 instanceof（启动路径里没有 Command 构造器）。
+    // 带 taskId 的是新任务输入，其余非空对象是 resume Command。
+    const resume = input !== null && !('taskId' in input);
     let runId: string | undefined;
     try {
       const task = this.getTaskRow(taskId);
@@ -400,7 +413,8 @@ export class PipelineService implements OnModuleInit {
       this.traceRuns.set(taskId, runId);
       this.runStartedAt.set(runId, Date.now());
       const cfg = { configurable: { thread_id: taskId } };
-      const result = await this.graph.invoke(input as never, cfg as never);
+      const graph = await this.getGraph();
+      const result = await graph.invoke(input as never, cfg as never);
       // 用户在本次图执行期间点了停止：图可能正常返回（例如恰好走到 interrupt），
       // 此时绝不能把终态改回 awaiting_confirmation/completed —— 用户意图优先。
       if (this.stoppedTasks.has(taskId)) {

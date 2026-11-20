@@ -48,20 +48,35 @@ const input = {
   generatedAt: new Date('2026-11-20T00:00:00.000Z'),
 };
 
+// 1x1 PNG，用来验证图表附件会被解码、嵌入 DOCX 并打进 ZIP。
+const PNG_1PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
 describe('buildSubmissionPackage', () => {
-  it('生成四件套 ZIP，清单保留阻塞项，manifest 与 readiness 一致', async () => {
-    const pkg = await buildSubmissionPackage(input);
+  it('生成投稿包 ZIP（含 Cover Letter / 模板 / 图表），清单保留阻塞项，manifest 与 readiness 一致', async () => {
+    const pkg = await buildSubmissionPackage({
+      ...input,
+      journal: 'Journal of Graph Research',
+      template: 'ieee',
+      figures: [{ name: 'figures/figure-01.png', caption: '消融实验结果', bytes: PNG_1PX.length, data: PNG_1PX }],
+    });
     expect(pkg.filename).toBe('测试投稿包-投稿包.zip');
     expect(pkg.size).toBeGreaterThan(0);
+    expect(pkg.template.key).toBe('ieee');
     expect(pkg.files.map((f) => f.name)).toEqual([
       'manuscript.docx',
+      'cover-letter.md',
       'references.bib',
       'submission-checklist.md',
+      'figures/captions.md',
+      'figures/figure-01.png',
       'manifest.json',
     ]);
 
     const files = unzipSync(new Uint8Array(Buffer.from(pkg.base64, 'base64')));
     expect(Object.keys(files).sort()).toEqual([
+      'cover-letter.md',
+      'figures/captions.md',
+      'figures/figure-01.png',
       'manifest.json',
       'manuscript.docx',
       'references.bib',
@@ -70,14 +85,24 @@ describe('buildSubmissionPackage', () => {
 
     const manifestRaw = strFromU8(files['manifest.json']);
     const manifest = JSON.parse(manifestRaw);
-    expect(manifest.schemaVersion).toBe('sciflow-submission-package/1');
+    expect(manifest.schemaVersion).toBe('sciflow-submission-package/2');
+    expect(manifest.template).toMatchObject({ key: 'ieee', label: 'IEEE 双栏风格' });
+    expect(manifest.journal).toBe('Journal of Graph Research');
     expect(manifest.files.find((f: { name: string }) => f.name === 'manifest.json').bytes).toBe(Buffer.byteLength(manifestRaw));
     expect(manifest.readiness).toMatchObject({ ready: false, score: 40, failCount: 2, warnCount: 1 });
-    expect(manifest.files).toHaveLength(4);
+    expect(manifest.files).toHaveLength(7);
     expect(manifest.files.every((f: { bytes: number }) => f.bytes > 0)).toBe(true);
+
+    const cover = strFromU8(files['cover-letter.md']);
+    expect(cover).toContain('Journal of Graph Research');
+    expect(cover).toContain('测试投稿包');
+    expect(cover).toContain('［请填写姓名、单位、邮箱］');
+    expect(cover).not.toContain('虚构作者');
 
     const checklist = strFromU8(files['submission-checklist.md']);
     expect(checklist).toContain('有阻塞项');
+    expect(checklist).toContain('排版模板：IEEE 双栏风格');
+    expect(checklist).toContain('图表 1 张');
     expect(checklist).toContain('| 阻塞 | 正文篇幅 |');
     expect(checklist).toContain('| 提醒 | 关键词块 |');
 
@@ -91,6 +116,9 @@ describe('buildSubmissionPackage', () => {
     const documentXml = strFromU8(docxFiles['word/document.xml']);
     expect(documentXml).toContain('测试投稿包');
     expect(documentXml).toContain('这是一段用于 DOCX 的测试正文。');
+    // 图表附件同时进 DOCX（drawing）与 ZIP（figures/）
+    expect(documentXml).toContain('<w:drawing>');
+    expect(strFromU8(files['figures/captions.md'])).toContain('消融实验结果');
   });
 
   it('可投稿态清单明确写可投稿；文献库为空时仍生成合法 BibTeX 文件', async () => {
@@ -103,5 +131,8 @@ describe('buildSubmissionPackage', () => {
     const files = unzipSync(new Uint8Array(Buffer.from(pkg.base64, 'base64')));
     expect(strFromU8(files['submission-checklist.md'])).toContain('就绪状态：可投稿');
     expect(strFromU8(files['references.bib'])).toContain('项目文献库为空');
+    expect(pkg.files.map((f) => f.name)).toEqual([
+      'manuscript.docx', 'cover-letter.md', 'references.bib', 'submission-checklist.md', 'manifest.json',
+    ]);
   });
 });

@@ -6,6 +6,17 @@ import type { components } from './api/openapi-types';
  */
 export type Project = components['schemas']['ProjectDto'];
 
+/** 项目级评审标准（服务端 ProjectQualityStandardDto；未生成 OpenAPI 前先手写同形）。 */
+export interface ProjectQualityStandard {
+  key: 'draft' | 'standard' | 'strict' | 'review' | 'conference';
+  label: string;
+  passScore: number;
+  minChars: number;
+  minSections: number;
+  minUniqueCitations: number;
+  source: 'project' | 'global' | 'fallback';
+}
+
 /**
  * 项目级研究 Brief：研究问题 / 范围 / 方法 / 约束 / 成功标准（Agent 每轮读取）。
  * 类型来自 OpenAPI 生成 contract（NestJS DTO），不再手写第二份。
@@ -754,6 +765,13 @@ export type SubmissionReadiness = components['schemas']['SubmissionReadinessDto'
 
 /** 投稿包（DOCX + BibTeX + 清单 + manifest）：类型来自 OpenAPI 生成 contract。 */
 export type SubmissionPackage = components['schemas']['SubmissionPackageDto'];
+
+/** 内置投稿排版模板（服务端 SUBMISSION_TEMPLATES）。 */
+export interface SubmissionTemplate {
+  key: 'generic' | 'ieee' | 'elsevier' | 'springer' | 'nature';
+  label: string;
+  note: string;
+}
 
 /** AI 解析编辑部邮件的建议（不改库，用户确认后走 event 端点） */
 export interface ParseEmailResult {

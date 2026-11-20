@@ -4,8 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
 import { qualityReports, reviewComments, documents, citations } from '../db/schema';
 import { checkPaperQuality } from '../common/quality-audit';
-import { parseQualityStandard, type QualityStandardKey } from '../common/quality-standards';
-import { appSettings } from '../db/schema';
+import { readProjectQualityStandard } from '../common/project-quality-standard';
 import { AiService, ReviewResult } from '../ai/ai.service';
 import { parseJson } from '../common/json-guard';
 import { structureFeedback } from './quality-feedback';
@@ -20,16 +19,6 @@ const DIM_CN: Record<string, string> = {
   figures: '图表',
   format: '格式',
 };
-
-/** 读全局评审标准（app_setting quality_standard；非法值 fail-closed 回落 standard） */
-function readQualityStandard(): QualityStandardKey {
-  try {
-    const row = db.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, 'quality_standard')).get();
-    return parseQualityStandard(row?.value).key;
-  } catch {
-    return 'standard';
-  }
-}
 
 @Injectable()
 export class QualityService {
@@ -70,14 +59,14 @@ export class QualityService {
    */
   async review(documentId: string, title: string, content: string) {
     if (!documentId?.trim()) throw new BadRequestException('documentId 必填');
-    const doc = db.select({ id: documents.id }).from(documents).where(eq(documents.id, documentId)).get();
+    const doc = db.select({ id: documents.id, projectId: documents.projectId }).from(documents).where(eq(documents.id, documentId)).get();
     if (!doc) throw new NotFoundException('文档不存在');
     if (!content || content.length < 50) {
       throw new BadRequestException('文档内容过短，暂无法评分（至少 50 字）');
     }
     const result: ReviewResult & { totalScore: number } = await this.ai.reviewPaper(title, content);
     const citationCount = db.select().from(citations).where(eq(citations.documentId, documentId)).all().length;
-    const objective = checkPaperQuality(content, { citationCount, standard: readQualityStandard() });
+    const objective = checkPaperQuality(content, { citationCount, standard: readProjectQualityStandard(doc.projectId) });
     const row = {
       id: randomUUID(),
       documentId,
@@ -133,7 +122,7 @@ export class QualityService {
     const rows = db.select().from(documents).where(eq(documents.projectId, projectId)).all();
     const items = rows.map((doc) => {
       const citationCount = (db.select().from(citations).where(eq(citations.documentId, doc.id)).all() || []).length;
-      const report = checkPaperQuality(String(doc.content || ''), { citationCount, standard: readQualityStandard() });
+      const report = checkPaperQuality(String(doc.content || ''), { citationCount, standard: readProjectQualityStandard(doc.projectId) });
       // 及格线必须与用户选择的评审标准一致（draft 70 / conference 78 / standard 80 / strict 85），
       // 不能在总览里写死 80，否则会和流水线门禁、质量页给出相反结论。
       const passScore = report.standard?.passScore ?? 80;

@@ -1,18 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/database';
-import { appSettings, citations, documents, references } from '../db/schema';
-import { parseQualityStandard, type QualityStandardKey } from '../common/quality-standards';
+import { citations, documents, references } from '../db/schema';
+import { readProjectQualityStandard } from '../common/project-quality-standard';
 import { assessSubmissionReadiness, type SubmissionReadinessResult } from './submission-readiness';
-
-function readStandard(): QualityStandardKey {
-  try {
-    const row = db.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, 'quality_standard')).get();
-    return parseQualityStandard(row?.value).key;
-  } catch {
-    return 'standard';
-  }
-}
 
 @Injectable()
 export class SubmissionReadinessService {
@@ -52,7 +43,7 @@ export class SubmissionReadinessService {
       content: doc.content || '',
       libraryReferences,
       citationLinks,
-      standard: readStandard(),
+      standard: readProjectQualityStandard(projectId),
     });
 
     return {

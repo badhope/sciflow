@@ -3,6 +3,7 @@ import { ProjectsService } from './projects.service';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ProjectAccessService } from '../common/project-access.service';
 import { ProjectDto } from './projects.dto';
+import { ProjectQualityStandardDto } from './projects.dto';
 import type { AuthPayload } from '../auth/auth.service';
 
 @ApiTags('Projects')
@@ -61,6 +62,28 @@ export class ProjectsController {
   @ApiOkResponse({ type: ProjectDto })
   create(@Body() body: { name: string; description?: string }, @Req() req: { user?: AuthPayload }) {
     return this.projects.create(body, this.access.ownerOf(req.user));
+  }
+
+  /** 项目级评审标准（只影响本项目；未设置时回退全局） */
+  @Get(':id/quality-standard')
+  @ApiOkResponse({ type: ProjectQualityStandardDto })
+  getQualityStandard(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertProject(id, req.user);
+    return this.projects.getQualityStandard(id);
+  }
+
+  @Patch(':id/quality-standard')
+  @ApiOkResponse({ type: ProjectQualityStandardDto })
+  setQualityStandard(@Param('id') id: string, @Body() body: { standard: string }, @Req() req: { user?: AuthPayload }) {
+    this.access.assertProject(id, req.user);
+    return this.projects.setQualityStandard(id, body?.standard || '');
+  }
+
+  @Delete(':id/quality-standard')
+  @ApiOkResponse({ type: ProjectQualityStandardDto })
+  clearQualityStandard(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertProject(id, req.user);
+    return this.projects.clearQualityStandard(id);
   }
 
   @Patch(':id')

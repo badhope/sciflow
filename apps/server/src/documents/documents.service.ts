@@ -6,7 +6,7 @@ import '@citation-js/plugin-csl';
 import './csl-register'; // 注册官方补缺样式（IEEE/GB-T 7714/Nature/Chicago/Springer/ACS），必须在 Cite 使用前导入
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
-import { documents, citations, references, polishRecords, qualityReports, reviewComments, experiments, pipelineTasks, appSettings } from '../db/schema';
+import { documents, citations, references, polishRecords, qualityReports, reviewComments, experiments, pipelineTasks } from '../db/schema';
 import { checkPaperQuality } from '../common/quality-audit';
 import { auditCitations } from '../common/citation-audit';
 import { buildManuscriptDocx } from './manuscript-docx';
@@ -14,18 +14,9 @@ import { AiService } from '../ai/ai.service';
 import { ReferencesService } from '../references/references.service';
 import { splitTailBlock } from '../pipeline/tail-blocks';
 import { parseAuthors as parseAuthorArr } from '../common/authors';
-import { parseQualityStandard, type QualityStandardKey } from '../common/quality-standards';
+import { readProjectQualityStandard } from '../common/project-quality-standard';
 import { extractSections, replaceSectionBody, restoreSection as restoreSectionText, sectionDiff, type SectionDiffEntry } from './section-restore';
 
-/** 读全局评审标准（app_setting quality_standard；非法值 fail-closed 回落 standard） */
-function readQualityStandard(): QualityStandardKey {
-  try {
-    const row = db.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, 'quality_standard')).get();
-    return parseQualityStandard(row?.value).key;
-  } catch {
-    return 'standard';
-  }
-}
 import { parseJson } from '../common/json-guard';
 import { toCslAuthors, buildCslEntry, cslSurname } from '../common/citation-csl';
 
@@ -587,7 +578,7 @@ export class DocumentsService {
     // 仓库引用契约：正文只有 [n] 锚点，列表由前端/导出渲染；所以把 citation 表条数传给检查器，
     // 否则会把「没有内嵌参考文献块」误判成硬伤（实测踩到）。
     const citationCount = (db.select().from(citations).where(eq(citations.documentId, id)).all() || []).length;
-    const report = checkPaperQuality(content, { citationCount, standard: readQualityStandard() });
+    const report = checkPaperQuality(content, { citationCount, standard: readProjectQualityStandard(doc.projectId) });
     // 附带历史 LLM 评分，便于对照「机械分」与「模型分」的漂移。
     // 新行 total_score 已是客观分：必须读 llm_score/llm_scores，老行回落到 total_score/scores。
     const history = db.select().from(qualityReports).where(eq(qualityReports.documentId, id)).all()

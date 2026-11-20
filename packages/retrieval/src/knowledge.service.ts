@@ -7,7 +7,6 @@ import { eq, inArray, and, asc, sql } from 'drizzle-orm';
 import { AiService } from '../../ai/src/ai.service';
 import { EmbeddingService } from './embedding.service';
 import { fingerprint } from '../../core/src/fingerprint';
-import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { parseAuthors } from '../../core/src/authors';
 import { projectTo2D, blobToVector, downsampleIndices } from './projection';
 import { mmrSelect, normalizeScores } from './mmr';
@@ -33,17 +32,25 @@ export class KnowledgeService {
     private readonly embedding: EmbeddingService,
   ) {}
 
-  /** 文本分块：RecursiveCharacterTextSplitter（@langchain/textsplitters）——按段落→换行→中文句读递归切分到 CHUNK_SIZE */
-  private readonly splitter = new RecursiveCharacterTextSplitter({
-    chunkSize: CHUNK_SIZE,
-    chunkOverlap: CHUNK_OVERLAP,
-    separators: ['\n\n', '\n', '。', '；', '，', ' ', ''],
-  });
+  /** 文本分块：RecursiveCharacterTextSplitter 按需加载。
+   *  @langchain/textsplitters 冷导入约 1.8s，只有真正上传/切块时才需要；
+   *  放进启动路径会让所有只读 API 一起背成本。 */
+  private splitterPromise: Promise<import('@langchain/textsplitters').RecursiveCharacterTextSplitter> | null = null;
 
   private async chunkText(text: string): Promise<string[]> {
     const cleaned = text.replace(/\r/g, '').replace(/[  ]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
     if (!cleaned) return [];
-    const parts = await this.splitter.splitText(cleaned);
+    if (!this.splitterPromise) {
+      this.splitterPromise = import('@langchain/textsplitters').then(({ RecursiveCharacterTextSplitter }) =>
+        new RecursiveCharacterTextSplitter({
+          chunkSize: CHUNK_SIZE,
+          chunkOverlap: CHUNK_OVERLAP,
+          separators: ['\n\n', '\n', '。', '；', '，', ' ', ''],
+        }),
+      );
+    }
+    const splitter = await this.splitterPromise;
+    const parts = await splitter.splitText(cleaned);
     return parts.map((p) => p.trim()).filter(Boolean);
   }
 

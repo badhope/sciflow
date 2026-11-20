@@ -948,6 +948,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/submission/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SubmissionController_templates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/submission/package": {
         parameters: {
             query?: never;
@@ -1666,6 +1682,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/quality-standard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProjectsController_getQualityStandard"];
+        put?: never;
+        post?: never;
+        delete: operations["ProjectsController_clearQualityStandard"];
+        options?: never;
+        head?: never;
+        patch: operations["ProjectsController_setQualityStandard"];
         trace?: never;
     };
     "/documents": {
@@ -4092,10 +4124,25 @@ export interface components {
             /** @description 检查时间（毫秒时间戳） */
             checkedAt: number;
         };
+        SubmissionTemplateDto: {
+            /** @enum {string} */
+            key: "generic" | "ieee" | "elsevier" | "springer" | "nature";
+            label: string;
+            /** @description 字体/字号/行距说明 */
+            note: string;
+        };
         SubmissionPackageFileDto: {
             /** @description 包内文件名 */
             name: string;
             /** @description 未压缩字节数 */
+            bytes: number;
+        };
+        SubmissionPackageFigureDto: {
+            /** @description 包内路径（figures/figure-01.png） */
+            name: string;
+            /** @description 图表说明 */
+            caption: string;
+            /** @description PNG 字节数 */
             bytes: number;
         };
         SubmissionPackageDto: {
@@ -4118,6 +4165,10 @@ export interface components {
             score: number;
             failCount: number;
             warnCount: number;
+            /** @description 目标期刊（未填写为空串） */
+            journal: string;
+            template: components["schemas"]["SubmissionTemplateDto"];
+            figures: components["schemas"]["SubmissionPackageFigureDto"][];
         };
         JournalDto: {
             /** @description 期刊 ID */
@@ -4246,6 +4297,43 @@ export interface components {
             templates?: string;
             /** @description 企业模式归属用户；本地模式为空串 */
             ownerId?: string;
+        };
+        ProjectQualityStandardDto: {
+            /**
+             * @description 标准 key
+             * @example standard
+             */
+            key: string;
+            /**
+             * @description 标准中文名
+             * @example SCI 通用期刊
+             */
+            label: string;
+            /**
+             * @description 及格线
+             * @example 80
+             */
+            passScore: number;
+            /**
+             * @description 正文最少字符
+             * @example 4500
+             */
+            minChars: number;
+            /**
+             * @description 最少二级章节数
+             * @example 5
+             */
+            minSections: number;
+            /**
+             * @description 最少唯一引用数
+             * @example 15
+             */
+            minUniqueCitations: number;
+            /**
+             * @description 取值来源
+             * @enum {string}
+             */
+            source: "project" | "global" | "fallback";
         };
         DocDto: {
             /** @description 文档 ID */
@@ -5912,6 +6000,25 @@ export interface operations {
             };
         };
     };
+    SubmissionController_templates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionTemplateDto"][];
+                };
+            };
+        };
+    };
     SubmissionController_submissionPackage: {
         parameters: {
             query: {
@@ -6991,6 +7098,69 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    ProjectsController_getQualityStandard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectQualityStandardDto"];
+                };
+            };
+        };
+    };
+    ProjectsController_clearQualityStandard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectQualityStandardDto"];
+                };
+            };
+        };
+    };
+    ProjectsController_setQualityStandard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectQualityStandardDto"];
+                };
             };
         };
     };

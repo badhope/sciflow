@@ -282,7 +282,7 @@ mcp
     const { McpService } = await import('./mcp/mcp.service');
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
     const mcps = ctx.get(McpService);
-    const server = mcps.buildSdkServer();
+    const server = await mcps.buildSdkServer();
     const transport = new StdioServerTransport();
     await server.connect(transport);
     // stderr 输出协议日志（stdout 保留给 JSON-RPC）

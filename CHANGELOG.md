@@ -4,7 +4,29 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.19.2] - 2026-11-20
+
+### Added
+
+- **项目级评审标准**：新增 `quality_standard:project:<projectId>`，项目设置优先、全局回退；
+  `GET/PATCH/DELETE /api/projects/:id/quality-standard`，质量评审、客观审计、投稿就绪统一读项目口径。
+  投稿页增加「本项目评审标准」选择器，并显示项目级/继承全局来源。
+- **投稿包增强**：支持 `journal`、`template` 参数与 5 套排版模板（generic/ieee/elsevier/springer/nature）；
+  新增 `cover-letter.md`；实验 PNG 图表自动嵌入 `manuscript.docx` 并打包到 `figures/`，附 `captions.md`。
+  投稿包 schema 升到 `sciflow-submission-package/2`。
+- **Agent 工具 `submission.package`**：返回文件名、大小、成员、模板、图表、就绪结果与下载路径，
+  不回传 base64，避免大对象塞进模型上下文。
+- **模板清单 API**：`GET /api/submission/templates`，OpenAPI 221 paths。
+
+### Changed
+
+- **启动性能**：MCP SDK、LangGraph、文本切分器、研究循环图与角色智能体改为按需加载；
+  冷启动实测约 26.5s → 22.4s（未达到 <15s 目标，继续拆分模块）。
+- **包体守卫**：新增首屏 gzip 250KB 与单懒加载块 gzip 900KB 预算；首屏 127.4KB gzip，
+  `elk` 懒加载块 447.9KB gzip（raw 1.46MB，仍高于 raw 900KB 目标，首屏不加载）。
+
 ## [1.19.1] - 2026-11-20
+
 
 ### Added
 

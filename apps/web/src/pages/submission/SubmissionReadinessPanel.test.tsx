@@ -7,7 +7,17 @@ import type { SubmissionPackage, SubmissionReadiness } from '../../types';
 import { SubmissionReadinessPanel } from './SubmissionReadinessPanel';
 
 vi.mock('../../api/client', () => ({
-  api: { submission: { readiness: vi.fn(), package: vi.fn() } },
+  api: {
+    submission: {
+      readiness: vi.fn(),
+      package: vi.fn(),
+      templates: vi.fn(async () => [{ key: 'generic', label: '通用中文投稿', note: '' }, { key: 'ieee', label: 'IEEE 双栏风格', note: '' }]),
+    },
+    projects: {
+      qualityStandard: vi.fn(async () => ({ key: 'standard', label: 'SCI 通用期刊', passScore: 80, minChars: 4500, minSections: 5, minUniqueCitations: 15, source: 'global' })),
+      setQualityStandard: vi.fn(),
+    },
+  },
 }));
 
 vi.mock('../../components/ui', async (importOriginal) => {
@@ -79,6 +89,9 @@ function packageResult(over: Partial<SubmissionPackage> = {}): SubmissionPackage
     score: 92,
     failCount: 0,
     warnCount: 1,
+    journal: '',
+    template: { key: 'generic', label: '通用中文投稿', note: '' },
+    figures: [],
     ...over,
   };
 }
@@ -107,7 +120,7 @@ describe('SubmissionReadinessPanel', () => {
 
     expect(await screen.findByText('可投稿')).toBeTruthy();
     expect(screen.getByText('92%')).toBeTruthy();
-    expect(screen.getByText(/SCI 通用期刊/)).toBeTruthy();
+    expect(screen.getAllByText(/SCI 通用期刊/).length).toBeGreaterThan(0);
     expect(screen.getByText('未检测到摘要块。')).toBeTruthy();
     expect(readiness).toHaveBeenCalledWith('p1', 'doc-1');
   });
@@ -121,7 +134,7 @@ describe('SubmissionReadinessPanel', () => {
     await screen.findByText('可投稿');
     fireEvent.click(screen.getByText('下载投稿包'));
 
-    await waitFor(() => expect(packageApi).toHaveBeenCalledWith('p1', 'doc-1'));
+    await waitFor(() => expect(packageApi).toHaveBeenCalledWith('p1', 'doc-1', { journal: '', template: 'generic' }));
     expect(saveBase64).toHaveBeenCalledWith('异质图鲁棒性论文-投稿包.zip', 'UEsDBA==', 'application/zip');
     const success = await screen.findByText(/已生成 异质图鲁棒性论文-投稿包.zip/);
     expect(success.textContent).toContain('manuscript.docx');

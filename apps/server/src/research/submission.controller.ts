@@ -5,7 +5,8 @@ import { SubmissionReadinessService } from './submission-readiness.service';
 import { SubmissionPackageService } from './submission-package.service';
 import { JournalDto, SubmissionTrackDto } from './submission.dto';
 import { SubmissionReadinessDto } from './submission-readiness.dto';
-import { SubmissionPackageDto } from './submission-package.dto';
+import { SubmissionPackageDto, SubmissionTemplateDto } from './submission-package.dto';
+import { SUBMISSION_TEMPLATES } from './submission-templates';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -43,17 +44,26 @@ export class SubmissionController {
     return this.readiness.check(projectId, documentId);
   }
 
-  /** 投稿包：DOCX + BibTeX + 检查清单 + manifest，ZIP base64 下载 */
+  /** 内置排版模板清单（不伪造期刊官方模板，只给字体/字号/行距预设） */
+  @Get('templates')
+  @ApiOkResponse({ type: [SubmissionTemplateDto] })
+  templates() {
+    return SUBMISSION_TEMPLATES;
+  }
+
+  /** 投稿包：DOCX + Cover Letter + BibTeX + 检查清单 + 图表 + manifest，ZIP base64 下载 */
   @Get('package')
   @ApiOkResponse({ type: SubmissionPackageDto })
   submissionPackage(
     @Query('projectId') projectId: string,
     @Query('documentId') documentId: string,
+    @Query('journal') journal: string | undefined,
+    @Query('template') template: string | undefined,
     @Req() req: { user?: AuthPayload },
   ) {
     this.access.assertProject(projectId, req.user);
     this.access.assertDocument(documentId, req.user);
-    return this.pkg.build(projectId, documentId);
+    return this.pkg.build(projectId, documentId, { journal, template });
   }
 
   /** 期刊库列表 */

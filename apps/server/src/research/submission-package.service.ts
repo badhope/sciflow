@@ -1,10 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { asc, eq } from 'drizzle-orm';
 import { db } from '../db/database';
-import { citations, documents, references } from '../db/schema';
+import { citations, documents, experiments, projects, references } from '../db/schema';
 import { parseJson } from '../common/json-guard';
 import { SubmissionReadinessService } from './submission-readiness.service';
-import { buildSubmissionPackage, type SubmissionPackageFile } from './submission-package';
+import { buildSubmissionPackage, type SubmissionPackageFigure, type SubmissionPackageFile } from './submission-package';
 
 const EMPTY_OUTLINE: { title: string; sections: { title: string; subsections: string[] }[] } = { title: '', sections: [] };
 
@@ -21,6 +21,14 @@ export interface SubmissionPackageResponse {
   score: number;
   failCount: number;
   warnCount: number;
+  journal: string;
+  template: { key: string; label: string; note: string };
+  figures: { name: string; caption: string; bytes: number }[];
+}
+
+export interface SubmissionPackageOptions {
+  journal?: string;
+  template?: string;
 }
 
 @Injectable()
@@ -31,7 +39,7 @@ export class SubmissionPackageService {
    * 投稿包：readiness + 现有 DOCX / BibTeX 导出 → ZIP。
    * 只读、不调模型；阻塞态也允许导出，但清单会保留阻塞项。
    */
-  async build(projectId: string, documentId: string): Promise<SubmissionPackageResponse> {
+  async build(projectId: string, documentId: string, options: SubmissionPackageOptions = {}): Promise<SubmissionPackageResponse> {
     const readiness = this.readiness.check(projectId, documentId);
     const doc = db.select().from(documents).where(eq(documents.id, documentId)).get();
     if (!doc || doc.projectId !== projectId) throw new NotFoundException('文档不存在或不属于该项目');
@@ -67,16 +75,22 @@ export class SubmissionPackageService {
       doi: r.reference.doi,
     }));
 
+    const projectName = db.select({ name: projects.name }).from(projects).where(eq(projects.id, projectId)).get()?.name || '';
+    const figures = this.collectFigures(projectId);
     const generatedAt = new Date();
     const pkg = await buildSubmissionPackage({
       projectId,
       documentId,
       title: doc.title || '',
+      projectName,
       outline,
       content: doc.content || '',
       projectRefs,
       citationRefs,
       readiness,
+      figures,
+      journal: options.journal,
+      template: options.template,
       generatedAt,
     });
 
@@ -93,6 +107,43 @@ export class SubmissionPackageService {
       score: readiness.score,
       failCount: readiness.failCount,
       warnCount: readiness.warnCount,
+      journal: pkg.journal,
+      template: pkg.template,
+      figures: pkg.figures,
     };
+  }
+
+  /**
+   * 收集项目实验产出的 PNG 图表：只取 data:image/png;base64 的 data URL。
+   * 单张 >2MB 或总量 >8MB 直接跳过，避免投稿包被截图撑爆；跳过项不写入 manifest。
+   */
+  private collectFigures(projectId: string): SubmissionPackageFigure[] {
+    const rows = db
+      .select({ id: experiments.id, goal: experiments.goal, conclusion: experiments.conclusion, figures: experiments.figures, createdAt: experiments.createdAt })
+      .from(experiments)
+      .where(eq(experiments.projectId, projectId))
+      .orderBy(asc(experiments.createdAt))
+      .all();
+    const out: SubmissionPackageFigure[] = [];
+    let total = 0;
+    for (const row of rows) {
+      const urls = parseJson<string[]>(row.figures, []);
+      for (const url of urls) {
+        if (out.length >= 8 || total >= 8 * 1024 * 1024) return out;
+        const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(url || '').trim());
+        if (!m) continue;
+        const data = Buffer.from(m[1], 'base64');
+        if (!data.length || data.length > 2 * 1024 * 1024) continue;
+        const caption = String(row.conclusion || '').trim() || String(row.goal || '').trim() || `实验图表 ${row.id.slice(0, 8)}`;
+        out.push({
+          name: `figures/figure-${String(out.length + 1).padStart(2, '0')}.png`,
+          caption: caption.slice(0, 200),
+          bytes: data.length,
+          data,
+        });
+        total += data.length;
+      }
+    }
+    return out;
   }
 }

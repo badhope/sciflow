@@ -1619,6 +1619,30 @@
         ]
       }
     },
+    "/submission/templates": {
+      "get": {
+        "operationId": "SubmissionController_templates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SubmissionTemplateDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
     "/submission/package": {
       "get": {
         "operationId": "SubmissionController_submissionPackage",
@@ -2754,6 +2778,92 @@
         "responses": {
           "200": {
             "description": ""
+          }
+        },
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/projects/{id}/quality-standard": {
+      "get": {
+        "operationId": "ProjectsController_getQualityStandard",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectQualityStandardDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Projects"
+        ]
+      },
+      "patch": {
+        "operationId": "ProjectsController_setQualityStandard",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectQualityStandardDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Projects"
+        ]
+      },
+      "delete": {
+        "operationId": "ProjectsController_clearQualityStandard",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectQualityStandardDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -6043,7 +6153,7 @@
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "1.19.1",
+    "version": "1.19.2",
     "contact": {}
   },
   "tags": [],
@@ -7623,6 +7733,33 @@
           "checkedAt"
         ]
       },
+      "SubmissionTemplateDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "generic",
+              "ieee",
+              "elsevier",
+              "springer",
+              "nature"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "description": "字体/字号/行距说明"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "note"
+        ]
+      },
       "SubmissionPackageFileDto": {
         "type": "object",
         "properties": {
@@ -7637,6 +7774,28 @@
         },
         "required": [
           "name",
+          "bytes"
+        ]
+      },
+      "SubmissionPackageFigureDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "包内路径（figures/figure-01.png）"
+          },
+          "caption": {
+            "type": "string",
+            "description": "图表说明"
+          },
+          "bytes": {
+            "type": "number",
+            "description": "PNG 字节数"
+          }
+        },
+        "required": [
+          "name",
+          "caption",
           "bytes"
         ]
       },
@@ -7686,6 +7845,19 @@
           },
           "warnCount": {
             "type": "number"
+          },
+          "journal": {
+            "type": "string",
+            "description": "目标期刊（未填写为空串）"
+          },
+          "template": {
+            "$ref": "#/components/schemas/SubmissionTemplateDto"
+          },
+          "figures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubmissionPackageFigureDto"
+            }
           }
         },
         "required": [
@@ -7700,7 +7872,10 @@
           "ready",
           "score",
           "failCount",
-          "warnCount"
+          "warnCount",
+          "journal",
+          "template",
+          "figures"
         ]
       },
       "JournalDto": {
@@ -8039,6 +8214,59 @@
           "status",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "ProjectQualityStandardDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "标准 key",
+            "example": "standard"
+          },
+          "label": {
+            "type": "string",
+            "description": "标准中文名",
+            "example": "SCI 通用期刊"
+          },
+          "passScore": {
+            "type": "number",
+            "description": "及格线",
+            "example": 80
+          },
+          "minChars": {
+            "type": "number",
+            "description": "正文最少字符",
+            "example": 4500
+          },
+          "minSections": {
+            "type": "number",
+            "description": "最少二级章节数",
+            "example": 5
+          },
+          "minUniqueCitations": {
+            "type": "number",
+            "description": "最少唯一引用数",
+            "example": 15
+          },
+          "source": {
+            "type": "string",
+            "description": "取值来源",
+            "enum": [
+              "project",
+              "global",
+              "fallback"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "passScore",
+          "minChars",
+          "minSections",
+          "minUniqueCitations",
+          "source"
         ]
       },
       "DocDto": {

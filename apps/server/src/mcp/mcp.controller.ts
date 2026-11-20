@@ -1,6 +1,5 @@
 import { Controller, Get, Post, Body, Param, Req, Res, All } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { McpService } from './mcp.service';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
@@ -45,7 +44,10 @@ export class McpController {
    */
   @All('rpc')
   async rpc(@Req() req: Request & { user?: AuthPayload }, @Res() res: Response) {
-    const server = this.mcp.buildSdkServer(req.user);
+    const [server, { StreamableHTTPServerTransport }] = await Promise.all([
+      this.mcp.buildSdkServer(req.user),
+      import('@modelcontextprotocol/sdk/server/streamableHttp.js'),
+    ]);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => {
       void transport.close();

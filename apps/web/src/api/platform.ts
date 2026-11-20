@@ -225,10 +225,13 @@ export const platform = {
       request<SubmissionReadiness>(
         `/api/submission/readiness?projectId=${encodeURIComponent(projectId)}&documentId=${encodeURIComponent(documentId)}`,
       ),
-    package: (projectId: string, documentId: string) =>
-      request<SubmissionPackage>(
-        `/api/submission/package?projectId=${encodeURIComponent(projectId)}&documentId=${encodeURIComponent(documentId)}`,
-      ),
+    templates: () => request<import('../types').SubmissionTemplate[]>('/api/submission/templates'),
+    package: (projectId: string, documentId: string, opts: { journal?: string; template?: string } = {}) => {
+      const qs = new URLSearchParams({ projectId, documentId });
+      if (opts.journal) qs.set('journal', opts.journal);
+      if (opts.template) qs.set('template', opts.template);
+      return request<SubmissionPackage>(`/api/submission/package?${qs.toString()}`);
+    },
     /* —— 投稿流程状态跟踪 —— */
     trackSubmit: (body: {
       projectId: string;

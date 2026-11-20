@@ -1,10 +1,8 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { z } from 'zod';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { ListToolsRequestSchema, CallToolRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, ListResourceTemplatesRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { allowPrivateOutbound, checkOutboundUrl } from '../common/outbound-guard';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { sqlite } from '../db/database';
 import { AiService } from '../ai/ai.service';
 import { ReferencesService } from '../references/references.service';
@@ -22,11 +20,8 @@ import { MemoryService } from '../memory/memory.service';
 import { SubmissionService } from '../research/submission.service';
 import { NoveltyService } from '../research/novelty.service';
 import { SubmissionReadinessService } from '../research/submission-readiness.service';
+import { SubmissionPackageService } from '../research/submission-package.service';
 import { ResearchBriefService } from '../research-brief/research-brief.service';
-import { evaluateWithCritic } from '../research-cycle/agents/critic.agent';
-import { reviewWithExpert } from '../research-cycle/agents/expert.agent';
-import { planWithPi } from '../research-cycle/agents/pi.agent';
-import { designExperiment } from '../research-cycle/agents/experimenter.agent';
 import type { AuthPayload } from '../auth/auth.service';
 
 /** MCP 工具定义（符合 Model Context Protocol 2026 的 Tool 结构：name/description/inputSchema） */
@@ -109,6 +104,7 @@ export class McpService {
     private readonly brief: ResearchBriefService,
     private readonly novelty: NoveltyService,
     private readonly readiness: SubmissionReadinessService,
+    private readonly submissionPackage: SubmissionPackageService,
   ) {
     this.tools = [
       {
@@ -343,6 +339,47 @@ export class McpService {
         },
       },
       {
+        name: 'submission.package',
+        description: '生成投稿包清单（不返回 ZIP base64，避免大对象塞进上下文）：返回文件名、大小、成员、排版模板、图表、就绪结果与投稿页下载路径。只读、不调模型；阻塞态也可生成，但清单保留阻塞项。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: { type: 'string', description: '项目 ID' },
+            documentId: { type: 'string', description: '要投稿的文档 ID' },
+            journal: { type: 'string', description: '目标期刊名（可选，用于 Cover Letter）' },
+            template: { type: 'string', enum: ['generic', 'ieee', 'elsevier', 'springer', 'nature'], description: 'DOCX 排版模板（可选）' },
+          },
+          required: ['projectId', 'documentId'],
+        },
+        handler: async (args, user) => {
+          const missing = noProjectHint(args, ['projectId', 'documentId']);
+          if (missing) return { error: missing };
+          this.access.assertProject(String(args.projectId), user);
+          this.access.assertDocument(String(args.documentId), user);
+          const pkg = await this.submissionPackage.build(String(args.projectId), String(args.documentId), {
+            journal: args.journal ? String(args.journal) : undefined,
+            template: args.template ? String(args.template) : undefined,
+          });
+          const qs = new URLSearchParams({ projectId: String(args.projectId), documentId: String(args.documentId) });
+          if (args.journal) qs.set('journal', String(args.journal));
+          if (args.template) qs.set('template', String(args.template));
+          return {
+            filename: pkg.filename,
+            size: pkg.size,
+            files: pkg.files,
+            journal: pkg.journal,
+            template: pkg.template,
+            figures: pkg.figures,
+            ready: pkg.ready,
+            score: pkg.score,
+            failCount: pkg.failCount,
+            warnCount: pkg.warnCount,
+            downloadPath: `/api/submission/package?${qs.toString()}`,
+            note: '下载 ZIP 请在 SciFlow 投稿辅助页点击「下载投稿包」；工具结果不携带 base64。',
+          };
+        },
+      },
+      {
         name: 'submission.email',
         description: '解析编辑部邮件：推断建议投稿状态、置信度与理由。只给建议、不改库；会调用一次 LLM。',
         inputSchema: {
@@ -416,7 +453,7 @@ export class McpService {
           const missing = noProjectHint(args, ['hypothesisStatement', 'runOutput']);
           if (missing) return { error: missing };
           const predictions = Array.isArray(args.predictions) ? args.predictions.map((p: unknown) => String(p)) : [];
-          return evaluateWithCritic(this.ai, {
+          return (await import('../research-cycle/agents/critic.agent')).evaluateWithCritic(this.ai, {
             hypothesisStatement: String(args.hypothesisStatement),
             predictions,
             runOutput: String(args.runOutput),
@@ -476,7 +513,7 @@ export class McpService {
             ? await this.memory.recall(projectId, String(args.question), 4)
             : [];
           const memory = experiences.map((m) => `- ${m.content}`).join('\n');
-          return planWithPi(this.ai, {
+          return (await import('../research-cycle/agents/pi.agent')).planWithPi(this.ai, {
             question: String(args.question),
             brief,
             memory,
@@ -508,7 +545,7 @@ export class McpService {
           const design = args.design && typeof args.design === 'object' && !Array.isArray(args.design)
             ? (args.design as Record<string, unknown>)
             : {};
-          return designExperiment(this.ai, {
+          return (await import('../research-cycle/agents/experimenter.agent')).designExperiment(this.ai, {
             hypothesisStatement: String(args.hypothesisStatement),
             predictions,
             design,
@@ -537,7 +574,7 @@ export class McpService {
           const design = args.design && typeof args.design === 'object' && !Array.isArray(args.design)
             ? (args.design as Record<string, unknown>)
             : {};
-          return reviewWithExpert(this.ai, {
+          return (await import('../research-cycle/agents/expert.agent')).reviewWithExpert(this.ai, {
             question: String(args.question),
             hypothesisStatement: String(args.hypothesisStatement),
             predictions,
@@ -1253,7 +1290,7 @@ export class McpService {
       this.access.assertProject(projectId, user);
       return;
     }
-    if (name === 'submission.readiness') {
+    if (name === 'submission.readiness' || name === 'submission.package') {
       this.access.assertProject(String(args?.projectId || ''), user);
       this.access.assertDocument(String(args?.documentId || ''), user);
       return;
@@ -1313,7 +1350,13 @@ export class McpService {
    * 工具清单一处定义（this.tools），REST 端点与 MCP 协议端点共用同一实现，
    * 避免"自造协议"与真协议双维护。
    */
-  buildSdkServer(user?: AuthPayload): Server {
+  async buildSdkServer(user?: AuthPayload): Promise<Server> {
+    // SDK 冷导入约 20s（schema/zod 体积大）：只在真正需要 MCP 协议时加载，
+    // 普通 HTTP/Agent 路径不背这个启动成本。
+    const [{ Server }, { ListToolsRequestSchema, CallToolRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, ListResourceTemplatesRequestSchema }] = await Promise.all([
+      import('@modelcontextprotocol/sdk/server/index.js'),
+      import('@modelcontextprotocol/sdk/types.js'),
+    ]);
     const server = new Server(
       { name: 'sciflow', version: APP_VERSION },
       { capabilities: { tools: {}, resources: {} } },
@@ -1393,6 +1436,10 @@ export class McpService {
    * v0.4 起外部互通走真 MCP 协议（原自造 GET /tools + POST /call 已删除）。
    */
   private async withExternalClient<T>(url: string, timeoutMs: number, fn: (client: Client, timeoutMs: number) => Promise<T>): Promise<T> {
+    const [{ Client }, { StreamableHTTPClientTransport }] = await Promise.all([
+      import('@modelcontextprotocol/sdk/client/index.js'),
+      import('@modelcontextprotocol/sdk/client/streamableHttp.js'),
+    ]);
     const base = String(url || '').replace(/\/$/, '');
     if (!/^https?:\/\//.test(base)) throw new HttpException('URL 需以 http(s):// 开头', HttpStatus.BAD_REQUEST);
     // SSRF 防护：外部 MCP 地址由用户输入，必须拒绝内网/元数据地址

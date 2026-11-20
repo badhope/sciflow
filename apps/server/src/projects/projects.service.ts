@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db, sqlite } from '../db/database';
 import { projects, documents, references, pipelineTasks, reflexionLogs, screeningQueue, extractionFields, extractionValues, reviewComments, experiments, submissions, submissionStatusEvents, citations, qualityReports, polishRecords, knowledgeDocs, knowledgeChunks, memoryLogs, agentExecutions, agentSteps, agentTasks, toolApprovals, agentPlans, llmCallLogs, chatSessions, researchBriefs } from '../db/schema';
 import { parseJson } from '../common/json-guard';
+import { clearProjectQualityStandard, getProjectQualityStandard, setProjectQualityStandard } from '../common/project-quality-standard';
 import { BUNDLE_TABLES, BUNDLE_VERSION, buildIdMap, remapRow, renameOnImport, validateBundle } from './project-bundle';
 
 /** Zod schemas for projects input validation */
@@ -37,6 +38,28 @@ export class ProjectsService {
     const row = db.select().from(projects).where(eq(projects.id, id)).get();
     if (!row) throw new NotFoundException('项目不存在');
     return row;
+  }
+
+  /** 项目级评审标准：项目设置优先，未设置回退全局。 */
+  getQualityStandard(id: string) {
+    this.get(id);
+    return getProjectQualityStandard(id);
+  }
+
+  setQualityStandard(id: string, value: string) {
+    this.get(id);
+    try {
+      setProjectQualityStandard(id, value);
+      return getProjectQualityStandard(id);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  clearQualityStandard(id: string) {
+    this.get(id);
+    clearProjectQualityStandard(id);
+    return getProjectQualityStandard(id);
   }
 
   create(input: { name: string; description?: string }, ownerId = '') {

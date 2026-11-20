@@ -23,6 +23,15 @@ export const writing = {
     update: (id: string, patch: Partial<Project>) =>
       request<Project>(`/api/projects/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
     remove: (id: string) => request<{ ok: boolean }>(`/api/projects/${id}`, { method: 'DELETE' }),
+    /** 项目级评审标准（未设置时回退全局） */
+    qualityStandard: (id: string) =>
+      request<import('../types').ProjectQualityStandard>(`/api/projects/${id}/quality-standard`),
+    setQualityStandard: (id: string, standard: string) =>
+      request<import('../types').ProjectQualityStandard>(`/api/projects/${id}/quality-standard`, {
+        method: 'PATCH', body: JSON.stringify({ standard }),
+      }),
+    clearQualityStandard: (id: string) =>
+      request<import('../types').ProjectQualityStandard>(`/api/projects/${id}/quality-standard`, { method: 'DELETE' }),
     /** 项目全量导出（自包含 JSON）：迁移/归档/交接 */
     exportBundle: (id: string, includeRuntime = false) =>
       request<Record<string, unknown>>(`/api/projects/${id}/export${includeRuntime ? '?includeRuntime=1' : ''}`),
