@@ -1,11 +1,10 @@
-import { Component, Suspense, lazy, useCallback, useContext, useEffect, useMemo, useRef, useState, createContext, type ReactNode } from 'react';
+import { Component, lazy, useCallback, useContext, useEffect, useMemo, useRef, useState, createContext, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { HashRouter, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { PageErrorBoundary } from './components/PageErrorBoundary';
-import { Download, Upload } from 'lucide-react';
+import { Download, Upload, MessageSquare } from 'lucide-react';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import {
-  BookOpen, Brain, Beaker, LayoutDashboard, Plus, Pencil, RefreshCw, Search, Send, Settings, Trash2, ChevronRight, Command, Sun, Moon, Monitor, XCircle as XCircleIcon, Library, LayoutGrid, Menu as MenuIcon, Target, Code2, Compass,
+  BookOpen, Brain, Beaker, LayoutDashboard, Plus, Pencil, RefreshCw, Search, Send, Settings, Trash2, ChevronRight, Command, Sun, Moon, Monitor, XCircle as XCircleIcon, Library, LayoutGrid, Menu as MenuIcon, Target,
 } from 'lucide-react';
 import { api } from './api/client';
 import { isNetworkError } from './api/core';
@@ -20,43 +19,18 @@ import { buildCommands, filterCommands } from './lib/commands';
 import { canonicalHref } from './lib/view-aliases';
 import { useHotkeys } from './lib/hotkeys';
 import { Button, Input, Modal, Spinner, ErrorBox, ToastViewport, ConfirmDialog, downloadText, type ToastItem, type ToastKind } from './components/ui';
+import { LazyPage } from './components/LazyPage';
 // 路由级代码分割：所有页面懒加载（首屏只加载当前视图，大厂 SPA 标准）
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const DesignPage = lazy(() => import('./pages/DesignPage').then((m) => ({ default: m.DesignPage })));
 const EvidencePage = lazy(() => import('./pages/EvidencePage').then((m) => ({ default: m.EvidencePage })));
-const WebSandboxPage = lazy(() => import('./pages/WebSandboxPage').then((m) => ({ default: m.WebSandboxPage })));
-const BrowserPage = lazy(() => import('./pages/BrowserPage').then((m) => ({ default: m.BrowserPage })));
-const LongformPage = lazy(() => import('./pages/LongformPage').then((m) => ({ default: m.LongformPage })));
-const ResearchProgramsPage = lazy(() => import('./pages/ResearchProgramsPage').then((m) => ({ default: m.ResearchProgramsPage })));
-const WritingPage = lazy(() => import('./pages/WritingPage').then((m) => ({ default: m.WritingPage })));
 const WriteReviewPage = lazy(() => import('./pages/WriteReviewPage').then((m) => ({ default: m.WriteReviewPage })));
-const LiteraturePage = lazy(() => import('./pages/LiteraturePage').then((m) => ({ default: m.LiteraturePage })));
-const PipelinePage = lazy(() => import('./pages/PipelinePage').then((m) => ({ default: m.PipelinePage })));
-const QualityPage = lazy(() => import('./pages/QualityPage').then((m) => ({ default: m.QualityPage })));
 const SubmissionPage = lazy(() => import('./pages/SubmissionPage').then((m) => ({ default: m.SubmissionPage })));
-const KnowledgePage = lazy(() => import('./pages/KnowledgePage').then((m) => ({ default: m.KnowledgePage })));
-const ExperimentsPage = lazy(() => import('./pages/ExperimentsPage').then((m) => ({ default: m.ExperimentsPage })));
+const VerificationPage = lazy(() => import('./pages/VerificationPage').then((m) => ({ default: m.VerificationPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const MemoryPage = lazy(() => import('./pages/MemoryPage').then((m) => ({ default: m.MemoryPage })));
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage').then((m) => ({ default: m.WorkspacePage })));
-/** 页面级骨架：懒加载 chunk 下载期间给出结构占位，避免整屏空白与布局跳动 */
-function PageSkeleton({ name }: { name: string }) {
-  return (
-    <div className="mx-auto max-w-5xl space-y-4 p-4" role="status" aria-live="polite" aria-label={`${name}加载中`}>
-      <div className="skeleton h-7 w-48 rounded-lg" />
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="skeleton h-20 rounded-xl" />
-        ))}
-      </div>
-      <div className="skeleton h-64 rounded-xl" />
-      <span className="sr-only">{name}加载中…</span>
-    </div>
-  );
-}
-const SuspensePage = ({ children, name = '页面' }: { children: ReactNode; name?: string }) => (
-  <Suspense fallback={<PageSkeleton name={name} />}>{children}</Suspense>
-);
+/** 页面级骨架与加载壳已收敛到 components/LazyPage，路由与二级 Tab 共用一套实现。 */
 
 export type View =
   | 'workspace'
@@ -86,7 +60,7 @@ const VIEW_KEYS: readonly View[] = ['workspace', 'dashboard', 'design', 'evidenc
 
 /** 功能导航分组（大厂式：按工作流分组，设置独立收纳到底部） */
 const VIEW_LABELS: Record<View, string> = {
-  workspace: '工作台',
+  workspace: '科研对话',
   dashboard: '项目驾驶舱',
   design: '研究设计',
   evidence: '证据库',
@@ -97,7 +71,7 @@ const VIEW_LABELS: Record<View, string> = {
   websandbox: 'Web 项目',
   browser: '内置浏览器',
   literature: '文献调研',
-  experiments: '实验记录',
+  experiments: '实验与验证',
   knowledge: '知识库',
   memory: '记忆中心',
   pipeline: '全自动流水线',
@@ -114,7 +88,7 @@ const VIEW_LABELS: Record<View, string> = {
  *  · 工作台/写作/文献/知识库四个平级入口，用户看不出「先做什么」；
  *  · 质量评分与投稿辅助被归进「自动化」，而它们其实是稿件的后续阶段。
  * 新结构收敛为 6 个一级入口（驾驶舱 / 研究设计 / 证据库 / 实验与验证 / 写作与评审 / 投稿），
- * 工具箱承载长篇、Web、浏览器、记忆；用户从上往下走即可，不再面对 15 个平级按钮。
+ * 工具箱只承载科研对话与记忆；长篇/Web/浏览器已并入对应板块，不再重复占入口。
  */
 const NAV_GROUPS: { label: string; hint: string; defaultCollapsed?: boolean; items: { key: View; label: string; icon: typeof LayoutDashboard }[] }[] = [
   {
@@ -137,12 +111,10 @@ const NAV_GROUPS: { label: string; hint: string; defaultCollapsed?: boolean; ite
   },
   {
     label: '工具箱',
-    hint: '长篇 / Web / 浏览器 / 记忆',
+    hint: '对话 / 记忆',
     defaultCollapsed: true,
     items: [
-      { key: 'longform', label: VIEW_LABELS.longform, icon: BookOpen },
-      { key: 'websandbox', label: VIEW_LABELS.websandbox, icon: Code2 },
-      { key: 'browser', label: VIEW_LABELS.browser, icon: Compass },
+      { key: 'workspace', label: VIEW_LABELS.workspace, icon: MessageSquare },
       { key: 'memory', label: VIEW_LABELS.memory, icon: Brain },
     ],
   },
@@ -153,12 +125,13 @@ const NAV_GROUPS: { label: string; hint: string; defaultCollapsed?: boolean; ite
  * 让用户随时知道自己处在科研生命周期的哪一段，而不是面对 12 个平级按钮。
  */
 const VIEW_STAGE: Record<View, number> = {
-  dashboard: 0, design: 0, evidence: 0, experiments: 0,
+  dashboard: 0, design: 0, evidence: 0, experiments: 0, workspace: 0,
   'write-review': 1, submission: 1,
-  longform: 2, websandbox: 2, browser: 2, memory: 2,
-  // 兼容旧深链：这些页面不再出现在一级导航，但路由与阶段高亮仍有效
-  workspace: 0, programs: 0, literature: 0, knowledge: 0,
+  memory: 2,
+  // 兼容旧深链：这些页面不再出现在一级导航，canonicalHref 会归一到合并页
+  programs: 0, literature: 0, knowledge: 0,
   pipeline: 1, writing: 1, quality: 1,
+  longform: 2, websandbox: 2, browser: 2,
   settings: -1,
 };
 
@@ -169,6 +142,7 @@ const PAGE_PADDING: Partial<Record<View, string>> = {
   writing: 'p-2 sm:p-3',
   design: 'p-3 sm:p-4',
   evidence: 'p-3 sm:p-4',
+  experiments: 'p-3 sm:p-4',
   'write-review': 'p-2 sm:p-3',
 };
 
@@ -186,74 +160,77 @@ interface PageRenderCtx {
   onTabChange: (key: string) => void;
   onDocChange: (id: string | null) => void;
 }
+/** 四个合并页的统一渲染：路由页与旧深链共用，不再各写一套包装。 */
+function renderDesign(ctx: PageRenderCtx, tab: string | null) {
+  const { project, openDoc, onTabChange } = ctx;
+  return project ? (
+    <LazyPage name="研究设计">
+      <DesignPage key={project.id} project={project} openDoc={openDoc} tab={tab} onTabChange={onTabChange ?? (() => undefined)} />
+    </LazyPage>
+  ) : null;
+}
+
+function renderEvidence(ctx: PageRenderCtx, tab: string | null) {
+  const { project, onTabChange } = ctx;
+  return project ? (
+    <LazyPage name="证据库">
+      <EvidencePage key={project.id} project={project} tab={tab} onTabChange={onTabChange ?? (() => undefined)} />
+    </LazyPage>
+  ) : null;
+}
+
+function renderWriteReview(ctx: PageRenderCtx, tab: string | null) {
+  const { project, initialDocId, onTabChange, onDocChange } = ctx;
+  return project ? (
+    <LazyPage name="写作与评审">
+      <WriteReviewPage
+        key={project.id}
+        project={project}
+        initialDocId={initialDocId}
+        tab={tab}
+        onTabChange={onTabChange ?? (() => undefined)}
+        onDocChange={onDocChange}
+      />
+    </LazyPage>
+  ) : null;
+}
+
+function renderVerification(ctx: PageRenderCtx, tab: string | null) {
+  const { project, onTabChange } = ctx;
+  return project ? (
+    <LazyPage name="实验与验证">
+      <VerificationPage key={project.id} project={project} tab={tab} onTabChange={onTabChange ?? (() => undefined)} />
+    </LazyPage>
+  ) : null;
+}
+
 const PAGE_RENDERERS: Record<View, (ctx: PageRenderCtx) => ReactNode> = {
   workspace: ({ project, openDoc, initialDocId }) =>
     project ? (
-      <PageErrorBoundary pageName="工作台">
-        <SuspensePage name="工作台">
-          {/* key=project.id：切项目必须整页重挂载，否则旧项目的消息会被写进新项目的 localStorage（跨项目串话） */}
-          <WorkspacePage key={project.id} project={project} initialDocId={initialDocId} onOpenFullEditor={openDoc} />
-        </SuspensePage>
-      </PageErrorBoundary>
+      <LazyPage name="科研对话">
+        {/* key=project.id：切项目必须整页重挂载，否则旧项目的消息会被写进新项目的 localStorage（跨项目串话） */}
+        <WorkspacePage key={project.id} project={project} initialDocId={initialDocId} onOpenFullEditor={openDoc} />
+      </LazyPage>
     ) : null,
-  settings: () => <PageErrorBoundary pageName="设置"><SuspensePage name="设置"><SettingsPage /></SuspensePage></PageErrorBoundary>,
+  settings: () => <LazyPage name="设置"><SettingsPage /></LazyPage>,
   dashboard: ({ project, onNavigate, openDoc }) =>
-    project ? <PageErrorBoundary pageName="工作台"><SuspensePage name="项目总览"><DashboardPage project={project} onNavigate={onNavigate} openDoc={openDoc} /></SuspensePage></PageErrorBoundary> : null,
-  design: ({ project, openDoc, tab, onTabChange }) =>
-    project ? (
-      <PageErrorBoundary pageName="研究设计">
-        <SuspensePage name="研究设计">
-          <DesignPage key={project.id} project={project} openDoc={openDoc} tab={tab} onTabChange={onTabChange ?? (() => undefined)} />
-        </SuspensePage>
-      </PageErrorBoundary>
-    ) : null,
-  evidence: ({ project, tab, onTabChange }) =>
-    project ? (
-      <PageErrorBoundary pageName="证据库">
-        <SuspensePage name="证据库">
-          <EvidencePage key={project.id} project={project} tab={tab} onTabChange={onTabChange ?? (() => undefined)} />
-        </SuspensePage>
-      </PageErrorBoundary>
-    ) : null,
-  'write-review': ({ project, initialDocId, tab, onTabChange, onDocChange }) =>
-    project ? (
-      <PageErrorBoundary pageName="写作与评审">
-        <SuspensePage name="写作与评审">
-          <WriteReviewPage
-            key={project.id}
-            project={project}
-            initialDocId={initialDocId}
-            tab={tab}
-            onTabChange={onTabChange ?? (() => undefined)}
-            onDocChange={onDocChange}
-          />
-        </SuspensePage>
-      </PageErrorBoundary>
-    ) : null,
-  programs: ({ project }) =>
-    project ? <PageErrorBoundary pageName="研究计划"><SuspensePage name="研究计划"><ResearchProgramsPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null,
-  writing: ({ project, initialDocId }) =>
-    project ? <PageErrorBoundary pageName="论文写作"><SuspensePage name="论文写作"><WritingPage key={project.id} project={project} initialDocId={initialDocId} /></SuspensePage></PageErrorBoundary> : null,
-  websandbox: ({ project }) =>
-    project ? <PageErrorBoundary pageName="Web 项目"><SuspensePage name="Web 项目"><WebSandboxPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null,
-  browser: () => <PageErrorBoundary pageName="内置浏览器"><SuspensePage name="内置浏览器"><BrowserPage /></SuspensePage></PageErrorBoundary>,
-  longform: ({ project }) =>
-    project ? <PageErrorBoundary pageName="长篇写作"><SuspensePage name="长篇写作"><LongformPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null,
-  literature: ({ project }) => (project ? <PageErrorBoundary pageName="文献调研"><SuspensePage name="文献调研"><LiteraturePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
-  experiments: ({ project }) => (project ? <PageErrorBoundary pageName="实验记录"><SuspensePage name="实验记录"><ExperimentsPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
-  knowledge: ({ project }) => (project ? <PageErrorBoundary pageName="知识库"><SuspensePage name="知识库"><KnowledgePage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
-  memory: ({ project }) => (project ? <PageErrorBoundary pageName="记忆中心"><SuspensePage name="记忆中心"><MemoryPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
-  pipeline: ({ project, openDoc }) =>
-    project ? <PageErrorBoundary pageName="全自动流水线"><SuspensePage name="全自动流水线"><PipelinePage key={project.id} project={project} onOpenDoc={openDoc} /></SuspensePage></PageErrorBoundary> : null,
-  quality: ({ project }) =>
-    project ? (
-      <PageErrorBoundary pageName="质量评分">
-        <Suspense fallback={<div className="p-8 text-sm text-slate-400" role="status" aria-label="加载质量评分">加载质量评分…</div>}>
-          <QualityPage key={project.id} project={project} />
-        </Suspense>
-      </PageErrorBoundary>
-    ) : null,
-  submission: ({ project }) => (project ? <PageErrorBoundary pageName="投稿辅助"><SuspensePage name="投稿辅助"><SubmissionPage key={project.id} project={project} /></SuspensePage></PageErrorBoundary> : null),
+    project ? <LazyPage name="项目驾驶舱"><DashboardPage project={project} onNavigate={onNavigate} openDoc={openDoc} /></LazyPage> : null,
+  design: (ctx) => renderDesign(ctx, ctx.tab),
+  evidence: (ctx) => renderEvidence(ctx, ctx.tab),
+  'write-review': (ctx) => renderWriteReview(ctx, ctx.tab),
+  experiments: (ctx) => renderVerification(ctx, ctx.tab),
+  submission: ({ project }) => (project ? <LazyPage name="投稿辅助"><SubmissionPage key={project.id} project={project} /></LazyPage> : null),
+  memory: ({ project }) => (project ? <LazyPage name="记忆中心"><MemoryPage key={project.id} project={project} /></LazyPage> : null),
+  // 旧深链只保留类型键；渲染直接复用合并页并强制对应 Tab，不再保留第二套页面包装。
+  programs: (ctx) => renderDesign(ctx, 'programs'),
+  pipeline: (ctx) => renderDesign(ctx, 'pipeline'),
+  literature: (ctx) => renderEvidence(ctx, 'literature'),
+  knowledge: (ctx) => renderEvidence(ctx, 'knowledge'),
+  writing: (ctx) => renderWriteReview(ctx, 'writing'),
+  quality: (ctx) => renderWriteReview(ctx, 'quality'),
+  longform: (ctx) => renderWriteReview(ctx, 'longform'),
+  websandbox: (ctx) => renderVerification(ctx, 'web'),
+  browser: (ctx) => renderVerification(ctx, 'browser'),
 };
 
 export const ThemeContext = createContext<{
@@ -432,7 +409,7 @@ function AppInner() {
   const writingDocQuery = useQuery({
     queryKey: ['doc-title', selectedDocId],
     queryFn: () => api.documents.get(selectedDocId!).then((d) => d.title || ''),
-    enabled: view === 'writing' && !!selectedDocId,
+    enabled: (view === 'writing' || view === 'write-review') && !!selectedDocId,
   });
   const writingDocTitle = writingDocQuery.data ?? '';
 
@@ -617,7 +594,7 @@ function AppInner() {
                     <span className="shell-crumb__project truncate max-w-[100px] sm:max-w-[200px]">{currentProject.name}</span>
                     <ChevronRight size={14} className="shell-crumb__sep shrink-0" aria-hidden="true" />
                     <span className="shell-crumb__view whitespace-nowrap">{VIEW_LABELS[view]}</span>
-                    {view === 'writing' && writingDocTitle && (
+                    {(view === 'writing' || view === 'write-review') && writingDocTitle && (
                       <>
                         <ChevronRight size={14} className="shell-crumb__sep shrink-0" aria-hidden="true" />
                         <span className="shell-crumb__doc truncate max-w-[120px] sm:max-w-[240px]">{writingDocTitle}</span>
@@ -1161,8 +1138,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 
-/** 已知视图路径（与 VIEW_KEYS 对齐）：用于把裸路径 `/writing` 归一成 hash 路由 */
-const BARE_ROUTES = new Set(['workspace','dashboard','design','evidence','write-review','pipeline','writing','quality','literature','knowledge','experiments','submission','memory','settings']);
+/** 裸路径白名单直接取自 VIEW_KEYS，避免两份视图清单漂移（此前 longform/websandbox/browser 就漏了）。 */
+const BARE_ROUTES = new Set<string>(VIEW_KEYS);
 
 /**
  * 裸路径兼容：HashRouter 只认 `#/writing`，而用户/文档/收藏夹常写 `/writing`。

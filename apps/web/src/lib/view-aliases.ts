@@ -1,7 +1,7 @@
 import type { View } from '../App';
 
 /**
- * 旧深链 → 6 个一级入口的别名。
+ * 旧深链 → 合并页的别名。
  *
  * 这不是删除页面，而是把「计划/流水线」「文献/知识库」「写作/质量」
  * 这些已被合并的页面从可导航入口降级为兼容深链：
@@ -21,6 +21,9 @@ export const LEGACY_VIEW_ALIAS: Partial<Record<View, ViewAlias>> = {
   knowledge: { view: 'evidence', tab: 'knowledge' },
   writing: { view: 'write-review', tab: 'writing', keepDoc: true },
   quality: { view: 'write-review', tab: 'quality', keepDoc: true },
+  longform: { view: 'write-review', tab: 'longform' },
+  websandbox: { view: 'experiments', tab: 'web' },
+  browser: { view: 'experiments', tab: 'browser' },
 };
 
 /**

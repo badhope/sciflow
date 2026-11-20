@@ -16,7 +16,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ChartEmpty } from './charts-primitives';
+import { ChartEmpty, SERIES } from './charts-primitives';
 
 /* ─────────────────────────────────────────────────────────────────────
  * 重图表层（依赖 recharts）：Donut / HBar / LineChart。
@@ -32,8 +32,6 @@ import { ChartEmpty } from './charts-primitives';
  * 2. HBar 高度是内部实现细节：调用方只给数据。
  * 3. 每个图表都提供 aria-label 与 <desc>。
  * ───────────────────────────────────────────────────────────────────── */
-
-const SERIES = ['var(--viz-series-1)', 'var(--viz-series-2)', 'var(--viz-series-3)', 'var(--viz-series-4)', 'var(--viz-series-5)', 'var(--viz-series-6)'];
 
 /* 坐标网格与轴线：统一走主题变量，深浅色主题自动适配 */
 const GRID_STROKE = 'var(--border)';

@@ -21,6 +21,10 @@ vi.mock('./QualityPage', () => ({
   QualityPage: ({ docId }: { docId: string | null }) => <div>评审当前：{docId}</div>,
 }));
 
+vi.mock('./LongformPage', () => ({
+  LongformPage: () => <div>长篇写作内容</div>,
+}));
+
 const project = { id: 'p1', name: '测试项目' } as Project;
 
 describe('WriteReviewPage', () => {
@@ -34,5 +38,12 @@ describe('WriteReviewPage', () => {
     expect(onDocChange).toHaveBeenLastCalledWith('d1');
     await userEvent.click(screen.getByRole('tab', { name: '质量评审' }));
     expect(await screen.findByText('评审当前：d1')).toBeTruthy();
+  });
+
+  it('长篇写作是独立 Tab，不抢论文当前稿件', async () => {
+    const onDocChange = vi.fn();
+    render(<WriteReviewPage project={project} initialDocId={null} tab="longform" onTabChange={vi.fn()} onDocChange={onDocChange} />);
+    expect(await screen.findByText('长篇写作内容')).toBeTruthy();
+    expect(onDocChange).not.toHaveBeenCalled();
   });
 });

@@ -1,17 +1,11 @@
-import { lazy, Suspense } from 'react';
+import { lazy } from 'react';
 import type { Project } from '../types';
-import { PageErrorBoundary } from '../components/PageErrorBoundary';
+import { LazyPage } from '../components/LazyPage';
 import { TabbedPage } from '../components/TabbedPage';
 import { EvidenceSummary } from '../components/EvidenceSummary';
 
 const LiteraturePage = lazy(() => import('./LiteraturePage').then((m) => ({ default: m.LiteraturePage })));
 const KnowledgePage = lazy(() => import('./KnowledgePage').then((m) => ({ default: m.KnowledgePage })));
-
-const Fallback = ({ name }: { name: string }) => (
-  <div className="flex h-full items-center justify-center p-6 text-xs text-slate-400" role="status" aria-live="polite">
-    {name}加载中…
-  </div>
-);
 
 /**
  * 证据库入口：总览计数 + 文献/资料两个 Tab。
@@ -41,22 +35,18 @@ export function EvidencePage({
               key: 'literature',
               label: '文献库',
               node: (
-                <PageErrorBoundary pageName="文献调研">
-                  <Suspense fallback={<Fallback name="文献调研" />}>
-                    <LiteraturePage key={project.id} project={project} />
-                  </Suspense>
-                </PageErrorBoundary>
+                <LazyPage name="文献调研">
+                  <LiteraturePage key={project.id} project={project} />
+                </LazyPage>
               ),
             },
             {
               key: 'knowledge',
               label: '知识库',
               node: (
-                <PageErrorBoundary pageName="知识库">
-                  <Suspense fallback={<Fallback name="知识库" />}>
-                    <KnowledgePage key={project.id} project={project} />
-                  </Suspense>
-                </PageErrorBoundary>
+                <LazyPage name="知识库">
+                  <KnowledgePage key={project.id} project={project} />
+                </LazyPage>
               ),
             },
           ]}

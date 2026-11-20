@@ -223,7 +223,7 @@ export function WorkspacePage({
 
   // 流水线轮询：仅在有活动任务时以 2.5s 间隔刷新（React Query refetchInterval）
   const taskQuery = useQuery({
-    queryKey: ['pipeline-task', effectiveTaskId],
+    queryKey: qk.pipelineTask(effectiveTaskId!),
     queryFn: () => api.pipeline.get(effectiveTaskId!),
     enabled: !!effectiveTaskId,
     refetchInterval: (q) => {
@@ -463,7 +463,7 @@ export function WorkspacePage({
     mutationFn: (chosen?: Outline) => api.pipeline.confirmOutline(effectiveTaskId!, chosen),
     onSuccess: () => {
       setChosenVariant(null);
-      void qc.invalidateQueries({ queryKey: ['pipeline-task', effectiveTaskId] });
+      void qc.invalidateQueries({ queryKey: qk.pipelineTask(effectiveTaskId!) });
     },
   });
   const newDoc = useMutation({

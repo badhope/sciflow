@@ -75,7 +75,7 @@ function IntentEditor() {
             <option value="/writing">论文写作</option>
             <option value="/pipeline">全自动流水线</option>
             <option value="/quality">质量评分</option>
-            <option value="/workspace">工作台</option>
+            <option value="/workspace">科研对话</option>
           </select>
           <Input placeholder="触发词，逗号分隔（如 meta分析,荟萃分析）" value={state.intentForm.keywords} onChange={(e: React.ChangeEvent<HTMLInputElement>) => dispatch({ type: 'SET_INTENT_FORM', form: { ...state.intentForm, keywords: e.target.value } })} />
         </div>
@@ -777,7 +777,7 @@ export function SettingsPage() {
               <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">当前账号是普通成员</div>
               <div className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
                 模型接入、权限档、注入钩子、扩展资产、用量统计与联网服务商属于实例级配置，仅管理员可修改。
-                你可以正常使用工作台、写作、文献、知识库、流水线、质量与投稿；如需调整模型或权限，请联系管理员。
+                你可以正常使用科研对话、研究设计、证据库、实验与验证、写作与评审与投稿；如需调整模型或权限，请联系管理员。
               </div>
             </div>
           </div>

@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.19.10] - 2026-11-20
+
+### Changed
+
+- **导航可见项从 11 个（含设置）收敛到 9 个（含设置）**：实验记录、Web 项目、内置浏览器合并为「实验与验证」三个二级 Tab；长篇写作并入「写作与评审」；「科研对话」从隐藏页恢复为工具箱显式入口。旧深链继续保留，但只复用合并页，不再维护第二套页面渲染器。
+- **页面加载壳单一实现**：新增 `components/LazyPage`，统一 `PageErrorBoundary + Suspense + 骨架屏`；`App.tsx` 与三个合并页约 20 处重复包装全部删除。
+- **旧路由渲染器去重**：`programs/pipeline/literature/knowledge/writing/quality/longform/websandbox/browser` 不再各自懒加载页面，统一调用对应合并页并强制 Tab；裸路径白名单直接由 `VIEW_KEYS` 派生。
+- **查询键单源**：Pipeline 详情的 `pipe-task` / `pipeline-task` 两个 key 统一为 `qk.pipelineTask`；图表色板 `SERIES` 从 `charts-primitives` 单点导出。
+
+### Fixed
+
+- 写作与评审页的面包屑文档名在 `write-review` 入口也能显示；长篇写作 Tab 不拉论文列表、不写入 `?doc=`，避免书稿与论文文档状态串线。
+
+### Tests
+
+- 服务端 114 文件 / 809 测试通过；Web 45 文件 / 243 测试通过；lint、两端 typecheck、全量 build 通过；OpenAPI 生成文件无 diff。
+
 ## [1.19.9] - 2026-11-20
 
 ### Added

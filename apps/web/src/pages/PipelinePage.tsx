@@ -318,7 +318,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
   const activeBase = tasks.find((t) => t.id === activeIdEff) ?? null;
   const activeBusy = !!activeBase && (activeBase.status === 'running' || activeBase.status === 'awaiting_confirmation');
   const activePollQuery = useQuery({
-    queryKey: ['pipe-task', activeIdEff],
+    queryKey: qk.pipelineTask(activeIdEff!),
     enabled: activeBusy,
     queryFn: () => api.pipeline.get(activeIdEff!),
     refetchInterval: activeBusy && tabActive ? 3000 : false,
@@ -333,7 +333,7 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
     const close = openSse<{ task: PipelineTask }>(`/api/pipeline/${activeIdEff}/events`, {
       onOpen: () => setLiveFor(activeIdEff),
       onData: (payload) => {
-        if (payload?.task) qc.setQueryData(['pipe-task', activeIdEff], payload.task);
+        if (payload?.task) qc.setQueryData(qk.pipelineTask(activeIdEff), payload.task);
       },
       onError: () => setLiveFor(null),
     });

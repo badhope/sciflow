@@ -117,7 +117,7 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
   const entries = [
     { label: '论文写作', desc: '大纲 · 起草 · 润色 · 翻译', icon: BookOpen, view: 'write-review' as View, tab: 'writing' },
     { label: '文献调研', desc: '多源检索 · 综述 · 文献库', icon: FlaskConical, view: 'evidence' as View, tab: 'literature' },
-    { label: '实验记录', desc: '本机 Python 沙箱 · 出图留存', icon: Beaker, view: 'experiments' as View },
+    { label: '实验与验证', desc: '本机实验 · Web 项目 · 浏览器', icon: Beaker, view: 'experiments' as View },
     { label: '全自动流水线', desc: '主题 → 初稿 → 评分 → 定稿', icon: Workflow, view: 'design' as View, tab: 'pipeline' },
     { label: '质量评分', desc: '7 维雷达评分与改进建议', icon: Gauge, view: 'write-review' as View, tab: 'quality' },
     { label: '投稿管理', desc: '选刊 · Cover Letter · 修回 · 台账', icon: Send, view: 'submission' as View },

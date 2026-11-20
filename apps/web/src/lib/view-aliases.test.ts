@@ -7,6 +7,12 @@ describe('canonicalHref', () => {
     expect(canonicalHref('quality', null, 'doc-9')).toBe('/write-review?tab=quality&doc=doc-9');
   });
 
+  it('把长篇/Web/浏览器入口归一为合并页二级 Tab', () => {
+    expect(canonicalHref('longform', null, null)).toBe('/write-review?tab=longform');
+    expect(canonicalHref('websandbox', null, null)).toBe('/experiments?tab=web');
+    expect(canonicalHref('browser', null, null)).toBe('/experiments?tab=browser');
+  });
+
   it('把文献/知识库与计划/流水线归一为二级 Tab', () => {
     expect(canonicalHref('literature', null, null)).toBe('/evidence?tab=literature');
     expect(canonicalHref('knowledge', null, null)).toBe('/evidence?tab=knowledge');
