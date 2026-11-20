@@ -9,6 +9,7 @@ import { db, sqlite } from '../db/database';
 import { references, screeningQueue, extractionFields, extractionValues, documents, citations } from '../db/schema';
 import { AiService } from '../ai/ai.service';
 import { buildCslEntries } from '../common/citation-csl';
+import { buildBibtex } from '../common/bibtex-export';
 import { parseAuthors } from '../common/authors';
 import { fingerprint } from '../common/fingerprint';
 import { parseTagsJson, parseStringList, isJsonStringArray } from '../common/json-guard';
@@ -643,11 +644,7 @@ export class ReferencesService {
   }
 
   private toBibtex(refs: (typeof references.$inferSelect)[]): string {
-    const raw = new Cite(this.toCslJson(refs)).format('bibtex');
-    // citation-js 会为大写保护的单词加花括号（{Graph} {Regression}），保证 BibTeX 编译时大小写不丢。
-    // 但下载/交换场景普遍期望明文标题（下游工具不需要保护，且肉眼可读）——按测试契约解包单词级保护括号。
-    // 负向后行断言保证 LaTeX 命令参数（\textbf{...}）不被解包；非单词内容（数学/空格/符号）保持原样。
-    return raw.replace(/(?<!\\)\{([A-Za-z0-9][A-Za-z0-9_-]*)\}/g, '$1');
+    return buildBibtex(refs);
   }
 
   private toRis(refs: (typeof references.$inferSelect)[]): string {

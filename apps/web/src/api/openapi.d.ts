@@ -948,6 +948,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/submission/package": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SubmissionController_submissionPackage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/submission/cover-letter": {
         parameters: {
             query?: never;
@@ -4076,6 +4092,33 @@ export interface components {
             /** @description 检查时间（毫秒时间戳） */
             checkedAt: number;
         };
+        SubmissionPackageFileDto: {
+            /** @description 包内文件名 */
+            name: string;
+            /** @description 未压缩字节数 */
+            bytes: number;
+        };
+        SubmissionPackageDto: {
+            projectId: string;
+            documentId: string;
+            title: string;
+            /** @description 生成时间（ISO 8601） */
+            generatedAt: string;
+            /** @description 下载文件名（中文标题-投稿包.zip） */
+            filename: string;
+            /**
+             * Format: byte
+             * @description ZIP 内容（base64）
+             */
+            base64: string;
+            /** @description ZIP 字节数 */
+            size: number;
+            files: components["schemas"]["SubmissionPackageFileDto"][];
+            ready: boolean;
+            score: number;
+            failCount: number;
+            warnCount: number;
+        };
         JournalDto: {
             /** @description 期刊 ID */
             id: string;
@@ -5865,6 +5908,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubmissionReadinessDto"];
+                };
+            };
+        };
+    };
+    SubmissionController_submissionPackage: {
+        parameters: {
+            query: {
+                projectId: string;
+                documentId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionPackageDto"];
                 };
             };
         };

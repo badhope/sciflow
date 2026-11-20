@@ -752,6 +752,9 @@ export type SubmissionTrack = components['schemas']['SubmissionTrackDto'];
 /** 投稿就绪检查（确定性，不调模型）：类型来自 OpenAPI 生成 contract。 */
 export type SubmissionReadiness = components['schemas']['SubmissionReadinessDto'];
 
+/** 投稿包（DOCX + BibTeX + 清单 + manifest）：类型来自 OpenAPI 生成 contract。 */
+export type SubmissionPackage = components['schemas']['SubmissionPackageDto'];
+
 /** AI 解析编辑部邮件的建议（不改库，用户确认后走 event 端点） */
 export interface ParseEmailResult {
   suggestedStatus: SubmissionStatus;

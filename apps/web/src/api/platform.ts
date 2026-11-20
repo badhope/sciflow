@@ -22,6 +22,7 @@ import type { WebSearchConfig,
   SelfCheck,
   SubmissionStatus,
   SubmissionReadiness,
+  SubmissionPackage,
   SubmissionTrack,
 } from '../types';
 import { request, setToken } from './core';
@@ -223,6 +224,10 @@ export const platform = {
     readiness: (projectId: string, documentId: string) =>
       request<SubmissionReadiness>(
         `/api/submission/readiness?projectId=${encodeURIComponent(projectId)}&documentId=${encodeURIComponent(documentId)}`,
+      ),
+    package: (projectId: string, documentId: string) =>
+      request<SubmissionPackage>(
+        `/api/submission/package?projectId=${encodeURIComponent(projectId)}&documentId=${encodeURIComponent(documentId)}`,
       ),
     /* —— 投稿流程状态跟踪 —— */
     trackSubmit: (body: {

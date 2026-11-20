@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, ClipboardCheck, RefreshCw, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardCheck, Download, RefreshCw, XCircle } from 'lucide-react';
 import { api } from '../../api/client';
-import { Badge, Button, Empty, ErrorBox, Spinner, errMsg } from '../../components/ui';
+import { Badge, Button, Empty, ErrorBox, Spinner, downloadBase64, errMsg } from '../../components/ui';
 import { DocumentSelect } from '../../components/DocumentSelect';
 import type { Doc, SubmissionReadiness } from '../../types';
 
@@ -24,6 +24,9 @@ const STATUS_META: Record<SubmissionReadiness['items'][number]['status'], {
  */
 export function SubmissionReadinessPanel({ projectId, docs }: { projectId: string; docs: Pick<Doc, 'id' | 'title'>[] }) {
   const [docId, setDocId] = useState('');
+  const [pkgBusy, setPkgBusy] = useState(false);
+  const [pkgMessage, setPkgMessage] = useState('');
+  const [pkgError, setPkgError] = useState('');
   const query = useQuery({
     queryKey: ['submission-readiness', projectId, docId],
     queryFn: () => api.submission.readiness(projectId, docId),
@@ -31,6 +34,22 @@ export function SubmissionReadinessPanel({ projectId, docs }: { projectId: strin
   });
   const data = query.data;
   const error = query.error ? errMsg(query.error) : '';
+
+  const downloadPackage = async () => {
+    if (!docId) return;
+    setPkgBusy(true);
+    setPkgError('');
+    setPkgMessage('');
+    try {
+      const pkg = await api.submission.package(projectId, docId);
+      downloadBase64(pkg.filename, pkg.base64, 'application/zip');
+      setPkgMessage(`已生成 ${pkg.filename}（${Math.max(1, Math.round(pkg.size / 1024))} KB）：${pkg.files.map((f) => f.name).join(' / ')}`);
+    } catch (e) {
+      setPkgError(errMsg(e));
+    } finally {
+      setPkgBusy(false);
+    }
+  };
 
   return (
     <div>
@@ -46,9 +65,14 @@ export function SubmissionReadinessPanel({ projectId, docs }: { projectId: strin
           </p>
         </div>
         {data && (
-          <Button variant="outline" size="sm" onClick={() => void query.refetch()} loading={query.isFetching}>
-            <RefreshCw size={13} /> 重新检查
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => void downloadPackage()} loading={pkgBusy}>
+              <Download size={13} /> 下载投稿包
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => void query.refetch()} loading={query.isFetching}>
+              <RefreshCw size={13} /> 重新检查
+            </Button>
+          </div>
         )}
       </div>
 
@@ -65,6 +89,12 @@ export function SubmissionReadinessPanel({ projectId, docs }: { projectId: strin
       {!docId && <Empty compact text="先选择一篇项目文档" hint="检查不会修改稿件，只给出阻塞项与提醒。" />}
       {query.isLoading && <Spinner label="检查投稿材料…" />}
       {error && <ErrorBox message={`就绪检查失败：${error}`} />}
+      {pkgError && <ErrorBox message={`投稿包生成失败：${pkgError}`} />}
+      {pkgMessage && (
+        <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-[11px] leading-5 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">
+          {pkgMessage}
+        </div>
+      )}
 
       {data && (
         <div className="mt-4 space-y-3">
@@ -130,6 +160,7 @@ export function SubmissionReadinessPanel({ projectId, docs }: { projectId: strin
 
           <p className="text-[11px] leading-5 text-slate-400">
             这是投稿前的确定性自检，不替代期刊编辑初审；「提醒」不阻塞提交，「阻塞」建议先补齐再投。
+            投稿包含 `manuscript.docx` / `references.bib` / `submission-checklist.md` / `manifest.json`；阻塞态也可下载，清单会保留阻塞项。
           </p>
         </div>
       )}

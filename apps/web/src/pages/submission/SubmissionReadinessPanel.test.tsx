@@ -1,15 +1,23 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api/client';
-import type { SubmissionReadiness } from '../../types';
+import { downloadBase64 } from '../../components/ui';
+import type { SubmissionPackage, SubmissionReadiness } from '../../types';
 import { SubmissionReadinessPanel } from './SubmissionReadinessPanel';
 
 vi.mock('../../api/client', () => ({
-  api: { submission: { readiness: vi.fn() } },
+  api: { submission: { readiness: vi.fn(), package: vi.fn() } },
 }));
 
+vi.mock('../../components/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../components/ui')>();
+  return { ...actual, downloadBase64: vi.fn() };
+});
+
 const readiness = vi.mocked(api.submission.readiness);
+const packageApi = vi.mocked(api.submission.package);
+const saveBase64 = vi.mocked(downloadBase64);
 const docs = [{ id: 'doc-1', title: '异质图鲁棒性论文' }];
 
 function result(over: Partial<SubmissionReadiness> = {}): SubmissionReadiness {
@@ -52,6 +60,29 @@ function result(over: Partial<SubmissionReadiness> = {}): SubmissionReadiness {
   };
 }
 
+function packageResult(over: Partial<SubmissionPackage> = {}): SubmissionPackage {
+  return {
+    projectId: 'p1',
+    documentId: 'doc-1',
+    title: '异质图鲁棒性论文',
+    generatedAt: '2026-11-20T08:00:00.000Z',
+    filename: '异质图鲁棒性论文-投稿包.zip',
+    base64: 'UEsDBA==',
+    size: 1024,
+    files: [
+      { name: 'manuscript.docx', bytes: 512 },
+      { name: 'references.bib', bytes: 200 },
+      { name: 'submission-checklist.md', bytes: 180 },
+      { name: 'manifest.json', bytes: 132 },
+    ],
+    ready: true,
+    score: 92,
+    failCount: 0,
+    warnCount: 1,
+    ...over,
+  };
+}
+
 function renderPanel() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -62,7 +93,11 @@ function renderPanel() {
 }
 
 describe('SubmissionReadinessPanel', () => {
-  beforeEach(() => readiness.mockReset());
+  beforeEach(() => {
+    readiness.mockReset();
+    packageApi.mockReset();
+    saveBase64.mockReset();
+  });
 
   it('选中文档后展示可投稿与逐项状态', async () => {
     readiness.mockResolvedValue(result());
@@ -75,6 +110,24 @@ describe('SubmissionReadinessPanel', () => {
     expect(screen.getByText(/SCI 通用期刊/)).toBeTruthy();
     expect(screen.getByText('未检测到摘要块。')).toBeTruthy();
     expect(readiness).toHaveBeenCalledWith('p1', 'doc-1');
+  });
+
+  it('一键下载投稿包：调用真实 API，触发 ZIP 下载并展示包内文件', async () => {
+    readiness.mockResolvedValue(result());
+    packageApi.mockResolvedValue(packageResult());
+    renderPanel();
+
+    fireEvent.change(screen.getByLabelText('投稿文档'), { target: { value: 'doc-1' } });
+    await screen.findByText('可投稿');
+    fireEvent.click(screen.getByText('下载投稿包'));
+
+    await waitFor(() => expect(packageApi).toHaveBeenCalledWith('p1', 'doc-1'));
+    expect(saveBase64).toHaveBeenCalledWith('异质图鲁棒性论文-投稿包.zip', 'UEsDBA==', 'application/zip');
+    const success = await screen.findByText(/已生成 异质图鲁棒性论文-投稿包.zip/);
+    expect(success.textContent).toContain('manuscript.docx');
+    expect(success.textContent).toContain('references.bib');
+    expect(success.textContent).toContain('submission-checklist.md');
+    expect(success.textContent).toContain('manifest.json');
   });
 
   it('阻塞项用红色状态明确展示，不把提醒伪装成通过', async () => {

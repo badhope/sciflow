@@ -2,8 +2,10 @@ import { Controller, Post, Get, Delete, Patch, Body, Param, Query, Req } from '@
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { SubmissionService } from './submission.service';
 import { SubmissionReadinessService } from './submission-readiness.service';
+import { SubmissionPackageService } from './submission-package.service';
 import { JournalDto, SubmissionTrackDto } from './submission.dto';
 import { SubmissionReadinessDto } from './submission-readiness.dto';
+import { SubmissionPackageDto } from './submission-package.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -19,6 +21,7 @@ export class SubmissionController {
   constructor(
     private readonly submission: SubmissionService,
     private readonly readiness: SubmissionReadinessService,
+    private readonly pkg: SubmissionPackageService,
     private readonly access: ProjectAccessService,
   ) {}
 
@@ -38,6 +41,19 @@ export class SubmissionController {
     this.access.assertProject(projectId, req.user);
     this.access.assertDocument(documentId, req.user);
     return this.readiness.check(projectId, documentId);
+  }
+
+  /** 投稿包：DOCX + BibTeX + 检查清单 + manifest，ZIP base64 下载 */
+  @Get('package')
+  @ApiOkResponse({ type: SubmissionPackageDto })
+  submissionPackage(
+    @Query('projectId') projectId: string,
+    @Query('documentId') documentId: string,
+    @Req() req: { user?: AuthPayload },
+  ) {
+    this.access.assertProject(projectId, req.user);
+    this.access.assertDocument(documentId, req.user);
+    return this.pkg.build(projectId, documentId);
   }
 
   /** 期刊库列表 */

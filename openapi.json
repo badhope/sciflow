@@ -1619,6 +1619,44 @@
         ]
       }
     },
+    "/submission/package": {
+      "get": {
+        "operationId": "SubmissionController_submissionPackage",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionPackageDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Submission"
+        ]
+      }
+    },
     "/submission/cover-letter": {
       "post": {
         "operationId": "SubmissionController_coverLetter",
@@ -6005,7 +6043,7 @@
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "1.19.0",
+    "version": "1.19.1",
     "contact": {}
   },
   "tags": [],
@@ -7583,6 +7621,86 @@
           "items",
           "stats",
           "checkedAt"
+        ]
+      },
+      "SubmissionPackageFileDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "包内文件名"
+          },
+          "bytes": {
+            "type": "number",
+            "description": "未压缩字节数"
+          }
+        },
+        "required": [
+          "name",
+          "bytes"
+        ]
+      },
+      "SubmissionPackageDto": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "generatedAt": {
+            "type": "string",
+            "description": "生成时间（ISO 8601）"
+          },
+          "filename": {
+            "type": "string",
+            "description": "下载文件名（中文标题-投稿包.zip）"
+          },
+          "base64": {
+            "type": "string",
+            "format": "byte",
+            "description": "ZIP 内容（base64）"
+          },
+          "size": {
+            "type": "number",
+            "description": "ZIP 字节数"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubmissionPackageFileDto"
+            }
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "score": {
+            "type": "number"
+          },
+          "failCount": {
+            "type": "number"
+          },
+          "warnCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "projectId",
+          "documentId",
+          "title",
+          "generatedAt",
+          "filename",
+          "base64",
+          "size",
+          "files",
+          "ready",
+          "score",
+          "failCount",
+          "warnCount"
         ]
       },
       "JournalDto": {

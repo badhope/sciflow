@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.19.1] - 2026-11-20
+
+### Added
+
+- **一键投稿包**：投稿辅助页「就绪检查」新增「下载投稿包」，一次导出
+  `manuscript.docx`、`references.bib`、`submission-checklist.md`、`manifest.json` 四件套 ZIP。
+- **复用既有导出**：DOCX 走 `docx` 生成器（标题/大纲/正文/按 citation 顺序排列的参考文献），
+  BibTeX 走 citation-js；ZIP 由已安装的 `fflate` 编排，不新增依赖。
+- **阻塞态也可下载**：清单会保留所有 `fail / warn` 与统计，不会把未通过包装成可投稿；
+  提醒不阻塞，阻塞建议先补齐。
+- **新 API**：`GET /api/submission/package?projectId=&documentId=`，返回文件名、ZIP base64、
+  大小与包内清单；DTO 进入 OpenAPI（219 paths）。
+- **真实校验**：浏览器下载的 ZIP 可在 LibreOffice 打开 DOCX；manifest 的文件大小与实际成员一致。
+
 ## [1.19.0] - 2026-11-20
 
 ### Added
