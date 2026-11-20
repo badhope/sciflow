@@ -62,6 +62,9 @@
 | DELETE | `/api/documents/:id` | 删除文档 |
 | POST | `/api/documents/:id/outline` | 生成研究计划 / 章节大纲 |
 | POST | `/api/documents/:id/section` | 分章起草（Agentic RAG） |
+| POST | `/api/documents/:id/revision-queues` | 启动修改计划队列（后台逐条定向改写） |
+| GET | `/api/documents/:id/revision-queues/:queueId` | 查询队列进度与逐条 before/after |
+| POST | `/api/documents/:id/revision-queues/:queueId/stop` | 停止队列（当前条目跑完，未开始条目跳过） |
 | POST | `/api/documents/:id/abstract` | 生成摘要 |
 | POST | `/api/documents/:id/polish` | 学术润色 / 翻译 / 降重 |
 | GET | `/api/documents/:id/polish-records` | 润色历史记录 |

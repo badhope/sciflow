@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.19.5] - 2026-11-20
+
+### Added
+
+- **修改计划执行队列**：审稿回复生成的修改计划可直接排队执行。每条计划先匹配目标章节（显式章名必须精确命中；未点名时只在 excerpt/建议动作中匹配最长现有标题，匹配不到就跳过，绝不默认改第一节），后台串行调用单节改写，每步自动快照，逐条记录 before/after 与 changed。投稿页支持启动、1.5s 轮询、逐条 diff 展开与停止（当前条目跑完后不再启动新条目）。
+  队列保存在文档 `revision_queue` JSON 字段，随文档删除/复制，不额外建表；单文档同时只允许一队运行。新增 `POST/GET /api/documents/:id/revision-queues` 与 `POST /api/documents/:id/revision-queues/:queueId/stop`。
+
+### Tests
+
+- 新增 `revision-queue.spec.ts`（3 条纯函数，覆盖显式标题精确匹配、错误标题拒绝、最长标题匹配与无章节名返回空）与 `revision-queue.service.spec.ts`（3 条队列执行，覆盖串行改写 + before/after、未匹配条目跳过、停止后当前条目跑完且后续不启动）。
+- 服务端 111 文件 / 789 测试通过；Web 44 文件 / 240 测试通过；typecheck、lint、web build、chunk budget 与 OpenAPI 生成通过。
+
 ## [1.19.4] - 2026-11-20
 
 ### Added

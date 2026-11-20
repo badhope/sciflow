@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common';
-import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service';
-import { DocDto } from './documents.dto';
+import { DocDto, RevisionQueueDto, StartRevisionQueueDto } from './documents.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 import { paginate } from '../common/paginate';
@@ -98,6 +98,37 @@ export class DocumentsController {
   reviseSection(@Param('id') id: string, @Body() body: { title: string; reviewPoints: string }, @Req() req: { user?: AuthPayload }) {
     this.access.assertDocument(id, req.user);
     return this.documents.reviseSectionFromReview(id, String(body.title || ''), String(body.reviewPoints || ''));
+  }
+
+  /** 创建并启动修改计划队列（后台逐条执行，前端轮询进度） */
+  @Post(':id/revision-queues')
+  @HttpCode(HttpStatus.OK)
+  @ApiBody({ type: StartRevisionQueueDto })
+  @ApiOkResponse({ type: RevisionQueueDto })
+  startRevisionQueue(
+    @Param('id') id: string,
+    @Body() body: StartRevisionQueueDto,
+    @Req() req: { user?: AuthPayload },
+  ) {
+    this.access.assertDocument(id, req.user);
+    return this.documents.startRevisionQueue(id, body?.items || []);
+  }
+
+  /** 查询队列进度（含逐条 before/after） */
+  @Get(':id/revision-queues/:queueId')
+  @ApiOkResponse({ type: RevisionQueueDto })
+  getRevisionQueue(@Param('id') id: string, @Param('queueId') queueId: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
+    return this.documents.getRevisionQueue(id, queueId);
+  }
+
+  /** 停止队列：当前条目跑完，未开始的条目标记 skipped */
+  @Post(':id/revision-queues/:queueId/stop')
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: RevisionQueueDto })
+  stopRevisionQueue(@Param('id') id: string, @Param('queueId') queueId: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
+    return this.documents.stopRevisionQueue(id, queueId);
   }
 
   /** 段落级恢复：只回滚指定章节，其余章节保持当前内容（恢复前自动快照） */

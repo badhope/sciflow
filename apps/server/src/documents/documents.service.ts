@@ -16,6 +16,7 @@ import { splitTailBlock } from '../pipeline/tail-blocks';
 import { parseAuthors as parseAuthorArr } from '../common/authors';
 import { readProjectQualityStandard } from '../common/project-quality-standard';
 import { extractSections, replaceSectionBody, restoreSection as restoreSectionText, sectionDiff, type SectionDiffEntry } from './section-restore';
+import { createRevisionQueue, inferSectionTitle, type RevisionQueue, type RevisionQueueInput, type RevisionQueueItem } from './revision-queue';
 
 import { parseJson } from '../common/json-guard';
 import { toCslAuthors, buildCslEntry, cslSurname } from '../common/citation-csl';
@@ -134,6 +135,150 @@ export class DocumentsService {
     this.createSnapshot(id, `按评审意见修改「${title}」前的自动快照`);
     db.update(documents).set({ content: next, updatedAt: Date.now() }).where(eq(documents.id, id)).run();
     return { content: next, changed: true };
+  }
+
+  /** 读取文档上最近的修改队列；没有则返回 null */
+  private readRevisionQueue(doc: { revisionQueue?: string | null }): RevisionQueue | null {
+    const q = parseJson<RevisionQueue | null>(doc.revisionQueue || '{}', null);
+    return q && typeof q === 'object' && q.id ? q : null;
+  }
+
+  /** 只更新 document.revision_queue，不触碰正文/版本号，避免队列轮询把文档版本炒热 */
+  private saveRevisionQueue(documentId: string, queue: RevisionQueue) {
+    db.update(documents).set({ revisionQueue: JSON.stringify(queue) }).where(eq(documents.id, documentId)).run();
+  }
+
+  /**
+   * 创建并启动一份修改计划队列（后台串行执行，前端轮询）。
+   * 队列执行逐条调用现有 sections/revise：每条改前自动快照，只改目标章节。
+   */
+  startRevisionQueue(id: string, inputs: RevisionQueueInput[]) {
+    const doc = this.get(id);
+    if (!Array.isArray(inputs) || inputs.length === 0) throw new BadRequestException('修改计划不能为空');
+    const titles = extractSections(doc.content ?? '').map((s) => s.title).filter(Boolean);
+    if (!titles.length) throw new BadRequestException('文档还没有可修改的章节标题（先用 ## 标题组织正文）');
+    const existing = this.readRevisionQueue(doc);
+    if (existing && (existing.status === 'queued' || existing.status === 'running')) {
+      throw new BadRequestException('该文档已有正在执行的修改队列，请等待完成或先停止');
+    }
+    const now = Date.now();
+    const items: RevisionQueueItem[] = inputs.map((input) => {
+      const sectionTitle = inferSectionTitle(input, titles);
+      const reviewPoints = (input.reviewPoints || '').trim()
+        || [input.excerpt, input.suggestedAction].filter(Boolean).join('\n').trim();
+      let status: RevisionQueueItem['status'] = 'pending';
+      let error = '';
+      if (!reviewPoints) {
+        status = 'skipped';
+        error = '没有可执行的修改要求';
+      } else if (!sectionTitle) {
+        status = 'skipped';
+        error = input.sectionTitle?.trim()
+          ? `正文中没有找到章节「${input.sectionTitle.trim()}」`
+          : '计划条目没有点名任何现有章节';
+      }
+      return {
+        id: randomUUID(),
+        planItemId: input.planItemId || '',
+        sectionTitle,
+        reviewPoints,
+        status,
+        error,
+        before: '',
+        after: '',
+        changed: false,
+        startedAt: null,
+        finishedAt: null,
+      };
+    });
+    if (!items.some((i) => i.status === 'pending')) {
+      throw new BadRequestException('没有可执行的条目：计划条目未匹配到现有章节');
+    }
+    const queue = createRevisionQueue(id, randomUUID(), items, now);
+    this.saveRevisionQueue(id, queue);
+    void this.runRevisionQueue(id, queue.id).catch((e) => {
+      const current = this.readRevisionQueue(this.get(id));
+      if (!current || current.id !== queue.id) return;
+      current.status = 'failed';
+      current.finishedAt = Date.now();
+      current.items.forEach((i) => {
+        if (i.status === 'pending' || i.status === 'running') i.status = 'failed';
+      });
+      this.saveRevisionQueue(id, { ...current, updatedAt: Date.now() });
+      console.error('[revision-queue] 执行失败', e);
+    });
+    return queue;
+  }
+
+  /** 后台串行执行队列：每完成一条就落盘，前端可轮询到逐条进度。 */
+  private async runRevisionQueue(documentId: string, queueId: string) {
+    const initial = this.readRevisionQueue(this.get(documentId));
+    if (!initial || initial.id !== queueId || initial.status === 'stopped') return;
+    initial.status = 'running';
+    initial.updatedAt = Date.now();
+    this.saveRevisionQueue(documentId, initial);
+    for (let index = 0; index < initial.items.length; index += 1) {
+      const current = this.readRevisionQueue(this.get(documentId));
+      if (!current || current.id !== queueId || current.status === 'stopped') return;
+      const item = current.items[index];
+      if (!item || item.status !== 'pending') continue;
+      item.status = 'running';
+      item.startedAt = Date.now();
+      current.updatedAt = Date.now();
+      this.saveRevisionQueue(documentId, current);
+      try {
+        const before = extractSections(this.get(documentId).content ?? '').find((s) => s.title === item.sectionTitle)?.body ?? '';
+        item.before = before;
+        const result = await this.reviseSectionFromReview(documentId, item.sectionTitle, item.reviewPoints);
+        const after = extractSections(result.content ?? '').find((s) => s.title === item.sectionTitle)?.body ?? '';
+        item.status = 'done';
+        item.after = after;
+        item.changed = result.changed;
+      } catch (e: any) {
+        item.status = 'failed';
+        item.error = e?.message || String(e);
+      }
+      item.finishedAt = Date.now();
+      const latest = this.readRevisionQueue(this.get(documentId));
+      if (!latest || latest.id !== queueId) return;
+      latest.items[index] = item;
+      latest.updatedAt = Date.now();
+      this.saveRevisionQueue(documentId, latest);
+    }
+    const latest = this.readRevisionQueue(this.get(documentId));
+    if (!latest || latest.id !== queueId || latest.status === 'stopped') return;
+    const runnable = latest.items.filter((i) => i.status !== 'skipped');
+    const failed = runnable.filter((i) => i.status === 'failed');
+    latest.status = failed.length === 0 ? 'completed' : failed.length === runnable.length ? 'failed' : 'partial';
+    latest.finishedAt = Date.now();
+    latest.updatedAt = Date.now();
+    this.saveRevisionQueue(documentId, latest);
+  }
+
+  /** 读取队列（queueId 不匹配视为不存在，避免读到上一队） */
+  getRevisionQueue(id: string, queueId: string) {
+    const queue = this.readRevisionQueue(this.get(id));
+    if (!queue || queue.id !== queueId) throw new NotFoundException('修改队列不存在');
+    return queue;
+  }
+
+  /** 停止队列：当前正在跑的条目会跑完，未开始的条目标记 skipped。 */
+  stopRevisionQueue(id: string, queueId: string) {
+    const queue = this.getRevisionQueue(id, queueId);
+    if (queue.status !== 'queued' && queue.status !== 'running') return queue;
+    const now = Date.now();
+    queue.status = 'stopped';
+    queue.finishedAt = now;
+    queue.updatedAt = now;
+    for (const item of queue.items) {
+      if (item.status === 'pending') {
+        item.status = 'skipped';
+        item.error = '队列已停止';
+        item.finishedAt = now;
+      }
+    }
+    this.saveRevisionQueue(id, queue);
+    return queue;
   }
 
   /** 段落级 diff：当前正文 vs 指定历史版本（缺 version 时对比最新一版） */

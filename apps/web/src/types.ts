@@ -911,3 +911,37 @@ export interface ExtensionKindsResponse {
   templates: ExtensionTemplate[];
 }
 export interface ExtensionImportResult { added: number; updated: number; assets: ExtensionAsset[]; errors: string[] }
+
+
+/** 修改计划执行队列（单文档仅保留当前/最近一队） */
+export interface RevisionQueueItem {
+  id: string;
+  planItemId: string;
+  sectionTitle: string;
+  reviewPoints: string;
+  status: 'pending' | 'running' | 'done' | 'failed' | 'skipped';
+  error: string;
+  before: string;
+  after: string;
+  changed: boolean;
+  startedAt: number | null;
+  finishedAt: number | null;
+}
+
+export interface RevisionQueue {
+  id: string;
+  documentId: string;
+  status: 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'stopped';
+  createdAt: number;
+  updatedAt: number;
+  finishedAt: number | null;
+  items: RevisionQueueItem[];
+}
+
+export interface RevisionQueueInput {
+  planItemId?: string;
+  sectionTitle?: string;
+  reviewPoints?: string;
+  excerpt?: string;
+  suggestedAction?: string;
+}

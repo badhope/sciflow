@@ -26,6 +26,8 @@ export const documents = sqliteTable('document', {
   version: integer('version').default(1),
   versions: text('versions').default('[]'), // JSON: [{version,content,updatedAt}]
   status: text('status').default('draft'), // draft | reviewing | polished | final
+  /** 最近一次修改计划执行队列（JSON；单文档只保留当前/最近一队） */
+  revisionQueue: text('revision_queue').default('{}'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });

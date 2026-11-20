@@ -1828,6 +1828,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/documents/{id}/revision-queues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DocumentsController_startRevisionQueue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/documents/{id}/revision-queues/{queueId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DocumentsController_getRevisionQueue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/documents/{id}/revision-queues/{queueId}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DocumentsController_stopRevisionQueue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/documents/{id}/sections/restore": {
         parameters: {
             query?: never;
@@ -4355,10 +4403,74 @@ export interface components {
              * @example draft
              */
             status: string;
+            /** @description 最近一次修改计划执行队列 JSON 字符串 */
+            revisionQueue?: string;
             /** @description 创建时间（毫秒时间戳） */
             createdAt: number;
             /** @description 更新时间（毫秒时间戳） */
             updatedAt: number;
+        };
+        RevisionQueueInputItemDto: {
+            /**
+             * @description 评审计划条目 ID
+             * @example R1
+             */
+            planItemId?: string;
+            /** @description 目标章节标题；为空时按 excerpt/suggestedAction 匹配 */
+            sectionTitle?: string;
+            /** @description 实际改写要求；为空时用 excerpt + suggestedAction */
+            reviewPoints?: string;
+            /** @description 评审原文摘录 */
+            excerpt?: string;
+            /** @description 建议动作 */
+            suggestedAction?: string;
+        };
+        StartRevisionQueueDto: {
+            /** @description 待执行条目 */
+            items: components["schemas"]["RevisionQueueInputItemDto"][];
+        };
+        RevisionQueueItemDto: {
+            /** @description 队列条目 ID */
+            id: string;
+            /**
+             * @description 回链的评审计划条目 ID
+             * @example R1
+             */
+            planItemId: string;
+            /** @description 目标章节标题 */
+            sectionTitle: string;
+            /** @description 交给改写模型的要求 */
+            reviewPoints: string;
+            /** @description pending | running | done | failed | skipped */
+            status: string;
+            /** @description 失败/跳过原因 */
+            error: string;
+            /** @description 修改前章节正文 */
+            before: string;
+            /** @description 修改后章节正文 */
+            after: string;
+            /** @description 内容是否实际变化 */
+            changed: boolean;
+            /** @description 开始时间（毫秒） */
+            startedAt?: Record<string, never>;
+            /** @description 完成时间（毫秒） */
+            finishedAt?: Record<string, never>;
+        };
+        RevisionQueueDto: {
+            /** @description 队列 ID */
+            id: string;
+            /** @description 文档 ID */
+            documentId: string;
+            /** @description queued | running | completed | partial | failed | stopped */
+            status: string;
+            /** @description 创建时间（毫秒） */
+            createdAt: number;
+            /** @description 更新时间（毫秒） */
+            updatedAt: number;
+            /** @description 结束时间（毫秒） */
+            finishedAt?: Record<string, never>;
+            /** @description 逐条执行状态 */
+            items: components["schemas"]["RevisionQueueItemDto"][];
         };
         ExperimentDto: {
             /** @description 实验 ID */
@@ -7377,6 +7489,75 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    DocumentsController_startRevisionQueue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartRevisionQueueDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionQueueDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_getRevisionQueue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                queueId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionQueueDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_stopRevisionQueue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                queueId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionQueueDto"];
+                };
             };
         };
     };

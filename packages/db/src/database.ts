@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS document (
   version INTEGER DEFAULT 1,
   versions TEXT DEFAULT '[]',
   status TEXT DEFAULT 'draft',
+  revision_queue TEXT DEFAULT '{}',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -876,6 +877,7 @@ ensureColumn('quality_report', 'llm_score', 'INTEGER');
 ensureColumn('quality_report', 'llm_scores', "TEXT DEFAULT '{}'");
 ensureColumn('quality_report', 'expert_score', 'INTEGER');
 ensureColumn('quality_report', 'expert_status', "TEXT DEFAULT 'unreviewed'");
+ensureColumn('document', 'revision_queue', "TEXT DEFAULT '{}'");
 ensureColumn('review_comment', 'quote', "TEXT DEFAULT ''");
 ensureColumn('review_comment', 'anchor_start', 'INTEGER');
 ensureColumn('review_comment', 'anchor_end', 'INTEGER');

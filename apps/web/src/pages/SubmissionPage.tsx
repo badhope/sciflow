@@ -1,9 +1,9 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, MessageSquareReply, Plus, Send } from 'lucide-react';
 import { api } from '../api/client';
 import { ToastContext } from '../App';
-import type { Journal, JournalMatchResult, ParseEmailResult, Project, ReviewComment, SubmissionStatus, SubmissionTrack } from '../types';
+import type { Journal, JournalMatchResult, ParseEmailResult, Project, ReviewComment, RevisionQueue, SubmissionStatus, SubmissionTrack } from '../types';
 import { Badge, Button, Card, ConfirmDialog, ErrorBox, Input, Select, Spinner, Textarea, errMsg } from '../components/ui';
 import { DocumentSelect } from '../components/DocumentSelect';
 import { SubmissionReadinessPanel } from './submission/SubmissionReadinessPanel';
@@ -11,8 +11,36 @@ import { JournalLibrary, type JournalLibraryForm } from './submission/JournalLib
 import { JournalMatches } from './submission/JournalMatches';
 import { SubmissionTabNav } from './submission/SubmissionTabNav';
 import { TrackCard } from './submission/TrackCard';
+import { RevisionQueuePanel } from './submission/RevisionQueuePanel';
 import { REVISION_STATUSES, STATUS_META, STATUS_OPTIONS, inferStatusFromComments, todayISO, type SubmissionTab } from './submission/status';
 import { useProjectDocs } from '../lib/queries';
+import { qk } from '../lib/query-keys';
+
+type RevisionPlanItem = { id: string; excerpt: string; category: string; severity: string; suggestedAction: string };
+
+/** 从 Markdown 正文提取 1–4 级标题（与后端 extractSections 的标题口径保持一致） */
+function sectionTitlesOf(content: string): string[] {
+  const titles: string[] = [];
+  for (const line of (content || '').split(/\r?\n/)) {
+    const m = /^#{1,4}\s+(.+?)\s*#*\s*$/.exec(line);
+    if (m) titles.push(m[1].trim());
+  }
+  return titles;
+}
+
+/** 计划条目未显式指定章节时，按 excerpt + suggestedAction 匹配最长标题；匹配不到就留空让用户选 */
+function inferPlanSection(item: RevisionPlanItem, titles: string[]): string {
+  const hay = `${item.excerpt}\n${item.suggestedAction}`.toLowerCase();
+  let best = '';
+  for (const title of titles) {
+    if (title && hay.includes(title.toLowerCase()) && title.length > best.length) best = title;
+  }
+  return best;
+}
+
+function isQueueTerminal(status: RevisionQueue['status']): boolean {
+  return status === 'completed' || status === 'partial' || status === 'failed' || status === 'stopped';
+}
 
 export function SubmissionPage({ project }: { project: Project }) {
   const [tab, setTab] = useState<SubmissionTab>('journals');
@@ -25,7 +53,14 @@ export function SubmissionPage({ project }: { project: Project }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [output, setOutput] = useState('');
-  const [plan, setPlan] = useState<{ id: string; excerpt: string; category: string; severity: string; suggestedAction: string }[]>([]);
+  const [plan, setPlan] = useState<RevisionPlanItem[]>([]);
+  const [planSections, setPlanSections] = useState<Record<string, string>>({});
+
+  // 修改计划执行队列：启动后轮询进度，逐条展示 before/after
+  const [queue, setQueue] = useState<RevisionQueue | null>(null);
+  const [queueErr, setQueueErr] = useState('');
+  const [queueStarting, setQueueStarting] = useState(false);
+  const [queueStopping, setQueueStopping] = useState(false);
 
   // 期刊推荐（结构化匹配）
   const [title, setTitle] = useState('');
@@ -64,6 +99,8 @@ export function SubmissionPage({ project }: { project: Project }) {
 
   // 文档列表走共享 hook；错误直接派生，不再用 effect 同步一份重复错误状态。
   const docsError = docsQuery.error ? errMsg(docsQuery.error) : '';
+  const selectedDoc = docs.find((d) => d.id === selDoc);
+  const docSectionTitles = useMemo(() => sectionTitlesOf(selectedDoc?.content || ''), [selectedDoc?.content]);
   // 期刊库加载
   useEffect(() => {
     api.submission.listJournals().then(setLib).catch((e) => { setLib([]); setLoadErr(errMsg(e)); });
@@ -131,6 +168,82 @@ export function SubmissionPage({ project }: { project: Project }) {
     }
   };
 
+  // 派生轮询目标：只有 queued/running 的队列需要拉取；终态队列只触发一次刷新
+  const pollingQueueId = queue && !isQueueTerminal(queue.status) ? queue.id : null;
+  const finishedQueueId = queue && isQueueTerminal(queue.status) ? queue.id : null;
+
+  // 队列轮询：running/queued 时每 1.5s 拉一次；终态自动停
+  useEffect(() => {
+    if (!pollingQueueId || !selDoc) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const latest = await api.documents.getRevisionQueue(selDoc, pollingQueueId);
+        if (!cancelled) {
+          setQueue(latest);
+          setQueueErr('');
+        }
+      } catch (e: unknown) {
+        if (!cancelled) setQueueErr(errMsg(e));
+      }
+    };
+    const timer = window.setInterval(tick, 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [pollingQueueId, selDoc]);
+
+  // 队列结束后刷新文档列表，让正文与版本号同步
+  useEffect(() => {
+    if (!finishedQueueId || !selDoc) return;
+    qc.invalidateQueries({ queryKey: qk.docs(project.id) });
+    qc.invalidateQueries({ queryKey: qk.doc(selDoc) });
+  }, [finishedQueueId, selDoc, project.id, qc]);
+
+  const launchQueue = async () => {
+    setQueueErr('');
+    if (!selDoc) {
+      setQueueErr('请先在「回复审稿」页选择要修改的文档');
+      return;
+    }
+    const items = plan
+      .filter((item) => planSections[item.id])
+      .map((item) => ({
+        planItemId: item.id,
+        sectionTitle: planSections[item.id],
+        reviewPoints: `审稿意见 ${item.id}：${item.excerpt}\n需要修改：${item.suggestedAction}`,
+        excerpt: item.excerpt,
+        suggestedAction: item.suggestedAction,
+      }));
+    if (!items.length) {
+      setQueueErr('至少为一条修改计划选择目标章节');
+      return;
+    }
+    setQueueStarting(true);
+    try {
+      const started = await api.documents.startRevisionQueue(selDoc, items);
+      setQueue(started);
+    } catch (e: unknown) {
+      setQueueErr(errMsg(e));
+    } finally {
+      setQueueStarting(false);
+    }
+  };
+
+  const haltQueue = async () => {
+    if (!queue || !selDoc) return;
+    setQueueErr('');
+    setQueueStopping(true);
+    try {
+      setQueue(await api.documents.stopRevisionQueue(selDoc, queue.id));
+    } catch (e: unknown) {
+      setQueueErr(errMsg(e));
+    } finally {
+      setQueueStopping(false);
+    }
+  };
+
   const runMatch = async () => {
     if (!title.trim()) {
       setError('请先填写论文标题（或从项目内文档选择）');
@@ -167,6 +280,8 @@ export function SubmissionPage({ project }: { project: Project }) {
 
   const pickDoc = (id: string) => {
     setSelDoc(id);
+    setQueue(null);
+    setQueueErr('');
     loadComments(id);
     const d = docs.find((x) => x.id === id);
     if (d) {
@@ -459,7 +574,9 @@ export function SubmissionPage({ project }: { project: Project }) {
             <Textarea rows={3} placeholder="你的初步回应想法（可选）" value={responseHint} onChange={(e) => setResponseHint(e.target.value)} />
             <Button onClick={() => run(async () => {
               const res = await api.submission.replyReview(reviewComments, responseHint);
-              setPlan(res.revisionPlan ?? []);
+              const items = res.revisionPlan ?? [];
+              setPlan(items);
+              setPlanSections(Object.fromEntries(items.map((item) => [item.id, inferPlanSection(item, docSectionTitles)])));
               return res.letter;
             })} disabled={busy}>
               {busy ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} 生成回复信
@@ -467,8 +584,11 @@ export function SubmissionPage({ project }: { project: Project }) {
             {plan.length > 0 && (
               <div className="space-y-1.5">
                 <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">修改计划（评审意见回链，可直接作为修改任务的输入）</div>
+                <div className="text-[11px] text-slate-400 dark:text-slate-500">
+                  为每条选择目标章节；队列会按顺序逐条定向改写，每步自动快照，不会一次重写全文。
+                </div>
                 {plan.map((item) => (
-                  <div key={item.id} className="text-xs rounded-md border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 space-y-0.5">
+                  <div key={item.id} className="text-xs rounded-md border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 space-y-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-mono text-slate-500">{item.id}</span>
                       <span className={`rounded px-1.5 py-0.5 ${item.severity === 'major' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{item.severity}</span>
@@ -476,8 +596,33 @@ export function SubmissionPage({ project }: { project: Project }) {
                     </div>
                     <div className="text-slate-700 dark:text-slate-200">{item.excerpt}</div>
                     <div className="text-slate-500 dark:text-slate-400">→ {item.suggestedAction}</div>
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <span className="shrink-0 text-slate-400">目标章节</span>
+                      <Select
+                        className="text-xs flex-1 !py-1"
+                        ariaLabel={`${item.id} 目标章节`}
+                        options={[
+                          { value: '', label: docSectionTitles.length ? '未匹配，请选择…' : '当前文档没有可识别章节' },
+                          ...docSectionTitles.map((title) => ({ value: title, label: title })),
+                        ]}
+                        value={planSections[item.id] || ''}
+                        onChange={(v) => setPlanSections((m) => ({ ...m, [item.id]: v }))}
+                      />
+                    </div>
                   </div>
                 ))}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button variant="outline" className="text-xs" onClick={launchQueue} disabled={queueStarting}>
+                    {queueStarting ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                    执行修改队列
+                  </Button>
+                  <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                    已选 {plan.filter((item) => planSections[item.id]).length} / {plan.length} 条
+                  </span>
+                  {selDoc === '' && <span className="text-[11px] text-amber-600 dark:text-amber-300">先在「回复审稿」页选择文档</span>}
+                </div>
+                {queueErr && <div className="text-xs text-rose-600 dark:text-rose-300">{queueErr}</div>}
+                {queue && <RevisionQueuePanel queue={queue} stopping={queueStopping} onStop={haltQueue} />}
               </div>
             )}
           </div>

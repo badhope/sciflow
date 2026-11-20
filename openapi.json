@@ -3154,6 +3154,122 @@
         ]
       }
     },
+    "/documents/{id}/revision-queues": {
+      "post": {
+        "operationId": "DocumentsController_startRevisionQueue",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartRevisionQueueDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionQueueDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/documents/{id}/revision-queues/{queueId}": {
+      "get": {
+        "operationId": "DocumentsController_getRevisionQueue",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "queueId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionQueueDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/documents/{id}/revision-queues/{queueId}/stop": {
+      "post": {
+        "operationId": "DocumentsController_stopRevisionQueue",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "queueId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionQueueDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
     "/documents/{id}/sections/restore": {
       "post": {
         "operationId": "DocumentsController_restoreSection",
@@ -6153,7 +6269,7 @@
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "1.19.4",
+    "version": "1.19.5",
     "contact": {}
   },
   "tags": [],
@@ -8305,6 +8421,10 @@
             "description": "文档状态",
             "example": "draft"
           },
+          "revisionQueue": {
+            "type": "string",
+            "description": "最近一次修改计划执行队列 JSON 字符串"
+          },
           "createdAt": {
             "type": "number",
             "description": "创建时间（毫秒时间戳）"
@@ -8325,6 +8445,152 @@
           "status",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "RevisionQueueInputItemDto": {
+        "type": "object",
+        "properties": {
+          "planItemId": {
+            "type": "string",
+            "description": "评审计划条目 ID",
+            "example": "R1"
+          },
+          "sectionTitle": {
+            "type": "string",
+            "description": "目标章节标题；为空时按 excerpt/suggestedAction 匹配"
+          },
+          "reviewPoints": {
+            "type": "string",
+            "description": "实际改写要求；为空时用 excerpt + suggestedAction"
+          },
+          "excerpt": {
+            "type": "string",
+            "description": "评审原文摘录"
+          },
+          "suggestedAction": {
+            "type": "string",
+            "description": "建议动作"
+          }
+        }
+      },
+      "StartRevisionQueueDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "待执行条目",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RevisionQueueInputItemDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "RevisionQueueItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "队列条目 ID"
+          },
+          "planItemId": {
+            "type": "string",
+            "description": "回链的评审计划条目 ID",
+            "example": "R1"
+          },
+          "sectionTitle": {
+            "type": "string",
+            "description": "目标章节标题"
+          },
+          "reviewPoints": {
+            "type": "string",
+            "description": "交给改写模型的要求"
+          },
+          "status": {
+            "type": "string",
+            "description": "pending | running | done | failed | skipped"
+          },
+          "error": {
+            "type": "string",
+            "description": "失败/跳过原因"
+          },
+          "before": {
+            "type": "string",
+            "description": "修改前章节正文"
+          },
+          "after": {
+            "type": "string",
+            "description": "修改后章节正文"
+          },
+          "changed": {
+            "type": "boolean",
+            "description": "内容是否实际变化"
+          },
+          "startedAt": {
+            "type": "object",
+            "description": "开始时间（毫秒）"
+          },
+          "finishedAt": {
+            "type": "object",
+            "description": "完成时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "planItemId",
+          "sectionTitle",
+          "reviewPoints",
+          "status",
+          "error",
+          "before",
+          "after",
+          "changed"
+        ]
+      },
+      "RevisionQueueDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "队列 ID"
+          },
+          "documentId": {
+            "type": "string",
+            "description": "文档 ID"
+          },
+          "status": {
+            "type": "string",
+            "description": "queued | running | completed | partial | failed | stopped"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "更新时间（毫秒）"
+          },
+          "finishedAt": {
+            "type": "object",
+            "description": "结束时间（毫秒）"
+          },
+          "items": {
+            "description": "逐条执行状态",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RevisionQueueItemDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "documentId",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "items"
         ]
       },
       "ExperimentDto": {

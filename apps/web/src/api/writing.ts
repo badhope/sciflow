@@ -59,6 +59,18 @@ export const writing = {
       request<{ content: string; changed: boolean }>(`/api/documents/${id}/sections/restore`, {
         method: 'POST', body: JSON.stringify({ version, title }),
       }),
+    /** 启动修改计划队列：后台逐条定向改写，前端轮询进度 */
+    startRevisionQueue: (id: string, items: import('../types').RevisionQueueInput[]) =>
+      request<import('../types').RevisionQueue>(`/api/documents/${id}/revision-queues`, {
+        method: 'POST', body: JSON.stringify({ items }),
+      }),
+    /** 查询修改队列（含逐条 before/after） */
+    getRevisionQueue: (id: string, queueId: string) =>
+      request<import('../types').RevisionQueue>(`/api/documents/${id}/revision-queues/${queueId}`),
+    /** 停止队列：当前条目跑完，未开始的条目标记 skipped */
+    stopRevisionQueue: (id: string, queueId: string) =>
+      request<import('../types').RevisionQueue>(`/api/documents/${id}/revision-queues/${queueId}/stop`, { method: 'POST' }),
+
     /** 客观质量检查器（确定性规则引擎）：同一正文必然同分同指纹，不受模型漂移影响 */
     objectiveAudit: (id: string) => request<ObjectiveAuditResponse>(`/api/documents/${id}/objective-audit`),
     create: (projectId: string, title: string) =>
