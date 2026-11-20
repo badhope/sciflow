@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.19.9] - 2026-11-20
+
+### Added
+
+- **修改计划队列 v2**：单文档从「只保留最近一队」改为最多保留 20 队历史；列表接口只返回审计摘要（不吐 before/after 大字段），旧单队 JSON 继续兼容。新增 `autoResolve`：条目完成且确实改到正文时，自动把同一文档、同一条 `review_comment` 置为 `resolved`，并把 id 写入 `resolvedCommentIds`；已关闭的意见不重复计数。
+- **跳过/失败条目定向重试**：`POST /api/documents/:id/revision-queues/:queueId/retry` 只接受 `skipped`/`failed` 条目，指定章节必须存在于当前正文；重试新建一队只跑这一条，旧队保留为审计历史。投稿页新增历史队列面板、自动关闭意见徽标与章节重试控件。
+- **Pipeline / Agent 任务级 SSE**：新增 `GET /api/pipeline/:id/events`（1s 推送完整 task，终态自动结束）与 `GET /api/agent/events?projectId=`（2s 推送任务/摘要/待批/计划快照）。前端在运行中订阅并直接更新查询缓存；断线时自动退回原有 3s / 15s 轮询，页面显示「实时 / 轮询」状态。
+- **品牌与头部视觉打磨**：顶栏改为项目首字墨印面包屑 + AI 状态胶囊；首页 Hero 加入朱印水印、项目体征胶囊与印刷网点底纹；侧栏朱印增加内框、纸纹和更稳的比例；Pipeline / Agent 进度区增加实时状态胶囊。`BrandMark` 的「1 path + 1 circle」契约保持不变。
+
+### Fixed
+
+- **截图自动化被 SSE 长连接卡住**：`scripts/capture-ui.mjs` 从 `networkidle` 改为 `domcontentloaded`，避免 Agent SSE 一直占用连接导致深色页重载超时；E2E 侧栏清单同步到 v2.0 的 11 个实际入口，折叠工具箱的分组展开逻辑改为可重入。
+- Playwright 支持 `CHROMIUM_EXECUTABLE_PATH`，云主机可直接复用系统 Chromium，不必重复下载浏览器。
+
+### Tests
+
+- 服务端 114 文件 / 809 测试通过；Web 44 文件 / 240 测试通过；lint、两端 typecheck、全量 build、chunk budget（首屏 416.6KB raw / 127.8KB gzip）通过；OpenAPI 重新生成到 227 paths。
+- Playwright 全量 E2E：10 passed / 1 skipped（`real-chat` 需真实模型 key）；`capture-ui` 15 张浅色 + 3 张深色截图全部通过，运行中的流水线截图包含 `实时` 状态。
+
 ## [1.19.8] - 2026-11-20
 
 ### Security

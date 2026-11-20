@@ -12,6 +12,10 @@ export default defineConfig({
   use: {
     baseURL: process.env.E2E_BASE || 'http://localhost:5173',
     trace: 'retain-on-failure',
+    // 云主机/CI 可复用系统 Chromium，避免每次下载 Playwright 自带浏览器
+    launchOptions: process.env.CHROMIUM_EXECUTABLE_PATH
+      ? { executablePath: process.env.CHROMIUM_EXECUTABLE_PATH }
+      : undefined,
   },
   reporter: [['list']],
 });

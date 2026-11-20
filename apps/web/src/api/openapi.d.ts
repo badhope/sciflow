@@ -116,6 +116,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agent/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AgentHarnessController_events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agent/metrics": {
         parameters: {
             query?: never;
@@ -1835,7 +1851,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["DocumentsController_listRevisionQueues"];
         put?: never;
         post: operations["DocumentsController_startRevisionQueue"];
         delete?: never;
@@ -1870,6 +1886,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["DocumentsController_stopRevisionQueue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/documents/{id}/revision-queues/{queueId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DocumentsController_retryRevisionQueueItem"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2527,6 +2559,22 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["PipelineController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pipeline/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PipelineController_events"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4424,10 +4472,14 @@ export interface components {
             excerpt?: string;
             /** @description 建议动作 */
             suggestedAction?: string;
+            /** @description 关联的审稿意见 ID；成功后自动 resolve */
+            reviewCommentId?: string;
         };
         StartRevisionQueueDto: {
             /** @description 待执行条目 */
             items: components["schemas"]["RevisionQueueInputItemDto"][];
+            /** @description 完成后是否自动 resolve 关联审稿意见（默认 true） */
+            autoResolve?: boolean;
         };
         RevisionQueueItemDto: {
             /** @description 队列条目 ID */
@@ -4451,6 +4503,10 @@ export interface components {
             after: string;
             /** @description 内容是否实际变化 */
             changed: boolean;
+            /** @description 关联审稿意见 ID；成功后自动 resolve */
+            reviewCommentId?: string;
+            /** @description 关联审稿意见是否已自动 resolve */
+            commentResolved: boolean;
             /** @description 开始时间（毫秒） */
             startedAt?: Record<string, never>;
             /** @description 完成时间（毫秒） */
@@ -4469,8 +4525,44 @@ export interface components {
             updatedAt: number;
             /** @description 结束时间（毫秒） */
             finishedAt?: Record<string, never>;
+            /** @description 完成后是否自动 resolve 关联审稿意见 */
+            autoResolve: boolean;
+            /** @description 本队自动 resolve 的审稿意见 ID */
+            resolvedCommentIds: string[];
             /** @description 逐条执行状态 */
             items: components["schemas"]["RevisionQueueItemDto"][];
+        };
+        RevisionQueueSummaryDto: {
+            /** @description 队列 ID */
+            id: string;
+            /** @description 文档 ID */
+            documentId: string;
+            /** @description 队列状态 */
+            status: string;
+            /** @description 创建时间（毫秒） */
+            createdAt: number;
+            /** @description 更新时间（毫秒） */
+            updatedAt: number;
+            /** @description 结束时间（毫秒） */
+            finishedAt?: Record<string, never>;
+            /** @description 条目总数 */
+            total: number;
+            /** @description 待执行数 */
+            pending: number;
+            /** @description 执行中数 */
+            running: number;
+            /** @description 成功数 */
+            done: number;
+            /** @description 失败数 */
+            failed: number;
+            /** @description 跳过数 */
+            skipped: number;
+            /** @description 正文实际变化数 */
+            changed: number;
+            /** @description 自动 resolve 的审稿意见数 */
+            resolvedComments: number;
+            /** @description 是否启用自动 resolve */
+            autoResolve: boolean;
         };
         ExperimentDto: {
             /** @description 实验 ID */
@@ -4772,6 +4864,23 @@ export interface operations {
         requestBody?: never;
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AgentHarnessController_events: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7492,6 +7601,27 @@ export interface operations {
             };
         };
     };
+    DocumentsController_listRevisionQueues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionQueueSummaryDto"][];
+                };
+            };
+        };
+    };
     DocumentsController_startRevisionQueue: {
         parameters: {
             query?: never;
@@ -7540,6 +7670,28 @@ export interface operations {
         };
     };
     DocumentsController_stopRevisionQueue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                queueId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionQueueDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_retryRevisionQueueItem: {
         parameters: {
             query?: never;
             header?: never;
@@ -8496,6 +8648,25 @@ export interface operations {
         };
     };
     PipelineController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PipelineController_events: {
         parameters: {
             query?: never;
             header?: never;

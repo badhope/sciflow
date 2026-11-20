@@ -48,6 +48,8 @@ export class RevisionQueueItemDto {
   @ApiProperty({ description: '修改前章节正文' }) before!: string;
   @ApiProperty({ description: '修改后章节正文' }) after!: string;
   @ApiProperty({ description: '内容是否实际变化' }) changed!: boolean;
+  @ApiPropertyOptional({ description: '关联审稿意见 ID；成功后自动 resolve' }) reviewCommentId?: string;
+  @ApiProperty({ description: '关联审稿意见是否已自动 resolve' }) commentResolved!: boolean;
   @ApiPropertyOptional({ description: '开始时间（毫秒）' }) startedAt?: number | null;
   @ApiPropertyOptional({ description: '完成时间（毫秒）' }) finishedAt?: number | null;
 }
@@ -60,6 +62,8 @@ export class RevisionQueueDto {
   @ApiProperty({ description: '创建时间（毫秒）' }) createdAt!: number;
   @ApiProperty({ description: '更新时间（毫秒）' }) updatedAt!: number;
   @ApiPropertyOptional({ description: '结束时间（毫秒）' }) finishedAt?: number | null;
+  @ApiProperty({ description: '完成后是否自动 resolve 关联审稿意见' }) autoResolve!: boolean;
+  @ApiProperty({ type: [String], description: '本队自动 resolve 的审稿意见 ID' }) resolvedCommentIds!: string[];
   @ApiProperty({ type: [RevisionQueueItemDto], description: '逐条执行状态' }) items!: RevisionQueueItemDto[];
 }
 
@@ -70,9 +74,33 @@ export class RevisionQueueInputItemDto {
   @ApiPropertyOptional({ description: '实际改写要求；为空时用 excerpt + suggestedAction' }) reviewPoints?: string;
   @ApiPropertyOptional({ description: '评审原文摘录' }) excerpt?: string;
   @ApiPropertyOptional({ description: '建议动作' }) suggestedAction?: string;
+  @ApiPropertyOptional({ description: '关联的审稿意见 ID；成功后自动 resolve' }) reviewCommentId?: string;
 }
 
 export class StartRevisionQueueDto {
   @ApiProperty({ type: [RevisionQueueInputItemDto], description: '待执行条目' })
   items!: RevisionQueueInputItemDto[];
+
+  @ApiPropertyOptional({ description: '完成后是否自动 resolve 关联审稿意见（默认 true）' })
+  autoResolve?: boolean;
+}
+
+
+/** 历史队列审计摘要（不含 before/after 全文） */
+export class RevisionQueueSummaryDto {
+  @ApiProperty({ description: '队列 ID' }) id!: string;
+  @ApiProperty({ description: '文档 ID' }) documentId!: string;
+  @ApiProperty({ description: '队列状态' }) status!: string;
+  @ApiProperty({ description: '创建时间（毫秒）' }) createdAt!: number;
+  @ApiProperty({ description: '更新时间（毫秒）' }) updatedAt!: number;
+  @ApiPropertyOptional({ description: '结束时间（毫秒）' }) finishedAt?: number | null;
+  @ApiProperty({ description: '条目总数' }) total!: number;
+  @ApiProperty({ description: '待执行数' }) pending!: number;
+  @ApiProperty({ description: '执行中数' }) running!: number;
+  @ApiProperty({ description: '成功数' }) done!: number;
+  @ApiProperty({ description: '失败数' }) failed!: number;
+  @ApiProperty({ description: '跳过数' }) skipped!: number;
+  @ApiProperty({ description: '正文实际变化数' }) changed!: number;
+  @ApiProperty({ description: '自动 resolve 的审稿意见数' }) resolvedComments!: number;
+  @ApiProperty({ description: '是否启用自动 resolve' }) autoResolve!: boolean;
 }

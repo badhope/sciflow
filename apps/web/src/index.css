@@ -349,11 +349,26 @@ body {
   overflow: hidden;
   border-radius: var(--r-lg);
   background:
+    radial-gradient(120% 150% at 100% 0%, color-mix(in srgb, var(--brand-500) 10%, transparent) 0%, transparent 54%),
     linear-gradient(120deg,
       color-mix(in srgb, var(--brand-500) 7%, var(--card)) 0%,
       var(--card) 46%,
       color-mix(in srgb, var(--blue) 4%, var(--card)) 100%);
   border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 40%, transparent) inset, 0 16px 36px -30px color-mix(in srgb, var(--brand-600) 34%, transparent);
+  isolation: isolate;
+}
+/* 极淡的期刊网点底纹：只在抬头区出现，给纸面一点“印刷感”，不影响文字对比度 */
+.page-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(color-mix(in srgb, var(--brand-600) 10%, transparent) 0.6px, transparent 0.6px);
+  background-size: 7px 7px;
+  mask-image: linear-gradient(100deg, transparent 24%, rgba(0, 0, 0, 0.5) 62%, transparent 100%);
+  opacity: 0.55;
 }
 .page-hero::before {
   content: "";
@@ -362,17 +377,20 @@ body {
   left: 0;
   top: 0;
   bottom: 0;
-  width: 3px;
+  width: 4px;
   background-image: var(--brand-grad);
   background-color: var(--brand-500);
+  z-index: 3;
 }
 .page-hero__main {
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--sp-4);
-  padding: var(--sp-5) var(--sp-6) var(--sp-4);
+  padding: var(--sp-6) var(--sp-7) var(--sp-5);
 }
 .page-hero__eyebrow {
   font-size: 10px;
@@ -383,18 +401,57 @@ body {
   margin-bottom: 6px;
 }
 .page-hero__title {
-  font-size: 22px;
-  line-height: 1.25;
+  font-family: var(--font-heading);
+  font-size: 27px;
+  line-height: 1.18;
   font-weight: 650;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   color: var(--foreground);
 }
 .page-hero__desc {
   margin-top: 6px;
   max-width: 62ch;
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.65;
   color: var(--muted-foreground);
+}
+/* 抬头水印：朱印图形退到 7% 不透明度，作为品牌纹理而不是第三个“图标” */
+.page-hero__seal {
+  position: absolute;
+  z-index: 1;
+  right: clamp(18px, 5vw, 64px);
+  top: 50%;
+  width: clamp(96px, 13vw, 156px);
+  height: clamp(96px, 13vw, 156px);
+  transform: translateY(-50%) rotate(-8deg);
+  color: var(--brand-600);
+  opacity: 0.07;
+  pointer-events: none;
+}
+/* 抬头的元信息胶囊：把“项目现在有什么”放在标题下，而不是再开一排指标卡 */
+.page-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.page-hero__meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 72%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.page-hero__meta-item.is-ready {
+  border-color: color-mix(in srgb, var(--brand-500) 28%, transparent);
+  background: color-mix(in srgb, var(--brand-500) 7%, var(--card));
+  color: var(--brand-700);
 }
 .page-hero__actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 
@@ -561,11 +618,36 @@ select:focus-visible {
 
 /* 品牌徽标：朱砂印底（平涂）+ 白文标志。印章就是图标本体，任何主题下不变色 */
 .brand-logo {
-  background: var(--brand-seal-light, #be3b2a);
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 120% at 26% 18%, rgba(255, 255, 255, 0.16), transparent 48%),
+    var(--brand-seal-light, #be3b2a);
   /* 徽标内图形恒为白色：与 icon-master 的白文主笔同源 */
   color: #ffffff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 1px 2px rgba(80, 20, 10, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 4px 12px -6px rgba(80, 20, 10, 0.42);
 }
+/* 印章内框：2px 的内收细线，放大时更像一方真实钤印，而不是一个红色圆角块 */
+.brand-logo::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  z-index: 0;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: calc(var(--r-sm) + 2px);
+  pointer-events: none;
+}
+/* 斜向纸纹：非常轻，只在近看时出现 */
+.brand-logo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 4px);
+  mix-blend-mode: soft-light;
+}
+.brand-logo > * { position: relative; z-index: 1; }
 
 /* 侧边栏品牌区（墨流 2.0）：左上品牌光晕 + 底部渐变分隔线 */
 .shell-brand-zone {
@@ -684,11 +766,25 @@ kbd {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 52px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--card) 78%, transparent);
-  backdrop-filter: blur(8px);
+  position: relative;
+  z-index: 20;
+  height: 56px;
+  padding: 0 16px 0 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  background: color-mix(in srgb, var(--card) 84%, transparent);
+  backdrop-filter: blur(14px) saturate(1.08);
+  box-shadow: 0 10px 30px -28px color-mix(in srgb, #0b1424 36%, transparent);
+}
+/* 顶栏底部的一道品牌微光：替代粗边框，滚动时也不会抢内容 */
+.app-shell__toolbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-500) 34%, transparent) 18%, color-mix(in srgb, var(--brand-500) 22%, transparent) 70%, transparent);
+  pointer-events: none;
 }
 .app-shell__content {
   flex: 1 1 auto;
@@ -988,6 +1084,96 @@ kbd {
 .shell-menu-btn:hover { background: var(--muted); color: var(--foreground); }
 @media (max-width: 900px) { .shell-menu-btn { display: inline-flex; } }
 
+.shell-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 13px;
+}
+.shell-crumb__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 6px;
+  background: var(--brand-seal-light, #be3b2a);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+.shell-crumb__project { font-size: 12px; color: var(--muted-foreground); }
+.shell-crumb__sep { color: color-mix(in srgb, var(--muted-foreground) 45%, transparent); }
+.shell-crumb__view { font-size: 13px; font-weight: 600; color: var(--foreground); }
+.shell-crumb__doc {
+  max-width: 240px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 66%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 52%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.shell-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 68%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 76%, transparent);
+  color: var(--muted-foreground);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.shell-status__dot { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 999px; background: var(--muted-foreground); }
+.shell-status.is-online { color: var(--brand-700); border-color: color-mix(in srgb, var(--brand-500) 24%, transparent); }
+.shell-status.is-online .shell-status__dot { background: var(--brand-500); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-500) 14%, transparent); }
+.shell-status.is-offline .shell-status__dot { background: var(--destructive); }
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.live-pill.is-live {
+  border-color: color-mix(in srgb, var(--brand-500) 24%, transparent);
+  background: color-mix(in srgb, var(--brand-500) 7%, transparent);
+  color: var(--brand-700);
+}
+.live-pill__dot { width: 5px; height: 5px; border-radius: 999px; background: var(--muted-foreground); }
+.live-pill.is-live .live-pill__dot { background: var(--brand-500); animation: live-pulse 1.8s var(--ease) infinite; }
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.72); }
+}
+@media (max-width: 900px) {
+  .shell-crumb__avatar { display: none; }
+  .shell-crumb__doc { max-width: 110px; }
+  .shell-status { padding: 0 6px; }
+}
+@media (max-width: 640px) {
+  .page-hero__seal { display: none; }
+  .page-hero__main { padding: var(--sp-5); }
+  .page-hero__title { font-size: 23px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-pill.is-live .live-pill__dot { animation: none; }
+}
 .shell-nav-group { padding: 8px 10px 2px; }
 .shell-nav-group__label {
   padding: 4px 8px;

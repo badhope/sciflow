@@ -59,17 +59,25 @@ export const writing = {
       request<{ content: string; changed: boolean }>(`/api/documents/${id}/sections/restore`, {
         method: 'POST', body: JSON.stringify({ version, title }),
       }),
-    /** 启动修改计划队列：后台逐条定向改写，前端轮询进度 */
-    startRevisionQueue: (id: string, items: import('../types').RevisionQueueInput[]) =>
+    /** 启动修改计划队列：后台逐条定向改写，前端 SSE/轮询进度 */
+    startRevisionQueue: (id: string, items: import('../types').RevisionQueueInput[], autoResolve = true) =>
       request<import('../types').RevisionQueue>(`/api/documents/${id}/revision-queues`, {
-        method: 'POST', body: JSON.stringify({ items }),
+        method: 'POST', body: JSON.stringify({ items, autoResolve }),
       }),
-    /** 查询修改队列（含逐条 before/after） */
+    /** 历史队列审计：按新到旧返回最近 20 队摘要 */
+    listRevisionQueues: (id: string) =>
+      request<{ queues: import('../types').RevisionQueueSummary[] }>(`/api/documents/${id}/revision-queues`),
+    /** 查询修改队列（可按 queueId 读取历史队列，含逐条 before/after） */
     getRevisionQueue: (id: string, queueId: string) =>
       request<import('../types').RevisionQueue>(`/api/documents/${id}/revision-queues/${queueId}`),
     /** 停止队列：当前条目跑完，未开始的条目标记 skipped */
     stopRevisionQueue: (id: string, queueId: string) =>
       request<import('../types').RevisionQueue>(`/api/documents/${id}/revision-queues/${queueId}/stop`, { method: 'POST' }),
+    /** 跳过/失败条目二次指定章节重试：新建一队，保留旧队审计 */
+    retryRevisionQueueItem: (id: string, queueId: string, itemId: string, sectionTitle: string) =>
+      request<import('../types').RevisionQueue>(`/api/documents/${id}/revision-queues/${queueId}/retry`, {
+        method: 'POST', body: JSON.stringify({ itemId, sectionTitle }),
+      }),
 
     /** 客观质量检查器（确定性规则引擎）：同一正文必然同分同指纹，不受模型漂移影响 */
     objectiveAudit: (id: string) => request<ObjectiveAuditResponse>(`/api/documents/${id}/objective-audit`),

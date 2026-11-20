@@ -1,7 +1,8 @@
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, Check, CheckCircle2, Clock3, ListChecks, ShieldCheck, X } from 'lucide-react';
 import { api } from '../../api/client';
+import { openSse } from '../../api/core';
 import { ToastContext } from '../../App';
 import { Badge, Button, errMsg } from '../../components/ui';
 import { HBar } from '../../components/charts';
@@ -63,6 +64,27 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
     decideApproval: approvalMutation,
     decidePlan: planMutation,
   } = useAgentInbox(projectId, { tasksInterval: 15_000, approvalsInterval: 15_000 });
+
+  // Agent 任务 SSE：有变化时统一失效查询；15s 轮询保留为断线降级。
+  const [live, setLive] = useState(false);
+  useEffect(() => {
+    const close = openSse<{ tasks: unknown[]; summary: unknown; approvals: unknown[]; plans: unknown[] }>(
+      `/api/agent/events?projectId=${encodeURIComponent(projectId)}`,
+      {
+        onOpen: () => setLive(true),
+        onData: () => {
+          void qc.invalidateQueries({ queryKey: qk.agentTasks(projectId) });
+          void qc.invalidateQueries({ queryKey: qk.agentApprovals(projectId) });
+          void qc.invalidateQueries({ queryKey: qk.agentPlans(projectId) });
+        },
+        onError: () => setLive(false),
+      },
+    );
+    return () => {
+      setLive(false);
+      close();
+    };
+  }, [projectId, qc]);
 
   const metrics = metricsQuery.data;
   const recentRuns = metrics?.recentRuns ?? [];
@@ -131,6 +153,10 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
         <Activity size={14} className="text-teal-600 dark:text-teal-400" aria-hidden="true" />
         <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Agent 运行</span>
         <span className="text-[11px] text-slate-400">近 7 天</span>
+        <span className={`live-pill ${live ? 'is-live' : 'is-polling'}`} title={live ? 'SSE 实时推送中' : 'SSE 未连接，已降级为 15 秒轮询'}>
+          <span className="live-pill__dot" aria-hidden="true" />
+          {live ? '实时' : '轮询'}
+        </span>
         {(pendingPlans.length > 0 || approvals.length > 0) && (
           <Badge tone="amber">{pendingPlans.length + approvals.length} 项待批</Badge>
         )}

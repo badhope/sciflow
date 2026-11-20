@@ -111,16 +111,16 @@ async function main() {
   });
 
   // 选中种子项目（深链 + localStorage 与 App 的选项目逻辑一致）
-  await page.goto(`${BASE}/#/workspace`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/#/workspace`, { waitUntil: 'domcontentloaded' });
   await page.evaluate((pid) => {
     localStorage.setItem('sciflow.currentProjectId', pid);
     localStorage.setItem('sciflow-theme', 'light');
   }, projectId);
-  await page.reload({ waitUntil: 'networkidle' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
 
   const shoot = async (suffix = '') => {
     for (const p of PAGES) {
-      await page.goto(`${BASE}/${p.hash}`, { waitUntil: 'networkidle' });
+      await page.goto(`${BASE}/${p.hash}`, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(700);
       const body = await page.locator('main').innerText().catch(() => '');
       if (!p.expect.test(body)) {
@@ -138,8 +138,8 @@ async function main() {
   await page.evaluate(() => localStorage.setItem('sciflow-theme', 'dark'));
   for (const name of ['dashboard', 'quality', 'settings']) {
     const p = PAGES.find((x) => x.name === name);
-    await page.goto(`${BASE}/${p.hash}`, { waitUntil: 'networkidle' });
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.goto(`${BASE}/${p.hash}`, { waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(700);
     const file = path.join(OUT, `${name}-dark.png`);
     await page.screenshot({ path: file, fullPage: false });

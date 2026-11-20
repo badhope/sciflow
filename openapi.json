@@ -163,6 +163,20 @@
         ]
       }
     },
+    "/agent/events": {
+      "get": {
+        "operationId": "AgentHarnessController_events",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Agent"
+        ]
+      }
+    },
     "/agent/metrics": {
       "get": {
         "operationId": "AgentHarnessController_getMetrics",
@@ -3192,6 +3206,37 @@
         "tags": [
           "Documents"
         ]
+      },
+      "get": {
+        "operationId": "DocumentsController_listRevisionQueues",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RevisionQueueSummaryDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
       }
     },
     "/documents/{id}/revision-queues/{queueId}": {
@@ -3235,6 +3280,44 @@
     "/documents/{id}/revision-queues/{queueId}/stop": {
       "post": {
         "operationId": "DocumentsController_stopRevisionQueue",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "queueId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionQueueDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/documents/{id}/revision-queues/{queueId}/retry": {
+      "post": {
+        "operationId": "DocumentsController_retryRevisionQueueItem",
         "parameters": [
           {
             "name": "id",
@@ -4387,6 +4470,29 @@
       },
       "delete": {
         "operationId": "PipelineController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Pipeline"
+        ]
+      }
+    },
+    "/pipeline/{id}/events": {
+      "get": {
+        "operationId": "PipelineController_events",
         "parameters": [
           {
             "name": "id",
@@ -6269,7 +6375,7 @@
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "1.19.8",
+    "version": "1.19.9",
     "contact": {}
   },
   "tags": [],
@@ -8470,6 +8576,10 @@
           "suggestedAction": {
             "type": "string",
             "description": "建议动作"
+          },
+          "reviewCommentId": {
+            "type": "string",
+            "description": "关联的审稿意见 ID；成功后自动 resolve"
           }
         }
       },
@@ -8482,6 +8592,10 @@
             "items": {
               "$ref": "#/components/schemas/RevisionQueueInputItemDto"
             }
+          },
+          "autoResolve": {
+            "type": "boolean",
+            "description": "完成后是否自动 resolve 关联审稿意见（默认 true）"
           }
         },
         "required": [
@@ -8528,6 +8642,14 @@
             "type": "boolean",
             "description": "内容是否实际变化"
           },
+          "reviewCommentId": {
+            "type": "string",
+            "description": "关联审稿意见 ID；成功后自动 resolve"
+          },
+          "commentResolved": {
+            "type": "boolean",
+            "description": "关联审稿意见是否已自动 resolve"
+          },
           "startedAt": {
             "type": "object",
             "description": "开始时间（毫秒）"
@@ -8546,7 +8668,8 @@
           "error",
           "before",
           "after",
-          "changed"
+          "changed",
+          "commentResolved"
         ]
       },
       "RevisionQueueDto": {
@@ -8576,6 +8699,17 @@
             "type": "object",
             "description": "结束时间（毫秒）"
           },
+          "autoResolve": {
+            "type": "boolean",
+            "description": "完成后是否自动 resolve 关联审稿意见"
+          },
+          "resolvedCommentIds": {
+            "description": "本队自动 resolve 的审稿意见 ID",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "items": {
             "description": "逐条执行状态",
             "type": "array",
@@ -8590,7 +8724,90 @@
           "status",
           "createdAt",
           "updatedAt",
+          "autoResolve",
+          "resolvedCommentIds",
           "items"
+        ]
+      },
+      "RevisionQueueSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "队列 ID"
+          },
+          "documentId": {
+            "type": "string",
+            "description": "文档 ID"
+          },
+          "status": {
+            "type": "string",
+            "description": "队列状态"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "更新时间（毫秒）"
+          },
+          "finishedAt": {
+            "type": "object",
+            "description": "结束时间（毫秒）"
+          },
+          "total": {
+            "type": "number",
+            "description": "条目总数"
+          },
+          "pending": {
+            "type": "number",
+            "description": "待执行数"
+          },
+          "running": {
+            "type": "number",
+            "description": "执行中数"
+          },
+          "done": {
+            "type": "number",
+            "description": "成功数"
+          },
+          "failed": {
+            "type": "number",
+            "description": "失败数"
+          },
+          "skipped": {
+            "type": "number",
+            "description": "跳过数"
+          },
+          "changed": {
+            "type": "number",
+            "description": "正文实际变化数"
+          },
+          "resolvedComments": {
+            "type": "number",
+            "description": "自动 resolve 的审稿意见数"
+          },
+          "autoResolve": {
+            "type": "boolean",
+            "description": "是否启用自动 resolve"
+          }
+        },
+        "required": [
+          "id",
+          "documentId",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "total",
+          "pending",
+          "running",
+          "done",
+          "failed",
+          "skipped",
+          "changed",
+          "resolvedComments",
+          "autoResolve"
         ]
       },
       "ExperimentDto": {

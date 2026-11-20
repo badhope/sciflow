@@ -16,7 +16,7 @@ import { splitTailBlock } from '../pipeline/tail-blocks';
 import { parseAuthors as parseAuthorArr } from '../common/authors';
 import { readProjectQualityStandard } from '../common/project-quality-standard';
 import { extractSections, replaceSectionBody, restoreSection as restoreSectionText, sectionDiff, type SectionDiffEntry } from './section-restore';
-import { createRevisionQueue, inferSectionTitle, type RevisionQueue, type RevisionQueueInput, type RevisionQueueItem } from './revision-queue';
+import { createRevisionQueue, inferSectionTitle, MAX_REVISION_QUEUES, normalizeRevisionQueueStore, serializeRevisionQueueStore, summarizeRevisionQueue, type RevisionQueue, type RevisionQueueInput, type RevisionQueueItem, type RevisionQueueStore } from './revision-queue';
 
 import { parseJson } from '../common/json-guard';
 import { toCslAuthors, buildCslEntry, cslSurname } from '../common/citation-csl';
@@ -137,28 +137,35 @@ export class DocumentsService {
     return { content: next, changed: true };
   }
 
-  /** 读取文档上最近的修改队列；没有则返回 null */
-  private readRevisionQueue(doc: { revisionQueue?: string | null }): RevisionQueue | null {
-    const q = parseJson<RevisionQueue | null>(doc.revisionQueue || '{}', null);
-    return q && typeof q === 'object' && q.id ? q : null;
+  /** 读取文档的修改队列存储（兼容旧单队 JSON），空值返回空队列。 */
+  private readRevisionQueueStore(doc: { revisionQueue?: string | null }): RevisionQueueStore {
+    return normalizeRevisionQueueStore(parseJson<unknown>(doc.revisionQueue || '{}', {}));
   }
 
   /** 只更新 document.revision_queue，不触碰正文/版本号，避免队列轮询把文档版本炒热 */
-  private saveRevisionQueue(documentId: string, queue: RevisionQueue) {
-    db.update(documents).set({ revisionQueue: JSON.stringify(queue) }).where(eq(documents.id, documentId)).run();
+  private saveRevisionQueueStore(documentId: string, store: RevisionQueueStore) {
+    db.update(documents).set({ revisionQueue: serializeRevisionQueueStore(store) }).where(eq(documents.id, documentId)).run();
+  }
+
+  /** 按 queueId 在历史队列里查找；不存在返回 null（不抛异常，方便内部循环复用）。 */
+  private findRevisionQueue(documentId: string, queueId: string): RevisionQueue | null {
+    const store = this.readRevisionQueueStore(this.get(documentId));
+    return store.queues.find((q) => q.id === queueId) ?? null;
   }
 
   /**
-   * 创建并启动一份修改计划队列（后台串行执行，前端轮询）。
+   * 创建并启动一份修改计划队列（后台串行执行，前端通过 SSE/轮询读取）。
    * 队列执行逐条调用现有 sections/revise：每条改前自动快照，只改目标章节。
+   * autoResolve=true 时，done 且正文有变化的条目会把关联 review_comment 置为 resolved。
    */
-  startRevisionQueue(id: string, inputs: RevisionQueueInput[]) {
+  startRevisionQueue(id: string, inputs: RevisionQueueInput[], options: { autoResolve?: boolean } = {}) {
     const doc = this.get(id);
     if (!Array.isArray(inputs) || inputs.length === 0) throw new BadRequestException('修改计划不能为空');
     const titles = extractSections(doc.content ?? '').map((s) => s.title).filter(Boolean);
     if (!titles.length) throw new BadRequestException('文档还没有可修改的章节标题（先用 ## 标题组织正文）');
-    const existing = this.readRevisionQueue(doc);
-    if (existing && (existing.status === 'queued' || existing.status === 'running')) {
+    const store = this.readRevisionQueueStore(doc);
+    const existing = store.queues.find((q) => q.status === 'queued' || q.status === 'running');
+    if (existing) {
       throw new BadRequestException('该文档已有正在执行的修改队列，请等待完成或先停止');
     }
     const now = Date.now();
@@ -187,6 +194,8 @@ export class DocumentsService {
         before: '',
         after: '',
         changed: false,
+        reviewCommentId: (input.reviewCommentId || '').trim(),
+        commentResolved: false,
         startedAt: null,
         finishedAt: null,
       };
@@ -194,38 +203,55 @@ export class DocumentsService {
     if (!items.some((i) => i.status === 'pending')) {
       throw new BadRequestException('没有可执行的条目：计划条目未匹配到现有章节');
     }
-    const queue = createRevisionQueue(id, randomUUID(), items, now);
-    this.saveRevisionQueue(id, queue);
+    const queue = createRevisionQueue(id, randomUUID(), items, now, options.autoResolve !== false);
+    store.queues = [queue, ...store.queues].slice(0, MAX_REVISION_QUEUES);
+    this.saveRevisionQueueStore(id, store);
     void this.runRevisionQueue(id, queue.id).catch((e) => {
-      const current = this.readRevisionQueue(this.get(id));
-      if (!current || current.id !== queue.id) return;
+      const current = this.findRevisionQueue(id, queue.id);
+      if (!current) return;
       current.status = 'failed';
       current.finishedAt = Date.now();
       current.items.forEach((i) => {
         if (i.status === 'pending' || i.status === 'running') i.status = 'failed';
       });
-      this.saveRevisionQueue(id, { ...current, updatedAt: Date.now() });
+      const latestStore = this.readRevisionQueueStore(this.get(id));
+      const idx = latestStore.queues.findIndex((q) => q.id === queue.id);
+      if (idx >= 0) latestStore.queues[idx] = { ...current, updatedAt: Date.now() };
+      this.saveRevisionQueueStore(id, latestStore);
       console.error('[revision-queue] 执行失败', e);
     });
     return queue;
   }
 
-  /** 后台串行执行队列：每完成一条就落盘，前端可轮询到逐条进度。 */
+  /** 把一条审稿意见置为 resolved；只允许操作同一文档，返回是否实际更新。 */
+  private resolveReviewComment(documentId: string, reviewCommentId: string): boolean {
+    if (!reviewCommentId.trim()) return false;
+    const row = db.select().from(reviewComments).where(eq(reviewComments.id, reviewCommentId)).get();
+    if (!row || row.documentId !== documentId) return false;
+    if (row.status === 'resolved') return true;
+    db.update(reviewComments)
+      .set({ status: 'resolved', updatedAt: Date.now() })
+      .where(eq(reviewComments.id, reviewCommentId))
+      .run();
+    return true;
+  }
+
+  /** 后台串行执行队列：每完成一条就落盘，前端可实时读取逐条进度。 */
   private async runRevisionQueue(documentId: string, queueId: string) {
-    const initial = this.readRevisionQueue(this.get(documentId));
-    if (!initial || initial.id !== queueId || initial.status === 'stopped') return;
+    const initial = this.findRevisionQueue(documentId, queueId);
+    if (!initial || initial.status === 'stopped') return;
     initial.status = 'running';
     initial.updatedAt = Date.now();
-    this.saveRevisionQueue(documentId, initial);
+    this.saveQueueById(documentId, initial);
     for (let index = 0; index < initial.items.length; index += 1) {
-      const current = this.readRevisionQueue(this.get(documentId));
-      if (!current || current.id !== queueId || current.status === 'stopped') return;
+      const current = this.findRevisionQueue(documentId, queueId);
+      if (!current || current.status === 'stopped') return;
       const item = current.items[index];
       if (!item || item.status !== 'pending') continue;
       item.status = 'running';
       item.startedAt = Date.now();
       current.updatedAt = Date.now();
-      this.saveRevisionQueue(documentId, current);
+      this.saveQueueById(documentId, current);
       try {
         const before = extractSections(this.get(documentId).content ?? '').find((s) => s.title === item.sectionTitle)?.body ?? '';
         item.before = before;
@@ -234,32 +260,60 @@ export class DocumentsService {
         item.status = 'done';
         item.after = after;
         item.changed = result.changed;
+        if (result.changed && current.autoResolve && item.reviewCommentId && !item.commentResolved) {
+          if (this.resolveReviewComment(documentId, item.reviewCommentId)) {
+            item.commentResolved = true;
+            if (!current.resolvedCommentIds.includes(item.reviewCommentId)) {
+              current.resolvedCommentIds.push(item.reviewCommentId);
+            }
+          }
+        }
       } catch (e: any) {
         item.status = 'failed';
         item.error = e?.message || String(e);
       }
       item.finishedAt = Date.now();
-      const latest = this.readRevisionQueue(this.get(documentId));
-      if (!latest || latest.id !== queueId) return;
+      const latest = this.findRevisionQueue(documentId, queueId);
+      if (!latest) return;
       latest.items[index] = item;
+      // item 是在 current 上更新的，resolvedCommentIds 必须同步到刚读出的 latest，
+      // 否则单条旁路只留下 commentResolved=true、审计列表却看不到已关闭意见。
+      if (item.commentResolved && item.reviewCommentId && !latest.resolvedCommentIds.includes(item.reviewCommentId)) {
+        latest.resolvedCommentIds.push(item.reviewCommentId);
+      }
       latest.updatedAt = Date.now();
-      this.saveRevisionQueue(documentId, latest);
+      this.saveQueueById(documentId, latest);
     }
-    const latest = this.readRevisionQueue(this.get(documentId));
-    if (!latest || latest.id !== queueId || latest.status === 'stopped') return;
+    const latest = this.findRevisionQueue(documentId, queueId);
+    if (!latest || latest.status === 'stopped') return;
     const runnable = latest.items.filter((i) => i.status !== 'skipped');
     const failed = runnable.filter((i) => i.status === 'failed');
     latest.status = failed.length === 0 ? 'completed' : failed.length === runnable.length ? 'failed' : 'partial';
     latest.finishedAt = Date.now();
     latest.updatedAt = Date.now();
-    this.saveRevisionQueue(documentId, latest);
+    this.saveQueueById(documentId, latest);
   }
 
-  /** 读取队列（queueId 不匹配视为不存在，避免读到上一队） */
+  /** 保存单队（保留其他历史队列），是后台循环唯一写入口。 */
+  private saveQueueById(documentId: string, queue: RevisionQueue) {
+    const store = this.readRevisionQueueStore(this.get(documentId));
+    const idx = store.queues.findIndex((q) => q.id === queue.id);
+    if (idx >= 0) store.queues[idx] = queue;
+    else store.queues = [queue, ...store.queues].slice(0, MAX_REVISION_QUEUES);
+    this.saveRevisionQueueStore(documentId, store);
+  }
+
+  /** 读取队列（按 queueId 在历史队列中查找，避免只能读最近一队）。 */
   getRevisionQueue(id: string, queueId: string) {
-    const queue = this.readRevisionQueue(this.get(id));
-    if (!queue || queue.id !== queueId) throw new NotFoundException('修改队列不存在');
+    const queue = this.findRevisionQueue(id, queueId);
+    if (!queue) throw new NotFoundException('修改队列不存在');
     return queue;
+  }
+
+  /** 历史队列审计：按新到旧返回摘要，不含 before/after 大字段。 */
+  listRevisionQueues(id: string) {
+    const store = this.readRevisionQueueStore(this.get(id));
+    return { queues: store.queues.map(summarizeRevisionQueue) };
   }
 
   /** 停止队列：当前正在跑的条目会跑完，未开始的条目标记 skipped。 */
@@ -277,8 +331,31 @@ export class DocumentsService {
         item.finishedAt = now;
       }
     }
-    this.saveRevisionQueue(id, queue);
+    this.saveQueueById(id, queue);
     return queue;
+  }
+
+  /**
+   * 未匹配/失败条目二次指定章节重试：不改写旧队历史，新建一队只跑这一条，
+   * 让「重试」也留下可审计的记录。
+   */
+  retryRevisionQueueItem(id: string, queueId: string, itemId: string, sectionTitle: string) {
+    const source = this.getRevisionQueue(id, queueId);
+    const item = source.items.find((i) => i.id === itemId);
+    if (!item) throw new NotFoundException('队列条目不存在');
+    if (item.status !== 'skipped' && item.status !== 'failed') {
+      throw new BadRequestException('只有跳过或失败的条目可以重试');
+    }
+    const title = (sectionTitle || '').trim();
+    if (!title) throw new BadRequestException('请指定要重试的目标章节');
+    const titles = extractSections(this.get(id).content ?? '').map((s) => s.title).filter(Boolean);
+    if (!titles.includes(title)) throw new BadRequestException(`正文中没有找到章节「${title}」`);
+    return this.startRevisionQueue(id, [{
+      planItemId: item.planItemId,
+      sectionTitle: title,
+      reviewPoints: item.reviewPoints,
+      reviewCommentId: item.reviewCommentId,
+    }], { autoResolve: source.autoResolve });
   }
 
   /** 段落级 diff：当前正文 vs 指定历史版本（缺 version 时对比最新一版） */

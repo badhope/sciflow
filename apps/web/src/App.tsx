@@ -610,16 +610,17 @@ function AppInner() {
             toolbar={
               <>
                 {view === 'settings' ? (
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">设置</span>
+                  <span className="shell-crumb__view text-sm">设置</span>
                 ) : currentProject ? (
-                  <div className="flex items-center gap-1.5 text-sm min-w-0">
-                    <span className="text-slate-400 truncate max-w-[100px] sm:max-w-[200px]">{currentProject.name}</span>
-                    <ChevronRight size={14} className="text-slate-300 dark:text-slate-600 shrink-0" aria-hidden="true" />
-                    <span className="font-medium whitespace-nowrap">{VIEW_LABELS[view]}</span>
+                  <div className="shell-crumbs min-w-0">
+                    <span className="shell-crumb__avatar" aria-hidden="true">{(currentProject.name.trim().slice(0, 1) || 'S').toUpperCase()}</span>
+                    <span className="shell-crumb__project truncate max-w-[100px] sm:max-w-[200px]">{currentProject.name}</span>
+                    <ChevronRight size={14} className="shell-crumb__sep shrink-0" aria-hidden="true" />
+                    <span className="shell-crumb__view whitespace-nowrap">{VIEW_LABELS[view]}</span>
                     {view === 'writing' && writingDocTitle && (
                       <>
-                        <ChevronRight size={14} className="text-slate-300 dark:text-slate-600 shrink-0" aria-hidden="true" />
-                        <span className="text-slate-500 dark:text-slate-400 truncate max-w-[120px] sm:max-w-[240px]">{writingDocTitle}</span>
+                        <ChevronRight size={14} className="shell-crumb__sep shrink-0" aria-hidden="true" />
+                        <span className="shell-crumb__doc truncate max-w-[120px] sm:max-w-[240px]">{writingDocTitle}</span>
                       </>
                     )}
                   </div>
@@ -627,6 +628,10 @@ function AppInner() {
                   <span className="text-sm text-slate-400">未选择项目</span>
                 )}
                 <div className="ml-auto flex items-center gap-2">
+                  <span className={`shell-status ${aiReady ? 'is-online' : aiReady === false ? 'is-offline' : ''}`} title={aiReady ? 'AI 服务已连接' : aiReady === false ? 'AI 服务未配置或不可用' : '正在检测 AI 服务'}>
+                    <span className="shell-status__dot" aria-hidden="true" />
+                    <span className="hidden sm:inline">{aiReady ? 'AI 就绪' : aiReady === false ? 'AI 离线' : 'AI 检测中'}</span>
+                  </span>
                   {view !== 'settings' && currentProject && (
                     <Button variant="outline" className="text-xs px-2.5 py-1.5" onClick={() => setShowNewProject(true)}>
                       <Plus size={13} aria-hidden="true" /> 新建项目

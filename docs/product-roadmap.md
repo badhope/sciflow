@@ -1,6 +1,6 @@
 # Product roadmap
 
-Last reviewed: 2026-11-20 · Current release: **1.19.8**
+Last reviewed: 2026-11-20 · Current release: **1.19.9**
 
 This document states what exists today, what is deliberately out of scope, and
 what is planned next. It is the single source of truth for product scope; the
@@ -63,10 +63,12 @@ decision not to build it.
 | Pipeline | End-to-end orchestration | Shipped | LangGraph with a human outline checkpoint |
 | Pipeline | Checkpoint resume | Shipped | Continues after a service restart |
 | Pipeline | Step timing and token accounting | Shipped | Per-step duration chart and per-call cost log |
+| Pipeline | Live progress stream | Shipped | Task-level SSE (`GET /pipeline/:id/events`) pushes the full task on change; the UI falls back to 3s polling if the stream drops |
 | Submission | Journal matching | Shipped | Matches against the local journal library with decision-time hints |
 | Submission | Cover letter generation | Shipped | Structured generation from the manuscript |
 | Submission | Submission tracking | Shipped | Append-only status events with a multi-state machine |
-| Submission | Review reply | Shipped | Reply letter plus a structured revision plan (category/severity/action), linked into the pipeline's reflexion log via `taskId`; a plan can now be queued and executed section by section, with per-item before/after, progress polling and stop control (`POST /documents/:id/revision-queues`) |
+| Submission | Review reply | Shipped | Reply letter plus a structured revision plan (category/severity/action), linked into the pipeline's reflexion log via `taskId`; a plan can now be queued and executed section by section, with per-item before/after, progress polling, stop control and targeted retry |
+| Submission | Revision queue audit | Shipped | Up to 20 retained queues per document, summary-only history listing, deterministic review-comment matching and auto-resolve with a recorded `resolvedCommentIds` audit trail |
 | Integration | MCP server and client | Shipped | Expose tools and resources; attach external MCP servers |
 | Integration | Headless CLI | Shipped | `sciflow run` produces a manuscript without the UI |
 | Integration | Desktop application | Shipped | Packaging works locally with a C++ toolchain, and the `desktop-installer` CI workflow builds the Windows NSIS installer on a runner for anyone without one (v1.12.0 artifact verified green) |

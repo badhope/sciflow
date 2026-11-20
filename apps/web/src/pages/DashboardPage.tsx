@@ -15,6 +15,7 @@ import { ProjectCockpit, type QualityGateState } from './dashboard/ProjectCockpi
 import { AgentOpsPanel } from './dashboard/AgentOpsPanel';
 import { ResearchBriefCard } from './dashboard/ResearchBriefCard';
 import { ProjectStatsBar } from './dashboard/ProjectStatsBar';
+import { BrandMark } from '../components/BrandMark';
 
 export function DashboardPage({ project, onNavigate, openDoc }: {
   project: Project;
@@ -131,6 +132,9 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
         <details> 内嵌区（低频配置不该占首屏最贵的位置）。
       */}
       <section className="page-hero mb-6">
+        <div className="page-hero__seal" aria-hidden="true">
+          <BrandMark className="h-full w-full" variant="mono" />
+        </div>
         <div className="page-hero__main">
           <div className="min-w-0">
             <div className="page-hero__eyebrow">研究项目</div>
@@ -138,6 +142,18 @@ export function DashboardPage({ project, onNavigate, openDoc }: {
             <p className="page-hero__desc">
               {project.description || '让科研从想法到成文 — 文献、写作、评审与投稿在同一处闭环'}
             </p>
+            <div className="page-hero__meta">
+              <span className="page-hero__meta-item">
+                <FileText size={12} aria-hidden="true" /> {docs.length} 篇草稿
+              </span>
+              <span className="page-hero__meta-item">
+                <FlaskConical size={12} aria-hidden="true" /> {refs.length} 篇文献
+              </span>
+              <span className={`page-hero__meta-item ${qualityGate.score !== null ? 'is-ready' : ''}`}>
+                <Gauge size={12} aria-hidden="true" />
+                {qualityGate.score === null ? '质量门待评分' : `质量门 ${qualityGate.score} 分`}
+              </span>
+            </div>
           </div>
           <div className="page-hero__actions">
             <Button onClick={() => onNavigate('design', 'pipeline')} title="用主题一键生成初稿">

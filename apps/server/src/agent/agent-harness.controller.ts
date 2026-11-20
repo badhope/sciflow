@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, Req, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Req, Res, BadRequestException } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { TaskListService, type TaskInput } from './task-list.service';
 import { ApprovalService } from './approval.service';
 import { PlanAuthorizationService } from './plan-authorization.service';
@@ -44,6 +45,55 @@ export class AgentHarnessController {
     }
     if (this.access.enforced) throw new BadRequestException('企业模式下必须指定 projectId');
     return undefined;
+  }
+
+  /**
+   * Agent 任务事件流：任务清单 / 摘要 / 待审批 / 计划变化时推送一次完整快照。
+   * 前端用同一份 SSE 触发 React Query 失效，不再各自 15s 轮询。
+   */
+  @Get('events')
+  events(@Query('projectId') projectId: string | undefined, @Req() req: Request & { user?: AuthPayload }, @Res() res: Response) {
+    const pid = this.scopedProject(projectId, req.user);
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    let closed = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let last = '';
+    let ticks = 0;
+    const snapshot = () => ({
+      tasks: this.tasks.list(pid),
+      summary: this.tasks.summary(pid),
+      approvals: this.approvals.pending(pid),
+      plans: this.plans.list(pid),
+    });
+    const send = () => {
+      if (closed) return;
+      try {
+        const payload = JSON.stringify(snapshot());
+        if (payload !== last) {
+          last = payload;
+          res.write(`data: ${payload}\n\n`);
+        } else {
+          ticks += 1;
+          if (ticks % 15 === 0) res.write(': ping\n\n');
+        }
+      } catch (e: any) {
+        if (!closed) res.write(`data: ${JSON.stringify({ error: e?.message || 'Agent 数据读取失败' })}\n\n`);
+        closed = true;
+        if (timer) clearInterval(timer);
+        res.end();
+      }
+    };
+    req.on('close', () => {
+      closed = true;
+      if (timer) clearInterval(timer);
+    });
+    send();
+    if (!closed) timer = setInterval(send, 2000);
   }
 
   /** Agent 观测指标：工具调用成功率/耗时/P95/按工具分布 + run 完成情况。 */

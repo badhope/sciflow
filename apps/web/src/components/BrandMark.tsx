@@ -56,19 +56,19 @@ export function BrandMark({
 export function BrandLockup({ subtitle = '让科研从想法到成文' }: { subtitle?: string }) {
   return (
     <div className="flex items-center gap-3">
-      <div className="brand-logo flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px]">
-        <BrandMark className="h-[25px] w-[25px]" variant="inverse" />
+      <div className="brand-logo flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px]">
+        <BrandMark className="h-[27px] w-[27px]" variant="inverse" />
       </div>
       <div className="min-w-0 leading-none">
         <div className="flex items-baseline gap-[1px]">
-          <span className="brand-wordmark text-[17px] font-semibold text-slate-900 dark:text-slate-50">Sci</span>
-          <span className="brand-wordmark text-[17px] font-bold text-[color:var(--brand-seal-light,#BE3B2A)] dark:text-[color:var(--brand-seal-on-dark,#D4674F)]">
+          <span className="brand-wordmark text-[18px] font-semibold tracking-[-0.015em] text-slate-900 dark:text-slate-50">Sci</span>
+          <span className="brand-wordmark text-[18px] font-bold tracking-[-0.015em] text-[color:var(--brand-seal-light,#BE3B2A)] dark:text-[color:var(--brand-seal-on-dark,#D4674F)]">
             Flow
           </span>
         </div>
-        <div className="mt-[5px] flex items-center gap-1.5">
+        <div className="mt-[6px] flex items-center gap-1.5">
           <span className="h-[9px] w-px bg-slate-300 dark:bg-slate-600" aria-hidden="true" />
-          <span className="brand-tagline text-[10px] font-medium tracking-[0.14em] text-slate-500 dark:text-slate-400">{subtitle}</span>
+          <span className="brand-tagline text-[10px] font-medium tracking-[0.13em] text-slate-500 dark:text-slate-400">{subtitle}</span>
         </div>
       </div>
     </div>

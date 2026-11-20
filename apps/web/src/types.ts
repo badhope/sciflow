@@ -925,7 +925,7 @@ export interface ExtensionKindsResponse {
 export interface ExtensionImportResult { added: number; updated: number; assets: ExtensionAsset[]; errors: string[] }
 
 
-/** 修改计划执行队列（单文档仅保留当前/最近一队） */
+/** 修改计划执行队列（单文档保留最近 20 队历史） */
 export interface RevisionQueueItem {
   id: string;
   planItemId: string;
@@ -936,6 +936,8 @@ export interface RevisionQueueItem {
   before: string;
   after: string;
   changed: boolean;
+  reviewCommentId: string;
+  commentResolved: boolean;
   startedAt: number | null;
   finishedAt: number | null;
 }
@@ -947,7 +949,27 @@ export interface RevisionQueue {
   createdAt: number;
   updatedAt: number;
   finishedAt: number | null;
+  autoResolve: boolean;
+  resolvedCommentIds: string[];
   items: RevisionQueueItem[];
+}
+
+export interface RevisionQueueSummary {
+  id: string;
+  documentId: string;
+  status: RevisionQueue['status'];
+  createdAt: number;
+  updatedAt: number;
+  finishedAt: number | null;
+  total: number;
+  pending: number;
+  running: number;
+  done: number;
+  failed: number;
+  skipped: number;
+  changed: number;
+  resolvedComments: number;
+  autoResolve: boolean;
 }
 
 export interface RevisionQueueInput {
@@ -956,4 +978,5 @@ export interface RevisionQueueInput {
   reviewPoints?: string;
   excerpt?: string;
   suggestedAction?: string;
+  reviewCommentId?: string;
 }

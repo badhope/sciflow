@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Brain, Clock, Eye, Loader2, Plus, Trash2, Workflow, Zap } from 'lucide-react';
 import { api } from '../api/client';
+import { openSse } from '../api/core';
 import { useTabActive } from '../lib/tab-visibility';
 import { qk } from '../lib/query-keys';
 import { useContext } from 'react';
@@ -323,6 +324,21 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
     refetchInterval: activeBusy && tabActive ? 3000 : false,
   });
   const active = activePollQuery.data ? normalize(activePollQuery.data) : activeBase;
+
+  // 运行中走 SSE 推送（1s，服务端只读 SQLite；轮询保留为降级兜底）
+  const [liveFor, setLiveFor] = useState<string | null>(null);
+  const pipeLive = liveFor === activeIdEff;
+  useEffect(() => {
+    if (!activeIdEff || !activeBusy || !tabActive) return;
+    const close = openSse<{ task: PipelineTask }>(`/api/pipeline/${activeIdEff}/events`, {
+      onOpen: () => setLiveFor(activeIdEff),
+      onData: (payload) => {
+        if (payload?.task) qc.setQueryData(['pipe-task', activeIdEff], payload.task);
+      },
+      onError: () => setLiveFor(null),
+    });
+    return close;
+  }, [activeIdEff, activeBusy, tabActive, qc]);
   const refresh = async () => {
     await qc.invalidateQueries({ queryKey: qk.pipeline(project.id) });
   };
@@ -682,6 +698,12 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {activeBusy && (
+                      <span className={`live-pill ${pipeLive ? 'is-live' : 'is-polling'}`} title={pipeLive ? 'SSE 实时推送中' : 'SSE 未连接，已降级为 3 秒轮询'}>
+                        <span className="live-pill__dot" aria-hidden="true" />
+                        {pipeLive ? '实时' : '轮询'}
+                      </span>
+                    )}
                     <Badge tone={statusText[active.status]?.tone || 'blue'}>{statusText[active.status]?.text || active.status}</Badge>
                     {(active.status === 'running' || active.status === 'awaiting_confirmation') && (
                       <Button variant="outline" className="text-xs" onClick={() => setStoppingTask(active)} title="中止当前流水线（上游挂起时不用重启服务）">

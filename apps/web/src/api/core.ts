@@ -291,7 +291,12 @@ export function streamChat(opts: {
   onError?: (msg: string) => void;
 }): () => void {
   const ctrl = new AbortController();
-  const signal = opts.signal ? AbortSignal.any([ctrl.signal, opts.signal]) : ctrl.signal;
+  // 不用 AbortSignal.any：部分桌面壳/旧 Chromium 没有该静态方法。
+  // 外部 signal 手动桥接到内部 controller，语义等价且兼容性更稳。
+  if (opts.signal) {
+    if (opts.signal.aborted) ctrl.abort();
+    else opts.signal.addEventListener('abort', () => ctrl.abort(), { once: true });
+  }
   let full = '';
   const finish = () => opts.onDone?.(full);
   fetch(u('/api/chat/stream'), {
@@ -309,7 +314,7 @@ export function streamChat(opts: {
       enableThinking: opts.enableThinking,
       webSearch: opts.webSearch,
     }),
-    signal,
+    signal: ctrl.signal,
   })
     .then(async (res) => {
       if (!res.ok || !res.body) {
@@ -405,6 +410,68 @@ export function streamChat(opts: {
         return;
       }
       opts.onError?.(friendlyError(errorMessage(e)));
+    });
+  return () => ctrl.abort();
+}
+
+/**
+ * 通用 GET SSE 订阅（流水线 / Agent 任务进度）。
+ * 只处理 `data: {...}` 事件；返回 abort 函数，组件卸载必须调用。
+ */
+export function openSse<T>(
+  path: string,
+  opts: { onData: (data: T) => void; onOpen?: () => void; onError?: (msg: string) => void; signal?: AbortSignal },
+): () => void {
+  const ctrl = new AbortController();
+  // 不用 AbortSignal.any：部分桌面壳/旧 Chromium 没有该静态方法。
+  // 外部 signal 手动桥接到内部 controller，语义等价且兼容性更稳。
+  if (opts.signal) {
+    if (opts.signal.aborted) ctrl.abort();
+    else opts.signal.addEventListener('abort', () => ctrl.abort(), { once: true });
+  }
+  fetch(u(path), {
+    headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {},
+    signal: ctrl.signal,
+  })
+    .then(async (res) => {
+      if (!res.ok || !res.body) {
+        let raw: unknown;
+        try {
+          const data = await res.json();
+          raw = data?.message ?? data?.error;
+        } catch {
+          /* 非 JSON 错误体 */
+        }
+        throw new ApiError(friendlyError(raw, res.status), res.status, isTranslated(raw));
+      }
+      opts.onOpen?.();
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      const parser = createParser({
+        onEvent: (ev) => {
+          const payload = (ev.data ?? '').trim();
+          if (!payload || payload === '[DONE]') return;
+          try {
+            const json = JSON.parse(payload) as Record<string, unknown>;
+            if (typeof json.error === 'string' && json.error) {
+              opts.onError?.(friendlyError(json.error));
+              return;
+            }
+            opts.onData(json as T);
+          } catch {
+            /* 坏行跳过，不中断订阅 */
+          }
+        },
+      });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parser.feed(decoder.decode(value, { stream: true }));
+      }
+    })
+    .catch((e: unknown) => {
+      if (typeof e === 'object' && e !== null && 'name' in e && e.name === 'AbortError') return;
+      opts.onError?.(e instanceof ApiError ? e.message : friendlyError(errorMessage(e)));
     });
   return () => ctrl.abort();
 }

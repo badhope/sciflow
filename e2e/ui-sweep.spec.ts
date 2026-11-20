@@ -13,21 +13,21 @@ import { expect, test } from '@playwright/test';
  */
 
 const API = process.env.E2E_API || 'http://127.0.0.1:43200';
+/**
+ * 侧栏实际可见入口（v2.0 IA：研究流程 / 产出 / 工具箱 + 设置）。
+ * 旧版 15 个平级入口已收成 3 组，测试按当前导航断言，避免用已下线标签误报。
+ */
 const VIEWS = [
-  '工作台',
-  '项目总览',
-  '研究计划',
-  '文献调研',
-  '知识库',
-  '全自动流水线',
-  '论文写作',
+  '项目驾驶舱',
+  '研究设计',
+  '证据库',
+  '实验记录',
+  '写作与评审',
+  '投稿辅助',
   '长篇写作',
   'Web 项目',
-  '质量评分',
-  '投稿辅助',
-  '实验记录',
-  '记忆中心',
   '内置浏览器',
+  '记忆中心',
   '设置',
 ];
 
@@ -44,16 +44,18 @@ test.beforeAll(async ({ request }) => {
   }
 });
 
-test('侧栏 12 个入口逐个点击并渲染', async ({ page }) => {
+test('侧栏 11 个入口逐个点击并渲染', async ({ page }) => {
   await page.goto('/#/workspace');
   await page.waitForLoadState('networkidle');
   // 设置入口独立渲染在分组导航之后，因此用整个 aside 定位，而不是 nav[aria-label=功能导航]
   const nav = page.locator('aside');
 
-  // 阶段分组默认折叠最后一段（投稿与复盘）：按真实用户路径先展开所有折叠分组
-  const collapsed = nav.locator('button[aria-expanded="false"]');
-  for (let i = 0, n = await collapsed.count(); i < n; i++) {
-    await collapsed.nth(i).click({ timeout: 3000 }).catch(() => undefined);
+  // 工具箱分组默认折叠：按真实用户路径先展开所有折叠分组。
+  // 用 while 而不是固定 count：每展开一组，集合长度会变，固定索引会漏点。
+  const collapsed = nav.locator('.shell-nav-group__label[aria-expanded="false"]');
+  for (let guard = 0; guard < 6; guard++) {
+    if ((await collapsed.count()) === 0) break;
+    await collapsed.first().click({ timeout: 3000 }).catch(() => undefined);
   }
 
   for (const label of VIEWS) {

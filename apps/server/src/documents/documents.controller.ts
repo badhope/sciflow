@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common';
 import { ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service';
-import { DocDto, RevisionQueueDto, StartRevisionQueueDto } from './documents.dto';
+import { DocDto, RevisionQueueDto, RevisionQueueSummaryDto, StartRevisionQueueDto } from './documents.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 import { paginate } from '../common/paginate';
@@ -111,10 +111,18 @@ export class DocumentsController {
     @Req() req: { user?: AuthPayload },
   ) {
     this.access.assertDocument(id, req.user);
-    return this.documents.startRevisionQueue(id, body?.items || []);
+    return this.documents.startRevisionQueue(id, body?.items || [], { autoResolve: body?.autoResolve });
   }
 
-  /** 查询队列进度（含逐条 before/after） */
+  /** 历史队列审计：按新到旧返回最近 20 队摘要（不含 before/after 大字段） */
+  @Get(':id/revision-queues')
+  @ApiOkResponse({ type: [RevisionQueueSummaryDto] })
+  listRevisionQueues(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
+    return this.documents.listRevisionQueues(id);
+  }
+
+  /** 查询队列进度（含逐条 before/after；可按 queueId 读取历史队列） */
   @Get(':id/revision-queues/:queueId')
   @ApiOkResponse({ type: RevisionQueueDto })
   getRevisionQueue(@Param('id') id: string, @Param('queueId') queueId: string, @Req() req: { user?: AuthPayload }) {
@@ -129,6 +137,20 @@ export class DocumentsController {
   stopRevisionQueue(@Param('id') id: string, @Param('queueId') queueId: string, @Req() req: { user?: AuthPayload }) {
     this.access.assertDocument(id, req.user);
     return this.documents.stopRevisionQueue(id, queueId);
+  }
+
+  /** 跳过/失败条目二次指定章节重试：新建一队，保留旧队审计记录 */
+  @Post(':id/revision-queues/:queueId/retry')
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: RevisionQueueDto })
+  retryRevisionQueueItem(
+    @Param('id') id: string,
+    @Param('queueId') queueId: string,
+    @Body() body: { itemId: string; sectionTitle: string },
+    @Req() req: { user?: AuthPayload },
+  ) {
+    this.access.assertDocument(id, req.user);
+    return this.documents.retryRevisionQueueItem(id, queueId, String(body?.itemId || ''), String(body?.sectionTitle || ''));
   }
 
   /** 段落级恢复：只回滚指定章节，其余章节保持当前内容（恢复前自动快照） */

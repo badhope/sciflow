@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, MessageSquareReply, Plus, Send } from 'lucide-react';
 import { api } from '../api/client';
 import { ToastContext } from '../App';
-import type { Journal, JournalMatchResult, ParseEmailResult, Project, ReviewComment, RevisionQueue, SubmissionStatus, SubmissionTrack } from '../types';
+import type { Journal, JournalMatchResult, ParseEmailResult, Project, ReviewComment, RevisionQueue, RevisionQueueItem, RevisionQueueSummary, SubmissionStatus, SubmissionTrack } from '../types';
 import { Badge, Button, Card, ConfirmDialog, ErrorBox, Input, Select, Spinner, Textarea, errMsg } from '../components/ui';
 import { DocumentSelect } from '../components/DocumentSelect';
 import { SubmissionReadinessPanel } from './submission/SubmissionReadinessPanel';
@@ -11,7 +11,7 @@ import { JournalLibrary, type JournalLibraryForm } from './submission/JournalLib
 import { JournalMatches } from './submission/JournalMatches';
 import { SubmissionTabNav } from './submission/SubmissionTabNav';
 import { TrackCard } from './submission/TrackCard';
-import { RevisionQueuePanel } from './submission/RevisionQueuePanel';
+import { RevisionQueueHistory, RevisionQueuePanel } from './submission/RevisionQueuePanel';
 import { REVISION_STATUSES, STATUS_META, STATUS_OPTIONS, inferStatusFromComments, todayISO, type SubmissionTab } from './submission/status';
 import { useProjectDocs } from '../lib/queries';
 import { qk } from '../lib/query-keys';
@@ -26,6 +26,20 @@ function sectionTitlesOf(content: string): string[] {
     if (m) titles.push(m[1].trim());
   }
   return titles;
+}
+
+/** 计划条目与已录入审稿意见的确定性匹配：只有唯一命中才回链，避免自动关闭错的意见。 */
+function matchReviewCommentId(item: RevisionPlanItem, comments: ReviewComment[]): string {
+  const norm = (value: string) => value.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
+  const excerpt = norm(item.excerpt || '');
+  if (excerpt.length < 6) return '';
+  const hits = comments.filter((c) => {
+    if (c.status !== 'open') return false;
+    const comment = norm(c.commentText || '');
+    const quote = norm(c.quote || '');
+    return comment.includes(excerpt) || excerpt.includes(comment) || (quote.length >= 6 && (quote.includes(excerpt) || excerpt.includes(quote)));
+  });
+  return hits.length === 1 ? hits[0].id : '';
 }
 
 /** 计划条目未显式指定章节时，按 excerpt + suggestedAction 匹配最长标题；匹配不到就留空让用户选 */
@@ -58,9 +72,12 @@ export function SubmissionPage({ project }: { project: Project }) {
 
   // 修改计划执行队列：启动后轮询进度，逐条展示 before/after
   const [queue, setQueue] = useState<RevisionQueue | null>(null);
+  const [queueHistory, setQueueHistory] = useState<RevisionQueueSummary[]>([]);
+  const [historyDocId, setHistoryDocId] = useState<string | null>(null);
   const [queueErr, setQueueErr] = useState('');
   const [queueStarting, setQueueStarting] = useState(false);
   const [queueStopping, setQueueStopping] = useState(false);
+  const [queueRetrying, setQueueRetrying] = useState<string | null>(null);
 
   // 期刊推荐（结构化匹配）
   const [title, setTitle] = useState('');
@@ -172,6 +189,16 @@ export function SubmissionPage({ project }: { project: Project }) {
   const pollingQueueId = queue && !isQueueTerminal(queue.status) ? queue.id : null;
   const finishedQueueId = queue && isQueueTerminal(queue.status) ? queue.id : null;
 
+  // 历史队列：切换文档时自动读取；队列结束后再刷新一次，保证审计条最新
+  useEffect(() => {
+    if (!selDoc) return;
+    let cancelled = false;
+    api.documents.listRevisionQueues(selDoc)
+      .then((res) => { if (!cancelled) { setQueueHistory(res.queues); setHistoryDocId(selDoc); } })
+      .catch(() => { if (!cancelled) { setQueueHistory([]); setHistoryDocId(selDoc); } });
+    return () => { cancelled = true; };
+  }, [selDoc]);
+
   // 队列轮询：running/queued 时每 1.5s 拉一次；终态自动停
   useEffect(() => {
     if (!pollingQueueId || !selDoc) return;
@@ -199,6 +226,9 @@ export function SubmissionPage({ project }: { project: Project }) {
     if (!finishedQueueId || !selDoc) return;
     qc.invalidateQueries({ queryKey: qk.docs(project.id) });
     qc.invalidateQueries({ queryKey: qk.doc(selDoc) });
+    api.documents.listRevisionQueues(selDoc)
+      .then((res) => { setQueueHistory(res.queues); setHistoryDocId(selDoc); })
+      .catch(() => undefined);
   }, [finishedQueueId, selDoc, project.id, qc]);
 
   const launchQueue = async () => {
@@ -215,6 +245,7 @@ export function SubmissionPage({ project }: { project: Project }) {
         reviewPoints: `审稿意见 ${item.id}：${item.excerpt}\n需要修改：${item.suggestedAction}`,
         excerpt: item.excerpt,
         suggestedAction: item.suggestedAction,
+        reviewCommentId: matchReviewCommentId(item, comments),
       }));
     if (!items.length) {
       setQueueErr('至少为一条修改计划选择目标章节');
@@ -241,6 +272,24 @@ export function SubmissionPage({ project }: { project: Project }) {
       setQueueErr(errMsg(e));
     } finally {
       setQueueStopping(false);
+    }
+  };
+
+  /** 跳过/失败条目：指定章节后新建一队重试，旧队历史保留 */
+  const retryQueueItem = async (item: RevisionQueueItem, sectionTitle: string) => {
+    if (!queue || !selDoc || !sectionTitle) return;
+    setQueueErr('');
+    setQueueRetrying(item.id);
+    try {
+      const started = await api.documents.retryRevisionQueueItem(selDoc, queue.id, item.id, sectionTitle);
+      setQueue(started);
+      const history = await api.documents.listRevisionQueues(selDoc);
+      setQueueHistory(history.queues);
+      setHistoryDocId(selDoc);
+    } catch (e: unknown) {
+      setQueueErr(errMsg(e));
+    } finally {
+      setQueueRetrying(null);
     }
   };
 
@@ -622,7 +671,17 @@ export function SubmissionPage({ project }: { project: Project }) {
                   {selDoc === '' && <span className="text-[11px] text-amber-600 dark:text-amber-300">先在「回复审稿」页选择文档</span>}
                 </div>
                 {queueErr && <div className="text-xs text-rose-600 dark:text-rose-300">{queueErr}</div>}
-                {queue && <RevisionQueuePanel queue={queue} stopping={queueStopping} onStop={haltQueue} />}
+                {queue && (
+                  <RevisionQueuePanel
+                    queue={queue}
+                    stopping={queueStopping}
+                    onStop={haltQueue}
+                    sectionTitles={docSectionTitles}
+                    onRetry={retryQueueItem}
+                    retryingItemId={queueRetrying}
+                  />
+                )}
+                <RevisionQueueHistory queues={historyDocId === selDoc ? queueHistory : []} />
               </div>
             )}
           </div>
