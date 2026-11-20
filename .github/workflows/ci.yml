@@ -166,6 +166,10 @@ jobs:
           done
           tail -50 /tmp/gateway.log; exit 1
       - name: Prompt contract evals
+        env:
+          PROMPTFOO_DISABLE_TELEMETRY: '1'
+          PROMPTFOO_DISABLE_UPDATE: '1'
+          PROMPTFOO_DISABLE_REMOTE_GENERATION: 'true'
         run: pnpm exec promptfoo eval -c evals/promptfooconfig.yaml --no-progress-bar
       - name: Dump logs on failure
         if: failure()

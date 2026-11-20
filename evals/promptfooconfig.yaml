@@ -1,17 +1,14 @@
 # SciFlow Prompt 契约评估（promptfoo）
 # 离线可跑：先构建 server，再起 mock HTTP 网关（node:http 包装脚本，复用 mock 网关路由表，
-# 监听 127.0.0.1:5099），promptfoo 直连该端点。
+# 监听 127.0.0.1:5099），promptfoo 通过自定义 file provider 直连该端点。
 # 用法：
 #   1) pnpm --filter @sciflow/server build
 #   2) node apps/server/scripts/mock-openai-http.mjs &
 #   3) pnpm exec promptfoo eval -c evals/promptfooconfig.yaml
-# 真实模型回归：把 providers 换成你的 OpenAI 兼容端点（PROMPTFOO_* 环境变量或直接改 apiBaseUrl）。
+# 真实模型回归：把 providers 换成你的 OpenAI 兼容端点。
 description: SciFlow prompt 契约评估（mock 网关离线模式）
 providers:
-  - id: openai:chat:mock-model
-    config:
-      apiBaseUrl: http://127.0.0.1:5099/v1
-      apiKey: sk-mock-local-placeholder
+  - id: file://./mock-provider.mjs
 prompts:
   - '{{prompt}}'
 tests:
