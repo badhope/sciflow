@@ -1,6 +1,6 @@
 # Product roadmap
 
-Last reviewed: 2026-11-03 · Current release: **1.9.5**
+Last reviewed: 2026-11-20 · Current release: **1.19.3**
 
 This document states what exists today, what is deliberately out of scope, and
 what is planned next. It is the single source of truth for product scope; the
@@ -79,11 +79,19 @@ decision not to build it.
 | Quality | Untrusted-content defense | Shipped | External text is sanitized (invisible Unicode stripped, fence smuggling neutralized) and scanned for six injection signal classes before it reaches a prompt |
 | Operations | OTLP trace export | Shipped | Persisted traces export as OTLP/HTTP-JSON with `gen_ai.*` attributes to any collector; zero overhead when unset |
 | Operations | List pagination | Shipped | Documents and references accept optional `limit`/`offset`; requests without them keep the old full-list behaviour |
+| Quality | Project-level quality standard | Shipped | Project override takes precedence over the global standard; invalid writes are rejected; quality, document and submission-readiness paths read the same source |
+| Submission | One-click submission package | Shipped | Journal templates, cover letter, referenced figures and manifest v2 in one deterministic ZIP; readiness summary travels with the package |
+| Submission | Submission package Agent tool | Shipped | `submission.package` returns filenames, sizes, readiness and download path without leaking base64 into model context |
+| Operations | Front-end performance budgets | Shipped | First-screen raw/gzip and largest lazy chunk gzip budgets are checked in CI; raw single-chunk size remains an advisory metric |
 
 ## Deliberate non-goals
 
 - **Multi-tenant SaaS.** No hosted accounts, no shared storage, no per-organisation
   billing inside this repository.
+- **Collaboration UI and plugin marketplace.** The JWT mode isolates data by owner,
+  but this repository does not build invites, shared projects, comment threads,
+  paid plugin listings or a signature-trading marketplace. Local extension assets
+  remain supported as a toolbox, not as an app store.
 - **Publisher automation.** No logged-in crawling of submission systems and no
   background polling of editorial mailboxes. The tool organises what the user
   already has.

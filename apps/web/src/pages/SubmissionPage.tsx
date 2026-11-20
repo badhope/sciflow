@@ -1,59 +1,21 @@
-import { useContext, useEffect, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  CalendarClock, Check, ClipboardCheck, FilePen, Forward, Globe2, Library, Loader2, Mail, MessageSquareReply, Plus, Send, Trash2,
-} from 'lucide-react';
+import { Check, Loader2, MessageSquareReply, Plus, Send } from 'lucide-react';
 import { api } from '../api/client';
 import { ToastContext } from '../App';
 import type { Journal, JournalMatchResult, ParseEmailResult, Project, ReviewComment, SubmissionStatus, SubmissionTrack } from '../types';
 import { Badge, Button, Card, ConfirmDialog, ErrorBox, Input, Select, Spinner, Textarea, errMsg } from '../components/ui';
 import { DocumentSelect } from '../components/DocumentSelect';
-import { HBar } from '../components/charts';
 import { SubmissionReadinessPanel } from './submission/SubmissionReadinessPanel';
+import { JournalLibrary, type JournalLibraryForm } from './submission/JournalLibrary';
+import { JournalMatches } from './submission/JournalMatches';
+import { SubmissionTabNav } from './submission/SubmissionTabNav';
+import { TrackCard } from './submission/TrackCard';
+import { REVISION_STATUSES, STATUS_META, STATUS_OPTIONS, inferStatusFromComments, todayISO, type SubmissionTab } from './submission/status';
 import { useProjectDocs } from '../lib/queries';
 
-type Tab = 'readiness' | 'journals' | 'cover' | 'reply' | 'track';
-
-/* —— 状态 → 中文标签 / Badge 颜色 / 阶段分组（页面顶部常量） —— */
-const STATUS_META: Record<SubmissionStatus, { label: string; tone: 'slate' | 'green' | 'amber' | 'red' | 'teal' | 'blue'; group: string }> = {
-  submitted: { label: '收稿', tone: 'blue', group: '投稿中' },
-  initial_review: { label: '初审', tone: 'teal', group: '外审中' },
-  external_review: { label: '外审', tone: 'amber', group: '外审中' },
-  review_returned: { label: '意见已回', tone: 'amber', group: '外审中' },
-  minor_revision: { label: '小修', tone: 'amber', group: '返修' },
-  major_revision: { label: '大修', tone: 'red', group: '返修' },
-  re_review: { label: '复审', tone: 'amber', group: '返修' },
-  final_review: { label: '终审', tone: 'blue', group: '终审' },
-  accepted: { label: '录用', tone: 'green', group: '完结' },
-  in_production: { label: '编辑加工', tone: 'green', group: '完结' },
-  rejected: { label: '拒稿', tone: 'red', group: '终止' },
-  withdrawn: { label: '撤稿', tone: 'slate', group: '终止' },
-  transferred: { label: '转投他刊', tone: 'slate', group: '终止' },
-};
-const STATUS_OPTIONS = (Object.keys(STATUS_META) as SubmissionStatus[]).map((s) => ({
-  value: s,
-  label: STATUS_META[s].label,
-}));
-/** 活跃链路 Stepper 节点（终态不展示步进条） */
-const STEPPER_CHAIN: SubmissionStatus[] = ['submitted', 'initial_review', 'external_review', 'review_returned', 'minor_revision', 're_review', 'final_review', 'accepted', 'in_production'];
-const TERMINAL = new Set<SubmissionStatus>(['rejected', 'withdrawn', 'transferred']);
-/** 返修链路状态：出现时需要录入/展示修回截止日 */
-const REVISION_STATUSES = new Set<SubmissionStatus>(['minor_revision', 'major_revision']);
-
-const fmtDate = (ts?: number | null) => (ts ? new Date(ts).toLocaleDateString('zh-CN') : '—');
-const todayISO = () => new Date().toISOString().slice(0, 10);
-/** 修回截止日倒计时徽章：>=7 天绿，<7 琥珀，<3 红，超期红 + 提醒 */
-function revisionBadge(deadline: number | null): ReactNode {
-  if (!deadline) return null;
-  const ms = deadline - Date.now();
-  const days = Math.ceil(ms / 86400000);
-  if (ms < 0) return <Badge tone="red">修回已超期 {-days} 天 · 建议联系编辑部</Badge>;
-  const tone: 'green' | 'amber' | 'red' = days < 3 ? 'red' : days < 7 ? 'amber' : 'green';
-  return <Badge tone={tone}>修回剩 {days} 天</Badge>;
-}
-
 export function SubmissionPage({ project }: { project: Project }) {
-  const [tab, setTab] = useState<Tab>('journals');
+  const [tab, setTab] = useState<SubmissionTab>('journals');
   const [loadErr, setLoadErr] = useState('');
   const [removingJournal, setRemovingJournal] = useState<Journal | null>(null);
   const [removingTrack, setRemovingTrack] = useState<SubmissionTrack | null>(null);
@@ -300,14 +262,6 @@ export function SubmissionPage({ project }: { project: Project }) {
     toast('success', `已把「${j.name}」带入登记表单，核对后点「登记投稿」`);
   };
 
-  /** 任务2：按 open 审稿意见的 category 推断应推进到的投稿状态（与既有 major/minor 枚举对齐） */
-  const inferStatusFromComments = (comments: ReviewComment[]): SubmissionStatus => {
-    const cats = comments.map((c) => (c.category || '').toLowerCase());
-    if (cats.some((c) => /major|大修|大改/.test(c))) return 'major_revision';
-    if (cats.some((c) => /minor|小修|小改/.test(c))) return 'minor_revision';
-    return 'external_review';
-  };
-
   /** 任务2：从审稿意见直连投稿事件——读关联文档 open 意见，推断状态并追加一条事件 */
   const recordFromReview = async (t: SubmissionTrack) => {
     if (!t.documentId) {
@@ -326,7 +280,6 @@ export function SubmissionPage({ project }: { project: Project }) {
       const status = inferStatusFromComments(open);
       await api.submission.addTrackEvent(t.id, {
         status,
-        date: Date.now(),
         note: `来自审稿意见：${open.length} 条 open`,
       });
       toast('success', `已按 ${open.length} 条 open 审稿意见记录「${STATUS_META[status].label}」事件`);
@@ -408,34 +361,11 @@ export function SubmissionPage({ project }: { project: Project }) {
     }
   };
 
-  const TABS: { key: Tab; label: string; icon: typeof Globe2 }[] = [
-    { key: 'readiness', label: '就绪检查', icon: ClipboardCheck },
-    { key: 'journals', label: '期刊推荐', icon: Globe2 },
-    { key: 'cover', label: 'Cover Letter', icon: FilePen },
-    { key: 'reply', label: '审稿回复', icon: MessageSquareReply },
-    { key: 'track', label: '投稿跟踪', icon: CalendarClock },
-  ];
-
   return (
     <>
       <ErrorBox message={loadErr || docsError} />
     <div className="page-container">
-      <div className="flex gap-1 mb-4 border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => {
-              setTab(t.key);
-              setOutput('');
-            }}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm border-b-2 -mb-px whitespace-nowrap shrink-0 ${
-              tab === t.key ? 'border-teal-600 text-teal-700 font-medium' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800'
-            }`}
-          >
-            <t.icon size={14} /> {t.label}
-          </button>
-        ))}
-      </div>
+      <SubmissionTabNav tab={tab} onChange={(next) => { setTab(next); setOutput(''); }} />
 
       <ErrorBox message={error} />
 
@@ -588,291 +518,62 @@ export function SubmissionPage({ project }: { project: Project }) {
 
       {tab === 'journals' && (
         <>
-          {matching && (
-            <Card className="p-4 mb-4">
-              <Spinner label="AI 结构化匹配期刊中…" />
-            </Card>
-          )}
-          {!matching && match && match.journals.length > 0 && (
-            <Card className="p-4 mb-4">
-              <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">推荐期刊（按匹配度排序）</div>
-              <div className="space-y-3">
-                {[...match.journals]
-                  .sort((a, b) => b.score - a.score)
-                  .map((j) => {
-                    const meta = [
-                      j.if2024 ? `IF ${j.if2024}` : '',
-                      j.quartile || '',
-                      j.firstDecisionWeeks ? `${j.firstDecisionWeeks} 周一审` : '',
-                      j.acceptanceRate ? `录用率 ${j.acceptanceRate}%` : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' · ');
-                    return (
-                      <div key={j.name} className="rounded-lg border border-slate-100 dark:border-slate-800 p-3">
-                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                          <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{j.name}</span>
-                          {j.isInLibrary && <Badge tone="green">已在期刊库</Badge>}
-                          {j.oa && <Badge tone="slate">{j.oa === 'yes' ? 'OA' : j.oa}</Badge>}
-                        </div>
-                        <HBar
-                          max={100}
-                          items={[
-                            {
-                              label: '匹配度',
-                              value: j.score,
-                              sub: meta,
-                              hint: `${j.name}：匹配度 ${j.score}/100${meta ? ` · ${meta}` : ''}`,
-                            },
-                          ]}
-                        />
-                        {(j.reason || j.gap) && (
-                          <div className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400 space-y-0.5">
-                            {j.reason && (
-                              <div>
-                                <span className="text-slate-400 dark:text-slate-500">推荐理由：</span>
-                                {j.reason}
-                              </div>
-                            )}
-                            {j.gap && (
-                              <div>
-                                <span className="text-slate-400 dark:text-slate-500">差距提示：</span>
-                                {j.gap}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        <div className="mt-2 flex items-center gap-2">
-                          <button
-                            onClick={() => pickJournalToSubmit(j)}
-                            className="inline-flex items-center gap-1 text-xs rounded-md bubble-user px-2.5 py-1 hover:brightness-110"
-                            title="把这本期刊带入「投稿跟踪」登记表单"
-                          >
-                            <Send size={12} /> 投它
-                          </button>
-                          {!j.isInLibrary && (
-                            <span className="text-[11px] text-slate-400 dark:text-slate-500">未入期刊库，登记时可手动补录以获取一审周期</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </Card>
-          )}
-          {!matching && match && match.journals.length === 0 && (
-            <Card className="p-4 mb-4 text-center text-slate-400 dark:text-slate-500 text-sm">未匹配到合适期刊，补充摘要后重试</Card>
-          )}
-
-          {/* 期刊库管理 */}
-          <Card className="p-4 mb-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Library size={15} className="text-teal-600" />
-              <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">我的期刊库</span>
-              <span className="text-[11px] text-slate-400 dark:text-slate-500">已收录 {lib.length} 本</span>
-            </div>
-            <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-2">
-              <Input placeholder="期刊名（必填）" value={libForm.name} onChange={(e) => setLibForm((f) => ({ ...f, name: e.target.value }))} />
-              <Input placeholder="ISSN（可选）" value={libForm.issn} onChange={(e) => setLibForm((f) => ({ ...f, issn: e.target.value }))} />
-              <Input placeholder="出版商（可选）" value={libForm.publisher} onChange={(e) => setLibForm((f) => ({ ...f, publisher: e.target.value }))} />
-              <Input placeholder="分区 如 Q1（可选）" value={libForm.quartile} onChange={(e) => setLibForm((f) => ({ ...f, quartile: e.target.value }))} />
-              <Input placeholder="IF 2024（可选）" value={libForm.if2024} onChange={(e) => setLibForm((f) => ({ ...f, if2024: e.target.value }))} />
-            </div>
-            <Button variant="outline" className="text-xs mb-3" disabled={!libForm.name.trim()} onClick={addLibJournal}>
-              <Plus size={13} /> 添加到期刊库
-            </Button>
-            {lib.length === 0 ? (
-              <div className="text-xs text-slate-400 dark:text-slate-500">
-                期刊库为空 —— 添加常投期刊后，上方匹配结果会自动标记「已在期刊库」
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                {lib.map((j) => (
-                  <div key={j.id} className="flex items-center gap-2 rounded-lg border border-slate-100 dark:border-slate-800 px-3 py-2 text-sm">
-                    <span className="font-medium text-slate-700 dark:text-slate-200 flex-1 min-w-0 truncate">{j.name}</span>
-                    {j.if2024 ? <Badge tone="teal">IF {j.if2024}</Badge> : null}
-                    {j.quartile ? <Badge tone="slate">{j.quartile}</Badge> : null}
-                    {j.firstDecisionWeeks ? <span className="text-[11px] text-slate-400 dark:text-slate-500">{j.firstDecisionWeeks} 周一审</span> : null}
-                    <button className="p-1 text-slate-400 hover:text-rose-500 shrink-0" title="移除期刊" aria-label={`移除期刊 ${j.name}`} onClick={() => setRemovingJournal(j)}>
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
+          <JournalMatches matching={matching} match={match} onPickJournal={pickJournalToSubmit} />
+          <JournalLibrary
+            journals={lib}
+            form={libForm}
+            onFormChange={(patch: Partial<JournalLibraryForm>) => setLibForm((f) => ({ ...f, ...patch }))}
+            onAdd={addLibJournal}
+            onRemove={setRemovingJournal}
+          />
         </>
       )}
 
-      {/* —— 投稿跟踪卡片流 —— */}
       {tab === 'track' && (
         <div className="space-y-3">
           {tracks.length === 0 && <Card className="p-6 text-center text-sm text-slate-400 dark:text-slate-500">还没有投稿记录，在上方登记第一条吧</Card>}
-          {tracks.map((t) => {
-            const meta = STATUS_META[t.currentStatus] || STATUS_META.submitted;
-            const docTitle = t.documentId ? docs.find((d) => d.id === t.documentId)?.title : '';
-            const stepIdx = STEPPER_CHAIN.indexOf(t.currentStatus);
-            const forward = tracks.find((x) => x.previousSubmissionId === t.id);
-            return (
-              <Card key={t.id} className="p-4 mb-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t.journalName}</span>
-                  <Badge tone={meta.tone}>{meta.label}</Badge>
-                  <span className="text-[11px] text-slate-400 dark:text-slate-500">{meta.group}</span>
-                  {forward && (
-                    <span className="text-[11px] text-teal-700 dark:text-teal-400">
-                      已转投 → {forward.journalName}
-                    </span>
-                  )}
-                  <div className="ml-auto flex gap-1.5 items-center">
-                    <button className="text-[11px] text-teal-700 dark:text-teal-400 hover:underline" onClick={() => setEventFor(eventFor === t.id ? null : t.id)}>更新状态</button>
-                    {TERMINAL.has(t.currentStatus) && (
-                      <button className="text-[11px] text-teal-700 dark:text-teal-400 hover:underline" title="用同一稿件登记新期刊（自动串联旧记录）" onClick={() => transferToNew(t)}>
-                        <Forward size={11} className="inline mr-0.5" />转投他刊
-                      </button>
-                    )}
-                    <button className="text-[11px] text-teal-700 dark:text-teal-400 hover:underline" onClick={() => { setDeadlineFor(deadlineFor === t.id ? null : t.id); setDeadlineVal(t.revisionDeadline ? new Date(t.revisionDeadline).toISOString().slice(0, 10) : ''); }}>
-                      {t.revisionDeadline ? '改截止日' : '设截止日'}
-                    </button>
-                    <button className="text-[11px] text-teal-700 dark:text-teal-400 hover:underline" onClick={() => { setEmailFor(emailFor === t.id ? null : t.id); setParseResult(null); }}>
-                      <Mail size={11} className="inline mr-0.5" />解析邮件
-                    </button>
-                    <button
-                      className="text-[11px] text-teal-700 dark:text-teal-400 hover:underline disabled:text-slate-300 dark:disabled:text-slate-600 disabled:cursor-not-allowed disabled:no-underline"
-                      disabled={!t.documentId || (openCounts[t.id] || 0) === 0 || busy}
-                      title={
-                        !t.documentId
-                          ? '该投稿未关联论文文档'
-                          : (openCounts[t.id] || 0) === 0
-                            ? '该稿件文档没有待处理（open）的审稿意见'
-                            : `按 ${openCounts[t.id]} 条 open 审稿意见自动推断状态并记录事件`
-                      }
-                      onClick={() => recordFromReview(t)}
-                    >
-                      <MessageSquareReply size={11} className="inline mr-0.5" />审稿→事件{openCounts[t.id] ? `（${openCounts[t.id]}）` : ''}
-                    </button>
-                    <button className="p-1 text-slate-400 hover:text-rose-500" title="删除投稿记录" aria-label="删除投稿记录" onClick={() => setRemovingTrack(t)}>
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-                  {docTitle || t.title || '（未命名稿件）'} · 投稿于 {fmtDate(t.submittedAt)}
-                </div>
-
-                {/* 修回截止日倒计时 */}
-                {t.revisionDeadline && (
-                  <div className="mt-1.5 text-[11px]">
-                    {revisionBadge(t.revisionDeadline)}
-                    <span className="ml-1.5 text-slate-400 dark:text-slate-500">截止 {fmtDate(t.revisionDeadline)}</span>
-                  </div>
-                )}
-                {deadlineFor === t.id && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <Input type="date" value={deadlineVal} onChange={(e) => setDeadlineVal(e.target.value)} />
-                    <Button className="text-xs px-2 py-1" onClick={() => saveDeadline(t.id)}>保存</Button>
-                  </div>
-                )}
-
-                {/* L3 周期推断提示 */}
-                {t.dueAt && !TERMINAL.has(t.currentStatus) && (
-                  <div className="mt-1.5 text-[11px]">
-                    {t.overdue ? (
-                      <Badge tone="red">已超一审周期 {t.overdueDays} 天 · 建议询问编辑部</Badge>
-                    ) : (
-                      <Badge tone="amber">预计{t.estimatedStage ? STATUS_META[t.estimatedStage].label : ''}阶段 · 一审节点 {fmtDate(t.dueAt)}</Badge>
-                    )}
-                  </div>
-                )}
-
-                {/* 横向 Stepper：当前状态在链路中的位置（窄屏可横向滚动，避免 9 节点挤压换行） */}
-                {stepIdx >= 0 && (
-                  <div className="mt-3 overflow-x-auto">
-                  <div className="flex items-center min-w-[620px]">
-                    {STEPPER_CHAIN.map((s, i) => (
-                      <div key={s} className="flex items-center flex-1 last:flex-none">
-                        <div className="flex flex-col items-center">
-                          <div
-                            className={`w-2.5 h-2.5 rounded-full ${
-                              i <= stepIdx ? (i === stepIdx ? 'bg-teal-600 ring-4 ring-teal-100 dark:ring-teal-900/40' : 'bg-teal-400') : 'bg-slate-200 dark:bg-slate-700'
-                            }`}
-                          />
-                          <span className={`text-[11px] mt-0.5 ${i === stepIdx ? 'text-teal-700 font-medium' : 'text-slate-400'}`}>{STATUS_META[s].label}</span>
-                        </div>
-                        {i < STEPPER_CHAIN.length - 1 && <div className={`h-px flex-1 mx-0.5 mb-3 ${i < stepIdx ? 'bg-teal-400' : 'bg-slate-200 dark:bg-slate-700'}`} />}
-                      </div>
-                    ))}
-                  </div>
-                  </div>
-                )}
-
-                {/* 追加状态事件 */}
-                {eventFor === t.id && (
-                  <div className="mt-3 rounded-lg border border-slate-100 dark:border-slate-800 p-3 space-y-2">
-                    <Select options={STATUS_OPTIONS} value={evStatus} onChange={(v) => setEvStatus(v as SubmissionStatus)} />
-                    <Input placeholder="备注（可选）" value={evNote} onChange={(e) => setEvNote(e.target.value)} />
-                    {REVISION_STATUSES.has(evStatus) && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-400 dark:text-slate-500 shrink-0">修回截止日期</span>
-                        <Input type="date" value={evDeadline} onChange={(e) => setEvDeadline(e.target.value)} />
-                      </div>
-                    )}
-                    <Button className="text-xs px-2 py-1" onClick={() => confirmEvent(t.id)}>确认追加状态</Button>
-                  </div>
-                )}
-
-                {/* 粘贴邮件解析 */}
-                {emailFor === t.id && (
-                  <div className="mt-3 rounded-lg border border-slate-100 dark:border-slate-800 p-3 space-y-2">
-                    <Textarea rows={5} placeholder="粘贴编辑部邮件正文（退修/录用/退稿/缴费通知等），AI 给出建议状态，确认后入库" value={emailText} onChange={(e) => setEmailText(e.target.value)} />
-                    <Button variant="outline" className="text-xs" disabled={parsing || !emailText.trim()} onClick={() => doParseEmail(t)}>
-                      {parsing ? <Loader2 size={13} className="animate-spin" /> : <Mail size={13} />} AI 解析
-                    </Button>
-                    {parseResult && (
-                      <div className="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3 space-y-1.5">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs text-slate-500 dark:text-slate-400">建议状态：</span>
-                          <Badge tone={(STATUS_META[parseResult.suggestedStatus] || STATUS_META.submitted).tone}>
-                            {(STATUS_META[parseResult.suggestedStatus] || STATUS_META.submitted).label}
-                          </Badge>
-                          <span className="text-[11px] text-slate-400">置信度 {Math.round(parseResult.confidence * 100)}%</span>
-                          {parseResult.date && <span className="text-[11px] text-slate-400">{parseResult.date}</span>}
-                        </div>
-                        {parseResult.reason && <div className="text-[11px] text-slate-500 dark:text-slate-400">依据：{parseResult.reason}</div>}
-                        <div className="flex gap-2 pt-1">
-                          <Button className="text-xs px-2 py-1" disabled={confirming} onClick={() => confirmParse(t)}>
-                            {confirming ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} 确认更新
-                          </Button>
-                          <Button variant="outline" className="text-xs px-2 py-1" onClick={() => setParseResult(null)}>忽略建议</Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* 状态事件时间线 */}
-                <button className="mt-2 text-[11px] text-slate-400 hover:text-slate-600" onClick={() => setOpenTrackId(openTrackId === t.id ? null : t.id)}>
-                  {openTrackId === t.id ? '收起历史' : `展开历史（${t.events.length} 条）`}
-                </button>
-                {openTrackId === t.id && (
-                  <div className="mt-2 ml-1 border-l-2 border-slate-100 dark:border-slate-800 pl-3 space-y-2">
-                    {t.events.map((ev) => (
-                      <div key={ev.id} className="text-[12px]">
-                        <div className="flex items-center gap-2">
-                          <span className="text-slate-400 dark:text-slate-500">{fmtDate(ev.eventAt)}</span>
-                          <Badge tone={(STATUS_META[ev.toStatus as SubmissionStatus] || STATUS_META.submitted).tone}>
-                            {(STATUS_META[ev.toStatus as SubmissionStatus] || STATUS_META.submitted).label}
-                          </Badge>
-                          {ev.source === 'email_ai' && <span className="text-[11px] text-slate-400">AI 邮件解析</span>}
-                        </div>
-                        {ev.note && <div className="text-slate-500 dark:text-slate-400 mt-0.5">{ev.note}</div>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-            );
-          })}
+          {tracks.map((t) => (
+            <TrackCard
+              key={t.id}
+              track={t}
+              docs={docs}
+              openCount={openCounts[t.id] || 0}
+              busy={busy}
+              forwardJournalName={tracks.find((x) => x.previousSubmissionId === t.id)?.journalName}
+              eventOpen={eventFor === t.id}
+              evStatus={evStatus}
+              evNote={evNote}
+              evDeadline={evDeadline}
+              deadlineOpen={deadlineFor === t.id}
+              deadlineVal={deadlineVal}
+              emailOpen={emailFor === t.id}
+              emailText={emailText}
+              parsing={parsing}
+              parseResult={parseResult}
+              confirming={confirming}
+              historyOpen={openTrackId === t.id}
+              onToggleEvent={() => setEventFor(eventFor === t.id ? null : t.id)}
+              onStatusChange={setEvStatus}
+              onNoteChange={setEvNote}
+              onDeadlineChange={setEvDeadline}
+              onConfirmEvent={() => confirmEvent(t.id)}
+              onToggleDeadline={() => {
+                setDeadlineFor(deadlineFor === t.id ? null : t.id);
+                setDeadlineVal(t.revisionDeadline ? new Date(t.revisionDeadline).toISOString().slice(0, 10) : '');
+              }}
+              onDeadlineValueChange={setDeadlineVal}
+              onSaveDeadline={() => saveDeadline(t.id)}
+              onToggleEmail={() => { setEmailFor(emailFor === t.id ? null : t.id); setParseResult(null); }}
+              onEmailTextChange={setEmailText}
+              onParseEmail={() => doParseEmail(t)}
+              onDismissParse={() => setParseResult(null)}
+              onConfirmParse={() => confirmParse(t)}
+              onToggleHistory={() => setOpenTrackId(openTrackId === t.id ? null : t.id)}
+              onTransfer={() => transferToNew(t)}
+              onRecordFromReview={() => recordFromReview(t)}
+              onDelete={() => setRemovingTrack(t)}
+            />
+          ))}
         </div>
       )}
 

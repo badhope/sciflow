@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.19.3] - 2026-11-20
+
+### Changed
+
+- **投稿辅助页模块化（保留深链）**：`SubmissionPage.tsx` 从 918 行降到 620 行。
+  状态常量与推断、Tab 导航、期刊匹配结果、期刊库、单条投稿卡片分别拆到
+  `pages/submission/status.tsx`、`SubmissionTabNav.tsx`、`JournalMatches.tsx`、
+  `JournalLibrary.tsx`、`TrackCard.tsx`；路由、Tab 顺序与旧深链行为不变。
+- **P3 范围拍板**：多租户协作 UI、插件交易市场列为明确非目标；JWT 模式的 owner 隔离、
+  本地扩展资产与 Electron 离线内嵌后端继续保留，只做缺陷修复。同步更新
+  `docs/product-roadmap.md` 的能力表与非目标。
+
+### Fixed
+
+- 审稿意见直连投稿事件不再在渲染路径调用 `Date.now()`，改由服务端写入时间，消除
+  React purity lint 报错。
+
+### Tests
+
+- Web 44 文件 / 240 测试通过；新增 `status.test.ts` 覆盖大修/小修/外审回退与 13 状态选项。
+- Web build 与 chunk budget 通过：首屏 414.8KB raw / 127.4KB gzip，最大懒加载块 447.9KB gzip。
+
 ## [1.19.2] - 2026-11-20
 
 ### Added
