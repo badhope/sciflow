@@ -1,12 +1,15 @@
 # Dependabot 周更（ECOSYSTEM-AUDIT §5 宣称的落地配置；此前宣称无配置，属「宣称 vs 事实」错账）
 # pnpm 工作区由 npm ecosystem 覆盖（以 lockfile 识别）
+#
+# 五个镜像仓库必须共用同一个 main。常规版本更新会在各仓库之间制造分叉，
+# 因此这里暂停自动版本 PR；安全告警、自动安全修复与安全更新仍然开启。
 version: 2
 updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     groups:
       minor-and-patch:
         update-types:
@@ -20,4 +23,4 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 0
