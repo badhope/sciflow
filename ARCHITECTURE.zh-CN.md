@@ -1,0 +1,668 @@
+# SciFlow 架构文档（v1.0 现状）
+
+[English](ARCHITECTURE.md) · **简体中文**
+
+> 中文完整版：保留更多实现细节与历史背景；如与英文主文冲突，以英文主文为准。
+
+
+
+> 本文档是唯一真理源。任何影响架构、接口、数据模型、依赖的代码变更，必须同步回写本文档。
+> 状态基线：v1.0.0（2026-10-24）。重构决策依据见 §6 ADR 索引；本版审查结论文档 `docs/archive/AUDIT-2026-10-23.md`。
+>
+> **本 §7「禁止重复造轮子守则」对所有后续开发会话生效**：动手前先查 §2.6 地图——能用成熟件的必须用，不允许在任务中途自造已有成熟替代的基建。
+
+---
+
+## §2.10 v0.6 新增契约（2026-10-20）
+
+实测 + 独立审计驱动的一轮修复，确立了 8 条后续必须遵守的契约（同时写入 `AGENTS.md`）：
+
+| # | 契约 | 原因（历史事故） |
+|---|---|---|
+| 1 | 布局只在 `AppShell` 定义，页面不得自管分栏/断点/溢出 | 写作页五栏挤一行，1024px 下编辑器被压到 2px |
+| 2 | `HBar` 高度内部自适应，调用方禁止传 `height`/`barHeight`；颜色用 `--viz-series-*` | 该参数造成过两次事故（压成 5px / 丢标签） |
+| 3 | `request()` 抛 `ApiError`，页面只 catch 不拼文案 | 字符类正则误判，74/87 条中文错误被覆盖成"无法连接服务器" |
+| 4 | 流式回调参数是**累积值**，必须用 `applyStreamDelta` 覆盖 | 工作台误按增量追加，输出平方膨胀 |
+| 5 | 步骤清单唯一来源 `packages/core/src/pipeline-steps.ts` | 曾有四份不一致的清单，开关写了但 graph 不读 |
+| 6 | 流水线写正文必须走 `writeDocumentContent`（保版本） | graph 直接写库导致产物无版本历史 |
+| 7 | 正文只放 `[n]` 锚点，参考文献列表由前端按 CSL 渲染 | 服务端与前端各渲染一份，出现两个参考文献区 |
+| 8 | 工具调用与模型调用分表统计（`llm_call_log.kind`） | 无 token 的工具调用污染成本看板 |
+
+**Agent 工具链**（新增能力，见 `apps/server/src/agent/agent-tool-bridge.ts`）：
+- 工具来源：复用 `McpService.tools`（REST / MCP 协议 / Agent 三条入口同一份实现）
+- 作用域：`buildToolSet(projectId)` 强制覆盖模型入参中的 projectId，防跨项目检索
+- 限额：单轮最多 8 次调用、单项 20s 超时、计数在闭包内（并发对话互不影响）
+- 轨迹：`llm_call_log(kind='tool', caller='tool:<name>')`
+- 网关兼容：部分 OpenAI 兼容端点流式不返回标准 `tool_calls`（实测 hcnsec/Qwen3.8），
+  命中 `AI_TOOLS_NONSTREAM_HOSTS`（默认 `hcnsec.cn`）时改走非流式工具循环再按 SSE 回放
+
+---
+
+## §2.11 v0.6.0 全模块复审契约（2026-10-20 第二轮）
+
+| 契约 | 落点 | 护栏 |
+|---|---|---|
+| `@Public()` 只允许 auth / health | `apps/server/src/auth/public.decorator.ts` | `auth-surface.spec.ts` 静态扫描全部 controller |
+| 数值环境变量统一 `envInt`/`envFloat`（非法回落 + 区间夹取） | `packages/core/src/env.ts` | `env.spec.ts` 9 条 |
+| 项目删除必须覆盖全部 project 维度表（无外键） | `projects.service.ts` | `projects-cascade.spec.ts` 真实库断言 8 表归零 |
+| 步骤明细不得直出 JSON | `PipelineDag.summarizeStepOutput` | `PipelineDag.test.ts` 6 条 |
+| 环形图零值分段不占配色槽位 | `charts.tsx:normalizeDonutData` | `charts.test.tsx` 2 条 |
+| 图表配色 token 必须有定义 | `index.css` `--rose/amber/emerald/sky-500` | 脚本校验 var() 引用全集 |
+| CI 三 job 与 README 承诺一致 | `.github/workflows/ci.yml` | 命令与本机实测逐条对齐 |
+
+## §2.12 v0.10 前端交互契约（2026-10-23）
+
+对话三入口与交互基建收敛为单实现，确立 6 条契约：
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | 三处聊天入口（工作台/科研问答/写作抽屉）共用 `useChatSession` 内核；累积覆盖（`applyStreamDelta`）、停止保留已收文本、错误落 `message.error` 的语义只在内核实现一次 | `apps/web/src/lib/chat-session.ts` | `WorkspacePage.test.tsx` 8 条行为用例（含 D1 累积回归，走内核路径） |
+| 2 | 消息渲染唯一入口 `MessageList`（思考流/来源卡/用量/操作按钮/followUps 追问）；页面不得手写消息 DOM | `apps/web/src/components/MessageList.tsx` | 三入口同源渲染，能力漂移即回归 |
+| 3 | 全局快捷键唯一注册表：mod 归一化、输入框保护（`allowInInput` 显式开，编辑器/⌘K 类必须显式开）、后注册者优先、handler 返回 `false` 放行外层；全局导航类 keydown 一律走注册表（组件内局部焦点陷阱如 AppShell 抽屉/Esc 不在此列） | `apps/web/src/lib/hotkeys.ts` | App/WorkspacePage/WritingPage 三处已接入；⌘K/⌘N/⌘S/⌘B 均 allowInInput |
+| 4 | 异步动作三态（running/error/idle + 防重复提交）统一走 `useAsyncAction`，禁止手写 `setBusy/finally` 模式 | `apps/web/src/lib/async.ts` | ChatPanel 快捷动作 / WorkspacePage 发送到写作页已接入 |
+| 5 | 项目阶段条数据推断是纯函数 `deriveStages`（只有真实数据才算完成，空项目不全绿） | `apps/web/src/lib/stages.ts` | `stages.test.ts` 5 条 |
+| 6 | 可拖拽分栏统一 `SplitPane`（组件态）与 `useSplitDrag`（宽度态，localStorage 持久化） | `components/SplitPane.tsx` / `lib/split-drag.ts` | 写作编辑器/工作台预览已接入 |
+
+**已删除**：`lib/optimistic.ts`（`useOptimisticList`）——其撤销语义要求后端提供恢复接口，而服务端无任何 restore 端点，属无法真实接线的死代码（同 F-013「配了不生效」类缺陷），按纪律移除。
+
+## §2.13 v0.11 品牌与信息架构契约（2026-10-23）
+
+| 契约 | 落点 | 说明 |
+|---|---|---|
+| 品牌标志唯一矢量源 | `docs/brand/icon-master.svg`（1024 母版）+ `BrandMark.tsx` | 造型「墨流 S + 思想节点」；favicon/apple-touch/桌面 ICO·ICNS 一律由母版经 `pnpm icons` 再生成，禁止手改位图 |
+| 对话唯一入口 = 工作台 | `pages/WorkspacePage.tsx` | `ChatPage` 已删除；多会话/模型/思考/意图/slash/followUps/来源引用/导出全部在工作台；`#/chat` 深链由 `VIEW_KEYS` 白名单兜底回工作台（新增视图必须登记该白名单） |
+| 会话持久化 key | `pages/chat/chat-sessions.ts`（`sciflow.chat.sessions.*`） | 工作台沿用旧科研问答页同 key，用户会话跨版本无缝延续；更早的单线程 key 由工作台首载一次性迁移 |
+| 会话落盘不走 effect | 内核 `onMessagesChange` | effect 内同步 setState 触发 React Compiler lint（`set-state-in-effect`）；持久化/派生一律走内核回调或事件处理器 |
+| 品牌视觉纪律 | `index.css` | 背景不加网格纹理、Logo 不加釉面、按钮不常驻发光、卡片阴影中性色——「去 AI 通用感」四条已落地，后续改动不得回退 |
+
+---
+
+## §2.14 v1.0 深度研究与实验设计契约（2026-10-24）
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | F2 反共识大纲：outline-gen 优先产「主大纲+2 变体」（`writeOutlineVariants`），模型不支持时回退单大纲 `writeOutline`；变体走 `PipelineStep.variants`（Outline JSON 串数组）与 interrupt payload 下发，**不改变 `steps[].output`=主大纲 JSON 的既有契约** | `packages/ai/src/{prompts,mock-gateway,ai.service}.ts` · `pipeline.graph.ts` | `pipeline-variants.spec.ts` 5 条 + 回归「反共识大纲变体随步骤下发」 |
+| 2 | 研究深度 1-3：literature 节点按轮递归检索（第 2+ 轮由 `planResearch` 依上轮发现出新词），命中跨轮按 id/title 去重合并、meta 同名取最高分、零新增即收敛；配置存 `app_setting pipeline_research_depth`（1-3 钳制，非法静默回 1） | `pipeline.graph.ts` · `pipeline.service.researchDepth()` · `customization.pipeline-settings` | 回归「流水线设置·研究深度」3 条；`researchDepth()` 缺省=1 |
+| 3 | 步骤时间戳：`notify` 经纯函数 `applyStepWire` 投影——running 首次写 `startedAt`（进度通知不覆盖），done/failed/skipped 写 `endedAt`；前端甘特条只在 ≥2 步有真实时间戳时渲染 | `pipeline.service.ts applyStepWire` · `PipelinePage StepTimeline` | `pipeline-variants.spec` 时间戳用例 + 回归「步骤起止时间戳」 |
+| 4 | F3 实验设计：`POST /api/research/design` 只收 `{projectId,question,papers?}`，AI 输出经 zod `experimentDesignSchema` fail-closed（解析失败不落库）；设计稿存 `research_design` 表（listDesigns 倒序/单删） | `research.service.ts` · `research.controller.ts` · `packages/db schema` | `experiment-design.spec.ts` 4 条 + 回归 4 条 |
+| 5 | MCP resources：`buildSdkServer` 声明 `resources` 能力；静态 `sciflow://projects` + 模板 `sciflow://project/{projectId}/{documents|references}`，未知 URI 400、项目不存在 404；resource handler 只读 | `mcp.service.ts` | URI 正则与模板字面量同源（本表锁定） |
+| 6 | CLI：HTTP 一律原生 fetch（`AbortSignal.timeout`），**禁止再回 spawnSync('node','-e') 字符串拼接**；`sciflow run --topic … --auto --out <dir>` headless 全流程 = 建项目（可选）→ 建任务 → 轮询 → 自动确认大纲 → 导出 `<标题>.md`；exit 0 成功 / 2 业务中断 | `apps/server/src/cli.ts` | 冒烟：mock 服务下 `sciflow run --topic … --auto` 出 md 文件 |
+| 7 | 深度探针 `GET /api/health/deep` 三探针（db 往返时延 / vec0 计数 / AI 配置形态）只读不真发模型请求，单项失败不互相阻断 | `health.controller.ts` | 回归「深度探针」 |
+
+## §2.15 v1.0.1 可靠性契约（2026-10-24）
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **LLM 请求必有请求级超时**：非流式按总时长、流式按空闲无数据判定；`AI_REQUEST_TIMEOUT_MS`（默认 180s，0=禁用）。外部断连信号与超时信号用 `AbortSignal.any` 合并，任一触发即中止上游；超时抛 504 且错误文案含可调参数名 | `packages/ai/src/ai-transport.service.ts`（`withTimeout`/`requestTimeoutMs`/`isTimeoutError`） | `ai-transport.timeout.spec.ts` 4 条 |
+| 2 | **流水线可停止**：`POST /api/pipeline/:id/stop` 仅接受 running/awaiting_confirmation；停止置 `cancelled`，运行步骤 `cancelled`、未执行 `skipped`；`stoppedTasks` 内存标记阻止在途节点把状态改回 running/failed；停止后 DELETE 放行 | `pipeline.controller.ts` · `pipeline.service.ts:stop/invokeGraph/notify` · `PipelinePage` 停止按钮 | `pipeline-stop.spec.ts` 5 条 + 回归 28.x 6 条 |
+| 3 | **联网检索可选接入**：`buildWebHits` 按 URL 去重、上限 6、`origin='web'`、matchScore 0.9→0.5；仅进 summary 与起草 prompt 的「不可直接引用」区块，不写 references 表；默认关闭，失败静默降级 | `apps/server/src/pipeline/pipeline-websearch.ts` · `pipeline.service.ts:crossEnrich/referencesForPrompt` | `pipeline-websearch.spec.ts` 5 条 |
+| 4 | **分数口径单一**：知识库检索分为百分制（1-100），流水线归一为 0-1（`normalizeKnScore`）；chat `sources[].score` 对外统一 0-100，前端不得再猜测量纲 | `pipeline-metrics.ts` · `chat.service.ts` · `MessageList` | `pipeline-metrics.spec.ts` 4 条 |
+| 5 | **token 打点按 caller 隔离**：`lastTokensFor(caller)` 读取最近一次；`trackBudget(taskId, caller)` 显式传参，禁止在并行分支里读全局 `lastTotalTokens` | `ai-transport.service.ts` · `pipeline.service.ts` | `ai-transport.tokens.spec.ts` 3 条 |
+| 6 | **统计口径**：平均时延只统计成功调用；Agent 用量按本地日界聚合（`normalizeAgentDate`），与 SQL `localtime` 一致 | `usage.service.ts` · `agent-trace.service.ts` | `usage.service.spec.ts` 3 条 |
+| 7 | **尾部块识别单一来源**：`tail-blocks.ts` 是唯一实现（含「研究资料」），`documents.service.polish` 与 `pipeline.graph.polish` 必须共用，禁止自写 indexOf/正则 | `pipeline/tail-blocks.ts` | `documents.polish` 与 graph 同函数 |
+| 8 | **版本单一来源**：`common/version.ts` 运行时解析 package.json；MCP serverInfo / MCP client / CLI 全部引用 `APP_VERSION`，禁止写死 | `apps/server/src/common/version.ts` | 运行时 `node -e` 断言 + MCP 握手回归 |
+
+## §2.25 v1.11 Harness 加固契约（2026-11-04，生态对标后补齐）
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **工具重复调用护栏**：同一（工具名 + 参数稳定哈希，键序不敏感）在一次请求内最多真实执行 `AGENT_TOOL_REPEAT_LIMIT`（默认 3）次，超限拒绝执行并返回可读换路提示；计数在 buildToolSet 闭包内按请求隔离 | `apps/server/src/agent/agent-tool-bridge.ts`（`toolCallKey`/`repeatCounts`） | `agent-tool-repeat.spec.ts` 3 条 |
+| 2 | **模型降级链（仅非流式）**：`AI_MODEL_FALLBACK` 配置备选模型；主模型 p-retry 耗尽且用户未取消 → 备选模型再试一次，成功以 `caller:fallback` 留痕、失败保留主模型错误。流式路径不适用（增量已出无法安全重放），禁止把降级扩到流式 | `packages/ai/src/ai-transport.service.ts`（`generateWithRetry`/`fallbackModel`/complete catch） | 门禁：完整回归 + 手动断言主模型故障场景 |
+| 3 | **桌面原生模块：预编译优先**：`prepare-server.mjs` 先用 better-sqlite3 官方 Electron 预编译包（prebuild-install `-r electron`），失败才回退 node-gyp 源码重编；`CI=true` 环境下 pnpm 交互确认自动放行 | `apps/desktop/scripts/prepare-server.mjs` · `.github/workflows/desktop-installer.yml`（tag 触发出 exe） | 本机打包实测 + CI |
+
+---
+
+## §2.26 v1.16 自主研究循环契约（2026-11-12，阶段 3+）
+
+自主科研循环（`apps/server/src/research-cycle/`）把「AI 自己迭代科研」落成可验收的工程行为。以下契约后续不得回退：
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **编排只在图里**：研究循环是 LangGraph `StateGraph`（`plan → gate → execute → evaluate → decide`），带**回边**（decide → plan）与三类终止条件（轮次上限 / token 预算 / 停滞判定）。禁止在 service 或仓库外脚本里再写一套闭环编排 | `research-cycle/research-cycle.graph.ts` | `research-cycle.graph.spec.ts` 13 条（回边/终止/门禁/降级逐条锁） |
+| 2 | **L2 门禁是硬边界**：协议未 approved 不允许执行实验。L2 用 `interrupt()` 挂起（checkpoint 落 SQLite），驾驶舱批准后 `Command({resume})` 续跑；L3+ 才自动批准（等级取 `research_program.autonomy_level`，不写在代码里） | `research-cycle.graph.ts` gate 节点 · `programs/research-records.service.ts` `createRun` 双重校验 | `research-cycle.graph.spec.ts` 门禁 3 条 + `programs-access.spec.ts` |
+| 3 | **三个角色都是 LLM 智能体**（PI / 实验者 / 评审）：PI 与评审用 `generateObject` + zod 结构化输出，禁止手写 JSON 抠取；实验者只产出单段 Python 代码，走纯文本补全 + 确定性清洗（实测 JSON schema 模式会让弱模型退化成一整行 import 清单），再由 `sanitizePythonCode` 剥围栏。PI 与评审走 `strong` 模型档，实验者走 `fast` 档 | `research-cycle/agents/{pi,experimenter,critic}.agent.ts` | agent schema/sanitize 单测 + 真实模型验收 |
+| 4 | **智能体失败要降级不能崩循环**：PI 连续失败 → `stopReason=agent_error` 体面终止（保留已落库结论）；实验者/评审出错 → 失败运行 + `inconclusive`，下一轮照常继续；实验脚本报错或**零输出/只有 import** → 把错误回灌给实验者做**修复轮**（最多 1 次）。评审结论必须有逐字引用输出的证据，`supported/refuted` 无对应证据或置信度为 0 时强制降级 `inconclusive` | `research-cycle.graph.ts` plan/execute/evaluate 节点 · `agents/critic.agent.ts` | `research-cycle.graph.spec.ts`（agent_error/质量闸）· `critic.agent.spec.ts` 6 条 · 真实模型验收 |
+| 5 | **模型输出只做确定性清洗**：代码围栏、语言标记等格式噪声由服务端清洗（`sanitizePythonCode`），不消耗模型重试 | `agents/experimenter.agent.ts` | `experimenter.agent.spec.ts` 8 条 |
+| 6 | **跑题必须可检测**：PI 方案与原问题的 bigram 重合度 < 0.3 记告警；评审额外产出 `topicAligned`，跑题时在下一轮反馈里明确要求回到原问题（闭环自纠偏） | `research-cycle.graph.ts` `topicOverlap` · `agents/critic.agent.ts` | `research-cycle.graph.spec.ts` 重合度 1 条 |
+| 7 | **真源在库**：图状态只是运行时数据，全部科研对象落 `research_*` 表；循环结束后清理 checkpoint（与主流水线一致） | `research-cycle.service.ts` `clearCheckpoint` | 服务测试 + 真实运行核对 |
+| 8 | **工具作用域只收窄不放宽**：最终工具集 = `AGENT_TOOLS_ALLOW` ∩ 技能开关 ∩ profile；默认 profile = `full`（与既有行为一致，不做静默能力削减），窄 profile 由 `AGENT_TOOLS_PROFILE` 指定 | `agent/agent-tool-profiles.ts` | `agent-tool-profiles.spec.ts` 6 条 |
+| 9 | **门禁模式用户可选**：`approvalMode=human`（默认）走人工 interrupt；`approvalMode=ai` 为全自动，由**独立 AI 专家**审批，不挂起人工。专家驳回→`approval_rejected`；专家不可用/自相矛盾→`agent_error`/驳回（fail-closed，绝不默认放行）。模式随 cycle 预算落库 | `research-cycle.graph.ts` gate · `agents/expert.agent.ts` · `ResearchCycleRunner.tsx` | `research-cycle.graph.spec.ts` 全自动 3 条 + `expert.agent.spec.ts` 4 条 + UI 模式切换 1 条 |
+| 10 | **文献线索接入 PI/评审**：首轮用 `ScholarSearchService`（OpenAlex/Crossref/arXiv）检索 6 条，标题/年份/载体/DOI 注入 PI 与 Critic 提示词，修订轮复用；检索失败降级为空、不阻塞循环；线索随协议 `design.literature` 落库可核对，摘要不进状态/提示词 | `research-cycle.graph.ts` plan · `research-cycle.service.ts` · `agents/{pi,critic}.agent.ts` | `research-cycle.graph.spec.ts` 文献 2 条 |
+
+**工具成本实测（写这张表的依据）**：同一 chat 入口，不带工具 `prompt_tokens≈1.9k`，带 24 个工具 `≈10.0–10.9k`（`llm_call_log` 实测），工具循环每步重复付费。profile 是**控制面**（模型能做什么）兼**成本面**（每步少付多少），两者同一机制。
+
+---
+
+## §2.16 v1.2 模型接入契约（2026-10-26）
+
+设置页从「手填模型名」升级为「地址 + Key → 自动发现 → 自动匹配能力」。以下契约后续不得回退：
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **三种主流协议**：`openai-compatible`（默认）/ `anthropic-messages` / `google-gemini`，分别用官方 `@ai-sdk/openai-compatible` / `@ai-sdk/anthropic` / `@ai-sdk/google` 构造模型，禁止手写各家 wire protocol | `packages/ai/src/ai-transport.service.ts buildModelWith` · `packages/ai/src/model-catalog.ts MODEL_PROTOCOLS` | `model-catalog.spec.ts` 解析/鉴权头用例 |
+| 2 | **模型发现单一实现**：`/models` 拉取与解析只在 `packages/ai/src/model-catalog.ts`（`fetchModelCatalog` + `parseCatalog`），设置页接口与 AI 传输层共用；过滤嵌入/语音/图像/视频等非聊天模型，网关上报的 context/max_output 必须保留 | `packages/ai/src/model-catalog.ts` · `apps/server/src/settings/settings.service.ts discoverModels` | `model-catalog.spec.ts` 10 条 + `settings.provider.spec.ts` 检测模型 3 条 |
+| 3 | **能力自动匹配可覆盖**：厂商行持久化 `protocol/context_window/max_output/tool_calling/models`；激活时 `applyProviderCapabilities` 写入运行连接；`maxOutput` 不得超过 `context_window`；未上报时输出上限回落 4096；`tool_calling=0` 时 chat 静默移除工具集 | `packages/db/src/schema.ts modelProviders` · `packages/ai/src/ai-transport.service.ts defaultMaxOutput/completeStream` · `settings.service.ts normalizeCapabilities` | `settings.provider.spec.ts` 夹取/回显用例 |
+| 4 | **表单值检测与测试不改状态**：`POST /api/settings/providers/discover` 与 `/test` 使用未保存的表单值；编辑态掩码 Key 必须回查库内真实 Key（禁止把 `***` 当 Key 上送）；两者都经 `checkOutboundUrl` SSRF 守卫 | `settings.controller.ts` · `settings.service.ts resolveFormKey/guardOutbound` | `settings.provider.spec.ts` 掩码/SSRF/临时配置用例 |
+| 5 | **保存即生效**：编辑激活中的厂商后必须重新 `switchProvider(id)`，避免「页面显示新模型、内存仍打旧端点」；协议/能力列走 `ensureColumn` 迁移旧库 | `settings.service.ts saveProvider` · `packages/db/src/database.ts ensureColumn` | `settings.provider.spec.ts` 激活刷新用例 |
+| 6 | **流式 usage 必需**：OpenAI 兼容 provider 固定 `includeUsage: true`，否则 token 成本与上下文占比恒为 0（本次浏览器实测发现） | `packages/ai/src/ai-transport.service.ts buildModelWith` | 实际流式冒烟返回非零 usage |
+
+## §2.17 v1.3 配置中心契约（2026-10-26）
+
+设置页从「分散的自定义面板」升级为统一配置中心：角色 / 约束工程 / 钩子 / 权限档 / 审计，**Web 设置页、CLI、对话工具三条入口共用同一服务**，任一入口写入其余入口立即生效。以下契约不得回退：
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **单一写入口**：所有配置写操作只经 `ConfigCenterService`；控制器、CLI（`sciflow config`）、对话工具（`config.*`，MCP 工具）都调用它，禁止各自直写 `app_setting` 或新表 | `apps/server/src/config/config-center.service.ts` · `apps/server/src/config/config.controller.ts` · `apps/server/src/config/config-cli.ts` | `config-center.spec.ts` 22 条（含 actor=chat/cli 审计、导入导出、审计不可变）+ `ConfigCenterSettings.test.tsx` 6 条（面板走真实 API） |
+| 2 | **权限矩阵**：`strict`（只读）/ `balanced`（角色/约束/钩子/提示词/技能）/ `open`（除核心保护项外全部）/ `unrestricted`（全面放开，默认）。核心保护项（鉴权、密钥与加密、SSRF、审计、数据库路径、监听地址端口、不可逆数据操作）**任何档位不可改**，且不经配置中心暴露 | `apps/server/src/config/permission.ts` · `config.service.assertAllowed` | `permission.spec.ts` 6 条 + 回归「strict 拒绝写入并留拒绝审计」 |
+| 3 | **角色唯一事实源**：`config_role`（is_default=1）是对话角色；设置页「角色与技能」保存时同步写角色库；ChatService 的 `personaConfig()` 优先读角色库，旧 `app_setting.system_prompt` 仅兼容回退 | `apps/server/src/settings/settings.service.ts getPersona/savePersona` · `apps/server/src/chat/chat.service.ts personaConfig` | 实测更新默认角色提示词后模型按新角色回答（ZETA-9 标记法） |
+| 4 | **约束/钩子注入单一实现**：`packages/ai/src/prompt-augmentation.ts` 的 `loadPromptAugmentation(scope)` 是唯一注入点，在 `AiTransportService` 的 complete / completeStructured / completeStream / 非流式工具回退四处 system 层统一追加；scope 由 caller 归类（chat/chatSessionSummary/judgmentIntent → chat，其余 → pipeline） | `packages/ai/src/prompt-augmentation.ts` · `packages/ai/src/ai-transport.service.ts withConfigAugmentation` | `prompt-augmentation.spec.ts` 6 条；实测开启约束后 prompt_tokens 2187 vs 关闭 2021 |
+| 5 | **钩子真实执行**：`chat:before` 的 block 钩子在 ChatService.stream 前置拦截（SSE error 事件）；`chat:after` / `pipeline:after` 在完成回调触发 webhook（`checkOutboundUrl` SSRF 守卫 + 5s 超时）；`pipeline:before` 在 PipelineService.create 前置拦截；每次执行与拒绝都落 `config_audit` | `apps/server/src/chat/chat.service.ts stream` · `apps/server/src/chat/chat.controller.ts onComplete` · `apps/server/src/pipeline/pipeline.service.ts create/invokeGraph` | `config-center.spec.ts` 钩子用例；实测关键词命中返回「禁止导出密钥（安全策略）」、普通问题正常放行 |
+| 6 | **技能开关真实生效**：`AgentToolBridge.enabledSkillKeys()` 读 `app_setting.skills`，按前缀裁剪工具（literature/references→文献检索、knowledge→知识库问答、writing/outline/chat.answer→写作辅助）；`config.*` 工具不受技能开关影响（否则关掉技能就无法在对话里改回来）；无项目上下文时不暴露必填 `projectId` 的工具 | `apps/server/src/agent/agent-tool-bridge.ts` | `agent-skill-gating.spec.ts` 4 条 |
+| 7 | **无项目也能配置**：ChatService 的 `useTools` 不再要求 projectId，配置类工具在任意对话可用；对话工具步数上限 12、单轮工具调用上限 24（一次对话完成多项配置） | `apps/server/src/chat/chat.service.ts` | 实测一次对话完成 4 项配置（角色+约束+钩子+预览，工具调用 4 次） |
+| 8 | **审计只追加**：`config_audit` 记录 actor（ui/cli/chat）、类别、动作、allowed、reason；被拒操作必须留痕；任何档位不得删除或改写审计 | `config-center.service.ts audit/listAudit` | 回归「strict 拒绝配置写入」「拒绝操作写入审计」 |
+| 9 | **预设离线可用**：内置 4 套（学术严谨/高效产出/审稿人视角/数据处理型），应用幂等（只替换 `source=preset` 的约束与 `[预设]` 前缀钩子）；外部来源用「粘贴导入」承接，不依赖外网 | `apps/server/src/config/config-presets.ts` | 回归「预设重复应用不叠加」 |
+| 10 | **导入导出**：`GET /api/config/export` 输出角色/约束/钩子/权限（不含审计与密钥）；`POST /api/config/import` 幂等（同标题同规则、同名同事件同类型跳过），`--replace` 清空用户自建项并先写 `bulk_delete` 审计，单条坏数据只跳过并回报；`permission.mode` 默认不应用（防借导入提权） | `apps/server/src/config/config-center.service.ts exportBundle/importBundle` · `config-cli.ts` · `ConfigCenterSettings.tsx` | `config-center.spec.ts` 导入导出 5 条 + CLI 实测两次导入不叠加 |
+| 11 | **权限升档逐级**：切换权限档有专用门禁——降档自由、升档每次最多一级（strict→balanced→open→unrestricted），非法值 400；DB 脏值 fail-closed 回落 strict。防止「只读」被一键解除 | `apps/server/src/config/permission.ts PERMISSION_RANK/parsePermissionMode` · `ConfigCenterService.setPermissionMode` | `permission.spec.ts` 6 条 + `config-center.spec.ts` 升档 2 条 + 实测 strict→unrestricted 被拒 |
+| 12 | **审计不可变**：`config_audit` 有 `BEFORE UPDATE/DELETE` 触发器，任何档位（含 unrestricted）都不能改写/删除审计；`merge=false` 批量删除前先快照写审计 | `packages/db/src/database.ts trg_config_audit_no_*` | `config-center.spec.ts` 审计不可变用例 |
+| 13 | **钩子唯一**：`config_hook` 建 `(name,event,type)` 唯一索引，创建前预检；防止同名钩子重复注入 | `packages/db/src/database.ts ux_config_hook_name_event_type` · `createHook` | `config-center.spec.ts` 重复钩子用例 |
+| 14 | **非流式对话同源**：`/api/chat` 与 MCP `chat.answer` 显式 `context: 'chat'`（作用域正确），并执行 `chat:before` block 钩子（400 可读原因） | `packages/ai/src/ai.service.ts chat/chatWithContext` · `ChatService.answer` | 实测关键词命中返回 400、普通消息正常 |
+
+**运行时巡检**：`node scripts/monitor_config_center.mjs --base <url> --log <log>` 只读检查 19 项（服务健康/配置完整/钩子唯一/注入预览全覆盖/工具暴露/对话真实返回+usage/审计拒绝原因/日志无 error），退出码非 0 即有异常；已接入 CI `regression` job（回归之后执行），本地验收矩阵新增 F4/F5 两条 CLI 冒烟（`final_acceptance.py` 23 项）。
+
+## §2.18 v1.4 扩展中心契约（2026-10-26）
+
+六类科研资产（skill / mcp / role / constraint / hook / prompt）统一管理，内置目录随仓库发布、默认启用，四种添加入口与对话入口共用同一服务。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **单表单一服务**：所有资产存 `extension_asset`（唯一 key 索引），写操作只经 `ExtensionsService.upsert/toggle/remove`；禁止在别处直写该表 | `packages/db/src/database.ts extension_asset` · `apps/server/src/extensions/extensions.service.ts` | `extensions.service.spec.ts` 18 条 |
+| 2 | **内置目录默认启用**：`BUILTIN_EXTENSION_ASSETS`（87 条：20 MCP / 31 技能 / 10 角色 / 10 约束 / 4 钩子 / 12 提示词）首次启动幂等播种，`enabled=1`；内置不可物理删除，只能停用（`resetBuiltin` 一键恢复） | `apps/server/src/extensions/extension-catalog.ts` · `ensureSeed/remove/resetBuiltin` | 回归「内置资产默认全启用」+ spec「内置不可物理删除」 |
+| 3 | **投影真实生效**：启用/停用必须同步对应子系统——技能→`app_setting.skills`（保留内置 4 项）、角色→`config_role`、约束→`config_constraint`（source=extension）、钩子→`config_hook`、提示词→`custom_prompt`（仅显式应用）、MCP→`mcp_server`（仅 HTTP 端点） | `ExtensionsService.project*` | spec「停用资产会撤回投影」+ 回归「扩展约束已注入 chat / 停用后不再注入」 |
+| 4 | **提示词模板需显式应用**：模板 `enabled=1` 仅代表可用，不自动覆盖系统默认；`POST /api/extensions/:id/apply` 才写 `custom_prompt`，同 toolKey 只保留一个生效（`app_setting.extension_prompt_active`） | `projectPrompt/applyPrompt` | spec「默认不覆盖 / 应用后写入 / 切换生效」；回归 citations 回填用例 |
+| 5 | **私有优势工具不外泄**：`visibility=private` 的资产（SciFlow 自研 13 项）不进导出包、不出现在外部 MCP 客户端的 `extension.list`；仅本机设置页可见可关 | `listPublic/exportBundle` · `mcp.service.ts extension.list` | spec「导出包排除 private」+ 回归「扩展导出不含私有工具」 |
+| 6 | **四种添加格式**：SKILL.md（YAML frontmatter）/ 模板 JSON（`{kind,name,manifest}`，可数组）/ MCP JSON（`mcpServers`，仅 http(s) 端点）/ ZIP（自动遍历内部 SKILL.md 与 JSON）；错误逐条返回（不整体失败），无法识别时 400 带格式说明 | `parseSkillMarkdown/parseTemplateJson/parseMcpJson/importRaw` | spec 解析器 4 条 + 导入 3 条 + 回归「SKILL.md 导入 / 非法格式报错」 |
+| 7 | **一键 AI 生成**：按 kind 模板出 JSON 草稿（不落库）；`jsonrepair` 修复模型常见非法 JSON；结构校验失败给可读错误；前端关闭 60s 默认超时（AI 生成允许 3 分钟） | `ExtensionsService.generate` · `ExtensionCenter.tsx` | spec「jsonrepair 容错」+ 真实浏览器验证 |
+| 8 | **每个资产面板都可添加**：角色/技能/提示词/约束/钩子/MCP 面板均挂 `ExtensionQuickAdd`（同一套四种方式），不允许某类资产只能从单一入口添加 | `ConfigCenterSettings.tsx` · `PersonaSettings.tsx` · `SettingsPage.tsx` · `McpToolList.tsx` | `ExtensionCenter.test.tsx` 11 条（含四模式按钮齐全） |
+| 9 | **对话入口**：MCP 工具 `extension.list/create/toggle/generate`；`extension.list` 对模型同样过滤 private（外部客户端不掌握私有资产清单） | `mcp.service.ts` · `agent-tool-bridge.ts` allowlist | 实测 MCP 工具数 23 且含 4 个 extension.* |
+| 10 | **CLI 对等**：`sciflow ext list|toggle|import|export|reset`，与 Web/对话同一 REST 服务 | `apps/server/src/config/config-cli.ts registerExtensionCommands` | CLI 实测 list/toggle/import/export |
+
+## §2.24 v1.9.1 全路由探针与接线真实性契约（2026-10-29）
+
+第二轮审计的方法论：**不看代码写了什么，看运行时真实发生什么**。工具：`scripts/route_probe.py`
+（97 条真实 HTTP 探针，入库可复跑）+ 读写两端扫描（app_setting / env / 前端 API 路径 vs OpenAPI）。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **全局输入管道不得误杀标量**：Nest 的 `@Body('field')` 逐字段取参会把 string 传给管道；管道若强制「必须是对象」，所有逐字段取参的端点全量 400。规则：标量放行、数组仍拒绝 | `common/input-validation.pipe.ts` · `references.controller.ts gap` | `input-validation.pipe.spec.ts` 5 条 + 回归 27.9 |
+| 2 | **新控制器禁止 `@Body('x')` 逐字段取参**（与管道语义强耦合）：一律 `@Body() body: {...}` + 显式校验 | 全部 controller | 代码审阅 |
+| 3 | **引用渲染器的降级产物必须可审计**：`[文献N]`（越界降级）与未渲染的 `[Ref:N]`/`[补充文献]` 是「引用断链」的物证，体检必须红牌（`residualAnchors`，每处 −10 不封顶；落库为空再 −60），客观检查器必须计硬伤（占位封顶 40） | `packages/core/src/citation-audit.ts` · `quality-audit.ts` | 回归 27.6/27.7 + citation-audit.spec 3 条 |
+| 4 | **起草 prompt 不得自相矛盾**：文献池为空时必须显式禁用引用标记（此前要求 `[Ref:编号]` 又给「（无可用文献）」，模型只能编造） | `packages/ai/src/prompts.ts DRAFT_SECTION` | prompt 分支 hasRefs 两侧文案 |
+| 5 | **配置三处可达性**：`pipeline_token_budget` / `retrieval_rerank` / `websearch_in_pipeline` 必须经 `GET/POST /api/customization/pipeline-settings` 读写，设置页有对应控件；禁止「报错让用户去设置，设置里却没有」 | `customization.service.ts` · `SettingsPage.tsx PipelineEditor` | 回归 27.8a-f |
+| 6 | **预算缺省口径单一**：键不存在 = 300k（与 `trackBudget` 一致），存在时 0 = 不限；两处读数不得分叉 | `customization.service.ts` vs `pipeline.service.ts` | 回归 27.8b |
+| 7 | **静态 OpenAPI 契约必须随版本再生**：`openapi.json` / `openapi.d.ts` 落后 5 个小版本（1.4.0→1.9.0）属于文档失真；发版前必须 `pnpm openapi:gen` | `openapi.json` · `apps/web/src/api/openapi.d.ts` | version 字段 = package version |
+| 8 | **审计手段入库**：`scripts/route_probe.py` 是全路由真实探针（建项目/文档/文献 → GET 全量 → POST 写操作），新路由合入时同步补探针 | `scripts/route_probe.py` | 本轮 97 条全通过 |
+
+## §2.23 v1.9 检索链路真实性、模块边界与引用体检契约（2026-10-29）
+
+本轮做的是「把宣称的能力真正接通」，而不是加功能。三条历史假象被修掉：向量检索从未产出过向量、
+模块边界规则从未命中、引用体检只查三类问题。以下契约禁止回退。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **嵌入必须真正可用**：`node-llama-cpp` 3.x 的 embedding 能力在 `model.createEmbeddingContext()` 返回的 `LlamaEmbeddingContext` 上（`LlamaContext` 没有该方法）。禁止在 `LlamaContext` 上调 `getEmbeddingFor`（历史缺陷：恒返回 null → 向量索引永远为空，「混合检索」实际只有 FTS5 单路） | `packages/retrieval/src/embedding.service.ts` | `retrieval-quality.spec.ts` 16 条 + 真实 /v1/embeddings 端点实测（embeddedChunks 从 0 变 1） |
+| 2 | **嵌入双后端**：`EMBEDDING_PROVIDER=auto`（默认）按「有 GGUF → local，否则 AI 已配置 → api」选择；`api` 走当前模型厂商的 `/embeddings`，零额外配置。Anthropic Messages 协议不提供 embeddings，必须返回 null 而不是伪装支持 | `embedding.service.ts` · `packages/ai/src/ai.service.ts embedTexts` · `knowledge.module.ts REMOTE_EMBEDDER` | `resolveEmbeddingBackend` 6 条单测 + health `capabilities.embeddingBackend` 实测为 api |
+| 3 | **维度守卫前置**：vec0 表固定 `FLOAT[384]`，任何后端产出的向量必须等于该维度；不符返回 null（该块降级全文检索），禁止让 insert 抛错回滚整个上传事务 | `embedding-config.ts toVectorBlob` | `toVectorBlob` 3 条（384 通过 / 3 与 768 拒绝 / null） |
+| 4 | **批量嵌入是主路径**：上传必须走 `embedBatch`（API 一次 64 条；本地受限并发 4），禁止逐条 `Promise.all(map(embed))` 打爆上游或抢满 CPU | `knowledge.service.ts embedChunks` | 上传实测（1 次请求 1 个 chunk，日志 1 次调用） |
+| 5 | **检索必须去冗余**：RRF 融合后做 MMR（λ=0.7，候选上限 40）。同一文档相邻块（800 字切块 + 15% 重叠）不得占满 topK | `packages/retrieval/src/mmr.ts` · `knowledge.service.ts search` | `retrieval-quality.spec.ts` 4 条（首条最相关 / 重复块被压掉 / 候选不足不填充 / 向量余弦优先） |
+| 6 | **外部学术 API 必须缓存 + 并行**：`ScholarSearchService.search` 走 10 分钟 TTL 进程内 LRU（200 条），三源 × 各关键词并行；禁止按 query 串行（4×3 = 12 次串行往返） | `research/scholar-search.service.ts` | `SCHOLAR_CACHE_TTL_MS` 可关；日志「学术检索」命中次数 |
+| 7 | **包边界必须可执行**：接口层（apps/server）禁止 `packages/{core,db,ai,retrieval}/src/**` 深路径导入，只允许 `apps/server/src/common/*` 桶或包名。**原 ESLint pattern `**/packages/*/src/*!(index)*` 在 minimatch 下从未命中（规则形同虚设）**，现改为显式列目录 | `eslint.config.mjs` | 反向探针：把深路径导入塞进 apps/server 必须报 error（实测已报） |
+| 8 | **包必须有公共出口**：`packages/{ai,retrieval}/src/index.ts` 是唯一出口（此前 `@sciflow/ai` 与 `@sciflow/retrieval` 连 package.json 都没有） | 各包 `index.ts` + `package.json` | 桶文件是唯一允许深路径的位置（`apps/server/src/common/*.ts` / `ai/*.ts`） |
+| 9 | **引用体检判定必须可复用**：判定下沉为纯函数 `packages/core/src/citation-audit.ts`，服务层只取数。新增 5 类判定：未引用条目 / 锚点断号 / 重复 DOI / 同 DOI 元数据冲突 / 孤儿引用；`issues: string[]` 历史契约保留，另给 `details[]`（level/code/items）供 UI 分级 | `packages/core/src/citation-audit.ts` · `documents.service.ts citationAudit` | `citation-audit.spec.ts` 11 条 + 回归 27.1-27.5 全绿 |
+| 10 | **引用体检禁止 N+1**：一次 `inArray` 批量取回 reference，禁止逐条 `db.select()`（200 条引用 = 200 次查询） | `documents.service.ts` | 代码审阅 + `citation-audit.spec.ts` 纯函数口径 |
+| 11 | **重组件必须按需加载**：`ForceGraph`（sigma+graphology ≈450KB）、`WritingEditor`（CodeMirror ≈610KB）、`WritingPreview`（react-markdown+KaTeX）必须 `lazy()`；编辑器句柄放独立轻量模块 `writing/editor-handle.ts`，否则父页面静态 import 会把 CodeMirror 拉回首屏 | `literature/LiteratureTools.tsx` · `WritingPage.tsx` · `writing/editor-handle.ts` | 构建产物：LiteraturePage 570KB→106KB、WritingPage 682KB→54KB，新增独立 ForceGraph/WritingEditor chunk |
+| 12 | **查询路径必须有索引**：`citation(reference_id)`、`memory_log(project_id, created_at DESC)`、`pipeline_task(status)`、`document(project_id, updated_at DESC)`、`reference(project_id, fingerprint)`。最后一项必须在 `ensureColumn('reference','fingerprint')` 之后建（老库该列靠迁移补齐，提前建会整段失败） | `packages/db/src/database.ts` | 启动日志无 `no such column`（历史回归曾因此 26 个 spec 全红） |
+
+## §2.22 v1.8 归属校验收口与实例级配置分级（2026-10-28）
+
+企业模式（`AUTH_MODE=jwt`）此前只有 5 个控制器有归属校验（documents / references / experiments / projects / pipeline），
+其余 8 个零校验；实例级配置（模型 Key / 权限档 / 钩子 / 扩展资产 / 用量 / 联网 Key）只要求登录。
+本批次把两类边界固化为契约。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **子资源归属必须可断言**：任何「有 projectId 的表」都要有对应的 `assertXxx(id, user)`，语义统一为「子资源 → 项目 → owner」，非 owner 一律 404（不泄露存在性），本地模式 no-op | `common/project-access.service.ts`（knowledge/memory/submission/researchDesign/reviewComment/agentExecution/qualityReport 七类新断言） | `project-access-subresources.spec.ts` 10 条（非 owner 404 / owner 放行 / 幽灵 id 404 / 本地模式全放行 / assertAdmin 三态） |
+| 2 | **控制器不得裸奔**：所有带数据面的 controller 必须注入 `ProjectAccessService` 并在每个 handler 断言。静态扫描（`scan_access.py` 思路）应只剩「无状态 AI 助手」与「全局期刊库只读」6 个端点可豁免 | 13 个 controller | 静态扫描 + `auth-surface.spec.ts` |
+| 3 | **实例级配置按角色分级**：`settings` / `config` / `extensions` / `customization` / `usage` / `websearch` / 期刊库增删 挂 `AdminGuard`（企业模式仅 admin，本地模式放行）。理由：改 baseURL 即可把全实例请求引到自己的服务器，改权限档即可放开自身限制 | `auth/admin.guard.ts` + 上述控制器类级 `@UseGuards(AdminGuard)` | `auth-surface.spec.ts` 2 条（控制器清单 + 三态语义） |
+| 4 | **禁止跨租户聚合**：`dashboard/overview`、`memory`、`documents` 列表在无 projectId 时，企业模式分别 403 / 403 / 400；本地模式保持原全库语义（CLI 与回归依赖） | 对应 controller | JWT 真机验证 23 项 |
+| 5 | **行业口径一致的双分数必须并排**：质量页必须同时展示「客观分（可复现、带指纹、流水线门禁使用）」与「LLM 7 维分（仅参考）」，并明写前者是门禁依据 | `QualityPage.tsx #objective-audit` | `QualityPage.test.tsx` 4 条（自动触发 / 六维+指纹 / 硬伤口径 / 门禁说明） |
+| 6 | **记忆必须项目作用域**：`MemoryPage` 请求必带 projectId；企业模式无 projectId 记忆列表直接 403 | `MemoryPage.tsx` · `memory.controller.ts` | `MemoryPage.test.tsx` 2 条（每个请求都带 projectId / 空态说明） |
+| 7 | **前端不得让成员吃 403**：能改实例配置的页面必须先解析角色；member 看到说明卡 + 个人偏好（外观），而不是整页报错 | `lib/use-auth-role.ts` · `SettingsPage.tsx` | JWT 真机（member 设置页降级视图） |
+| 8 | **筛选后的批量操作只作用于可见集合**：「导入当前结果」必须用 `visibleHits` 而不是 `hits`，避免把被过滤掉的条目静默写入 | `LiteratureTable.tsx importAll` | 按钮文案与实现同源（`导入当前结果`） |
+| 9 | **总览层必须先回答「哪几篇没达标」**：质量页必须提供项目级文档分总览（客观分对当前正文实时算 + 最新 LLM 分），最差优先；前端必须自带排序兜底，不得依赖接口顺序 | `QualityPage.tsx#quality-overview` · `quality.service.ts projectOverview` | `quality-overview.spec.ts` 5 条（排序/计数/LLM 最新/引用口径/空项目）+ `QualityPage.test.tsx` 3 条（总览渲染/默认选中最新/点击切换） |
+
+## §2.21 v1.7 主题风格包与科研能力补齐契约（2026-10-28）
+
+本批次把「明暗两态」升级为「风格 × 明暗」正交体系，并把三处对标科研工具的硬缺口接进自动化流水线。契约如下，禁止回退。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **主题两维正交**：`data-theme`（风格，6 套）与 `.dark`（明暗）互不覆盖；`applyTheme(resolved, style)` 是唯一写入点（同时写 data-theme / class / colorScheme / theme-color）。禁止在组件里手写 `classList.toggle('dark')` | `lib/theme.ts` · `App.tsx ThemeContext` | `theme.test.ts` 4 条（6 套齐备 / 元数据完整 / 两维互不覆盖 / 非法值回落） |
+| 2 | **风格包只覆盖 token**：`styles/themes.css` 每套包覆盖调色板（`--color-*`）、品牌与语义 token、圆角/阴影/密度/字体刻度；不得用 `!important` 大面积压组件，不得改组件类名。调色板必须保持 50→950 单调（组件大量成对使用 `bg-slate-50 dark:bg-slate-900`，反向即破版） | `apps/web/src/styles/themes.css` | 构建产物：`.text-slate-800{color:var(--color-slate-800)}` 仍成立；6 主题计算样式探针 |
+| 3 | **首屏无闪变**：`index.html` 预置脚本必须同时写 `data-theme` 与 `.dark`，且默认值与 `readStoredTheme()` 一致（均为 `system`）。历史上的 41ms 深→浅闪变源于两处默认值不一致 | `apps/web/index.html` · `lib/theme.ts` | 浏览器实测（无存储 + 系统深色） |
+| 4 | **主题不得只换卡片**：代码块、CodeMirror、玻璃顶栏、滚动条、选区、骨架屏、氛围光、焦点环全部走 token（`--code-*` / `--glass-*` / `--scrollbar-*` / `--selection-bg` / `--skeleton-*` / `--ambient-*` / `--focus-ring-*`）；`index.css` 的 `:root/.dark` 块外不得出现裸 hex | `index.css` | 脚本扫描（块外 hex = 2，均为注释/导出物） |
+| 5 | **高对比主题是真无障碍**：2px 实线边框、3px 焦点框、关闭 backdrop-filter 与氛围光、正文 21:1；不得只做「配色更艳」 | `themes.css :root[data-theme='contrast']` | 对比度脚本核算 |
+| 6 | **学术库发现检索只读**：`POST /api/references/discover` 只返回元数据，不入库、不下载全文；开关与流水线同一 `scholar_search` 设置（`isEnabledNow()`），AI_MOCK=1 时返回 `enabled:false` | `references.controller.ts discover` · `ScholarSearchService.isEnabledNow` | 实测 3 条真实命中（2025 异配图论文） |
+| 7 | **新颖性预检零 LLM**：重叠度用纯函数 `noveltyOverlap`（选题 token 为分母取最相近标题覆盖率），不得引入 LLM 判断（会漂移且对未见文献会编）；≥70% 必须写入产物「研究说明」，不只留日志；失败必须 fail-soft（预检不可用不阻断流水线） | `pipeline-metrics.ts noveltyOverlap` · `pipeline.graph.ts novelty-check` | `pipeline-metrics.spec.ts` 4 条 + 图节点 try/catch |
+| 8 | **自动配图必须可渲染**：写作预览的 ```mermaid 代码块由 `MermaidBlock` 渲染为 SVG；mermaid 必须按需 `import()`（主包禁止引用）；渲染失败保留源码 + 提示，不得白屏 | `components/MermaidBlock.tsx` · `WritingPreview.tsx CodeBlock` | 构建产物：主 chunk 无 mermaid；浏览器实测 SVG 出图 |
+| 9 | **步骤清单仍单一来源**：新增步骤必须同时写入 `packages/core/pipeline-steps.ts`（key/label/configurable/uiStep）与 graph 的 `.addNode`/`.addEdge`，且 graph 的 `stepEnabled()` 使用同名 key | `pipeline-steps.ts` · `pipeline.graph.ts` · `PipelineService.stepEnabled` | 设置页实测 10 步；`customization` API 返回含 novelty-check |
+
+## §2.20 v1.6 品牌与界面体系契约（2026-10-27）
+
+界面打磨不是"换配色"，而是把**信息层级、品牌识别、依赖可达性**三件事固化成契约，避免回退。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **品牌标志唯一来源**：`BrandMark` 是全站 logo 的单一实现（与 `public/favicon.svg` 同源几何）；三层语义不可删——主笔（粗细渐变 S）、主流线（贯穿细线）、成果节点（实心圆+外环）。禁止退回"圆环 + 渐变"式通用图形 | `components/BrandMark.tsx` | `BrandMark.test.tsx` 5 条（结构齐备 / inverse 不用渐变 / 词标与标语） |
+| 2 | **三种变体分工**：`mono`（跟随 currentColor）/ `gradient`（浅底彩色）/ `inverse`（品牌渐变底上的纯白反白）。品牌徽标容器 `.brand-logo` 内图形恒为白色（`--on-brand` 是给渐变按钮文字用的，暗色下是深墨色） | 同上 + `index.css .brand-logo` | 暗色模式实测（曾整块变白） |
+| 3 | **七种表面按信息角色选用**：`panel` 主面板（唯一带阴影）/ `inset` 内嵌（无阴影）/ `metric` 指标（无边框、可密集并排）/ `accent` 强调（品牌描边）/ `warning` 警示（琥珀左条）/ `danger` 危险区 / `plain` 纯容器。规则：**越靠近内容的容器阴影越弱**；禁止 `Card` 套 `Card` | `components/ui.tsx SurfaceTone` · `index.css .surface-*` | `ui.test.tsx` 4 条（各 tone 类名独立 / inset 不带 panel / plain 无表面类） |
+| 4 | **三档字体栈，零 CDN**：`--font-ui`（界面）/ `--font-read`（论文正文与预览，中文宋体+拉丁衬线）/ `--font-mono`。全部系统字体，不引 Google Fonts（境内不可达且阻塞首屏），不新增字体文件 | `index.css :root` + `.reading-surface` | 构建产物无字体外链 |
+| 5 | **页面抬头（Hero）**：每页首屏必须有唯一主任务锚点（标题 + 元信息 + 主操作）；低频配置（如项目写作偏好）折叠进 `<details>`，不占首屏最贵位置 | `DashboardPage.tsx .page-hero` | 浏览器实测（亮/暗/390px） |
+| 6 | **功能入口不得与主内容争层级**：5 个功能入口用紧凑分段导航条（`.page-quicknav`），不用 5 张等大卡片压在草稿列表之前 | `DashboardPage.tsx` | 浏览器实测 |
+| 7 | **设置页导航必须等于真实 DOM**：`sections` 数组顺序与页面 id 顺序一致；每个 id 必须在 DOM 中存在；跳转用滚动容器 `.app-shell__content` 而非 window（应用是壳内滚动），并锁定高亮 400ms 防重渲染回弹 | `SettingsPage.tsx` | 浏览器实测 4 个锚点逐个跳转（scrollTop + active 双验证） |
+| 8 | **境外模型必须显式标注**：厂商预置按「国内直连 → 本地 → 境外」排序；`region: 'global'` 的项在按钮上加「境外」角标，选中后在表单底部给替代路径说明（国产厂商 / 自建兼容网关 / 合规专线）。不写死任何第三方中转域名（寿命短、合规性各异） | `ProviderManager.tsx QUICK_PROVIDERS / REPLACE_HINT` | 类型 + 浏览器实测 |
+| 9 | **图表层按依赖拆分**：零依赖的 `MetricCard / ChartEmpty / SegBar / Sparkline / ProgressRing` 在 `charts-primitives.tsx`；recharts 组件（Donut/HBar/LineChart）在 `charts.tsx` 并 re-export 基础件，调用方 import 路径不变。约束：**主包不得引用 recharts** | `components/charts*.tsx` | 构建产物校验：主 chunk 中 `recharts` 出现次数为 0 |
+| 10 | **列表与空态语义**：空态用 `.empty-surface`（虚线 + 极浅底），不得长得像正常内容卡；长列表用 `.list-heavy`（`content-visibility:auto`）；全局 `scrollbar-gutter: stable` | `ui.tsx EmptyState` · `index.css` | 浏览器实测 |
+| 11 | **错误不得被吞**：页面级 `error` 必须渲染（`ErrorBox` + 可关闭）；禁止解构为 `_error` 后丢弃 | `LiteratureTable.tsx` | 浏览器实测（检索失败可见） |
+
+## §2.19 v1.5 客观质量检查器与真实论文流水线契约（2026-10-27）
+
+用 u2-flash 从 UI 端到端跑通多篇完整论文后固化：质量判定必须确定性可复现，起草必须名实相符，参考文献必须主题相关，润色不得挂死。
+
+| # | 契约 | 落点 | 护栏 |
+|---|---|---|---|
+| 1 | **门禁唯一依据是客观分**：`checkPaperQuality()` 六维各 20 分归一 100，硬伤封顶 40（空文 0）；LLM 分只作回炉建议，不参与合格判定——同一稿实测 LLM 在 27–59 漂移，取 min 会导致无意义回炉 | `packages/core/src/quality-audit.ts` · `pipeline.graph.ts effectiveScore` | `quality-audit.spec.ts` 23 条（含 100 次同分同指纹） |
+| 2 | **确定性要求**：纯函数、无随机/时间/网络；入口先归一 `
+
+`；任何带 `/g` 的模式只能经无状态克隆测试（`testAny`）——否则 `lastIndex` 会污染后续判定 | 同上 `testAny / text.replace(/
+
+?/g)` | spec「CRLF 等价」「/g 状态隔离 50 次」 |
+| 3 | **学术诚信（名实相符）**：自述「不报告新的原始实验」却写「实验结果表明…优于/提升/有效」且无结果表/带数值指标 → 硬伤封顶 40。本系统不运行实验，任何本文实证结论都属编造 | `NO_EXPERIMENT_DISCLAIMER` · `EXPERIMENT_RESULT_CLAIM` · `EXPERIMENT_EVIDENCE` | spec 4 条（含真实验稿不误伤） |
+| 4 | **结构按文章类型判定**：综述/框架类要求 引言/讨论/结论（「方法」可由框架/机理/评估协议承担，「结果」可由评估/分析承担）；实证类（有结果表或带百分数指标）才要求完整 IMRaD | 同上 `SYNONYMS / isReviewLike` | spec「综述类不误罚」「实证类仍要求」 |
+| 5 | **起草名实相符**：`DRAFT_SECTION` 明令禁止把文献结论写成「本文实验表明」；`planResearch`/`WRITE_OUTLINE` 禁止把「跑实验并报告新结果」列为目标——大纲不设实验章节，只设「评估协议设计 / 已有实证证据归纳」 | `packages/ai/src/prompts.ts` | 真实跑批全文 0 处虚构实证结论 |
+| 6 | **引用池一致性**：起草 prompt 的 `[Ref:N]` 与渲染必须用同一输入（projectId + topic + keywords）重算同一池；池排序按 token 相关度（不按被引数），相关条目 ≥8 时剔除零相关旧条目 | `refsForDraft/referencesForPrompt` · `buildRefsPrompt/renderCitations` 签名 | 真实跑批 19/19 条主题相关 |
+| 7 | **评审附录编号**：必须 `citation JOIN reference ORDER BY citations.created_at`（= 正文首次出现序），不得用文献池顺序拼附录 | `pipeline.graph.ts reviewRefRows` | 评审不再误报「引用编号错乱」 |
+| 8 | **学术检索只收相关**：OpenAlex/Crossref/arXiv 三源合并后过「标题≥1 token + 合计≥2 token + 覆盖≥2 个检索词分组」门禁，再按覆盖数排序 | `ScholarSearchService.search` | 真实跑批离线验证 20 条全为 GNN 主题 |
+| 9 | **润色不得嵌套限流**：`polish()` 不得再包 `this.limit`（`complete()` 内已有同一 p-limit，嵌套会饿死）；并行润色 + 单段 90s 超时 + 600s 总看门狗，失败保留原文 | `packages/ai/src/ai.service.ts polish` | 真实跑批 14 段 90s 完成（原 5.5h 挂死） |
+| 10 | **LLM 评审 fail-soft**：评审空响应/解析失败只降级为「仅客观检查」，不得把已起草完成的流水线判 failed | `pipeline.graph.ts try/catch reviewResult` | 真实事故复现（第 3 轮 failed → 修复后第 4/5 轮完成） |
+| 11 | **产物必须可见**：工作台优先展示任务产物文档（`task.documentId` > 显式选择清理 > 最新一篇）；写作页 `?doc=` 变化必须同步（原只在挂载时读一次） | `WorkspacePage.tsx` · `WritingPage.tsx` | 浏览器实测两次（旧稿 → 新稿） |
+| 12 | **失败可重跑**：`POST /api/pipeline/:id/rerun` 沿用原主题新建任务（运行中拒绝，AI 未配置拒绝）；流水线页失败卡片给按钮 | `PipelineService.rerun` · `PipelinePage.tsx` | `pipeline-rerun.spec.ts` 4 条 |
+| 13 | **导出格式**：Markdown/docx 的参考文献作者必须 `parseAuthors()` 后再拼，禁止直接把 JSON 数组字符串写进正文 | `documents.service.ts exportMarkdown` | 导出实测「— Soroush Vahidi (2025), arXiv」 |
+| 14 | **检查器可复用**：API `GET /api/documents/:id/objective-audit`、CLI `quality check`、写作页「客观检查器」面板三处共用同一纯函数；前端切换文档必须清空上一份报告 | `documents.controller.ts` · `config-cli.ts` · `WritingToolsPanel.tsx` | CLI + UI 实测同分同指纹 |
+
+## §2.9 模块化布局（M3，2026-10-18）
+
+**分层定案**：`packages/` = 核心能力层，`apps/server/src` = 接口层（controller/module/websearch/settings 等）。
+
+```
+packages/core/       纯工具（json-guard · authors · fingerprint）——零依赖
+packages/db/         数据层（schema · database · secret-crypto）——SQLite/drizzle/sqlite-vec
+packages/ai/         AI 层（ai-transport · ai.service · prompts · mock-gateway）——AI SDK/Nest 装饰器
+packages/retrieval/  检索层（knowledge.service · embedding.service）——依赖 core/db/ai
+```
+
+**过渡机制**：apps/server/src 原 10 个位置为 re-export 桶，调用方 import 零改动；tsconfig include 收录 packages 源码统一编译（装饰器元数据/sqlite-vec/原生模块等特案依赖此模式，贯穿不变）。
+
+**依赖红线（ESLint 强制）**：① packages 禁止反向依赖 apps/server；② 接口层只经桶或包出口使用能力，禁深路径绕过。真 workspace 拆包（独立构建/发布）触发条件：出现跨应用复用需求时再做，此前统一编译模式不动。
+
+## 0. 现状基线（S0 考古结论）
+
+- 意图：本地优先、单机部署的科研 AI 全生命周期工作台（文献→规划→大纲→分章起草→质量门→润色→引用→投稿）。
+- 现状：顺序流水线已可用且部分工艺良好（密钥加密、Python 沙箱、CSL 引用、断点续跑防覆盖）；但 README/docs 描述的架构（orchestrator/、并行 Research、多 Agent 追踪）未被实现，存在三处幻觉文档、两张从未写入的表、一处自造"伪 MCP"协议。
+- 手搓基建待替换：`ai-transport.service.ts`(362 行 OpenAI 协议手写)、`json-utils.ts`(80 行)、`pipeline-steps.ts`(189 行伪 DAG)、`pipeline.service.ts` 内手写断点续跑/互斥锁/异常哨兵、`mcp.service.ts`(314 行自造 REST 协议)、`cli.ts` 手写参数解析、`knowledge.service.ts:33` 手写分段、`documents.service.ts:128` pdf-parse。
+- 检索层**不是**手搓：FTS5 BM25（`db/database.ts:378`）+ sqlite-vec ANN（:487）+ 本地嵌入 node-llama-cpp（`embedding.service.ts`，bge-small-zh-v1.5）已是原生 SQLite 方案，保留。
+- 认证层不是手搓：@nestjs/jwt + bcryptjs 已在用，保留。
+- 桌面端基线（2026-10-14 实测修正）：Electron 33→**38**（内嵌 Node 22，原生支持 `require(ESM)`；33 的内嵌 Node 20 无法 require 现代 ESM-only 依赖，打包运行时实测三连炸：swagger@12 ESM → 降 v11、better-sqlite3 ABI → prepare 脚本自动按 Electron ABI 重编、p-retry@6/ai@7 ESM-only → 随 38 升级解决）。桌面打包验证：Setup.exe 产出 + `ELECTRON_RUN_AS_NODE` 实跑 health/流水线 completed/agent trace 全通过。
+- 导出层不是手搓：`docx`@9.7.2 已是依赖且用于 exportDocx（`documents.service.ts:407`），保留。
+- 测试现状：server 2 个 spec / 12.6k 行；web 零测试、无 vitest；**全仓无 eslint/prettier**；回归靠 `scripts/full_regression.py`（不在 CI）。
+
+## 1. 目标架构总览
+
+```
+┌─ 前端 apps/web ─────────────────────────────────────────────────┐
+│ React 19 + react-router(声明式) + TanStack Query(数据)          │
+│ TanStack Table(文献表) · recharts(图) · streamdown(流式MD)      │
+│ CodeMirror 6(写作编辑器) · graphology+sigma(文献网络,可选)      │
+└──────────────┬───────────────────────────────────────────────────┘
+               │ REST + SSE（client.ts 按域拆分；Swagger→openapi-typescript 类型同步）
+┌─ 服务端 apps/server ────────────────────────────────────────────┐
+│ 编排层  LangGraph.js 1.5（真DAG · interrupt 人工确认 ·          │
+│         Send API 并行 · SQLite checkpointer 断点续跑）          │
+│ 模型层  Vercel AI SDK 7 + @ai-sdk/openai-compatible             │
+│         generateObject+zod 结构化输出 · fast/strong 路由        │
+│         （Ollama/LM Studio 经同一 openai-compatible 端点免费获得）│
+│ 协议层  @modelcontextprotocol/sdk（MCP server+client）          │
+│ 领域层  原封不动：FTS5+vec0 混合检索 · secret-crypto ·          │
+│         Python沙箱 · citation-js/CSL · docx · memory · submission│
+└──────────────────────────────────────────────────────────────────┘
+```
+
+分层原则：**编排、模型、协议三层全部换成业界成熟件；领域层一行不换。** 四个"工程"落位：
+
+| 工程 | 落位 |
+|---|---|
+| 模型工程 | AI SDK provider 抽象（OpenAI 兼容全厂商 + Ollama 本地模型）、fast/strong 档路由（保留）、node-llama-cpp 本地嵌入（保留） |
+| 上下文工程 | LangGraph state + checkpointer（流水线状态）、chat_session 摘要注入（已有）、Contextual Retrieval 前缀（已有） |
+| 提示工程 | `prompts.ts` 领域 prompt 保留（自有资产）、customPrompts 可定制（已有）、promptfoo 离线评估（dev） |
+| 约束工程 | zod 端到端（generateObject schema、MCP tool inputSchema、API DTO）、质量门阈值、LangGraph interrupt 人工确认 |
+
+## 2. 依赖地图（全部 npm 实查版本，2026-10）
+
+### 2.1 运行时新增（server）
+
+| 包 | 版本 | 许可证 | 替换/启用 | 删除的手搓代码 |
+|---|---|---|---|---|
+| `ai` | 7.0.138 | Apache-2.0 | 模型层：传输/流式/重试/结构化输出 | `ai-transport.service.ts` 协议部分（保留 fast/strong 路由、token 落库、密钥解密约 50 行薄封装） |
+| `@ai-sdk/openai-compatible` | 3.0.68 | Apache-2.0 | OpenAI 兼容厂商接入（含 Ollama/LM Studio 本地端点，无需额外包） | 同上 |
+| `@langchain/langgraph` | 1.5.0 | MIT | 编排层：真 DAG、`interrupt()` 人工确认、Send API 并行起草、checkpointer 断点续跑 | `pipeline-steps.ts` 全部 189 行（伪 DAG + AWAITING_CONFIRMATION 异常哨兵）、`pipeline.service.ts` 的 `running` Set 互斥与 `resumeInterrupted()` 手写续跑 |
+| `@langchain/langgraph-checkpoint-sqlite` | 1.1.0 | MIT | SQLite 持久化（底层 better-sqlite3 ^12.10） | 手写 checkpoint 恢复逻辑 |
+| `@modelcontextprotocol/sdk` | 1.32.1 | MIT | 真 MCP server（对外暴露工具）+ 真 MCP client（接外部工具） | `mcp.service.ts:286-298` 自造 `/tools`+`/call` REST 协议 |
+| `jsonrepair` | 3.15.0 | MIT | 修复 AI 返回的近合法 JSON（渐进迁移期兜底） | `ai/json-utils.ts` 80 行 + `stripFencesAndExtract` |
+| `@langchain/textsplitters` | 1.0.2 ✅已落地 | MIT | 知识库分块 RecursiveCharacterTextSplitter（800 字/块，中文句读分隔符） | `knowledge.service.ts` 手写段落聚合 chunkText（已删） |
+| `unpdf` | 1.8.1 ✅已落地 | MIT | 知识库 PDF 解析（实测：手造 PDF→base64→提取全文→分块 201） | `pdf-parse`@2.4.5（已移除依赖） |
+| `helmet` | 8.3.0 | MIT | HTTP 安全头（main.ts 现仅有 CORS） | — |
+| `nestjs-pino` + `pino` | 5.3.1 / 10.4.0 | MIT | 结构化日志（现全部是 NestJS console Logger） | 各处散落 `console.error` |
+| `commander` | 15.0.0 | MIT | CLI 参数解析 | `cli.ts` 手写 argv 解析 |
+| `autoevals` | 0.4.0 | MIT | 质量门补充评估器（Factuality 等，可选维度） | — |
+
+体积代价：约 32MB node_modules 增量（server 为 Node 进程，不影响浏览器 bundle；Electron asar 可接受）。
+
+**兼容点（必须处理）**：`@langchain/langgraph-checkpoint-sqlite` 依赖 `better-sqlite3 ^12.10.0`，项目现锁 `~11.9.0`（apps/server/package.json:25）。需升 major 并重新构建 Electron 原生模块。
+
+### 2.2 运行时新增（web）
+
+| 包 | 版本 | 用途 |
+|---|---|---|
+| `@tanstack/react-query` | 5.104.2 | 替换各页手写 useState/useEffect/loading/error 数据获取（App.tsx ~15 个 useState 起步） |
+| `@tanstack/react-table` | **8.21.3（钉版）** | 抽取矩阵表（动态列 = 文献 + 字段、表头点击排序）；v9 为新 major（API 重写）暂不升 |
+| `streamdown` | 2.7.0 | ChatPanel 流式 Markdown 渲染（处理不完整块），替代裸 react-markdown 拼流 |
+| `@uiw/react-codemirror` + `@codemirror/lang-markdown` | 4.25.12 / 6.5.2 | 论文写作编辑器：替换 `WritingEditor.tsx` 的裸 Textarea（89 行），获得语法高亮/标题折叠/快捷键 |
+
+已装未用/错用（零新增依赖，纯改用法）：
+- `react-router-dom`@7.18.4 **已在依赖里**，但 `App.tsx:123` 仍用硬编码数组手解析 pathname → 改为声明式路由表。
+- `recharts`@2.15 已存在且 `components/charts.tsx`(238 行) 是它的薄封装 → 保留，**不引入 echarts**（60MB 对本应用无增益）。
+
+### 2.3 devDependencies（质量工程）
+
+| 包 | 版本 | 用途 |
+|---|---|---|
+| `eslint` + `typescript-eslint` + `prettier` | 10.12.0 / 8.71.2 / 3.9.10 | **全仓零 lint/format，P0 补齐**，入 CI |
+| `vitest` + `@testing-library/react` + `happy-dom` | 已有(vitest server) / 16.3.3 / 21.0.1 | web 单测从零到有（happy-dom 比 jsdom 轻 9MB） |
+| `msw` | 3.0.3 | web 单测 API mock |
+| `@playwright/test` | 1.64.0 | E2E 冒烟（Electron/本地双模式各一条主路径） |
+| `promptfoo` | 0.124.1 | prompt 回归评估（仅 dev，禁入运行时） |
+| `@nestjs/swagger` + `openapi-typescript` | 12.0.2 / 7.13.0 | 契约先行：装饰器 → `openapi.json`（216 paths，v1.17.0，2026-11）→ `apps/web/src/api/openapi.d.ts`（`pnpm openapi:gen` 重建）；`pnpm openapi:check` 防漂移；openapi-fetch 未采用（取类型即可，client.ts 对外行为不变） |
+
+CI 同步：`ci.yml` 增加 lint 步骤、web 测试步骤、`full_regression.py` 接入、promptfoo 评估可选 job。
+
+### 2.4 已采用且必须继续用的现有依赖（防后续会话误删/重复造）
+
+| 已有依赖 | 用在哪 | 谁也不许替代它的原因 |
+|---|---|---|
+| `@citation-js/*` + plugin-ris + csl-register | `documents.service.ts:5-6`、`references.service.ts` 引用渲染/BibTeX·RIS 导入导出 | CSL 生态标准实现；RIS 输出由官方 plugin-ris（0.8.1，core 0.8 系）提供 |
+| `docx`@9.7.2 | `exportDocx`（`documents.service.ts:407`） | 已解决 Word 导出，勿再评估 mammoth/html-docx |
+| `better-sqlite3` + FTS5 + `sqlite-vec` | `db/database.ts:378,487` 混合检索 | 原生 SQLite 能力即最强方案，禁止用 JS 重写 BM25 |
+| `node-llama-cpp`（bge-small-zh-v1.5） | `embedding.service.ts` 本地嵌入 | local-first 语义嵌入已就位，不引 @huggingface/transformers（46MB 重复职能） |
+| `@nestjs/jwt` + `bcryptjs` + `@nestjs/throttler` | auth/限流 | 成熟件已在用 |
+| `p-retry` / `p-limit` | transport 重试/并发 | 保留 |
+| `zod`@4.6 | DTO 校验 | 升级为端到端契约（AI schema/MCP schema 共用） |
+| `recharts`、`react-router-dom`、`diff`、`katex`、`remark-*` | 前端 | 已在依赖里，改用法不换包 |
+
+### 2.5 明确拒绝清单（评估过，不引入）
+
+| 候选 | 实查版本 | 拒绝理由 |
+|---|---|---|
+| Mastra | @mastra/core 1.76.0 | 75MB 全家桶，单用户本地应用过度设计；编排选 LangGraph |
+| @openai/agents (JS) | 0.20.0 | 与 LangGraph 职能重叠，编排器只保留一个 |
+| LlamaIndex.TS | llamaindex 0.12.1 | 检索层 FTS5+vec0 已是原生方案，RAG 编排职能与 LangGraph 重叠 |
+| mem0ai | 3.3.1 | 现有 memory 模块 88 行已覆盖单用户场景；mem0 需额外 LLM 抽取调用 |
+| A2A (a2a-js) | 0.2.0 | Agent 跨组织互操作协议，单机单用户无此需求。**Watch**：等 1.0+ 且出现科研多智能体互操作场景再评 |
+| AG-UI (@ag-ui/core) | 1.0.2 | 前后端自有契约已够用。**Watch** |
+| echarts | 6.1.0 | recharts 已覆盖且已封装 |
+| @huggingface/transformers | 4.3.1 | 与 node-llama-cpp 职能重复，46MB |
+| pyodide | 314.0.7 | 13.9MB；Python 沙箱已用本机 python3 + 威胁模型成型。**Watch**：若要做"零 Python 依赖分发"再评 |
+| Storybook | 10.6.2 | 22MB，单人项目组件规模不需要 |
+| i18next / react-i18next | 26.4.4 / 17.0.16 | 单语言产品 |
+| langfuse | 3.39.2 | 需自建服务端；llmCallLogs 够用。**Watch**：观测需求超出现有仪表板再评 |
+| duck-duck-scrape | 2.2.7 | 2025-01 起停更，比自研 94 行版本更旧，不换 |
+
+### 2.6 观察名单（不排期，条件触发再评）
+
+- ✅ **已采用（P4 落地）**：`graphology`@0.26.0 + `graphology-layout-forceatlas2`@0.10.1 + `sigma`@4.0.0 重写 `ForceGraph.tsx`（手写 FR 物理引擎 `literature-graph.ts` 已删）。
+- `@opentelemetry/api`@1.9.1：LangGraph/AI SDK 均可吐 OTel，观测需求升级时接 pino/OTel 管线。
+
+## 3. 数据模型变更
+
+1. **删除 `agent_run` 表**（schema.ts:163）：从未被写入（全仓 0 处 insert），PipelinePage 读取它的 UI（:684-722）为死代码，一并删除。
+2. **保留 `agent_execution`/`agent_step`**（schema.ts:409,434）：作为 chat/tool 来源的 Agent 轨迹（AgentTraceService 已写完整，需接线：注入 chat.service、experiments 等）。
+3. **流水线可观测性**：LangGraph checkpointer 自管 checkpoint 表；pipeline 轨迹 = checkpointer 状态 + llmCallLogs。`pipeline_task.steps` JSON 列改为由 graph state 投影生成（保持前端契约不变，PipelinePage 无需重写）。
+4. 其余表不动（documents/references/citations/knowledge/submissions 等全部保留）。
+5. **自主科研对象（8 张新表，2026-11-12 阶段 2A/2B）**：`research_program` → `research_cycle` → `research_question` → `research_hypothesis` → `research_protocol` → `research_run` → `research_claim` → `research_evidence`。
+   关系与不变式：
+   - 所有实体冗余 `program_id`，便于授权与按项目聚合查询；
+   - 状态机取值集中在服务层校验（`programs.service.ts` 的 `CYCLE_STATES` / `PROTOCOL_STATUS` / `RUN_STATUS` 等），避免脏状态写库；
+   - 版本/审批**只追加不覆盖**：Protocol 新版本 = 新行；
+   - `research_cycle.state` 新增 `awaiting_approval`（自主研究循环在协议审批门禁处挂起）。
+   详见 `packages/db/src/schema.ts` 与 `apps/server/src/programs/`。
+6. **质量报告分数来源拆分（2026-11-12）**：`quality_report` 新增 `objective_score` / `objective_dimensions` / `llm_score` / `llm_scores` / `expert_score` / `expert_status`，旧的 `total_score` / `scores` 保留兼容；旧库由 `ensureColumn` 自动迁移，旧行按 `scoreSource=llm-legacy` 回填 LLM 分。
+
+## 4. 模块结构变更（server）
+
+```
+apps/server/src/
+├── graph/                  # 新：LangGraph 编排（原 orchestrator 职责，兑现 README）
+│   ├── research.graph.ts   #   Research 阶段：Send API 并行 ReAct 子图
+│   ├── writing.graph.ts    #   主流水线：verify→research→interrupt(大纲确认)→draft(并行)→quality-gate→polish→citation
+│   └── nodes/*.ts          #   7 个步骤 = 7 个 node 函数（从 pipeline.service.ts 内联闭包抽出）
+├── ai/
+│   ├── ai-transport.service.ts   # 瘦身为 ~50 行：AI SDK 封装 + fast/strong 路由 + token 落库 + 密钥解密
+│   ├── ai.service.ts             # 领域方法改用 generateObject+zod；删除 json-utils.ts
+│   └── prompts.ts                # 保留（领域资产）
+├── mcp/                    # 换 @modelcontextprotocol/sdk：真 stdio/HTTP server + 外部工具 client
+└── （其余模块不动）
+```
+
+> 落地说明：未建独立 `graph/` 目录——编排落在 `pipeline/pipeline.graph.ts` + `pipeline/pipeline-state.ts`（与 pipeline 模块内聚，避免跨目录循环依赖）；research 子图与 Send API 并行未单拆（主图内 `runDrafting` 经 p-limit 并行，ReAct 循环在 literature 节点内）。§4 其余规划已按原样落地。
+
+前端：`App.tsx` 拆壳（声明式路由 + React Query Provider）；`client.ts` 按域拆 `api/*.ts`（P4 起由 openapi-typescript 生成类型）；各页数据获取迁 React Query；`WritingEditor` 换 CodeMirror。
+
+### 4.1 自主科研与研究循环（2026-11-12 阶段 2/3+）
+
+```
+apps/server/src/
+├── programs/                 # 自主科研对象（阶段 2A/2B）
+│   ├── programs.service.ts           # Program/Cycle/Question/Hypothesis/Protocol
+│   ├── research-records.service.ts   # Claim/Evidence/Run
+│   └── programs.controller.ts / research-records.controller.ts
+├── research-cycle/           # 自主研究循环（阶段 3+）：LangGraph 编排
+│   ├── research-cycle-state.ts       # 图状态（Annotation）
+│   ├── research-cycle.graph.ts       # plan→gate→execute→evaluate→decide（带回边）
+│   ├── research-cycle.service.ts     # 门面：start/resume/status/list + checkpoint 清理
+│   ├── research-cycle.controller.ts  # REST：/api/research-cycles/*
+│   └── agents/
+│       ├── pi.agent.ts               # PI：问题→假设→协议（strong 档）
+│       ├── experimenter.agent.ts     # 实验者：协议→Python 脚本（fast 档）
+│       └── critic.agent.ts           # 评审：输出→结论/证据/是否跑题（strong 档）
+└── agent/
+    └── agent-tool-profiles.ts        # 工具作用域（只收窄不放宽）
+
+apps/web/src/
+├── api/research-cycles.ts            # 研究循环 API 客户端
+└── pages/programs/ResearchCycleRunner.tsx  # 驾驶舱面板：发起/轮询/审批/恢复
+```
+
+> 落地说明：编排代码放在 `research-cycle/` 独立目录（与 `pipeline/` 平级）——两者是**不同**的图：主流水线是单次 DAG（产出稿件），研究循环是带回边的多轮图（产出结论）。它们共享 LangGraph 与 SQLite checkpoint，但不共享状态或节点。
+
+## 5. 分阶段实施（每阶段完成即回写本文档）
+
+| Phase | 内容 | 验收门 |
+|---|---|---|
+| **P0 诚实化+地基** ✅ 2026-10-13 | 修 README/docs 三处幻觉（orchestrator 描述、并行声明、回归基线数字 162→142）；删 agent_run 全链死代码（DDL/schema/service/controller/client/types/PipelinePage 80 行 UI + 3s 无效轮询）；eslint(flat config)+prettier 全仓 0 errors；web 测试从零到一（vitest+happy-dom+@testing-library，ui.tsx 8 测试）；better-sqlite3 11.9→12.11.1（14 测试 GREEN + 启动冒烟）；CI 增 lint/web-test 步骤 | typecheck+lint+build 双端全绿；server 14 + web 8 测试通过；文档与代码零口径冲突 ✅ |
+| **P1 模型层** ✅ 2026-10-13 | Vercel AI SDK（ai@7 + openai-compatible@3，supportsStructuredOutputs）替换全部手写 HTTP/SSE 协议；complete 保持 p-retry/p-limit/token 落库；新增 completeStructured（generateObject+zod）；jsonrepair 替换 json-utils/stripFences（文件已删）；**恢复 mock-gateway**（HEAD 上已被删导致 AI_MOCK 失效、文档基线不可复现）；流式改经 streamText→SSE 转接 | e2e：health/项目/流水线 interrupt→confirm→completed 全通；回归 mock 分支自 P1 起重新可跑 ✅ |
+| **P2 编排层** ✅ 2026-10-13 | LangGraph 重写主流水线（pipeline.graph.ts：interrupt 人工确认 + SqliteSaver checkpointer + Reflexion 回炉节点）；删除 pipeline-steps.ts（executeDAG/异常哨兵清零）；起草并行化（p-limit，AI_DRAFT_CONCURRENCY 可配）；AgentTraceService 接线（pipeline/pipeline-resume 两类 run + 每步 addStep 实测落库）；服务层重建为图门面（controller/cli/steps JSON 契约不变） | 断点续跑/人工确认/并行三行为全部实测：mock e2e interrupt→confirm→completed ✓；checkpoint 表 11 行落库 ✓；回归 PASS 143 / FAIL 0（全新库，scripts/full_regression.py v6，KNOWN 11 存量缺口单列）✅ |
+| **P3 协议层+加固** ✅ 2026-10-13 | `@modelcontextprotocol/sdk` 真 MCP Server：`POST /api/mcp/rpc`（Streamable HTTP）+ `cli.js mcp serve`（stdio）；工具注册表单一来源（REST 端点与 MCP 协议共用）；helmet 安全头（4 项实测响应头）；nestjs-pino 结构化日志（JSON 实测）；cli.ts 全量重写为 commander；外部 MCP client 仍为 REST 兼容模式（SDK 化列入 §8 待办） | 官方 SDK Client 双传输实测：HTTP 11 工具握手+callTool ✓；stdio 11 工具握手+callTool ✓；helmet 头/X-Content-Type-Options 等 ✓；pino JSON ✓；CLI --help/命令✓ |
+| **P4 前端** ✅ 主体完成 2026-10-13（含对话优先重构） | 视图注册表 + CodeMirror 6 + streamdown（一轮）；**二轮重构**：① `client.ts` 551 行拆为 `api/core|writing|research|platform`（barrel 兼容，对外形状不变）② `@tanstack/react-query` 全局接入（main.tsx Provider），WorkspacePage 的文档列表/正文/流水线轮询全部走 Query（refetchInterval 驱动 run card 进度）③ **WorkspacePage 对话优先工作台**：左对话线程（流式/推理折叠/来源卡/停止）+ 右文档预览 + 内联流水线卡（interrupt 大纲确认在对话内完成）④ 导航 IA 重排：工作台默认，核心/自动化/辅助三级，其余经 ⌘K。**本轮（技术债清零，2026-10-14）**：react-query 全站迁移（Dashboard/Experiments/Memory/Literature/Knowledge/Submission/Pipeline/Writing/App 壳，数据获取与轮询全部 Query 化）；sigma.js+graphology 重写 ForceGraph（手写 FR 物理引擎 literature-graph.ts 已删）；lint 豁免**全部删除**（set-state-in-effect/refs/immutability/exhaustive-deps 等归零 39→0）。✅ 该批遗留项已在第六轮全部完成（TanStack Table v8 抽取矩阵 / openapi 类型链 / msw / Workspace 二期 / mock-gateway MSW 化 / autoevals / Electron 构建验证——见 §8 终局） | typecheck 0 / build ✓ / **测试 12/12（WorkspacePage 4 条新增）** / lint 0 errors；Playwright 真机冒烟 ✓ |
+| **P5 质量工程** ✅ 主体完成 2026-10-13 | ① 回归入 CI + final_acceptance 矩阵（21 项）② **promptfoo**：`evals/promptfooconfig.yaml` 离线评估集（指向 mock 网关，实测 **2 passed / 0 failed**）+ `pnpm eval:prompts` ③ **Playwright**：`e2e/workspace-smoke.spec.ts` 真机冒烟（headless chromium 实测 **1 passed**，验证默认视图与导航 IA）+ CI `e2e-and-evals` job。✅ autoevals、sigma.js 均已在后续轮次落地（见 §8 终局） | final_acceptance **21/21**；回归 **161/0/0**；promptfoo 2/2；Playwright 1/1 |
+
+顺序依赖：P0→P1→P2 必须串行（同一模块）；P4 可与 P2/P3 并行。
+
+### 5.2 自主科研平台阶段线（2026-11-11 → 12）
+
+上游 P0–P5 是「把既有工作台做扎实」；本阶段线是**把工作台变成自主科研平台**，两条线并行不互斥。
+
+| 阶段 | 内容 | 验收门 |
+|---|---|---|
+| 阶段 0 隔离环境 ✅ | 仓库/依赖/缓存/数据/日志全部落在 `D:\sciflow-research`；项目内 pnpm 11.7.0；better-sqlite3 用既有 VS2022 编译 | 基线测试 558/197 通过；见 `reports/ENVIRONMENT_BASELINE.md` |
+| 阶段 1 安全 ✅ | MCP/Agent 项目归属授权、工具 zod 校验与超时、设置 upsert | 负向授权测试通过；见 `reports/PHASE1_SECURITY_REPORT.md` |
+| 阶段 2A/2B 科研对象 ✅ | 8 张 `research_*` 表 + 服务 + API + 授权；L2 门禁（协议未批准不建 Run） | server 587 测试；见 `PHASE2A/B` 报告 |
+| 阶段 2C/2D 驾驶舱 ✅ | 研究计划页 `#/programs`：假设/协议审批、结论/证据、运行创建与状态推进 | 浏览器 DOM 验收；见 `PHASE2C/2D` 报告 |
+| 阶段 3 复现 ✅ | Plass–Stone 1983 确定性复现（2 遍 × 2 输入，4 产物哈希一致）+ Card 1995 经济学两轮循环 | 见 `PHASE3_*` 报告 |
+| 阶段 3+ 真实模型 ✅ | Agnes 接入；非流式 chat 工具注入修复；质量报告 objective/llm/expert 分数拆分 | server 589 / web 197；见 `LIVE_MODEL_TEST_REPORT.md` |
+| **阶段 4 自主研究循环 ✅ 2026-11-12** | LangGraph 带回边的多轮循环（PI/实验者/评审 三个 LLM 智能体）+ L2 审批门禁 + 预算/停滞终止 + 驾驶舱面板 + 工具作用域 | server **77 文件 / 617 测试**、web 28/197、lint 0 errors、两侧 build 通过；**真实模型端到端 2 轮 → 结论 supported**（见 `reports/PHASE4_RESEARCH_CYCLE_REPORT.md`） |
+
+### 5.1 P0 完成快照（2026-10-13，commit 基线 3c601d1 之上）
+
+- 删除量：agent_run 表 DDL（database.ts）+ schema 定义 + `agentRuns(id)` 查询 + `GET /api/pipeline/:id/agents` 路由 + client `api.pipeline.agents` + `AgentRun` 类型 + PipelinePage 80 行死 UI + 每 3 秒无效轮询。
+- 修正量：README 4 处（首段 Supervisor 描述、特性区多智能体节、目录树 orchestrator 行、AgentRun→AgentExecution、基线 162→142）；docs/development.md 1 处；docs/api-overview.md 2 处（含删除 agents 端点行）。
+- 新增工具链：根 eslint.config.js（flat config，typescript-eslint recommended + react-hooks）+ .prettierrc.json + `pnpm lint`/`pnpm format` 脚本；apps/web vitest.config.ts + test-setup.ts + 首个测试 `src/components/ui.test.tsx`（8 条）。
+- lint 豁免（P2/P4 清零）：no-this-alias、no-require-imports、set-state-in-effect、refs、immutability（存量放行）；exhaustive-deps 降为 warn（5 处存量）。
+- 已知遗留：① Electron desktop:dist 未在本机验证 v12 重编（allowBuilds 已配置，编译产物 build/Release/better_sqlite3.node 正常产出）；② 5 条 exhaustive-deps warnings 待 P4 处理。
+
+## 6. ADR 索引
+
+- ADR-001 编排层选型：LangGraph vs Mastra vs @openai/agents vs 保留手搓 → LangGraph（docs/adr/001-orchestrator-langgraph.md）
+- ADR-002 模型层选型：Vercel AI SDK vs 继续手写传输层 → AI SDK（docs/adr/002-model-layer-ai-sdk.md）
+- ADR-003 协议层选型：@modelcontextprotocol/sdk vs 自造协议 → MCP SDK（docs/adr/003-mcp-official-sdk.md）
+- ADR-004 反过度设计拒绝清单：Mastra/LlamaIndex/mem0/A2A/AG-UI/echarts/transformers.js/pyodide/Storybook/i18next/langfuse/duck-duck-scrape（docs/adr/004-rejected-alternatives.md）
+
+## 7. 禁止重复造轮子守则（对所有后续开发会话生效）
+
+动手写任何"基建感"代码前，先对照本守则与 §2 地图。命中即用现成件；地图里没有的先查 npm（活跃度/体积/许可证三查），再回写本地图。
+
+| 你正要手搓… | 必须改用 | 理由 |
+|---|---|---|
+| 调 LLM / 解析 SSE 流 / 重试 | AI SDK（§2.1 ai + openai-compatible） | 传输层已整体换装 |
+| 从 AI 文本里抠 JSON | `generateObject` + zod；兜底 `jsonrepair` | 手写 stripFences 类代码已删除，禁止复活 |
+| 流水线步骤/状态机/断点续跑/人工确认 | LangGraph（node + interrupt + checkpointer） | §1 编排层唯一入口 |
+| 工具协议（对内或对外） | @modelcontextprotocol/sdk | 自造 REST 工具协议已删除 |
+| 任何图表 | `components/charts.tsx`（recharts 封装），缺图型先扩它 | 禁止页面内手写 SVG 图表 |
+| 任何表格排序/筛选/分页 | @tanstack/react-table | 禁止页面内手写表逻辑 |
+| 服务端分页数据获取/loading/error 态 | @tanstack/react-query | 禁止手写 useState+useEffect+fetch 三件套 |
+| 文本分块 | @langchain/textsplitters | 手写 chunkText 已删除 |
+| PDF 解析 | unpdf | — |
+| 全文/向量检索 | SQLite FTS5 + sqlite-vec（已有） | 禁止 JS 重写 BM25/余弦 |
+| 参数解析（CLI） | commander | 手写 argv 已删除 |
+| 重试/并发控制 | p-retry / p-limit（已有） | — |
+| 密码哈希/JWT/限流 | bcryptjs / @nestjs/jwt / @nestjs/throttler（已有） | — |
+| Word 导出 | docx（已有） | — |
+| 引用格式化 | @citation-js + csl-register（已有） | — |
+| HTTP 安全头 | helmet | — |
+| 结构化日志 | nestjs-pino | 禁止新增裸 console.* |
+| 前端类型契约 | @nestjs/swagger → openapi-typescript | 禁止 client.ts 手写重复类型 |
+| 流式 Markdown 渲染 | streamdown | — |
+| 富文本/Markdown 编辑器 | @uiw/react-codemirror | 禁止裸 Textarea 充当编辑器 |
+| 单测 API mock | msw | — |
+
+| 桌面打包原生模块 / 依赖 ESM 形态 | 原生模块交给 `apps/desktop/scripts/prepare-server.mjs` 自动按 Electron ABI 重编（幂等 ABI 戳）；Electron 基线 **≥41.10.7**（内嵌 Node 24；安全公告 5 条 high 的修复线）；CI/本机下载 electron 用 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`；`@electron/get` 必须留 3.1.x（electron-builder 26.x 需要 v3.1 才导出的 `ElectronDownloadCacheMode`，见 §2 overrides） | Electron 33 冒烟实测三连炸（ESM/ABI）教训；新增 ESM-only 依赖前对照本行 |
+| 容器基础镜像 / 构建上下文 | 基础镜像必须用 **glibc**（`node:22-slim`），禁用 alpine(musl)——better-sqlite3/node-llama-cpp/sqlite-vec 无 musl 预编译包；仓库根必须维护 `.dockerignore`（排除 node_modules/dist/.env/data），否则 `COPY apps/server` 会用宿主机依赖树覆盖容器内安装结果（实测 tsc bin 消失 → MODULE_NOT_FOUND），并把密钥/数据打进镜像 | 2026-10-15 实测三处真因：musl 编译失败 / 无 dockerignore 污染 / filter 与锁文件一致性 |
+| 图表组件高度语义 | `HBar` 的 `barHeight` = **单柱厚度**，整图高度按条目数自适应（显式 `height` 优先）；禁止再把它当容器高度用（曾致 8 处图表被压成 5px 且触发 Recharts 重复 key） | `apps/web/src/components/charts.tsx` 注释 + `charts.test.tsx` 回归护栏 |
+| 桌面 `extraResources` 拷贝目录 | 后端 bundle 必须放在**二级目录**（`resources/bundle/server`），禁止让 `node_modules` 处于 `from` 目录的根级 | electron-builder 过滤器硬编码 `if (relative === "node_modules") return false`（app-builder-lib/out/util/filter.js），根级 node_modules 会被**静默丢弃** → 安装包从 1.42GB 掉到 100MB、应用启动即崩（0.4.1 实测踩中并修复） |
+
+**判断规则**：新代码若含 `JSON.parse` 于模型输出、`new RegExp` 解析协议、手写 `for` 循环分页/排序、手拼 SSE `data:` 行——先停下查本表。
+
+### 7.1 交接自检（每次会话开始处理本仓库任务时执行）
+
+1. 任务涉及依赖/基建 → 重读 §2 依赖地图与 §2.4「已有依赖防误删表」。
+2. 任务涉及流水线/编排 → 只允许经 `graph/`（LangGraph），禁止在 service 里内联闭包编排。
+3. 想新建 util 文件 → 先查 §7 表格是否已有对应成熟件。
+4. 新装任何包 → 三查（npm 活跃度 / 体积 / 许可证）并回写 §2；同时检查是否与 §2.5 拒绝清单冲突。
+5. 完成任何影响架构的改动 → 回写本文档（§0 基线、§2 地图、§4 结构图、§5 进度）。
+
+## 8. 待办快照
+
+### 自主科研平台待办（2026-11-12）
+
+- [x] 阶段 4：自主研究循环（LangGraph 回边 + 三个 LLM 智能体 + L2 门禁 + 预算/停滞终止）——真实模型验收通过
+- [ ] **PI 角色换强模型**：当前只有 `agnes-3.0-flash` 一个模型，实测它做 PI 会跑题（问题里的「5% 离群点」被当成 `p=0.05`）。代码已按 strong/fast 路由，接入第二个强模型即生效
+- [ ] **沙箱解释器固化**：实验沙箱需要 numpy/scipy/pandas；本机已建 `D:\sciflow-research\data\sandbox-venv` 并通过 `SANDBOX_PYTHON` 接入，安装流程需写进部署文档
+- [ ] 工具作用域默认策略定档：`AGENT_TOOLS_PROFILE` 默认 `full`（不削减能力）；若要默认收窄以省 token，需先定「哪些工具在对话里本来就用不到」的证据
+- [ ] 循环的文献检索接入：PI/评审目前靠模型内部知识，下一轮要把 `literature.search` 工具按角色作用域接进循环
+- [ ] 截图能力恢复后补桌面/移动/暗色最终图；JWT 多用户浏览器 E2E
+- [ ] 规则驱动的复现 harness（`reproduction/*.mjs`）降级为「执行器」，编排职责全部归图
+
+### P0 前置项（2026-10-13 全部核销 ✅）
+
+- [x] README.md 删除 `orchestrator/` 目录树行；「并行 ReAct」标注为 P2 交付项；回归基线 162 → 142（以 scripts/full_regression.py docstring 为准）
+- [x] docs/development.md、docs/api-overview.md 删除 orchestrator 描述（后者连同 `/agents` 端点行一并删除）
+- [x] 删除 agent_run 全链：DDL（database.ts）+ schema 定义 + service 查询 + controller 路由 + client 方法 + types + PipelinePage 死 UI（80 行）+ 无效轮询
+- [x] apps/server/package.json better-sqlite3 ~11.9.0 → ~12.11.1（本机编译+14 测试+启动冒烟通过；Electron desktop:dist 重编待首次打包时验证）
+- [x] web 测试从零到一：vitest + happy-dom + @testing-library/react + jest-dom + user-event；`src/components/ui.test.tsx` 8 条全绿（msw 按 §5 P4 接入）
+- [x] eslint(flat config) + prettier 全仓配置，0 errors；CI 增 lint 与 web 测试步骤
+
+### 存量后端缺口 ✅ 已全部修复（2026-10-13，R1-R8）
+
+历史 11 项（回归脚本 KNOWN 清单）修复记录，逐项：
+- ✅ 流水线落 qualityReports：`pipeline.graph.ts` quality-gate 节点每轮评分一行落库（修复点同左）
+- ✅ 对象数组作者归一化：`references.service.ts` createSchema 收三形态作者，统一 `parseAuthors`（common/authors 单一来源）
+- ✅ BibTeX 保护括号解包（负向后行断言保 LaTeX 命令）；RIS 经官方 `@citation-js/plugin-ris@0.8.1`（原 500：format 'ris' 插件缺失）
+- ✅ 中文全文检索：`knowledge_chunk_fts` 迁移 unicode61 → **trigram**（database.ts 自动迁移+重建索引；查询侧 `buildTrigramQuery` 3-gram OR 展开），并修复 P0 期遗留的引用渲染丢失（renderCitations 回填）
+- ✅ apa 姓氏排序：CSL 引擎本身按姓排序；旧断言（`B Chen` 手写前缀）系 commit 2f6c885 去轮子化换 CSL 后未同步的**过期期望**，已更正为 CSL 契约（"Chen, B."）
+- ✅ 25.1 研究命中：新增 Planner（`PLAN_RESEARCH` 多语关键词）→ `crossEnrich` 逐关键词检索文献库并集去重 → libScore 命中标记「（文献库 · 匹配 N）」
+- ✅ 筛选 upsert 回包带 `title`（join 口径与 screenList 一致）
+- ✅ 顺带修复：quality-gate 节点读活行（researchMeta 在 literature 节点之后写入，图状态快照会读空）
+
+### 真实模型端到端验收（2026-10-14，OpenCode 的 Agnes 端点）
+
+用真实 OpenAI 兼容端点（agnes-3.0-flash / 2.5-flash）跑通三层验收，并抓到 3 个 mock 无法暴露的真实缺陷：
+
+1. **P1 修复：system 消息语义**——AI SDK v7 禁止 system 混入 `messages`（真实厂家直接 400，mock 不校验）。修复：`splitSystemMessages` 统一拆分 → `instructions`，三个调用点（generateText/generateObject/streamText）全覆盖。
+2. **P1 修复：限流识别**——上游配额报错为「免费用户 API 速率限制」文案 + `statusCode` 字段，原判定只认 `(429)`→ 未重试即失败。修复：`isRetriableLimit`（statusCode/status/中英文文案）+ 退避放宽（4 次 / 2s→60s）。
+3. **P2 修复：默认视图未生效**——`rawView` 的 `|| 'dashboard'` 短路了三元的 workspace 兜底，导致根路径仍落旧 dashboard（mock 冒烟当时用 `or` 断言掩盖了）。修复 + E2E 断言收紧（`data-testid="chat-thread"`）。
+
+体验打磨（真实跑中发现）：评审 prompt 加**评分锚点 + 维度独立**（原 citation 存疑会把 novelty/figures 连坐压到 0）+「疑似不实引用逐条标注，不臆断学术不端」；起草**逐节进度通知**（quality-gate 步骤实时显示"起草进度 n/N 节"，含回炉轮次）；workspace run card **已用时计时**；大纲 prompt **类型感知**（综述/比较研究不得套「实验与结果」章节，评审实测会据此判逻辑断裂）。
+
+真实验收结果：连通自检 ✓ | 非流式问答 7.3s ✓ | **SSE 流式首包 0.91s / 85 字秒 / usage 收尾 ✓** | **完整流水线 509s→completed（6 节 12.5k 字，引用/质量报告/trace 全落库）** ✓ | 逐节进度 6/6 实时可见 ✓ | 桌面打包版（Electron 41）真实模型 health+chat ✓ | CLI（health/project/status）✓ | Web Playwright 真实对话 ✓（`e2e/real-chat.spec.ts`，`E2E_REAL=1` 启用，默认 CI 跳过）。token 总账：首跑 46 calls / 90.5k tokens（含 3 轮回炉）——三轮回炉因"评审严格 + 首轮大纲含实验章节"所致，已用类型感知+维度独立收敛。
+
+### 计划内任务全部核销（2026-10-14 终局）
+
+**技术债清零（第五轮）**：eslint 39→0（豁免块删除、六规则 error 强制）。**收尾轮（第六轮）全部完成**：
+- ✅ msw 测试接入（web 测试 15/15，含 3 条网络层拦截：成功解析/中文业务错误透传/msw×fetch 协同）
+- ✅ autoevals 接入（server 测试 16/16；NumericDiff 守护质量门文案、Levenshtein 守护 mock 契约；LLM-judge 归 promptfoo）
+- ✅ swagger→openapi-typescript（openapi.json 114 paths；`pnpm openapi:gen`；apps/web/src/api/openapi-typescript 入口）
+- ✅ mock-gateway MSW 化（a20d12e MSW 版回归：**AI_MOCK 不再占用 5099 端口**；回归 161/0/0）
+- ✅ Workspace 二期（线程 localStorage 持久化；chat_session 历史侧栏注入背景；独立问答页并入——导航移除，深链保留）
+- ✅ TanStack Table v8（**钉 ^8.21.3**：v9 为新 major API 未稳）重写抽取矩阵（动态列=文献+字段、表头点击排序）
+- ✅ 路线图 #17 大纲模板（综述/IMRaD/基金三模板，本地 JSON 注入，零 AI 零依赖）
+- ✅ Electron desktop:dist 构建验证（见构建日志；better-sqlite3 v12 原生模块在 Electron 重编）
+
+### 0.4.1 依赖安全与发布质量批次（2026-10-15 续作）
+
+- ✅ **依赖安全：全量告警 103 → 3**（生产依赖仅 1 low=katex）。处置：electron 38.8.6→**41.10.7**（关 5 条 high）、simple-git→4.0.2 / argv-parser→2.0.1、tar→7.5.22、shell-quote→1.12.0、vite→6.4.3、vitest/@vitest/mocker→4.1.11、diff→8.0.4、js-yaml（5.x 线）、source-map-js、postcss-selector-parser、semver、electron-builder→26.15.3；`pnpm audit --registry=https://registry.npmjs.org --prod` 为目标命令。
+- ✅ **overrides 纪律**：全部**按受影响范围定点钉版**，禁止跨 major 全局替换——实测全局升 js-yaml 打坏 `@redocly/openapi-core`（`openapi:gen` 崩）、全局升 basic-ftp 打坏 `@electron/get` 缓存枚举（electron-builder 崩）。
+- ✅ **残留 3 条已登记** `SECURITY.md`（node-forge/sprintf-js 修复版未发布；katex 0.16 线无补丁且 rehype 链路锁 ^0.16）。
+- ✅ **桌面打包致命回归修复**：electron-builder `extraResources` 静默丢弃根级 `node_modules`（bundle 1.42GB→100MB）；改为二级目录 `resources/bundle/server` + `server-manager.ts` 入口路径同步 + `prepare-server.mjs` 布局调整；**实跑验证**：打包产物内 `ELECTRON_RUN_AS_NODE` 起后端 → `/api/health` 200、111 路由全注册。
+- ✅ **容器编排缺陷修复**：`docker-compose.yml` 缺 `HOST` 导致容器内绑回环（宿主 `-p` 不通）→ 补 `HOST=0.0.0.0` + 宿主侧仅发布 `127.0.0.1:3000`；`docker-compose.prod.yml` 因 `HOST=0.0.0.0`+`AUTH_MODE=none` 会被启动闸拒绝 → 显式 `ALLOW_INSECURE_BIND`（并注明不发布 3000 端口）；Dockerfile `pnpm@9`→`11.7.0` 并补 desktop package.json（锁文件一致性）。
+- ✅ **仓库卫生**：删除两份陈旧 `package-lock.json`（声明 0.1.0、依赖口径与 0.4.x 全不符）+ `.gitignore` 拦截；删除零引用的 `pdf-parse`；移除根目录交付报告与重复的 `docs/website.html`；新增 `.github/dependabot.yml`（每周 + 安全组优先）与 `.prettierignore`。
+- ✅ **门面与文档一致性**：`docs/index.html`（Pages 实际服务页）清除 Supervisor/手写 SVG/四平台等过时口径并补 badhope 仓入口；`docs/sciflow-code-tree.html` 删除幽灵 `orchestrator/` 模块改为真实 `pipeline/` 说明；`development.md`/`CONTRIBUTING.md`/`product-roadmap.md` 图表与计数口径改正；CHANGELOG 历史条目加"已被 0.4.0 取代"注记。
+- ✅ **openapi:gen 跨平台修复**：Windows 下 `spawnSync` 经 shell 执行含空格路径（如 `Program Files` 下的 node.exe）失败 → 改为 node 直连 exec + pnpm 走 shell；产物 111 paths / version 0.4.1。
+
+### 0.4.2 容器化与前端缺陷批次（2026-10-15 续作二世）
+
+- ✅ **Docker 三处真因修复**：glibc 基础镜像（musl 下原生模块无法安装）+ 新增 `.dockerignore`（宿主机 node_modules 覆盖容器依赖树 → tsc 消失；兼防 .env/data 入镜像）+ filter/锁文件一致性。**实跑验证**：build/server/web 三 target 全部构建成功；server 容器 `/api/health` 200、111 路由注册。
+- ✅ **HBar 柱高语义修复**（8 处图表受益）：`barHeight` 由"整图高度"改为"单柱厚度"，高度按条目数自适应，补 `domain=[0,max]`；红绿验证回归测试 ×2（jsonText/HBar）。
+- ✅ **jsonText 双形态兼容**：`/api/quality/latest` 返回已解析对象，旧实现 `raw.trim()` 崩溃 → 兼容对象/字符串；`QualityReport.scores` 类型同步。
+- ✅ **截图刷新**：7 张当前界面实拍（含对话工作台默认视图）+ `scripts/capture-screenshots.mjs` 可复跑采集脚本；README 双语预览区更新。
+- ✅ **五端元数据对齐**：GitHub 三仓 18 topics + homepage；Gitee 转公开 + 描述/主页；GitCode 描述/主页。
+
+**已知准入项（非债）**：TanStack Table × React Compiler 互操作 lint warning ×1（库级官方已知，跳过组件记忆化，无运行时影响；CI 门禁为 0 error）。
+
+**仅剩 backlog（路线图明确标注的 P2/不做项）**：QuickJS 不可信 JS 兜底（#23 尾项，路线图 P2 backlog）、外部学术 API/Pyodide/TeX Live/协作（路线图 §5 保持不做）。无其他计划内任务。

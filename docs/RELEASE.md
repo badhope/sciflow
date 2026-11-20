@@ -1,5 +1,8 @@
 # Release process
 
+**English** · [简体中文](RELEASE.zh-CN.md)
+
+
 This repository follows [Semantic Versioning](https://semver.org/) and keeps a
 [Keep a Changelog](https://keepachangelog.com/) history in `CHANGELOG.md`.
 

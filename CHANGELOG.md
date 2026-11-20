@@ -13,6 +13,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 - **Pipeline / Agent 任务级 SSE**：新增 `GET /api/pipeline/:id/events`（1s 推送完整 task，终态自动结束）与 `GET /api/agent/events?projectId=`（2s 推送任务/摘要/待批/计划快照）。前端在运行中订阅并直接更新查询缓存；断线时自动退回原有 3s / 15s 轮询，页面显示「实时 / 轮询」状态。
 - **品牌与头部视觉打磨**：顶栏改为项目首字墨印面包屑 + AI 状态胶囊；首页 Hero 加入朱印水印、项目体征胶囊与印刷网点底纹；侧栏朱印增加内框、纸纹和更稳的比例；Pipeline / Agent 进度区增加实时状态胶囊。`BrandMark` 的「1 path + 1 circle」契约保持不变。
 
+### Changed
+
+- **文档改为英文优先**：`README`、架构、贡献、安全、部署、配置、开发、API、质量、路线图、发布与品牌页均以英文为主文；每页顶部提供可点击的 `简体中文` 切换，中文完整版保留为 `*.zh-CN.md`。文档索引同时列出中英文入口。
+- 仓库介绍统一为一句短英文：`Local-first research workbench for literature, writing, review, and submission, with a deterministic quality gate and traceable citations.`
+
 ### Fixed
 
 - **截图自动化被 SSE 长连接卡住**：`scripts/capture-ui.mjs` 从 `networkidle` 改为 `domcontentloaded`，避免 Agent SSE 一直占用连接导致深色页重载超时；E2E 侧栏清单同步到 v2.0 的 11 个实际入口，折叠工具箱的分组展开逻辑改为可重入。

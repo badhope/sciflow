@@ -1,76 +1,64 @@
-# 安全策略 · Security Policy
+# Security policy
 
-## 项目定位与威胁模型
+**English** · [简体中文](SECURITY.zh-CN.md)
 
-SciFlow 默认面向单用户本地部署，也提供可选的 JWT 账号模式。默认服务仅监听回环地址；实验执行使用超时和独立工作目录，但不构成针对恶意代码的安全沙箱。对外或多用户部署仍需网关、TLS、权限审查和隔离环境。
+SciFlow is designed for a single user on a local machine. JWT accounts are
+available for a shared internal network. The default server binds to
+`127.0.0.1`; the experiment runner uses a timeout and a separate working
+directory, but it is not a sandbox for hostile code.
 
-## 安全设计要点
+## Design boundaries
 
-- **默认只监听回环地址**：后端 `main.ts` 默认 `HOST=127.0.0.1`，不对局域网暴露零鉴权 API；确需对外暴露时必须显式 `HOST=0.0.0.0`，并置于反向代理/内网之后。
-- **CORS 最小放行**：默认仅 `http://localhost:5173`，多来源用逗号分隔，`*` 需显式配置。
-- **密钥不入仓**：API Key 可由环境变量或本地 `apps/server/.env` 提供，也可在设置页配置并加密存入本地 SQLite；前端只显示掩码。请保护数据库、密钥文件和 `.env`，不要将它们提交或公开。
-- **实验沙箱隔离**：实验执行通过隔离 `spawn` 运行 Python，带 `SANDBOX_TIMEOUT_MS` 超时与独立工作目录；超时/失败时降级引导，不拖垮主进程。
-- **SQL 安全**：全部 SQL 经 Drizzle ORM 参数化，禁止字符串拼接。
-- **输入校验**：全局 `InputValidationPipe` 约束 JSON Body；MCP 工具参数按 JSON Schema 动态校验（缺参即拒），第三方工具返回统一加 untrusted-content 提示与指令隔离（对标 OWASP MCP Top 10）。
-- **健壮性兜底**：全局 `unhandledRejection` / `uncaughtException` 兜底 + SQLite `busy_timeout` + SIGTERM/SIGINT 优雅关闭（WAL checkpoint 后退出）。
-- **mock 网关只听回环**：`AI_MOCK=1` 的测试网关仅绑定 `127.0.0.1`，零外网访问，仅供本机测试/演示。
-- **出站连接级防护**：模型对话、模型目录与嵌入请求统一走受控传输（`packages/ai/src/safe-outbound.ts`）。地址在建立 socket 时按 DNS 实际解析结果校验，内网/回环/保留地址默认拒绝，云元数据地址无条件拒绝，重定向不跟随；`ALLOW_PRIVATE_OUTBOUND=1` 可显式放行本地模型服务，但不能放行元数据地址。
+- **Loopback by default.** `HOST=127.0.0.1` keeps the unauthenticated API off the
+  LAN. Setting `HOST=0.0.0.0` is an explicit decision and requires a reverse
+  proxy or an authenticated network.
+- **Minimal CORS.** Only `http://localhost:5173` is allowed by default. Multiple
+  origins are comma-separated; `*` must be set deliberately.
+- **Secrets stay local.** Keys can come from the environment, a local
+  `apps/server/.env`, or the settings page, where they are encrypted in SQLite.
+  The UI only shows a mask. Do not commit the database, the env file or keys.
+- **Process isolation.** Python and Node experiments run in a child process with
+  `SANDBOX_TIMEOUT_MS`, a separate working directory and a filtered environment.
+  A timeout returns a readable failure; it does not crash the API.
+- **Parameterised SQL.** All database access goes through Drizzle. String-built
+  SQL is not accepted.
+- **Input validation.** A global pipe validates JSON bodies. MCP tool arguments
+  are checked against their JSON Schema. Third-party tool output is labelled as
+  untrusted and fenced before it reaches the model.
+- **Controlled outbound traffic.** Model, embedding and MCP connections are
+  checked at socket-connect time. Private, loopback, link-local and
+  cloud-metadata addresses are rejected. `ALLOW_PRIVATE_OUTBOUND=1` can allow a
+  local model server, but never the metadata address.
+- **Mock gateway stays local.** `AI_MOCK=1` binds to `127.0.0.1` only and makes
+  no external calls.
 
-## 依赖安全与已知残留风险
+## Dependency checks
 
-核对命令（每次发版前必须重跑）：
+Run these before every release:
 
 ```bash
-# 生产依赖（进入运行时/镜像的闭包）——目标 0 已知漏洞
 pnpm audit --registry=https://registry.npmjs.org --prod
-# 全量（含 devDependency；devDep 不进入发布产物）
 pnpm audit --registry=https://registry.npmjs.org
 ```
 
-**2026-11-01 依赖安全复核**：使用官方 npm registry 重跑审计；生产依赖与全量依赖均为 **0 high / 0 critical**，最终 `pnpm audit --registry=https://registry.npmjs.org --audit-level high` 输出 `No known vulnerabilities found`。
+Production dependencies currently report no known high or critical
+vulnerabilities. Dependabot checks weekly; security updates are kept separate
+from routine version updates and are merged after CI passes.
 
-已完成的处置：
+## Known limits
 
-| 包 | 处置 | 验证 |
-|---|---|---|
-| `electron` 38.8.6 → **41.10.7** | 关闭 5 条 high（沙箱继承、`<webview>` Node 集成、协议处理器、拖拽等） | 桌面打包成功 + `prepare-server.mjs` 按 Electron ABI 重编 better-sqlite3 |
-| `simple-git` → **4.0.2** / `@simple-git/argv-parser` → **2.0.1** | 关闭 2 critical + 3 high（命令注入/配置包含） | 构建 + 全量回归 161/0/0 通过 |
-| `tar` → **7.5.22**（仅 7.5.x 受影响区间） | 关闭 1 critical + 多条 high/moderate | 构建 + 桌面打包通过 |
-| `shell-quote` → **1.12.0** | 关闭 1 critical | 脚本执行正常 |
-| `vite` → **6.4.3**、`vitest`/`@vitest/mocker` → **4.1.11**、`tinypool` | 关闭 critical/moderate（路径穿越、原型污染 RCE） | 单测 16+15 通过 |
-| `js-yaml`（仅 5.x 线 → 5.4.3）、`source-map-js` → 1.2.2、`diff` → 8.0.4、`basic-ftp` → 6.2.1、`postcss-selector-parser` → 7.1.6、`semver`（5.x 线）| 关闭 moderate/high/low | `openapi:gen` 通过（js-yaml v4 消费者保持 v4）、Tailwind typography CSS 正常、promptfoo 2/2 |
-| `electron-builder` → 26.15.3、`app-builder-lib` / `builder-util-runtime` | 关闭 high | 桌面 NSIS 打包成功 |
-| 删除 `pdf-parse`（已被 `unpdf` 取代，零引用）、清理两份陈旧 `package-lock.json` | 消除错误锁文件与冗余依赖面 | `pnpm install --frozen-lockfile` 通过 |
+- The experiment sandbox is a process boundary, not a container or VM.
+- The desktop build trusts the local user account; it does not protect against a
+  malicious process running as the same user.
+- A public deployment needs gateway authentication, TLS, rate limits and
+  monitoring that SciFlow does not ship.
 
-**当前审计结果**：2026-11-01 使用官方 npm registry 复核后，`pnpm audit --registry=https://registry.npmjs.org --audit-level high` 返回 `No known vulnerabilities found`。此前告警已通过同 major 补丁或经过构建/回归验证的定点 override 处理：
+## Reporting a vulnerability
 
-| 包 | 当前版本 | 处置 | 证据 |
-|---|---:|---|---|
-| `electron` | 44.9.1 | 升至修复版，避免受影响的中间证书链 | `pnpm audit` 无 high/critical |
-| `vite` | 6.4.5 | 升至 Windows `launch-editor` 修复版 | web typecheck/build 通过 |
-| `zod` | 4.6.6 | 升至集合校验内存耗尽修复版 | server/web 单测通过 |
-| `body-parser` / `multer` | 2.4.0 / 2.5.0 | Express 上传链路定点补丁 | route probe 96/96 |
-| `undici` | 7.30.1 | AI SDK 与构建链统一到 TLS/重定向/编码修复版 | server/web/build 通过 |
-| `node-forge` / `@azure/msal-node` | 1.4.2 / 7.1.2 | promptfoo 传递链定点补丁 | promptfoo 依赖树与 audit 通过 |
-| `fast-uri` / `glob` / `minimatch` | 3.1.9 / 14.0.2 / 11.0.1 | AJV、MCP、Electron 打包链按受影响 major 定点补丁 | `pnpm audit` 无 known vulnerabilities |
-| `katex` | 0.18.9 | 统一到项目直接依赖的安全版本 | web build 与单测通过 |
+Please do not open a public issue first. Use the private security advisory
+channel on GitHub, Gitee or GitCode, or contact the maintainer through the
+address on the repository profile. Include reproduction steps, the affected
+version, your OS/Node/pnpm versions and a proof of concept if you have one.
 
-`pnpm-workspace.yaml` 的 `overrides` 仍遵循按受影响范围定点钉版原则，不做未经验证的跨 major 全局替换；每次依赖变更必须重新执行冻结安装、typecheck、单测、build、全链路回归和官方 registry audit。
-
-- 依赖更新策略见 `.github/dependabot.yml`（每周检查；安全更新单独立组优先处理）。
-
-## 我们不做的事（及原因）
-
-- 不做登录态爬虫、不做邮箱授权守护进程——凡是编辑部/外部不会主动给你的数据，我们不假装自动获取。
-- 不依赖任何国外在线学术源；网络出站仅指向你自己配置的 OpenAI 兼容端点。
-
-## 报告漏洞
-
-如果你发现安全问题（例如可被利用的注入、沙箱逃逸、密钥泄露路径），请**不要**先发公开 Issue，优先私密披露：
-
-- 通过仓库镜像（GitCode / Gitee / GitHub）的 **Private Security Advisory / 私密 Issue** 通道提交；
-- 或邮件至维护者（占位：`sciflow-security@example.com`，请以仓库主页最新联系方式为准）。
-
-请附上：复现步骤、影响版本、环境（OS / Node / pnpm 版本）、PoC（如有）。我们会在 **72 小时内** 初步响应，确认后给出修复时间表并致谢。
-
-> 提示：本工具无账号体系，**请勿把它直接暴露到公网**；任何公网部署都必须自行加网关鉴权与 TLS。
+We aim to acknowledge a report within 72 hours and will agree on a fix window
+before any public disclosure.

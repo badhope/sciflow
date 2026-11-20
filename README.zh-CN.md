@@ -1,8 +1,8 @@
 # SciFlow
 
-**本地优先的科研工作台：从一个想法到一篇可验证的稿件，质量由确定性规则把关，引用可以逐层追到底。**
+**本地优先的科研工作台，覆盖文献、写作、评审与投稿；质量由确定性规则把关，引用可以逐层追到底。**
 
-[![CI](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml)
+[![CI](https://github.com/badhope/sciflow/actions/workflows/ci.yml/badge.svg)](https://github.com/badhope/sciflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [English](README.md) · **简体中文**
@@ -22,7 +22,7 @@ SciFlow 把整条科研链路留在你自己的电脑上：一个 SQLite 文件�
 需要 Node 20+ 与 pnpm。
 
 ```bash
-git clone https://github.com/Morningstar202604/sciflow.git
+git clone https://github.com/badhope/sciflow.git
 cd sciflow
 pnpm install
 cp apps/server/.env.example apps/server/.env   # 填写 AI_BASE_URL、AI_API_KEY、AI_MODEL
@@ -37,16 +37,18 @@ AI_MOCK=1 DATABASE_PATH=/tmp/sciflow_demo.db PORT=3000 \
 node scripts/seed-demo.mjs
 ```
 
-桌面端与 Docker 的构建方式见 [`docs/DESKTOP.md`](docs/DESKTOP.md) 和 [`docs/deployment.md`](docs/deployment.md)。
+桌面端与 Docker 的构建方式见 [`docs/DESKTOP.zh-CN.md`](docs/DESKTOP.zh-CN.md) 和 [`docs/deployment.zh-CN.md`](docs/deployment.zh-CN.md)。
 
 ## 文档
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — 模块边界与数据流
-- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) — 模型、检索、鉴权与 CLI 配置
-- [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — 健康检查、备份与故障处理
-- [`docs/README.md`](docs/README.md) — 文档索引
-- [`docs/product-roadmap.md`](docs/product-roadmap.md) — 已交付能力与明确不做的事
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) · [`CHANGELOG.md`](CHANGELOG.md)
+- [`ARCHITECTURE.zh-CN.md`](ARCHITECTURE.zh-CN.md) — 模块边界与数据流
+- [`docs/CONFIGURATION.zh-CN.md`](docs/CONFIGURATION.zh-CN.md) — 模型、检索、鉴权与 Agent 配置
+- [`docs/OPERATIONS.zh-CN.md`](docs/OPERATIONS.zh-CN.md) — 健康检查、备份与故障处理
+- [`docs/README.zh-CN.md`](docs/README.zh-CN.md) — 完整索引，每页都有英文入口
+- [`docs/product-roadmap.zh-CN.md`](docs/product-roadmap.zh-CN.md) — 已交付能力与明确不做的事
+- [`CONTRIBUTING.zh-CN.md`](CONTRIBUTING.zh-CN.md) · [`SECURITY.zh-CN.md`](SECURITY.zh-CN.md) · [`CHANGELOG.md`](CHANGELOG.md)
+
+每份指南顶部都有可点击的 `English` 切换。
 
 ## 边界
 

@@ -1,5 +1,8 @@
 # Product roadmap
 
+**English** · [简体中文](product-roadmap.zh-CN.md)
+
+
 Last reviewed: 2026-11-20 · Current release: **1.19.9**
 
 This document states what exists today, what is deliberately out of scope, and

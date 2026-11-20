@@ -1,8 +1,8 @@
 # SciFlow
 
-**A local-first research workbench that turns an idea into a verified manuscript — with a deterministic quality gate and citations you can trace.**
+**Local-first research workbench for literature, writing, review, and submission — with a deterministic quality gate and citations you can trace.**
 
-[![CI](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Morningstar202604/sciflow/actions/workflows/ci.yml)
+[![CI](https://github.com/badhope/sciflow/actions/workflows/ci.yml/badge.svg)](https://github.com/badhope/sciflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **English** · [简体中文](README.zh-CN.md)
@@ -22,7 +22,7 @@ SciFlow keeps the research chain on your own machine: one SQLite file, your mode
 Requires Node 20+ and pnpm.
 
 ```bash
-git clone https://github.com/Morningstar202604/sciflow.git
+git clone https://github.com/badhope/sciflow.git
 cd sciflow
 pnpm install
 cp apps/server/.env.example apps/server/.env   # set AI_BASE_URL, AI_API_KEY, AI_MODEL
@@ -42,11 +42,13 @@ Desktop and Docker builds are documented in [`docs/DESKTOP.md`](docs/DESKTOP.md)
 ## Documentation
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — module boundaries and data flow
-- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) — model, search, auth and CLI settings
+- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) — model, search, auth and agent settings
 - [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — health, backup and failure handling
-- [`docs/README.md`](docs/README.md) — documentation index
+- [`docs/README.md`](docs/README.md) — full index, with a Chinese link for every page
 - [`docs/product-roadmap.md`](docs/product-roadmap.md) — what is shipped and what is deliberately out of scope
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) · [`CHANGELOG.md`](CHANGELOG.md)
+
+Every guide starts with a clickable `简体中文` switch.
 
 ## Limits
 

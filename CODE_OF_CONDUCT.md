@@ -1,41 +1,61 @@
-# 贡献者公约（精简版） · Contributor Covenant
+# Contributor Covenant Code of Conduct
 
-## 我们的承诺
+**English** · [简体中文](CODE_OF_CONDUCT.zh-CN.md)
 
-作为成员、贡献者与维护者，我们承诺让每个人在 SciFlow 社区中不受骚扰——无论年龄、体型、可见或不可见的残障、族裔、性别认同与表达、经验水平、教育程度、社会经济地位、国籍、个人形象、种族、宗教或性身份与性取向。
+## Our pledge
 
-我们承诺以有助于开放、友善、多元、包容、健康社区的方式行事与互动。
+We as members, contributors and maintainers pledge to make participation in
+SciFlow a harassment-free experience for everyone, regardless of age, body size,
+visible or invisible disability, ethnicity, sex characteristics, gender identity
+and expression, level of experience, education, socio-economic status,
+nationality, personal appearance, race, religion, or sexual identity and
+orientation.
 
-## 我们的标准
+We pledge to act and interact in ways that contribute to an open, welcoming,
+diverse, inclusive and healthy community.
 
-有助于建设正向社区的行为包括但不限于：
+## Our standards
 
-- 对他人展示同理心与善意；尊重不同意见、观点与经验；
-- 给予并优雅地接受建设性反馈；
-- 对团队整体而非个人负责；
-- 以社区最佳利益为先。
+Examples of behaviour that builds a positive community:
 
-不可接受的行为包括：
+- Showing empathy and kindness toward other people.
+- Respecting differing opinions, viewpoints and experiences.
+- Giving and gracefully accepting constructive feedback.
+- Accepting responsibility, apologising to those affected by our mistakes, and
+  learning from the experience.
+- Focusing on what is best for the community, not only for us as individuals.
 
-- 使用性化语言/ imagery、性关注或挑逗；
-- 挑衅、侮辱或贬损性评论，以及人身或政治攻击；
-- 公开或私下骚扰；未经明确许可公布他人隐私信息（如地址）；
-- 其他在专业环境下可合理认定为不当的行为。
+Examples of unacceptable behaviour:
 
-## 维护者的责任
+- Sexualised language or imagery, and sexual attention or advances of any kind.
+- Trolling, insulting or derogatory comments, and personal or political attacks.
+- Public or private harassment.
+- Publishing another person's private information, such as a physical or email
+  address, without explicit permission.
+- Other conduct that could reasonably be considered inappropriate in a
+  professional setting.
 
-社区维护者有责任澄清可接受行为的标准，并对其认定为不当、威胁、冒犯或有害的任何行为采取公平的纠正措施。
+## Maintainer responsibilities
 
-社区维护者有权删除、编辑或拒绝与本公约不符的 Issue、评论、commit、wiki 编辑与其他贡献，并在适当时说明封禁理由。
+Maintainers clarify and enforce acceptable behaviour. They may remove, edit or
+reject comments, commits, code, issues and other contributions that do not
+follow this Code, and will communicate moderation reasons when appropriate.
 
-## 适用范围
+## Scope
 
-本公约在所有社区空间生效；当个人在官方渠道（电邮、聊天、线下活动）代表社区时同样适用。
+This Code applies in project spaces and when an individual is representing the
+project in public spaces.
 
-## 强制执行
+## Enforcement
 
-辱骂、骚扰或其他不可接受的行为可向项目维护者举报（经仓库私密安全通道）。所有投诉都会得到及时、公平的审查与调查。维护者有义务保护事件举报者的隐私与安全。
+Reports can be sent to the maintainer through the contact address on the
+repository profile. All complaints will be reviewed promptly and fairly.
+Maintainers must respect the privacy and security of the reporter.
 
-## 来源
+Enforcement may range from a private warning to a temporary or permanent ban,
+depending on the severity and repetition of the behaviour.
 
-本公约为 [Contributor Covenant 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct.html) 的精简中文版。
+## Attribution
+
+This Code is adapted from the
+[Contributor Covenant](https://www.contributor-covenant.org), version 2.1.

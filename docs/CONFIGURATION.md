@@ -1,363 +1,115 @@
-# SciFlow 配置指南
-> 不是参数罗列手册。按「你想怎么用」来组织——每个场景一份可直接抄的配置，附上当它不工作时该看哪里。
+# Configuration
 
----
+**English** · [简体中文](CONFIGURATION.zh-CN.md)
 
-## 先想清楚：你的模型从哪来
+SciFlow ships no built-in model. You bring an OpenAI-compatible endpoint, a
+local server, or run the mock gateway for tests. The same settings can be
+changed from the settings page, the CLI, or a chat instruction; environment
+variables are the fallback for a fresh install.
 
-SciFlow 是**零内置模型**的产品。它不附带任何 LLM、任何嵌入模型、任何云服务账号——所有 AI 能力都来自**你自己**的配置。这不是限制，是产品立场：你的 Key、你的额度、你的数据，从第一行配置开始就在你手里。
-
-三条路线，按需选择：
-
-| 路线 | 适合谁 | 体验 |
-|---|---|---|
-| **本地推理**（Ollama / LM Studio） | 数据绝不出机器、有显卡或大内存 | 慢一些，但物理隔离 |
-| **国内云 API**（豆包 / DeepSeek / 通义 / 智谱 / Kimi） | 要质量、要速度，接受按量付费 | 流水线全速跑 |
-| **混合**（云模型 + 本地嵌入） | 主力用云，语义检索不出本机 | 推荐默认姿势 |
-
----
-
-## 5 分钟最小可用配置
+## Fastest working setup
 
 ```bash
 cp apps/server/.env.example apps/server/.env
 ```
 
-编辑 `apps/server/.env`，只改三行：
-
 ```ini
-AI_BASE_URL=https://api.deepseek.com/v1   # 你选的厂商端点
-AI_API_KEY=sk-你的key                      # 你自己的 Key
-AI_MODEL=deepseek-chat                     # 你开通的模型名
+AI_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+AI_API_KEY=sk-your-api-key-here
+AI_MODEL=doubao-seed-1-6
 ```
 
-启动：
+Any OpenAI-compatible provider works: 火山方舟, DeepSeek, DashScope, 智谱,
+Moonshot, Ollama, LM Studio, or a self-hosted gateway. Use the exact model name
+from your provider. `AI_MODEL` is required; `AI_MODEL_FAST` and
+`AI_MODEL_STRONG` are optional routes.
 
-```bash
-pnpm install && pnpm dev        # 或 node apps/server/dist/apps/server/src/cli.js health
-```
+## Model routing
 
-> 也可以完全不用 `.env`：启动后在设置 → 模型路由 → 添加厂商，填 Base URL + Key 会自动检测可用模型并匹配上下文/输出/工具调用能力，点「测试连接」确认后保存并激活即可（v1.2）。
-
-**验收**：浏览器开 `http://localhost:3000/api/docs`，`/api/health` 返回 200 即通。若 `settings/check` 返回 503，九成是 Key 填错或模型名不存在——先别看代码，去厂商控制台核对模型名（DeepSeek 叫 `deepseek-chat`，豆包叫 `doubao-seed-*`，名字对不上一切白搭）。
-
-### 一条新手最容易踩的坑
-
-`.env` 必须放在 `apps/server/` 下（不是仓库根目录）。从根目录启动时它也会被显式加载，但放错了位置你会对着「配置明明写了却不生效」耗半小时——别问是怎么知道的。
-
----
-
-## 设置页 / CLI / 对话三入口改配置（v1.3）
-
-模型、角色、约束、钩子、权限都可以不改 `.env` 直接在应用内配置；三条入口写的是同一份数据，改完立即生效：
-
-| 入口 | 怎么用 | 适合 |
+| Variable | Purpose | Default |
 |---|---|---|
-| 设置页 | 浏览器 → 设置 → 模型路由 / 配置中心 | 图形化逐项调整、看注入预览与审计 |
-| CLI | `sciflow config status` / `permission` / `role` / `constraint` / `hook` / `preset` / `export` / `import` / `preview` / `audit` | 脚本化、批量导入导出、无 GUI 环境 |
-| 对话 | 在任意对话里让 AI 调用 `config.*` 工具（如「新增一条约束：所有数值必须带单位」） | 一句话完成多项设置 |
+| `AI_BASE_URL` | OpenAI-compatible base URL | 火山方舟 endpoint |
+| `AI_API_KEY` | Provider key; never commit it | empty |
+| `AI_MODEL` | Default model | empty, must be set |
+| `AI_MODEL_FAST` | Short answers, polish, review JSON | falls back to `AI_MODEL` |
+| `AI_MODEL_STRONG` | Planning and long-form drafting | falls back to fast |
+| `AI_RPM_CAP` | Requests per minute; concurrency is derived from it | 60 in the server, 8 in Compose |
+| `AI_REQUEST_TIMEOUT_MS` | Per-request timeout; `0` disables | 180000 |
+| `AI_MOCK` | `1` starts the in-process mock gateway | off |
 
-```bash
-# 例：CLI 新增约束 → 下一次对话立刻注入
-sciflow config constraint add "输出必须带单位" --rule "所有数值必须带单位" --level must --scope all
-sciflow config preview --scope chat        # 看到实际注入文本，与模型收到的一致
-sciflow config export --out my-config.json # 备份/分享（不含审计与密钥）
-sciflow config import my-config.json       # 幂等导入，重复导入不会叠加
-```
+A fast/strong split is worth setting for long pipelines: planning and critique
+benefit from a stronger model, while translation and formatting do not.
 
-**权限档**：`strict`（只读）/ `balanced` / `open` / `unrestricted`（默认全面放开）。核心保护项（鉴权、密钥与加密、SSRF、审计日志、数据库路径、监听地址与端口、不可逆数据操作）任何档位都不可改；放宽权限每次最多一级，防止误触一键放开。
+## Agent and tools
 
-**运行时巡检**：`node scripts/monitor_config_center.mjs --base http://127.0.0.1:3000 --log <日志>`，19 项只读检查，退出码非 0 即有异常（CI 的 regression job 已接入）。
-
----
-
-## 扩展中心：内置 87 条科研资产（v1.4）
-
-克隆下来就自带，默认全部启用，可在「设置 → 扩展中心」里按需关闭：
-
-| 类型 | 数量 | 内容 |
+| Variable | Purpose | Default |
 |---|---|---|
-| MCP 服务器 | 20 | Context7、DeepWiki、arXiv、Paper Search、Zotero、BioMCP、Semantic Scholar、CNKI、Obsidian、NotebookLM、Basic Memory、Deep Research 等（附仓库/许可证/安装方式；Context7 与 DeepWiki 为公开 HTTP 端点可直接连） |
-| 技能 Skills | 31 | Anthropic 官方 Skills、Academic Research Skills（53.9k★）、Codex/Claude 学术三件套、系统综述、Humanizer、Prism、LatteReview、论文校对/写作模板，以及 13 项 SciFlow 私有优势工具（引用体检 / 统计口径审计 / 可复现方案 / 伦理扫描 / 图表规范 / 新颖性扫描 / 基金契合 / 投稿风险 / 审稿答辩 / 精读矩阵 / 实验计划 / 数据可用性 / 提示词加固） |
-| 角色 | 10 | 方法学家、统计顾问、期刊编辑、基金评审、数据管理员、伦理审查员、科研馆员、可复现性专员、图表设计师、审稿回复专家 |
-| 约束 | 10 | 引用可溯源、禁止编造、数值带单位、结构化输出、PRISMA、隐私不外泄、先声明假设、必写局限、AI 使用披露、聊天简洁 |
-| 钩子 | 4 | 结尾自检、风险提示、流水线先提纲、隐私拦截（关键词命中即拦） |
-| 提示词模板 | 12 | 润色（Nature 风格/降重）、翻译、IMRaD 大纲、论点先行起草、七维评审、缺口分析、结构化提取、证据综合、Cover Letter、审稿回复、选刊 |
+| `AGENT_TOOLS` | `off` disables tool calls | on |
+| `AGENT_TOOLS_ALLOW` | Comma-separated tool allow-list | built-in research set |
+| `AGENT_TOOLS_PROFILE` | `full`, `research`, `experiment`, `config` | `full` |
+| `AGENT_TOOL_MODE` | `full` or `dynamic` (`tool_search` first) | `full` |
+| `AGENT_MAX_TOOL_CALLS` | Tool calls per turn | 24 |
+| `AGENT_TOOL_TIMEOUT_MS` | Per-tool timeout | 20000 |
+| `AI_TOOLS_NONSTREAM_HOSTS` | Hosts that need non-streaming tool calls | `hcnsec.cn` |
 
-**四种添加方式**（每个资产面板都有入口）：手填模板、粘贴 SKILL.md / 模板 JSON / MCP JSON、拖拽 `.md/.json/.zip`（自动解析包内 SKILL.md 与 JSON）、一键 AI 生成（按模板出草稿，确认后保存）。第五种：在对话里直接让 AI 调用 `extension.*` 工具。
+External MCP tools are visible only in the `full` profile. If you replace
+`AGENT_TOOLS_ALLOW`, include the MCP tool names or they will be filtered out.
 
-```bash
-sciflow ext list                      # 查看全部（含私有标记）
-sciflow ext toggle skill-arxiv-mcp    # 启用/停用（-off 停用）
-sciflow ext import ./my-skill.md      # 导入 SKILL.md / JSON
-sciflow ext export --out ext.json     # 导出（不含 SciFlow 私有工具）
-sciflow ext reset                     # 恢复全部内置
-```
+## Storage and retrieval
 
-私有优势工具（`visibility=private`）只在本机可见，不进入导出包、不出现在对外 MCP 清单。
-
----
-
-## Agent 运行时：工具面、审批与外部 MCP
-
-Agent 不是「一个模型硬干所有事」，工具面、审批和预算都是运行时配置：
-
-| 配置 | 作用 | 默认 |
+| Variable | Purpose | Default |
 |---|---|---|
-| `AGENT_TOOLS=off` | 关闭模型工具调用，只保留纯对话 | 开启 |
-| `AGENT_TOOLS_ALLOW` | 允许暴露给模型的工具白名单（逗号分隔，canonical 名） | 内置科研工具 + 配置/扩展 + 外部 MCP 三件套 |
-| `AGENT_TOOLS_PROFILE` | 按场景收窄工具面：`full` / `research` / `experiment` / `config` | `full` |
-| `AGENT_TOOL_MODE` | `full` 直接暴露全部白名单；`dynamic` 只直出核心工具，其余先 `tool_search` 再 `tool_invoke` | `full` |
-| `AGENT_MAX_TOOL_CALLS` | 单轮最多工具调用次数 | 24 |
-| `AGENT_TOOL_TIMEOUT_MS` | 单次工具超时（毫秒） | 20000 |
+| `DATABASE_PATH` | SQLite file | `apps/server/data/sciflow.db` |
+| `EMBEDDING_MODEL_PATH` | Local GGUF embedding model | empty; full-text search only |
+| `SCIFLOW_NO_VEC` | `1` disables sqlite-vec | off |
+| `KNOWLEDGE_CONTEXT_CHUNKS` | Neighbour chunks added to a hit | 1 |
+| `RETRIEVAL_RERANK` | LLM reranking | off |
+| `SCHOLAR_SEARCH` | OpenAlex / Crossref / arXiv search | on |
+| `WEBSEARCH_PROVIDER` | `so360`, `searxng`, `tavily`, `serper`, `brave`, `duckduckgo` | duckduckgo |
 
-**计划级授权**：模型可先提交研究计划（问题/假设/协议/风险/成本），用户在驾驶舱批准后，计划内工具按预算自动放行；预算按项目累计 token，耗尽自动回落逐次审批。计划与审批记录在 `agent_plan` / `tool_approval`，删项目时级联清理。
+Embeddings are optional. Without a model, search falls back to FTS5 BM25 and
+LIKE matching; nothing in the writing or review flow stops working.
 
-**外部 MCP**：设置 → 扩展中心可添加任意 MCP Streamable HTTP 端点。Agent 通过三个工具接入：
+## Network and auth
 
-- `mcp.external.list`：列出已配置服务器（只读）
-- `mcp.external.discover`：按 URL 探测工具清单（只读，受 SSRF 防护）
-- `mcp.external.call`：调用外部工具（需审批，返回内容标记为第三方不可信）
-
-外部 MCP 只在 `full` profile 暴露；`research` / `experiment` 角色不可见。若你自定义了 `AGENT_TOOLS_ALLOW`，记得把这三个名字加进去，否则会被白名单挡掉。
-
-**指标**：`GET /api/agent/metrics?days=7&projectId=...` 返回工具调用成功率、P95、按工具/按天分布、run 汇总与最近 run；驾驶舱 `AgentOpsPanel` 直接消费该接口，不再重复拉执行列表。
-
----
-
-## 模型路由：fast / strong 双档
-
-SciFlow 把 LLM 调用分成两档，**分别计费**：
-
-```ini
-AI_MODEL_FAST=deepseek-chat          # 对话、翻译、意图识别等高频轻活
-AI_MODEL_STRONG=deepseek-reasoner    # 章节起草、评审、规划等深活
-```
-
-不配就都走 `AI_MODEL`。**建议必配**：流水线一轮 8 章节起草 × 3 轮质量门，全用强模型的话账单会教你做人；评审/起草用 reasoner 级、润色/翻译用 chat 级，总成本能压一半以上。
-
-每次调用的真实消耗都记录在 `llm_call_log` 表——设置页 Usage 面板能看到每次调用的 token 数，月底对账不用猜。
-
-> 本地推理路线：`AI_BASE_URL=http://127.0.0.1:11434/v1`（Ollama），模型名填 `qwen2.5:14b` 之类。嵌入模型同理走本地，见下一节。
-
----
-
-## 嵌入模型：可选，且永远可选
-
-语义检索（向量 ANN）需要嵌入模型。**SciFlow 不内置、不自动下载**——这是刻意的：50MB 的模型文件自动落盘这种事，在没打招呼的情况下发生就不体面。
-
-两种姿势：
-
-```ini
-# 姿势 A：自备 GGUF（推荐 bge-small-zh-v1.5 q4_k_m，384 维）
-EMBEDDING_MODEL_PATH=/home/you/models/bge-small-zh-v1.5-q4_k_m.gguf
-
-# 姿势 B：什么都不配
-# 向量检索自动降级为 FTS5 BM25 → LIKE 全文检索，功能不阻塞
-```
-
-没配嵌入模型时，搜索照常能用（BM25 对中英混合查询效果尚可），只是语义相近但字面不同的内容召回会弱一些。**先用起来，觉得检索不够聪明再回来配**。
-
-注意：vec0 虚拟表固定 384 维（对应 bge-small 系），换 768 维模型请先看 `docs/master-plan.md` 的维度迁移计划——现在会静默降级，不会崩。
-
----
-
-## 联网搜索：开源内置，闭源自填
-
-搜索是可插拔的。**开源路线零成本，商业路线你自己填 Key**，SciFlow 不代管、不抽成：
-
-```bash
-# SearXNG（推荐）：自部署开源元搜索，隐私友好，可聚合多引擎
-docker run -d -p 8888:8080 searxng/searxng
-# 然后 PUT /api/web/config: { "provider": "searxng", "searxngUrl": "http://127.0.0.1:8888" }
-
-# 商业引擎（可选）：Tavily / Serper / Brave，Key 你自己去申请
-# PUT /api/web/config: { "provider": "tavily", "tavilyKey": "tvly-xxx" }
-```
-
-什么都不配时默认走 DuckDuckGo，**国内网络不可达时自动降级 so360（免 Key、国内可达）**；全链失败会在返回里带 `notice` 说明原因（不再静默空结果）。
-
-**科研问答里要不要联网**？默认关（`websearch_in_chat=on` 开启）。开了之后：知识库无命中时才发起网搜，来源以 `[网搜N]` 标注进上下文、以 🌐 卡片展示给前端。文献事实类问题建议关着——模型引用网页比幻觉引用更隐蔽，而 SciFlow 的立场是引用必须可溯源。
-
-查看当前配置（Key 掩码回显）：
-
-```bash
-curl http://127.0.0.1:3000/api/web/config
-```
-
----
-
-## 企业模式：权限分两层（v1.8）
-
-`AUTH_MODE=jwt` 时按「数据面 / 配置面」两层隔离；本地/桌面模式（默认 `none`）两层都放行，零登录体验不变。
-
-| 层 | 覆盖范围 | 判定 | 拒绝码 |
-|---|---|---|---|
-| 数据面 | 项目 + 全部子资源：文档 / 文献 / 知识库 / 记忆 / 实验 / 研究设计稿 / 审稿意见 / 评分报告 / 执行轨迹 / 投稿 / 流水线任务 | `ProjectAccessService.assertXxx(id, user)`：子资源 → 项目 → owner | **404**（不泄露存在性） |
-| 配置面 | 模型厂商与 Key、baseURL、连接测试、权限档、角色/约束/钩子、扩展资产、成本用量、联网 provider、期刊库增删 | `AdminGuard`（类级 `@UseGuards`） | **403** |
-| 聚合面 | `dashboard/overview`、`memory`、`documents` 列表不带 projectId | controller 显式判断 | **403 / 400** |
-
-为什么配置面必须按角色而不是按项目：改 `baseURL` 就能把**全实例**的请求（含他人稿件）引到自己的服务器；
-改权限档就能放开自身限制。这些不属于任何项目，只能按角色判定。
-
-### 快速自检（部署后跑一遍）
-
-```bash
-pnpm --filter @sciflow/server build
-node scripts/verify-jwt-access.mjs    # 28 项断言，全自动（自拉独立库与端口，跑完即关）
-```
-
-## 安全姿势：什么时候必须开认证
-
-默认零登录（`AUTH_MODE=none`），服务只监听 `127.0.0.1`——单机使用，这是最省心的姿势。
-
-**两种情况必须改**：
-
-1. 监听到局域网（`HOST=0.0.0.0`，比如给同组人共用）→ 必须 `AUTH_MODE=jwt` + `JWT_SECRET`，否则**启动闸直接拒绝拉起**。这不是建议，是硬约束。
-2. 暴露公网 → 在 1 的基础上加反向代理 + HTTPS，并把 `SANDBOX_TIMEOUT_MS` 想清楚（Python 沙箱是进程级隔离，不是容器级——威胁模型写在 `experiments.service.ts` 注释里，读一遍再决定要不要对外开放执行面）。
-
-```ini
-AUTH_MODE=jwt
-JWT_SECRET=openssl rand -hex 32 的输出贴这里
-HOST=0.0.0.0
-```
-
-首个注册用户自动成为管理员。数据库里的厂商 API Key 全程 AES-256-GCM 加密（主密钥 `apps/server/data/.sciflow.key`）——**备份 sciflow.db 时把 key 文件当成跟密码同级的资产对待，两者永远别放同一个压缩包里传网盘**。
-
----
-
-## Docker 一把梭
-
-```bash
-docker compose up -d          # dev 配置
-docker compose -f docker-compose.prod.yml up -d   # 生产配置
-```
-
-镜像构建走 `Dockerfile`（glibc 基础镜像——别手贱换 alpine/musl，better-sqlite3 的原生模块会教做人，v0.4.2 修过三处相关真因）。健康检查打 `/api/health`，114 条路由全注册即构建正确。
-
----
-
-## 速查：所有可调项
-
-| 变量 | 默认 | 说明 |
+| Variable | Purpose | Default |
 |---|---|---|
-| `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` | 无 | 三件套，缺一不可（零内置原则） |
-| `AI_MODEL_FAST` / `AI_MODEL_STRONG` | 同 `AI_MODEL` | 双档路由，强烈建议分开 |
-| `AI_RPM_CAP` | 8 | 每分钟 AI 调用上限（令牌桶），防 429 风暴 |
-| `AI_REQUEST_TIMEOUT_MS` | 180000 | **请求级超时**：上游不回包时中止，防流水线永久挂起（0=禁用；流式按空闲时长判定） |
-| `WEBSEARCH_IN_PIPELINE` | off | 流水线文献步骤是否并入联网检索线索（也可在设置页「流水线步骤与运行参数 → 流水线联网检索」开关，写 `websearch_in_pipeline`） |
-| `JUDGMENT_BASE_URL` / `JUDGMENT_API_KEY` / `JUDGMENT_MODEL` / `JUDGMENT_TIMEOUT_MS` | 无 | 意图判别器独立端点（OpenAI 兼容）；不配则沿用主 AI 服务 |
-| `EMBEDDING_MODEL_PATH` | 无 | 自备 GGUF 嵌入模型路径，不配则全文检索 |
-| `SCIFLOW_MODEL_CACHE` | `~/.sciflow/models` | 模型缓存目录 |
-| `WEBSEARCH_PROVIDER` | duckduckgo | so360（国内可达免 Key）/ searxng / tavily / serper / brave；DDG 失败自动降级 so360 |
-| `WEBSEARCH_IN_CHAT` | off | chat 联网兜底开关 |
-| `AUTH_MODE` / `JWT_SECRET` | none / 无 | 认证模式（非回环监听强制 jwt） |
-| `HOST` | 127.0.0.1 | 监听地址（0.0.0.0 触发安全闸） |
-| `SANDBOX_TIMEOUT_MS` | 10000 | Python 沙箱单次执行超时 |
-| `DATABASE_PATH` | `apps/server/data/sciflow.db` | SQLite 路径 |
-| `SCHOLAR_SEARCH` | on | 学术检索（OpenAlex/Crossref/arXiv）总开关；`off` 后流水线新颖性预检/文献补充与文献页「学术库检索」同时关闭（也可用设置页 `scholar_search`）。`AI_MOCK=1` 时强制关闭 |
-| `AI_MOCK` | 0 | 1 = 进程内 mock 网关（CI / 无网环境） |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | 无 | OTLP/HTTP-JSON 轨迹导出端点（如本地 collector `http://127.0.0.1:4318`，本地需配合 `ALLOW_PRIVATE_OUTBOUND=1`）；不配则零开销关闭 |
-| `OTEL_EXPORTER_OTLP_HEADERS` | 无 | 导出请求头（逗号分隔 key=value，如鉴权） |
-| `OTEL_SERVICE_NAME` | sciflow | OTLP 载荷的 service.name 属性 |
+| `HOST` | Listen address | `127.0.0.1` |
+| `PORT` | API port | 3000 |
+| `CORS_ORIGIN` | Allowed origins, comma-separated | local Vite origins |
+| `AUTH_MODE` | `none` or `jwt` | `none` |
+| `JWT_SECRET` | Signing key, at least 32 characters | empty |
+| `JWT_EXPIRES` | Token lifetime | `7d` |
+| `ALLOW_REGISTRATION` | Open self-registration | off |
+| `ALLOW_PRIVATE_OUTBOUND` | Allow private/local outbound targets | off |
+| `SANDBOX_TIMEOUT_MS` | Experiment timeout | 10000 |
 
-环境变量是首层兜底；运行期在设置页改的（厂商切换、搜索 provider）落 `app_setting` 表，**运行期配置优先于环境变量**——调试「改了没生效」时先看设置页。
+If `HOST` is not loopback, `AUTH_MODE=jwt` and a valid `JWT_SECRET` are required;
+the server refuses to start otherwise.
 
----
+## Search, traces and assets
 
-## 外观与主题（v1.7）
+- Web search is configured in the UI or via `PUT /api/web/config`. SearXNG is the
+  recommended self-hosted option; commercial providers need their own key.
+- `OTEL_EXPORTER_OTLP_ENDPOINT` exports traces as OTLP/HTTP-JSON. It is off by
+  default and adds no overhead when unset.
+- Built-in prompts, skills, roles and MCP catalogue entries are seeded once on
+  first start. They can be disabled but not physically deleted; `resetBuiltin`
+  restores the defaults.
 
-主题分两个正交维度，均在「设置 → 外观与主题」里切换（也可用 ⌘K 命令面板搜「风格」）：
-
-| 维度 | 存储键 | 取值 |
-|---|---|---|
-| 风格（视觉语言） | `sciflow-theme-style` | `sciflow`（默认）/ `academic` / `paper` / `minimal` / `night` / `contrast` |
-| 明暗 | `sciflow-theme` | `light` / `dark` / `system`（默认跟随系统） |
-
-- 风格包只覆盖 CSS 变量（调色板 / 品牌 / 语义 / 圆角 / 阴影 / 密度 / 字体），不改组件类名；新增风格只需在 `apps/web/src/styles/themes.css` 加一段 `:root[data-theme='x']`，并在 `apps/web/src/lib/theme.ts` 的 `THEME_STYLES` 登记元数据。
-- 高对比无障碍包额外关闭玻璃模糊与氛围光、2px 实线边框、3px 焦点框（WCAG AAA 正文 21:1）。
-- 主题选择存在浏览器 localStorage（本机），不写数据库、不上传；刷新由 `index.html` 预置脚本还原，无闪变。
-
-### 学术检索与新颖性预检
+## Docker
 
 ```bash
-# 学术库发现检索（只返回元数据，不入库）
-curl -X POST http://127.0.0.1:3100/api/references/discover   -H 'content-type: application/json'   -d '{"query":"heterophilic graph node classification","limit":5}'
-
-# 关闭学术检索（离线/合规场景）
-SCHOLAR_SEARCH=off
+cp .env.example .env          # fill AI_API_KEY
+docker compose up -d --build
+# open http://localhost:8080
 ```
 
-**国内网络注意**：OpenAlex / Crossref / arXiv 是境外公共 API，中国大陆网络直连可能超时或被拒绝。发现接口会返回 `status`（`ok` / `degraded` / `offline` / `disabled`）与逐源 `sources[]`；文献页在 `offline` / `degraded` 时明确提示“可能需要代理”，并提供「重试」与「改用本地文献库」。网络不可达不是“没搜到”，不要只换关键词。可配置代理，或改用本地库 / DOI / BibTeX 导入：
+Compose publishes the API only on `127.0.0.1:3000` and serves the web app on
+`8080`. Set `CORS_ORIGIN=http://localhost:8080` when using that address.
 
-```bash
-# 仅学术检索走代理（优先于标准代理变量）
-SCHOLAR_PROXY_URL=http://127.0.0.1:7890
-# 也兼容标准变量
-HTTPS_PROXY=http://127.0.0.1:7890
-```
+## Full reference
 
-流水线也会在源失败时降级为空结果，不阻塞成稿。
-
-流水线「新颖性预检」步骤在文献调研前执行：取近 8 年同题工作，算选题 token 覆盖率（objective，零 LLM），重叠度 ≥70% 时把提醒写进产物「研究说明」。可在设置页关闭该步骤；学术检索关闭时该步骤自动跳过（不影响流水线）。
-
-## 质量检查器（确定性，v1.5）
-
-同一篇稿件必须得到同一分数——这是验收和对比的前提。`packages/core/src/quality-audit.ts` 是纯函数：零随机、零时间、零网络，六维各 20 分归一 100，附 FNV-1a 指纹。
-
-```bash
-# 检查已落库的文档
-node apps/server/dist/cli.js quality check --doc <documentId>
-# 检查本地 Markdown 文件
-node apps/server/dist/cli.js quality check --file ./paper/draft.md
-# HTTP（前端「客观检查器」面板同源）
-curl http://127.0.0.1:3100/api/documents/<id>/objective-audit
-```
-
-| 维度 | 判据 |
-|---|---|
-| 结构完整性 | 二级章节数；综述/框架类要求 引言/讨论/结论，实证类（有结果表或带百分数指标）才要求完整 IMRaD |
-| 篇幅达标 | ≥3000 字符（≥4500 满分） |
-| 引用闭环 | 正文 `[n]` 锚点与参考文献条目/citation 表可对上 |
-| 可读性 | 平均句长（>90 扣分）、超长段落、过短段落占比 |
-| 修辞严谨 | 模糊限定词密度、无证据强断言 ≤3 处 |
-| 学术诚信 | 自述无原始实验却声称「实验结果表明…优于/提升」且无结果表/数值 → 硬伤 |
-
-硬伤（占位符、空文、重复段落、长篇零引用、悬空锚点、名实不符）直接封顶 40；空文 0 分。**质量门以客观分为准**，LLM 7 维分只作为回炉改进建议——同一稿实测 LLM 分在 27–59 之间漂移，不能当合格判据。
-
-流水线里「质量门」步骤可用步骤开关整体停用（停用后不评分直接放行，仅用于调试）；客观检查器本身随时可通过 CLI/API/前端单独运行。
-
-## 界面截图验收（真实浏览器）
-
-`scripts/capture-ui.mjs` 会自启 mock 后端、写入临时 SQLite 种子项目，逐页断言关键内容并截图；默认输出 `docs/screenshots`，也可指定 `--out`：
-
-```bash
-node scripts/capture-ui.mjs --out /tmp/sciflow-shots
-```
-
-默认使用 Playwright 自带 Chromium。CI / 云主机未安装对应版本时，可复用系统 Chromium：
-
-```bash
-CHROMIUM_EXECUTABLE_PATH=/usr/local/bin/chromium node scripts/capture-ui.mjs --out /tmp/sciflow-shots
-```
-
-脚本覆盖 15 个浅色页面 + 3 个深色页面；任一页面断言失败会直接报错，适合放进发布前验收。
-
-## CLI headless 全流程（一条命令出论文）
-
-后端已启动时，CLI 可无人值守跑完整流水线：
-
-```bash
-node apps/server/dist/cli.js run --topic "图神经网络在生物医药中的应用" --auto --depth 2 --out ./paper/
-#   --auto      自动确认大纲（不加则在大纲确认点停下，exit 2）
-#   --depth 1-3 研究深度：文献调研按轮递归检索（更全，token 消耗更高）
-#   --out 目录  完成后把论文 Markdown 写入 ./paper/<论文标题>.md
-```
-
-研究深度也可以在「流水线页 / 工作台」用深度选择器切换（标准 / 深入 / 彻底），两者写同一个全局设置。
-
-## 排障三连
-
-1. **AI 调用全 429** → 看 `AI_RPM_CAP`，免费档模型把数值调小；流水线并发起草天然是突发流量。
-2. **检索结果全是「知识库中没有找到」** → 知识库空？文档上传成功但嵌入模型没配（去日志找「未找到本地嵌入模型」警告）？命中与否在知识库页直接搜一下就分清。
-3. **引用渲染出来是 `[文献N]`** → 这是引用池外的降级标记，属预期行为：作者没在文献库命中里被正文引用。把该文献加入项目文献库即可转正为编号引用。
+The complete variable list, CLI examples and troubleshooting notes are in the
+[Chinese configuration guide](CONFIGURATION.zh-CN.md). The source of truth for
+defaults is `apps/server/.env.example` plus the `envInt` calls in code.
