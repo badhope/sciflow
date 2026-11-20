@@ -1,6 +1,6 @@
 # Product roadmap
 
-Last reviewed: 2026-11-20 · Current release: **1.19.5**
+Last reviewed: 2026-11-20 · Current release: **1.19.6**
 
 This document states what exists today, what is deliberately out of scope, and
 what is planned next. It is the single source of truth for product scope; the
@@ -43,6 +43,7 @@ decision not to build it.
 | Literature | Library management | Shipped | Import, fingerprint dedup, reading status machine, BibTeX and RIS exchange |
 | Literature | Screening and coding matrix | Shipped | PRISMA-style screening with a coding matrix and citation network |
 | Knowledge | Hybrid retrieval | Shipped | sqlite-vec ANN plus FTS5 trigram, RRF fusion, MMR de-duplication |
+| Knowledge | Cross-chunk passage retrieval | Shipped | Expand hits by ±N chunks, merge overlapping windows, strip chunk overlap, never join across documents; query and chat use it by default |
 | Knowledge | Grounded Q&A with source cards | Shipped | Hits carry author, year and document binding |
 | Knowledge | PDF parsing and chunking | Shipped | Upload PDF, TXT or Markdown; text extraction and chunking |
 | Design | Experiment design assistant | Shipped | Variables, controls, sample-size hints, procedure, analysis plan, validity risks |
@@ -101,10 +102,8 @@ decision not to build it.
 
 ## Next
 
-Ordered by value to a researcher, not by implementation ease.
-
-1. **Full-text retrieval for PDFs beyond chunk boundaries.** Chunk-level RAG is
-   solid; cross-chunk reasoning over long method sections is the remaining gap.
+No additional roadmap item is open. New work enters this list only after a
+concrete research-workflow gap is reproduced and scoped.
 
 ## How this document is maintained
 

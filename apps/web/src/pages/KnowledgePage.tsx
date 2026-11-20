@@ -656,7 +656,9 @@ export function KnowledgePage({ project }: { project: Project }) {
                     const open = !!openChunks[key];
                     const long = s.chunkText && s.chunkText.length > s.snippet.length;
                     const totalChunks = docs.find((d) => d.name === s.docName)?.chunkCount;
-                    const chunkNo = typeof s.chunkSeq === 'number' ? s.chunkSeq + 1 : null;
+                    const startNo = typeof (s.chunkStartSeq ?? s.chunkSeq) === 'number' ? (s.chunkStartSeq ?? s.chunkSeq)! + 1 : null;
+                    const endNo = typeof (s.chunkEndSeq ?? s.chunkSeq) === 'number' ? (s.chunkEndSeq ?? s.chunkSeq)! + 1 : null;
+                    const chunkNo = startNo !== null ? (endNo !== null && endNo !== startNo ? `${startNo}–${endNo}` : `${startNo}`) : null;
                     return (
                       <div key={key} className="text-[11px] text-slate-400 dark:text-slate-500 leading-relaxed">
                         <div className="flex items-center gap-2 flex-wrap">

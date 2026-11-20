@@ -4,6 +4,8 @@
  * 接口层只应从这里 import；禁止深路径 `packages/retrieval/src/xxx`。
  */
 export * from './knowledge.service';
+export { buildPassages, joinChunkTexts } from './passage';
+export type { Passage, PassageChunk, PassageHit, PassageOptions } from './passage';
 export { EMBEDDING_DIM, REMOTE_EMBEDDER, resolveEmbeddingBackend, toVectorBlob } from './embedding.service';
 export type { EmbeddingBackend, RemoteEmbedder } from './embedding.service';
 export { EmbeddingService } from './embedding.service';

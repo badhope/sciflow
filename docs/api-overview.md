@@ -115,10 +115,12 @@ NotebookLM 式本地知识库：上传资料 → 分块 → BM25+向量混合检
 | POST | `/api/knowledge/upload` | 上传 / 写入知识资料 |
 | GET | `/api/knowledge` | 资料列表 |
 | POST | `/api/knowledge/query` | 混合检索问答（带来源） |
-| POST | `/api/knowledge/search` | 仅检索命中块 |
+| POST | `/api/knowledge/search` | 纯检索；传 `contextChunks>0` 返回跨块 passage |
 | GET | `/api/knowledge/:id` | 资料详情 |
 | PATCH | `/api/knowledge/:id/bind` | 与文献双向绑定 |
 | DELETE | `/api/knowledge/:id` | 删除资料（连同分块） |
+
+> `contextChunks` 取 0–3，默认 0（保持旧单块命中契约）。`/api/knowledge/query` 与聊天 RAG 默认跨块，来源额外返回 `chunkStartSeq` / `chunkEndSeq` / `chunkCount`。
 
 ### pipeline —— 全自动流水线状态机（`/api/pipeline`）
 顺序流水线状态机（主题验证→文献→大纲→人工确认→起草→质量门→润色→引用）+ 断点续跑。

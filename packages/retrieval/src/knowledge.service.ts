@@ -3,13 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { db } from '../../db/src/database';
 import { sqlite, vecLoaded } from '../../db/src/database';
 import { knowledgeDocs, knowledgeChunks, references, appSettings } from '../../db/src/schema';
-import { eq, inArray, and, asc, sql } from 'drizzle-orm';
+import { eq, inArray, and, or, gte, lte, asc, sql } from 'drizzle-orm';
 import { AiService } from '../../ai/src/ai.service';
 import { EmbeddingService } from './embedding.service';
 import { fingerprint } from '../../core/src/fingerprint';
 import { parseAuthors } from '../../core/src/authors';
 import { projectTo2D, blobToVector, downsampleIndices } from './projection';
 import { mmrSelect, normalizeScores } from './mmr';
+import { buildPassages, type PassageChunk } from './passage';
 
 const CHUNK_SIZE = 800; // 每块约 800 字（段落聚合，与文档切分逻辑保持一致）
 const CHUNK_OVERLAP = 120; // 15% 重叠：块边界处上下文连续，RAG 检索质量关键参数（不可为 0）
@@ -478,6 +479,97 @@ export class KnowledgeService {
       }));
   }
 
+  /**
+   * 跨 chunk 全文检索：先按现有 ANN+FTS5 取命中块，再以每块为锚点向前后各扩 N 块，
+   * 去切块 overlap 并按文档合并重叠窗口。用于 RAG 问答与长方法节阅读，避免只看到 800 字切片。
+   *
+   * @param contextChunks 前后各扩几块（0–3，默认 env KNOWLEDGE_CONTEXT_CHUNKS 或 1）
+   */
+  async searchPassages(projectId: string, question: string, topK = 5, contextChunks?: number) {
+    const hits = await this.search(projectId, question, topK);
+    if (hits.length === 0) return [];
+    const radius = Number.isFinite(Number(contextChunks))
+      ? Math.max(0, Math.min(3, Math.floor(Number(contextChunks))))
+      : KnowledgeService.defaultContextChunks();
+    const grouped = new Map<string, typeof hits>();
+    for (const hit of hits) {
+      const docId = String(hit.docId || '');
+      if (!docId) continue;
+      const list = grouped.get(docId) || [];
+      list.push(hit);
+      grouped.set(docId, list);
+    }
+    const chunks: PassageChunk[] = [];
+    for (const [docId, docHits] of grouped) {
+      const ranges = docHits.map((h) => {
+        const seq = Number(h.seq) || 0;
+        return and(
+          gte(knowledgeChunks.seq, Math.max(0, seq - radius)),
+          lte(knowledgeChunks.seq, seq + radius),
+        );
+      });
+      const rows = db
+        .select({
+          id: knowledgeChunks.id,
+          docId: knowledgeChunks.docId,
+          seq: knowledgeChunks.seq,
+          content: knowledgeChunks.content,
+          context: knowledgeChunks.context,
+        })
+        .from(knowledgeChunks)
+        .where(and(eq(knowledgeChunks.docId, docId), or(...ranges)))
+        .all();
+      for (const row of rows) {
+        chunks.push({
+          id: row.id,
+          docId: row.docId,
+          seq: Number(row.seq) || 0,
+          content: row.content || '',
+          context: row.context ?? null,
+        });
+      }
+    }
+    const passages = buildPassages(
+      hits.map((h) => ({
+        id: String(h.id),
+        docId: String(h.docId),
+        docName: String(h.docName || ''),
+        seq: Number(h.seq) || 0,
+        content: String(h.content || ''),
+        context: h.context ?? null,
+        score: Number(h.score) || 0,
+      })),
+      chunks,
+      { contextChunks: radius, maxChars: 4000 },
+    );
+    const hitById = new Map(hits.map((h) => [String(h.id), h]));
+    const hitByDoc = new Map<string, (typeof hits)[number]>();
+    for (const h of hits) {
+      const docId = String(h.docId || '');
+      const prev = hitByDoc.get(docId);
+      if (!prev || Number(h.score) > Number(prev.score)) hitByDoc.set(docId, h);
+    }
+    return passages.slice(0, topK).map((p) => {
+      const anchor = hitById.get(p.id) || hitByDoc.get(p.docId);
+      return {
+        ...p,
+        docId: p.docId,
+        docName: p.docName,
+        context: p.context,
+        referenceId: anchor?.referenceId ?? null,
+        referenceTitle: anchor?.referenceTitle ?? null,
+        referenceAuthors: anchor?.referenceAuthors ?? null,
+        referenceYear: anchor?.referenceYear ?? null,
+      };
+    });
+  }
+
+  /** 跨块上下文默认半径（0–3）；设为 0 时 query 退化为原来的单块行为 */
+  static defaultContextChunks(): number {
+    const n = Number(process.env.KNOWLEDGE_CONTEXT_CHUNKS ?? 1);
+    return Number.isFinite(n) ? Math.max(0, Math.min(3, Math.floor(n))) : 1;
+  }
+
   /** B-3.3：LLM 重排开关（app_setting retrieval_rerank=on；env WEBSEARCH 同款优先级：DB > env > 默认 off） */
   private rerankEnabled(): boolean {
     try {
@@ -553,14 +645,14 @@ export class KnowledgeService {
     return { points, total: rows.length, sampled: idx.length < rows.length, limit };
   }
 
-  /** RAG 问答：检索 + LLM 基于资料回答（Contextual Retrieval：块前带文档上下文前缀） */
+  /** RAG 问答：跨 chunk passage 检索 + LLM 回答（Contextual Retrieval：块前带文档上下文前缀） */
   async query(projectId: string, question: string) {
-    const hits = await this.search(projectId, question, 5);
+    const hits = await this.searchPassages(projectId, question, 5, KnowledgeService.defaultContextChunks());
     if (hits.length === 0) {
       return { answer: '知识库中没有找到与问题相关的资料。请先上传相关文献或文档。', sources: [] };
     }
     const chunksText = hits
-      .map((h, i) => `【来源${i + 1}｜文档：${h.docName}】\n${h.context ? `${h.context}\n` : ''}${h.content}`)
+      .map((h, i) => `【来源${i + 1}｜文档：${h.docName}｜分块 ${h.startSeq + 1}-${h.endSeq + 1}】\n${h.context ? `${h.context}\n` : ''}${h.content}`)
       .join('\n\n---\n\n');
     const answer = await this.ai.knowledgeQa(question, chunksText);
     return {
@@ -572,6 +664,9 @@ export class KnowledgeService {
         chunkId: h.id,
         chunkText: h.content,
         chunkSeq: h.seq,
+        chunkStartSeq: h.startSeq,
+        chunkEndSeq: h.endSeq,
+        chunkCount: h.chunkCount,
         referenceId: h.referenceId ?? null,
         referenceTitle: h.referenceTitle ?? null,
         referenceAuthors: h.referenceAuthors ?? null,

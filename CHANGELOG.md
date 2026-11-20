@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.19.6] - 2026-11-20
+
+### Added
+
+- **跨 chunk 全文检索**：新增 `buildPassages` / `joinChunkTexts` 纯函数与 `KnowledgeService.searchPassages`。先沿用 ANN + FTS5 + RRF 取命中块，再以命中块为锚点向前后各扩 N 块（默认 1，上限 3），按文档合并重叠/连续窗口、去掉切块 overlap，单条 passage 上限 4000 字，永不跨文档拼接。
+  `POST /api/knowledge/search` 新增可选 `contextChunks`（`>0` 返回 passage，缺省/0 保持旧单块契约）；`/api/knowledge/query` 与聊天 RAG 默认走跨块检索，来源卡新增 `chunkStartSeq` / `chunkEndSeq` / `chunkCount`，知识库来源显示「分块 2–4」范围。
+  新增 `KNOWLEDGE_CONTEXT_CHUNKS`（0–3，默认 1）与 `KNOWLEDGE_PASSAGE_CHARS`（聊天注入上限，默认 2400）两个环境变量。
+
+### Tests
+
+- 新增 `passage.spec.ts`（6 条纯函数，覆盖去 overlap、短重复不误删、前后扩窗、重叠窗口合并、不跨文档合并、`contextChunks=0` 保持单块）与 `knowledge-passage.spec.ts`（3 条服务级，覆盖 passage 范围/邻块正文、单块旧契约、RAG 来源范围）。
+- 服务端 113 文件 / 798 测试通过；Web 44 文件 / 240 测试通过；typecheck、lint、web build、chunk budget 与 OpenAPI 生成/check 通过。
+
 ## [1.19.5] - 2026-11-20
 
 ### Added

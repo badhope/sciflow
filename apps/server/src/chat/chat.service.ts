@@ -28,6 +28,11 @@ export interface ChatSource {
   chunkText: string;
   /** 命中块在所属知识库文档内的分块序号（0 起，来自 knowledge_chunk.seq） */
   chunkSeq: number;
+  /** 跨块上下文起止分块序号（0 起；单块来源时与 chunkSeq 相同） */
+  chunkStartSeq?: number;
+  chunkEndSeq?: number;
+  /** 跨块上下文包含的分块数 */
+  chunkCount?: number;
   /** 该块绑定的文献 id（未绑定为 null） */
   referenceId: string | null;
   /** 绑定文献标题（未绑定为 null） */
@@ -60,8 +65,10 @@ interface ChatRuntimeOptions {
   user?: AuthPayload;
 }
 
-/** RAG 注入到模型的每块片段上限（字符）。320 太短导致上下文贫瘠（审计 H3）；默认 800，可经环境变量调整 */
+/** 兼容旧配置：单块片段下限。实际注入取 max(本值, KNOWLEDGE_PASSAGE_CHARS)，默认 800 */
 const KNOWLEDGE_SNIPPET_CHARS = envInt('KNOWLEDGE_SNIPPET_CHARS', 800, { min: 200, max: 8000 });
+/** 跨块 passage 注入上限：默认 2400 字，足够覆盖命中块前后各一块，避免扩展后又被截回单块 */
+const KNOWLEDGE_PASSAGE_CHARS = envInt('KNOWLEDGE_PASSAGE_CHARS', 2400, { min: 400, max: 8000 });
 
 /** Agent 化科研问答：回答前自动注入项目记忆 + 跨会话摘要 + 知识库 RAG 上下文 */
 @Injectable()
@@ -119,10 +126,10 @@ export class ChatService {
         parts.push(`当前正在撰写的论文（优先理解并关联此上下文）：\n${docContext.trim().slice(0, 2500)}`);
       }
       if (projectId && question) {
-        const hits = await this.knowledge.search(projectId, question, 3);
+        const hits = await this.knowledge.searchPassages(projectId, question, 3, 1);
         hitsLen = hits.length;
         if (hits.length) {
-          parts.push(`知识库资料（回答可标注【来源:文档名】）：\n${hits.map((h) => `【来源:${h.docName}】${h.content.slice(0, KNOWLEDGE_SNIPPET_CHARS)}`).join('\n')}`);
+          parts.push(`知识库资料（回答可标注【来源:文档名】）：\n${hits.map((h) => `【来源:${h.docName}｜分块 ${h.startSeq + 1}-${h.endSeq + 1}】${h.content.slice(0, Math.max(KNOWLEDGE_SNIPPET_CHARS, KNOWLEDGE_PASSAGE_CHARS))}`).join('\n')}`);
           // 同一文档多个片段只保留一条来源，取最高分块；该最高分块的 chunkText/chunkSeq/referenceId/referenceTitle 一并透传
           // （与 knowledge query 的 sources 字段对齐；docName/score 旧字段保留，新字段全部为附加）
           const byDoc = new Map<string, (typeof hits)[number]>();
@@ -136,6 +143,9 @@ export class ChatService {
               score: Math.round(h.score * 1000) / 1000,
               chunkText: truncateChunkText(h.content ?? ''),
               chunkSeq: h.seq ?? 0,
+              chunkStartSeq: h.startSeq ?? (h.seq ?? 0),
+              chunkEndSeq: h.endSeq ?? (h.seq ?? 0),
+              chunkCount: h.chunkCount ?? 1,
               referenceId: h.referenceId ?? null,
               referenceTitle: h.referenceTitle ?? null,
               referenceAuthors: h.referenceAuthors ?? null,

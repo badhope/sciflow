@@ -113,8 +113,8 @@ export const research = {
     /** 学习复盘取数：单文档全部分块正文（按 seq 升序）+ outline（Markdown 标题派生） */
     get: (id: string) => request<KnowledgeDocDetail>(`/api/knowledge/${id}`),
     /** 纯检索（不调 LLM，本地 BM25+向量）：返回命中文块，供来源卡片「引用到论文」/命令面板使用 */
-    search: (projectId: string, query: string) =>
-      request<KnowledgeSearchHit[]>(`/api/knowledge/search`, { method: 'POST', body: JSON.stringify({ projectId, query }) }),
+    search: (projectId: string, query: string, contextChunks?: number) =>
+      request<KnowledgeSearchHit[]>(`/api/knowledge/search`, { method: 'POST', body: JSON.stringify({ projectId, query, ...(contextChunks ? { contextChunks } : {}) }) }),
     /** 文献库↔知识库打通（#5）：绑定/解除文献，referenceId 传 null 解除 */
     bind: (id: string, referenceId: string | null) =>
       request<KnowledgeDoc>(`/api/knowledge/${id}/bind`, { method: 'PATCH', body: JSON.stringify({ referenceId }) }),

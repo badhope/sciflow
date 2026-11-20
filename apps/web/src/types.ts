@@ -461,6 +461,10 @@ export interface KnowledgeSource {
   chunkText: string;
   /** 命中块在所属文档内的分块序号（0 起，来源卡片显示 分块 seq+1） */
   chunkSeq: number;
+  /** 跨块上下文起止序号（0 起；旧数据只有 chunkSeq 时前端回退到单块） */
+  chunkStartSeq?: number;
+  chunkEndSeq?: number;
+  chunkCount?: number;
   /** 命中块绑定的文献（#5） */
   referenceId: string | null;
   referenceTitle: string | null;
@@ -483,6 +487,9 @@ export interface ChatSource {
   chunkText: string;
   /** 命中块在所属知识库文档内的分块序号（0 起） */
   chunkSeq: number;
+  chunkStartSeq?: number;
+  chunkEndSeq?: number;
+  chunkCount?: number;
   referenceId: string | null;
   referenceTitle: string | null;
   /** 差距#2：绑定文献作者/年份（SSE 未下发时前端容错为空不显示） */
@@ -514,6 +521,11 @@ export interface KnowledgeSearchHit {
   score: number;
   referenceId: string | null;
   referenceTitle: string | null;
+  /** contextChunks > 0 时返回跨块 passage 的起止序号与块数 */
+  startSeq?: number;
+  endSeq?: number;
+  chunkCount?: number;
+  matchedChunkIds?: string[];
 }
 
 

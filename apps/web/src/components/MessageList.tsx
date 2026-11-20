@@ -77,11 +77,14 @@ function Sources({ sources, onCite }: { sources: NonNullable<ChatMessage['source
         // 旧实现用 `score > 1 ? score : score*100` 猜量纲，低相关命中（≤1 分）会被放大 100 倍。
         const pct = Math.round(Math.min(100, Math.max(0, s.score)));
         const hasChunk = !!(s.chunkText && s.chunkText.trim());
+        const chunkRange = typeof s.chunkStartSeq === 'number' && typeof s.chunkEndSeq === 'number'
+          ? (s.chunkEndSeq === s.chunkStartSeq ? ` · 分块 ${s.chunkStartSeq + 1}` : ` · 分块 ${s.chunkStartSeq + 1}–${s.chunkEndSeq + 1}`)
+          : '';
         return (
           <div key={i}>
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
               <span className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-teal-700 dark:border-teal-800 dark:bg-teal-500/10 dark:text-teal-300">
-                <FileText size={10} aria-hidden="true" /> {s.docName}
+                <FileText size={10} aria-hidden="true" /> {s.docName}{chunkRange}
                 {pct > 0 ? ` · ${pct}%` : ''}
               </span>
               {hasChunk && (

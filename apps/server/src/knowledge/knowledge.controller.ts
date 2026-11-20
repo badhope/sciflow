@@ -55,15 +55,24 @@ export class KnowledgeController {
     return this.knowledge.query(body.projectId, body.question);
   }
 
-  /** 纯检索（不调 LLM，BM25+向量混合，本地零依赖）：body {projectId, query}，返回命中文块（与 query 的 sources 同源） */
+  /**
+   * 纯检索（不调 LLM，BM25+向量混合，本地零依赖）：body {projectId, query, contextChunks?}。
+   * contextChunks > 0 时返回跨块 passage（前后各扩 N 块，0–3）；默认 0，保持旧命中块契约。
+   */
   @Post('search')
-  search(@Body() body: { projectId: string; query?: string; question?: string }, @Req() req: { user?: AuthPayload }) {
+  search(
+    @Body() body: { projectId: string; query?: string; question?: string; contextChunks?: number },
+    @Req() req: { user?: AuthPayload },
+  ) {
     /**
      * 归属校验只拦「存在的他人项目」（企业模式）；不存在的 projectId 保持历史契约返回空数组，
      * 不抛 404 —— 纯检索是只读探测，抛错会让调用方（如全局搜索）整体失败。
      */
     if (this.access.enforced) this.access.assertProject(body?.projectId, req.user);
-    return this.knowledge.search(body.projectId, body.query || body.question || '', 5);
+    const query = body.query || body.question || '';
+    const ctx = Number(body.contextChunks);
+    if (Number.isFinite(ctx) && ctx > 0) return this.knowledge.searchPassages(body.projectId, query, 5, ctx);
+    return this.knowledge.search(body.projectId, query, 5);
   }
 
   /** 单文档取数：全部分块正文（按 seq 升序）+ outline（Markdown 标题派生）。
