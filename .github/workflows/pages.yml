@@ -1,7 +1,7 @@
 # GitHub Pages 站点发布（官网）
 #
-# 背景：官网 `docs/index.html` 已通过 Pages（source = main:/docs）在线，但没有工作流时
-# 只能依赖 GitHub 的自动构建，无法保证「发版后站点里的版本号与下载链接同步更新」。
+# 背景：官网 `docs/index.html` 已通过 GitHub Pages 发布（Pages source = GitHub Actions），
+# 本工作流在 push 后重新构建站点，保证「发版后站点里的版本号与下载链接同步更新」。
 # 本工作流做两件事：
 #   1) push 到 main 且 docs/ 变化时才部署（避免无意义构建）；
 #   2) 部署前把 index.html 里的版本占位替换成当前 tag/版本，保证官网永远指向最新安装包。

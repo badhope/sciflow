@@ -75,6 +75,8 @@ jobs:
           python-version: '3.12'
       - name: Build server
         run: pnpm --filter @sciflow/server build
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
       - name: Start backend (mock AI, fresh database)
         run: |
           rm -f /tmp/sciflow_ci.db*
