@@ -6,7 +6,7 @@ import { db, sqlite } from '../db/database';
 import { projects, documents, references, pipelineTasks, reflexionLogs, screeningQueue, extractionFields, extractionValues, reviewComments, experiments, submissions, submissionStatusEvents, citations, qualityReports, polishRecords, knowledgeDocs, knowledgeChunks, memoryLogs, agentExecutions, agentSteps, agentTasks, toolApprovals, agentPlans, llmCallLogs, chatSessions, researchBriefs } from '../db/schema';
 import { parseJson } from '../common/json-guard';
 import { clearProjectQualityStandard, getProjectQualityStandard, setProjectQualityStandard } from '../common/project-quality-standard';
-import { BUNDLE_TABLES, BUNDLE_VERSION, buildIdMap, remapRow, renameOnImport, validateBundle } from './project-bundle';
+import { BUNDLE_TABLES, BUNDLE_VERSION, buildIdMap, bundleSelectSql, remapRow, renameOnImport, validateBundle } from './project-bundle';
 
 /** Zod schemas for projects input validation */
 const createProjectSchema = z.object({
@@ -167,7 +167,7 @@ export class ProjectsService {
       if (!spec.defaultInclude && !includeRuntime) continue;
       try {
         const rows = sqlite
-          .prepare(`SELECT * FROM ${spec.table} WHERE ${spec.projectColumn} = ?`)
+          .prepare(bundleSelectSql(spec))
           .all(projectId) as Record<string, unknown>[];
         // snake_case → camelCase，使导出包与 API 形状一致（导入端按 camelCase 读取）
         const mapped = rows.map((r) => toCamelRow(r, spec.dropFields));
@@ -222,7 +222,8 @@ export class ProjectsService {
         }
         let inserted = 0;
         for (const row of rows) {
-          const mapped = remapRow(row, idMap, { projectId: newProjectId });
+          // 只有直接按 project_id 归属的表才强设 projectId；间接子表没有该列，强设会导致整行插入失败
+          const mapped = remapRow(row, idMap, spec.projectColumn ? { projectId: newProjectId } : {});
           try {
             db.run(sql`INSERT INTO ${sql.raw(spec.table)} (${sql.raw(Object.keys(mapped).map(toSnake).join(', '))}) VALUES (${sql.join(Object.values(mapped).map((v) => sql`${v === undefined ? null : v}`), sql`, `)})`);
             inserted += 1;

@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.19.7] - 2026-11-20
+
+### Fixed
+
+- **项目包导出/导入丢失间接子表**：`review_comment`、`citation`、`quality_report`、`polish_record`、`knowledge_chunk`、`submission_status_event`、`extraction_value`、`reflexion_log` 这些子表没有 `project_id`，旧导出统一按 `project_id` 查询，异常被 `catch` 吞掉后整表恒为空；导入时又强塞 `projectId`，即使有行也会因目标表无该列而逐行失败。
+  `BUNDLE_TABLES` 新增 `join` 关联路径，导出通过父表（document / knowledge_doc / submission / extraction_field / pipeline_task）定位项目；导入只对直接带 `project_id` 的表强设 `projectId`。新增 `bundleSelectSql` 纯函数，并对全部登记表在真实 schema 上执行查询校验。
+
+### Tests
+
+- 新增 `projects-bundle-export.spec.ts`（3 条：全部表查询可执行、导出包含审稿意见、导入后 `documentId` 已重映射且意见仍在）；`project-bundle.spec.ts` 增加间接表 join 断言。
+- 服务端 114 文件 / 802 测试通过；Web 44 文件 / 240 测试通过；typecheck、lint、OpenAPI 生成/check 通过。
+
 ## [1.19.6] - 2026-11-20
 
 ### Added

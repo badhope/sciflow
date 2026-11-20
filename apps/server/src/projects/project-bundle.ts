@@ -14,41 +14,65 @@
 /** 导出包格式版本：结构变更时递增，导入端据此拒绝不认识的版本 */
 export const BUNDLE_VERSION = 1;
 
+export interface BundleJoinSpec {
+  /** 父表名 */
+  table: string;
+  /** 子表用于关联父表的列 */
+  localColumn: string;
+  /** 父表被关联的列（通常是 id） */
+  targetColumn: string;
+  /** 父表用于关联项目的列 */
+  projectColumn: string;
+}
+
 export interface BundleTableSpec {
   /** 导出包里的键名 */
   key: string;
   /** 表名（用于提示与统计） */
   table: string;
-  /** 该表用于关联项目的列 */
-  projectColumn: string;
+  /** 该表直接关联项目的列；没有 project_id 的子表留空，改用 join */
+  projectColumn?: string;
+  /** 间接子表的关联路径：通过父表定位项目（如 review_comment.document_id → document.project_id） */
+  join?: BundleJoinSpec;
   /** 是否默认导出（运行态轨迹默认不带） */
   defaultInclude: boolean;
   /** 导出前是否剥掉指定字段（如大体积内容） */
   dropFields?: string[];
 }
 
+/** 生成导出查询：直接表按 project_id 过滤，间接表通过父表 join 定位项目。 */
+export function bundleSelectSql(spec: BundleTableSpec): string {
+  if (spec.join) {
+    return `SELECT c.* FROM ${spec.table} c JOIN ${spec.join.table} p ON p.${spec.join.targetColumn} = c.${spec.join.localColumn} WHERE p.${spec.join.projectColumn} = ?`;
+  }
+  if (spec.projectColumn) {
+    return `SELECT * FROM ${spec.table} WHERE ${spec.projectColumn} = ?`;
+  }
+  throw new Error(`BUNDLE_TABLES ${spec.key} 缺少 projectColumn 或 join`);
+}
+
 /** 项目内所有按 projectId 归属的表（与 schema 对齐；新增表时在此登记） */
 export const BUNDLE_TABLES: BundleTableSpec[] = [
   { key: 'documents', table: 'document', projectColumn: 'project_id', defaultInclude: true },
   { key: 'references', table: 'reference', projectColumn: 'project_id', defaultInclude: true },
-  { key: 'citations', table: 'citation', projectColumn: 'project_id', defaultInclude: true },
-  { key: 'qualityReports', table: 'quality_report', projectColumn: 'project_id', defaultInclude: true },
-  { key: 'reviewComments', table: 'review_comment', projectColumn: 'project_id', defaultInclude: true },
-  { key: 'polishRecords', table: 'polish_record', projectColumn: 'project_id', defaultInclude: true },
+  { key: 'citations', table: 'citation', join: { table: 'document', localColumn: 'document_id', targetColumn: 'id', projectColumn: 'project_id' }, defaultInclude: true },
+  { key: 'qualityReports', table: 'quality_report', join: { table: 'document', localColumn: 'document_id', targetColumn: 'id', projectColumn: 'project_id' }, defaultInclude: true },
+  { key: 'reviewComments', table: 'review_comment', join: { table: 'document', localColumn: 'document_id', targetColumn: 'id', projectColumn: 'project_id' }, defaultInclude: true },
+  { key: 'polishRecords', table: 'polish_record', join: { table: 'document', localColumn: 'document_id', targetColumn: 'id', projectColumn: 'project_id' }, defaultInclude: true },
   { key: 'knowledgeDocs', table: 'knowledge_doc', projectColumn: 'project_id', defaultInclude: true },
-  { key: 'knowledgeChunks', table: 'knowledge_chunk', projectColumn: 'project_id', defaultInclude: true },
+  { key: 'knowledgeChunks', table: 'knowledge_chunk', join: { table: 'knowledge_doc', localColumn: 'doc_id', targetColumn: 'id', projectColumn: 'project_id' }, defaultInclude: true },
   { key: 'memoryLogs', table: 'memory_log', projectColumn: 'project_id', defaultInclude: true },
   { key: 'experiments', table: 'experiment', projectColumn: 'project_id', defaultInclude: true },
   { key: 'submissions', table: 'submission', projectColumn: 'project_id', defaultInclude: true },
-  { key: 'submissionEvents', table: 'submission_status_event', projectColumn: 'project_id', defaultInclude: true },
+  { key: 'submissionEvents', table: 'submission_status_event', join: { table: 'submission', localColumn: 'submission_id', targetColumn: 'id', projectColumn: 'project_id' }, defaultInclude: true },
   { key: 'researchBriefs', table: 'research_brief', projectColumn: 'project_id', defaultInclude: true },
   { key: 'screeningQueue', table: 'screening_queue', projectColumn: 'project_id', defaultInclude: true },
   { key: 'extractionFields', table: 'extraction_field', projectColumn: 'project_id', defaultInclude: true },
-  { key: 'extractionValues', table: 'extraction_value', projectColumn: 'project_id', defaultInclude: true },
+  { key: 'extractionValues', table: 'extraction_value', join: { table: 'extraction_field', localColumn: 'field_id', targetColumn: 'id', projectColumn: 'project_id' }, defaultInclude: true },
   { key: 'chatSessions', table: 'chat_session', projectColumn: 'project_id', defaultInclude: true },
   // 运行态轨迹：默认不带（体积大、且对迁移无价值）
   { key: 'pipelineTasks', table: 'pipeline_task', projectColumn: 'project_id', defaultInclude: false },
-  { key: 'reflexionLogs', table: 'reflexion_log', projectColumn: 'project_id', defaultInclude: false },
+  { key: 'reflexionLogs', table: 'reflexion_log', join: { table: 'pipeline_task', localColumn: 'task_id', targetColumn: 'id', projectColumn: 'project_id' }, defaultInclude: false },
   { key: 'agentExecutions', table: 'agent_execution', projectColumn: 'project_id', defaultInclude: false },
 ];
 

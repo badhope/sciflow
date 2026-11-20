@@ -28,7 +28,22 @@ describe('BUNDLE_TABLES', () => {
     expect(new Set(keys).size).toBe(keys.length);
     for (const t of BUNDLE_TABLES) {
       expect(t.table.length).toBeGreaterThan(0);
-      expect(t.projectColumn).toBe('project_id');
+      // 直接表按 project_id 归属；间接子表必须给出 join 路径，二者只能有其一
+      if (t.join) {
+        expect(t.projectColumn).toBeUndefined();
+        expect(t.join.table.length).toBeGreaterThan(0);
+        expect(t.join.localColumn.length).toBeGreaterThan(0);
+        expect(t.join.projectColumn).toBe('project_id');
+      } else {
+        expect(t.projectColumn).toBe('project_id');
+      }
+    }
+  });
+
+  it('按文档/父表间接归属的表走 join，而不是错误的 project_id', () => {
+    for (const key of ['reviewComments', 'citations', 'qualityReports', 'polishRecords', 'knowledgeChunks', 'submissionEvents', 'extractionValues']) {
+      const spec = BUNDLE_TABLES.find((t) => t.key === key);
+      expect(spec?.join, key).toBeTruthy();
     }
   });
 
