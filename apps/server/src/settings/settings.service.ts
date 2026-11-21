@@ -260,7 +260,7 @@ export class SettingsService {
     if (!baseUrl) return { ok: false, models: [], error: '请先填写 Base URL' };
     if (!/^https?:\/\//.test(baseUrl)) return { ok: false, models: [], error: 'Base URL 需以 http:// 或 https:// 开头' };
     const key = this.resolveFormKey(body.id, body.apiKey);
-    // SSRF 守卫：内网/回环/云元数据地址默认拒绝（本地 Ollama 场景由调用方显式声明 privateOk，仍需 ALLOW_PRIVATE_OUTBOUND=1）
+    // SSRF 守卫：内网/回环/云元数据地址默认拒绝；本地 Ollama 需 ALLOW_PRIVATE_OUTBOUND=1
     const allowPrivate = allowPrivateOutbound();
     const guard = await this.guardOutbound(baseUrl, allowPrivate);
     if (!guard.ok) return { ok: false, models: [], error: `地址被安全策略拒绝：${guard.reason}` };

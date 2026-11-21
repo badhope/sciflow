@@ -33,23 +33,39 @@ export interface BuiltinAsset {
   manifest: Record<string, unknown>;
   /** 仅为远程 HTTP 端点时提供，启用后投影为 mcp_server 行 */
   url?: string;
+  /** 需要用户先在本机安装/启动的服务，默认不启用，避免“看起来已连接、调用必失败” */
+  defaultEnabled?: boolean;
 }
 
-/** 社区 MCP（真实仓库；仅 context7/deepwiki 提供公开 HTTP 端点可直接连接） */
+/** 社区 MCP：远程免安装端点优先（已实测），本地 stdio 项目明确标注“需安装” */
 const MCP_ASSETS: BuiltinAsset[] = [
   {
     key: 'mcp-context7', kind: 'mcp', source: 'builtin-public', name: 'Context7（库文档检索）',
-    description: '按库名/版本实时取官方文档片段，写代码或核对 API 时避免凭记忆编造。远程 HTTP 端点，开箱可连。',
+    description: '按库名/版本实时取官方文档片段，写代码或核对 API 时避免凭记忆编造。远程 HTTP 端点，2026-11-21 实测可连。',
     repo: 'upstash/context7', license: 'MIT', url: 'https://mcp.context7.com/mcp',
     install: '远程 HTTP：https://mcp.context7.com/mcp', tags: ['docs', 'remote'],
-    manifest: { transport: 'http', url: 'https://mcp.context7.com/mcp', tools: ['resolve-library-id', 'get-library-docs'] },
+    manifest: { transport: 'http', url: 'https://mcp.context7.com/mcp', tools: ['resolve-library-id', 'query-docs'] },
   },
   {
     key: 'mcp-deepwiki', kind: 'mcp', source: 'builtin-public', name: 'DeepWiki（仓库知识库）',
-    description: '把任意 GitHub 仓库转成可问答的工程知识库，适合读开源实现细节。远程 HTTP 端点。',
+    description: '把任意 GitHub 仓库转成可问答的工程知识库，适合读开源实现细节。2026-11-21 实测可连，3 个工具。',
     repo: 'regenrek/deepwiki-mcp', license: 'MIT', url: 'https://mcp.deepwiki.com/mcp',
     install: '远程 HTTP：https://mcp.deepwiki.com/mcp', tags: ['repo', 'remote'],
-    manifest: { transport: 'http', url: 'https://mcp.deepwiki.com/mcp' },
+    manifest: { transport: 'http', url: 'https://mcp.deepwiki.com/mcp', tools: ['ask_wiki_question', 'read_wiki_contents', 'read_wiki_structure'] },
+  },
+  {
+    key: 'mcp-huggingface', kind: 'mcp', source: 'builtin-public', name: 'Hugging Face（模型与数据集检索）',
+    description: '官方远程 MCP：检索模型、数据集与仓库详情。适合找可复现的模型/数据资产。2026-11-21 实测可连，4 个工具。',
+    url: 'https://huggingface.co/mcp',
+    install: '远程 HTTP：https://huggingface.co/mcp', tags: ['models', 'datasets', 'remote'],
+    manifest: { transport: 'http', url: 'https://huggingface.co/mcp', tools: ['hf_whoami', 'hub_repo_search', 'hub_repo_details', 'hf_fs'] },
+  },
+  {
+    key: 'mcp-mslearn', kind: 'mcp', source: 'builtin-public', name: 'Microsoft Learn（官方技术文档）',
+    description: '微软官方远程 MCP：搜索文档、代码样例并抓取全文，写代码/配环境时对照官方说明。2026-11-21 实测可连，3 个工具。',
+    url: 'https://learn.microsoft.com/api/mcp',
+    install: '远程 HTTP：https://learn.microsoft.com/api/mcp', tags: ['docs', 'code', 'remote'],
+    manifest: { transport: 'http', url: 'https://learn.microsoft.com/api/mcp', tools: ['microsoft_docs_search', 'microsoft_code_sample_search', 'microsoft_docs_fetch'] },
   },
   {
     key: 'mcp-arxiv', kind: 'mcp', source: 'builtin-public', name: 'arXiv MCP（预印本检索与全文）',
@@ -119,6 +135,7 @@ const MCP_ASSETS: BuiltinAsset[] = [
     description: '开源 deep research 引擎，支持 SSE API 与 MCP 接入，多轮检索生成报告。约 4.7k star。',
     repo: 'u14app/deep-research', license: 'MIT',
     install: 'docker run -p 3000:3000 u14app/deep-research（HTTP 端点）', tags: ['deep-research', 'report'],
+    defaultEnabled: false,
     manifest: { transport: 'http', url: 'http://localhost:3000/mcp', tools: ['deep_research'] },
   },
   {
@@ -126,6 +143,7 @@ const MCP_ASSETS: BuiltinAsset[] = [
     description: '开源 RAG 平台，内置引用与 deep research，支持 22+ 文件格式。约 2.1k star。',
     repo: 'agentset-ai/agentset', license: 'MIT',
     install: 'docker compose up（自托管 HTTP）', tags: ['rag', 'citations'],
+    defaultEnabled: false,
     manifest: { transport: 'http', url: 'http://localhost:3001/mcp' },
   },
   {
@@ -133,6 +151,7 @@ const MCP_ASSETS: BuiltinAsset[] = [
     description: '给 agent 提供个人知识库的私有访问，支持增量索引。',
     repo: 'docsagent/docsagent', license: 'MIT',
     install: 'docker run docsagent（HTTP）', tags: ['docs', 'knowledge'],
+    defaultEnabled: false,
     manifest: { transport: 'http', url: 'http://localhost:8080/mcp' },
   },
   {
@@ -178,116 +197,120 @@ const MCP_ASSETS: BuiltinAsset[] = [
     manifest: { transport: 'stdio' },
   },
 ];
-/** 社区 Skills / 规则 / 提示词集合（仓库级引用 + 本项目撰写的适配说明） */
+/** 社区 Skills（正文由本项目重写，保留公开来源作参考；启用即注入，不再只是仓库链接） */
+function skillAsset(
+  key: string,
+  name: string,
+  description: string,
+  instructions: string,
+  tags: string[],
+  provenance?: { repo: string; license: string; install: string },
+): BuiltinAsset {
+  return {
+    key, kind: 'skill', source: 'builtin-public', name, description, tags,
+    ...(provenance ? provenance : {}),
+    manifest: { mode: 'prompt', instructions },
+  };
+}
+
 const SKILL_ASSETS: BuiltinAsset[] = [
-  {
-    key: 'skill-anthropic-official', kind: 'skill', source: 'builtin-public', name: 'Anthropic 官方 Skills 集',
-    description: '官方 Skills 仓库（文档处理、表格、PDF、演示等），可作为 SKILL.md 规范参考与直接导入源。',
-    repo: 'anthropics/skills', license: 'MIT', install: 'git clone https://github.com/anthropics/skills',
-    tags: ['official', 'docs'], manifest: { mode: 'reference', importHint: '拖入仓库内某个 skill 目录或压缩包即可导入' },
-  },
-  {
-    key: 'skill-academic-research', kind: 'skill', source: 'builtin-public', name: 'Academic Research Skills（全流程）',
-    description: '面向 Claude Code 的学术科研技能集：检索 → 写作 → 评审 → 投稿全流程。约 53.9k star。',
-    repo: 'Imbad0202/academic-research-skills', license: 'MIT', install: 'git clone https://github.com/Imbad0202/academic-research-skills',
-    tags: ['academic', 'workflow'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-codex-academic', kind: 'skill', source: 'builtin-public', name: 'Codex/Claude 学术三件套',
-    description: '文献阅读、论文写作、科学计算三个科研技能，中文场景适配好。约 5.3k star。',
-    repo: 'zLanqing/codex-claude-academic-skills', license: 'MIT', install: 'git clone https://github.com/zLanqing/codex-claude-academic-skills',
-    tags: ['academic', 'chinese'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-agent-research', kind: 'skill', source: 'builtin-public', name: 'Agent Research Skills（系统综述）',
-    description: 'deep-research 技能：系统化文献综述与证据表。',
-    repo: 'lingzhi227/agent-research-skills', license: 'MIT', install: 'git clone https://github.com/lingzhi227/agent-research-skills',
-    tags: ['systematic-review'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-claude-scholar', kind: 'skill', source: 'builtin-public', name: 'Claude Scholar（科研助手）',
-    description: '半自动科研助手：选题、实验、写作、投稿的组合技能。约 5.9k star。',
-    repo: 'Galaxy-Dawn/claude-scholar', license: 'MIT', install: 'git clone https://github.com/Galaxy-Dawn/claude-scholar',
-    tags: ['research', 'workflow'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-humanizer', kind: 'skill', source: 'builtin-public', name: 'Academic Humanizer（去 AI 味）',
-    description: '去除论文/基金申请书中的 AI 写作痕迹，保留学术严谨性。约 2.6k star。',
-    repo: 'AIScientists-Dev/academic-humanizer', license: 'MIT', install: 'git clone https://github.com/AIScientists-Dev/academic-humanizer',
-    tags: ['writing', 'style'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-claude-prism', kind: 'skill', source: 'builtin-public', name: 'Claude Prism（离线写作工作台）',
-    description: '离线优先的科学写作工作区，含 LaTeX 与引用工作流。约 1.8k star。',
-    repo: 'delibae/claude-prism', license: 'MIT', install: 'git clone https://github.com/delibae/claude-prism',
-    tags: ['writing', 'latex'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-latte-review', kind: 'skill', source: 'builtin-public', name: 'LatteReview（LLM 系统综述流水线）',
-    description: '可编排的 LLM 系统综述包：筛选、抽取、质量评估。',
-    repo: 'PouriaRouzrokh/LatteReview', license: 'MIT', install: 'pip install lattreview',
-    tags: ['systematic-review', 'pipeline'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-paper-proofreading', kind: 'skill', source: 'builtin-public', name: 'Paper Proofreading Prompts',
-    description: 'Claude Code 驱动的论文校对提示词集（语法/一致性/术语）。',
-    repo: 'LimHyungTae/awesome-claudecode-paper-proofreading', license: 'MIT', install: 'git clone https://github.com/LimHyungTae/awesome-claudecode-paper-proofreading',
-    tags: ['proofreading'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-ai-research-writing', kind: 'skill', source: 'builtin-public', name: 'AI Research Writing 模板库',
-    description: '来自顶尖研究机构的论文写作 Prompt 模板与 Agent Skills 集合。',
-    repo: 'STRYXTN/awesome-ai-research-writing', license: 'MIT', install: 'git clone https://github.com/STRYXTN/awesome-ai-research-writing',
-    tags: ['writing', 'templates'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-deep-research-prompts', kind: 'skill', source: 'builtin-public', name: 'Deep Research Prompts',
-    description: '面向 OpenAI/Gemini/Qwen 的 deep research 提示词集。',
-    repo: 'langgptai/awesome-deep-research-prompts', license: 'MIT', install: 'git clone https://github.com/langgptai/awesome-deep-research-prompts',
-    tags: ['deep-research', 'prompts'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-agent-skills-1000', kind: 'skill', source: 'builtin-public', name: 'Awesome Agent Skills（1000+）',
-    description: '官方团队与社区的一千余个 agent skill 索引，可按需挑选导入。约 36k star。',
-    repo: 'VoltAgent/awesome-agent-skills', license: 'MIT', install: 'git clone https://github.com/VoltAgent/awesome-agent-skills',
-    tags: ['catalog'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-webfuse-autoresearch', kind: 'skill', source: 'builtin-public', name: 'Awesome Autoresearch（自主研究循环）',
-    description: '自主改进循环与研究 agent 的精选集合，适合搭建长期研究流程。',
-    repo: 'webfuse-com/awesome-autoresearch', license: 'MIT', install: 'git clone https://github.com/webfuse-com/awesome-autoresearch',
-    tags: ['autoresearch', 'catalog'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-agent-loop', kind: 'skill', source: 'builtin-public', name: 'Agent Loop Skills（迭代自评循环）',
-    description: '可插拔的 agentic loop：自主研究、科学写作、迭代评审直到收敛。',
-    repo: 'gaasher/Agent-Loop-Skills', license: 'MIT', install: 'git clone https://github.com/gaasher/Agent-Loop-Skills',
-    tags: ['loop', 'writing'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-paper-craft', kind: 'skill', source: 'builtin-public', name: 'PaperCraft（顶会论文 17 条规则）',
-    description: '面向顶会投稿的 17 条写作规则与检查清单。',
-    repo: 'charlotte-12s/paper-craft', license: 'MIT', install: 'git clone https://github.com/charlotte-12s/paper-craft',
-    tags: ['writing', 'rules'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-flonat-research', kind: 'skill', source: 'builtin-public', name: 'Flonat Research（博士研究基建）',
-    description: '面向博士研究者的 Claude Code / Codex 共享基建（技能与工作流）。',
-    repo: 'flonat/flonat-research', license: 'MIT', install: 'git clone https://github.com/flonat/flonat-research',
-    tags: ['phd', 'workflow'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-scientific-agent-skills', kind: 'skill', source: 'builtin-public', name: 'Scientific Agent Skills',
-    description: '把任意 agent 变成科研助手的技能集（跨 Gemini/Claude/Cursor/Codex）。',
-    repo: 'dongchankim-io/scientific-agent-skills', license: 'MIT', install: 'git clone https://github.com/dongchankim-io/scientific-agent-skills',
-    tags: ['science', 'cross-platform'], manifest: { mode: 'reference' },
-  },
-  {
-    key: 'skill-ai-agent-papers', kind: 'skill', source: 'builtin-public', name: 'AI Agent Papers（研究论文精选）',
-    description: 'agent 领域研究论文精选，适合做相关工作综述的起点。',
-    repo: 'VoltAgent/awesome-ai-agent-papers', license: 'MIT', install: 'git clone https://github.com/VoltAgent/awesome-ai-agent-papers',
-    tags: ['papers', 'catalog'], manifest: { mode: 'reference' },
-  },
+  skillAsset(
+    'skill-anthropic-official', '文档与表格交付规范',
+    'Word / Excel / PDF / PPT 的真实文件交付流程与自检清单（参考 anthropics/skills 的公开做法，正文为 SciFlow 重写）。',
+    '交付 Office 文件时先确认格式、模板、纸张与字体，再生成内容。Word 必须是真实 .docx：标题用样式、目录可更新、页码齐全、图片不拉伸；Excel 公式必须可重算，不写死结果，并另存数值副本；PDF 保留可检索文本与嵌入字体；PPT 一页一个论点，图表带标题、单位与来源。交付前逐项自检：打开无乱码、无 #REF!、目录可更新、文件能被非本机软件打开。禁止把 Markdown 改扩展名冒充 Office 文件。',
+    ['docs', 'office'],
+    { repo: 'anthropics/skills', license: 'Apache-2.0', install: '参考实现，无需安装' },
+  ),
+  skillAsset(
+    'skill-academic-research', '科研全流程总控',
+    '从问题界定到投稿的 8 阶段流程，每阶段强制产出可检查的中间物。',
+    '把任务拆成：问题界定→检索→证据表→方法设计→数据/实验→写作→评审→投稿。每阶段先产出可检查的中间物（检索式、证据表、分析计划、提纲），再进入下一阶段。开始前读取项目 Research Brief 与已有文档，避免重复劳动。遇到缺失数据或无法完成的实验，明确列为缺口，不编造。每轮结束给：已完成、待确认、下一步。需要事实时先调用检索/知识库工具，不凭记忆回答。',
+    ['workflow', 'academic'],
+  ),
+  skillAsset(
+    'skill-codex-academic', '文献精读与笔记',
+    '三遍法精读论文，输出 12 维固定矩阵，区分作者结论与自己的推断。',
+    '精读按三遍法：①标题/摘要/结论，判断是否相关；②图表与方法，提取研究设计、样本、基线、指标；③复现细节与局限，核对假设、统计前提、消融。输出固定矩阵：问题、假设、数据、方法、基线、指标、主结果、消融、局限、可复现性、可引用点、可借鉴点。缺失写「未报告」。引用要给页码或章节。不要把作者结论写成自己的推断，也不要把摘要没写的内容猜成全文事实。',
+    ['reading', 'notes'],
+  ),
+  skillAsset(
+    'skill-agent-research', '系统综述与 PRISMA',
+    '可复现的系统综述协议、检索式、双轮筛选与 PRISMA 数量报告。',
+    '系统综述必须可复现：先写协议（PICO 问题、数据库、检索式、时间范围、语言、纳入排除标准）；检索式记录到可重跑；筛选做标题/摘要与全文两轮，逐条记录排除原因；用 PRISMA 流程图报告识别、去重、筛选、纳入数量；数据抽取双人核对；偏倚风险用对应工具（RCT 用 RoB2，观察性用 NOS）。没有检索记录与筛选日志，就不能宣称「系统综述」。',
+    ['systematic-review', 'prisma'],
+  ),
+  skillAsset(
+    'skill-claude-scholar', '研究选题与假设',
+    '用现象缺口、理论缺口、方法缺口三层定位题目，并写成可证伪假设。',
+    '选题从「现象缺口→理论缺口→方法缺口」三层定位。每个候选题目给出：一句话问题、为什么现在重要、已有工作做到了哪、你准备改变什么、最小可验证实验、失败会说明什么。假设必须可证伪，写清自变量、因变量、控制变量与预期方向。避免「首次」「颠覆」这类无法验证的表述；新颖性必须用检索证据支撑，而不是自我评价。',
+    ['ideation', 'hypothesis'],
+  ),
+  skillAsset(
+    'skill-humanizer', '中文学术去 AI 腔',
+    '删除模板开头、排比句与空泛评价，保留作者原意、数据与引用。',
+    '改写中文学术文本时：删「首先/其次/最后」「综上所述」「随着…的发展」等模板开头；拆长排比句，允许长短句交错；把「具有重要意义」换成具体机制或效果；减少「不仅…而且」「一方面…另一方面」的对偶；每段只推进一个论点；保留作者原有用词与限定强度。输出只给改写文，另附 3 条主要改动理由，不改数据与引用，不把限定词改成绝对判断。',
+    ['writing', 'style'],
+  ),
+  skillAsset(
+    'skill-claude-prism', 'LaTeX 与引用工作流',
+    '从文档类、编译引擎到参考文献与图表标签的可复现 LaTeX 流程。',
+    '处理 LaTeX 稿件：先确认文档类、编译引擎（pdfLaTeX/XeLaTeX/LuaLaTeX）、参考文献工具（biber/bibtex）与模板要求；中文用 ctex 或 xeCJK。引用键统一为「作者年份关键词」，正文用 \cite{}，不要手写编号。图表用 \label/\ref，公式用 \eqref。编译后检查 overfull box、未定义引用、重复标签、缺失图片。给出可复现的编译命令链与所需宏包清单。',
+    ['latex', 'citation'],
+  ),
+  skillAsset(
+    'skill-latte-review', '文献筛选与数据抽取',
+    '批量筛选表与固定抽取字段，保留原文位置，拿不到全文就标注。',
+    '批量筛选文献时输出表：ID、标题、年份、来源、与问题的相关性（高/中/低/排除）、排除理由、待抽取字段。抽取字段固定为：研究设计、样本与场景、干预/暴露、对照、主要结局、效应量与置信区间、局限。每条记录保留原文位置（页码/章节）。不要因为摘要没写就猜全文；拿不到全文标「仅摘要」。抽取结果要能回到原文核对。',
+    ['screening', 'extraction'],
+  ),
+  skillAsset(
+    'skill-paper-proofreading', '论文校对',
+    '事实与引用、结构、语言、格式四轮校对，输出可定位的问题清单。',
+    '校对分四轮：①事实与引用：每个 [n] 有对应条目，DOI/年份/作者一致；②结构：摘要含目的/方法/结果/结论，正文无孤立段落；③语言：主谓一致、时态统一、术语一致、冠词与介词；④格式：单位空格、数字精度、图表编号、基金号。输出问题清单（位置/原文/建议/严重度），不要直接重写全文；无法确认的事实标「需作者核实」。',
+    ['proofreading', 'quality'],
+  ),
+  skillAsset(
+    'skill-ai-research-writing', '学术写作论证',
+    '主张、证据、解释、边界四段式推进，区分事实、推断与建议。',
+    '学术写作按「主张→证据→解释→边界」推进：每段开头一句可反驳的主张，中间给数据或文献证据，随后解释机制，最后写适用条件与反例。区分事实、推断与建议。使用审慎动词（suggest/indicate/associated with），只有研究设计支持时才使用因果表述。避免形容词堆砌。每节结尾写一句「本节结论」，并与摘要保持一致。',
+    ['writing', 'argument'],
+  ),
+  skillAsset(
+    'skill-deep-research-prompts', '深度调研',
+    '先拆子问题，再按来源等级取证，输出证据表、反方证据与未解问题。',
+    '深度调研先列 8-12 个待答子问题，按「定义→现状→机制→证据→争议→空白」排序。每个子问题至少两个独立来源，优先原始论文、官方文档与数据集，其次综述，最后新闻。给出来源等级与冲突点。输出：结论摘要（带置信度）、证据表、反方证据、未解问题、可执行下一步。找不到证据就写「未检索到」，不要用常识补，也不要把同一来源的转载当成两个独立证据。',
+    ['deep-research', 'evidence'],
+  ),
+  skillAsset(
+    'skill-webfuse-autoresearch', '自主研究循环',
+    '计划、执行、评估、决定四步循环，最多五轮，中间结论必须落盘。',
+    '自主研究每一轮固定四步：计划（本轮要回答什么、用什么工具、成功标准）→执行（记录每次调用与结果）→评估（证据是否足够、是否出现矛盾）→决定（继续/换方法/停止）。最多连续 5 轮，超过则总结进展并请求用户确认。所有中间结论落到文件或证据表，禁止只在对话里滚动。每轮结束写明「本轮新增证据 / 仍缺什么 / 下一轮计划」。',
+    ['autoresearch', 'loop'],
+  ),
+  skillAsset(
+    'skill-scientific-agent-skills', '数据分析与统计报告',
+    '数据字典、预注册分析计划、效应量与置信区间、图表与随机种子。',
+    '拿到数据先做数据字典：字段、类型、单位、缺失率、取值范围、采集方式。分析前写假设与主/次结局，避免事后挑指标。描述统计给 n、均值或中位数、SD 或 IQR；推断统计报效应量、置信区间、检验方法与前提检查。多重比较要校正。图表给原始点或分布，不只给均值柱。代码固定随机种子并保存环境与版本。',
+    ['statistics', 'data'],
+  ),
+  skillAsset(
+    'skill-flonat-research', '博士研究基建',
+    '研究日志、文献库、实验登记、决策记录四份长期文件与每周复盘。',
+    '长期研究项目维护四份文件：研究日志（日期/假设/动作/结果）、文献库（含 DOI 与笔记）、实验登记（配置/种子/指标/产物路径）、决策记录（为什么选 A 不选 B）。每周复盘：进展、阻塞、下周最小目标。跨月任务先写里程碑与验收标准。任何结果先落盘再汇报，避免会话丢失。交接时附上这四份文件与未完成事项，不靠口头记忆。',
+    ['phd', 'infrastructure'],
+  ),
+  skillAsset(
+    'skill-paper-craft', '顶会论文规则',
+    '摘要四句、引言一页、贡献不超过三条，每条贡献都有实验支撑。',
+    '顶会投稿先对齐模板与页数限制。摘要用「问题-方法-结果-意义」四句；引言在一页内说清 gap 与贡献；方法写可复现细节；实验给基线、消融与失败案例；结论不夸大。贡献列表不超过 3 条，每条都要有实验或理论支撑。检查匿名化、附录引用、图表可读性与参考文献格式。审稿回复只回应可核查的事实，不堆形容词。',
+    ['writing', 'conference'],
+  ),
+  skillAsset(
+    'skill-agent-loop', '迭代自评',
+    '逻辑、证据、表达三轮自检，每轮给出问题、位置、修改与复检结果。',
+    '完成初稿后做三轮自评：①逻辑：每节是否回答研究问题，是否存在跳跃；②证据：每个事实是否有来源，引用是否支持原句；③表达：是否有重复、歧义、未定义缩写。每轮列出「问题→位置→修改→复检结果」，直到无高危问题。不要用「已优化」代替具体修改，也不要把「模型觉得没问题」当作通过标准。',
+    ['review', 'loop'],
+  ),
 ];
 /** 本项目撰写的角色（无第三方版权） */
 function roleAsset(key: string, name: string, prompt: string, description: string, tags: string[] = []): BuiltinAsset {

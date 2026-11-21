@@ -4821,6 +4821,147 @@
         ]
       }
     },
+    "/settings/local-models": {
+      "get": {
+        "operationId": "SettingsController_listLocalModels",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/settings/local-models/ollama": {
+      "get": {
+        "operationId": "SettingsController_ollamaStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/settings/local-models/{id}/status": {
+      "get": {
+        "operationId": "SettingsController_localModelStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/settings/local-models/{id}/download": {
+      "post": {
+        "operationId": "SettingsController_downloadLocalModel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      },
+      "delete": {
+        "operationId": "SettingsController_cancelLocalModelDownload",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/settings/local-models/{id}/install": {
+      "post": {
+        "operationId": "SettingsController_installLocalModel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/settings/local-models/{id}": {
+      "delete": {
+        "operationId": "SettingsController_removeLocalModel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
     "/settings/mcp-servers": {
       "get": {
         "operationId": "SettingsController_listMcpServers",
@@ -6375,7 +6516,7 @@
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "1.19.11",
+    "version": "1.19.12",
     "contact": {}
   },
   "tags": [],

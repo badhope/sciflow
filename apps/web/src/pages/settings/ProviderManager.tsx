@@ -99,7 +99,7 @@ export function fmtTokens(n?: number): string {
 /** 自动检测触发条件：地址合法；新建需填 Key，编辑态可复用库内已存 Key */
 export function canAutoDetect(f: { baseUrl: string; apiKey: string; id?: string; privateOk?: boolean }): boolean {
   if (!/^https?:\/\//i.test(f.baseUrl.trim())) return false;
-  return Boolean(f.apiKey.trim()) || Boolean(f.id) || f.privateOk === true;
+  return Boolean(f.apiKey.trim()) || Boolean(f.id) || f.privateOk === true || isLocalEndpoint(f.baseUrl);
 }
 
 /** 本地端点（Ollama 等）判定：行级测试与表单保持一致，需要显式 privateOk 才放行内网地址 */
@@ -107,9 +107,14 @@ export function isLocalEndpoint(url: string): boolean {
   return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(url.trim());
 }
 
-/** 从检测结果里挑默认模型：优先轻量档（flash/lite/mini/haiku），否则第一个 */
-export function pickDefaultModel(models: DiscoveredModel[]): DiscoveredModel | undefined {
-  return models.find((m) => /flash|lite|mini|haiku|small/i.test(m.id)) || models[0];
+/** 能力回填说明：只陈述端点真实提供的信息，不把上一个模型的参数当作当前模型能力 */
+export function capabilityHintFor(m: DiscoveredModel): string {
+  const hasContext = typeof m.contextWindow === 'number' && m.contextWindow > 0;
+  const hasOutput = typeof m.maxOutput === 'number' && m.maxOutput > 0;
+  if (hasContext && hasOutput) return '已按端点元数据回填上下文与输出上限';
+  if (hasContext) return '已回填上下文；端点未提供最大输出，请手动确认';
+  if (hasOutput) return '已回填最大输出；端点未提供上下文，请手动确认';
+  return '端点未提供能力元数据，上下文与输出上限需手动填写';
 }
 
 export function ProviderManager({ settings }: { settings: AppSettings | null }) {
@@ -120,6 +125,7 @@ export function ProviderManager({ settings }: { settings: AppSettings | null }) 
   const [discoverError, setDiscoverError] = useState('');
   const [discoverInfo, setDiscoverInfo] = useState('');
   const [autoFilled, setAutoFilled] = useState(false);
+  const [capabilityHint, setCapabilityHint] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ProviderTestResult | null>(null);
   const [saving, setSaving] = useState(false);
@@ -135,14 +141,18 @@ export function ProviderManager({ settings }: { settings: AppSettings | null }) 
   const closeForm = useCallback(() => setShowForm(false), []);
 
   const applyDetectedModel = useCallback((m: DiscoveredModel) => {
+    const hasContext = typeof m.contextWindow === 'number' && m.contextWindow > 0;
+    const hasOutput = typeof m.maxOutput === 'number' && m.maxOutput > 0;
     setForm((cur) => ({
       ...cur,
       model: m.id,
-      contextWindow: m.contextWindow ? String(m.contextWindow) : cur.contextWindow,
-      maxOutput: m.maxOutput ? String(m.maxOutput) : cur.maxOutput,
-      toolCalling: m.toolCalling === undefined ? cur.toolCalling : m.toolCalling,
+      // 换模型必须换能力，不能把上一个模型的上下文/输出上限继续留在表单里
+      contextWindow: hasContext ? String(m.contextWindow) : '',
+      maxOutput: hasOutput ? String(m.maxOutput) : '',
+      toolCalling: m.toolCalling ?? true,
     }));
-    setAutoFilled(true);
+    setAutoFilled(hasContext || hasOutput);
+    setCapabilityHint(capabilityHintFor(m));
     setTestResult(null);
   }, []);
 
@@ -153,8 +163,9 @@ export function ProviderManager({ settings }: { settings: AppSettings | null }) 
       if (manual) setDiscoverError('请先填写合法的 Base URL（http/https）');
       return;
     }
-    if (!f.apiKey.trim() && !f.id) {
-      if (manual) setDiscoverError('请先填写 API Key');
+    // 本地 Ollama / 内网网关通常不需要 Key；只要显式勾选了私有端点就允许检测
+    if (!f.apiKey.trim() && !f.id && !f.privateOk && !isLocalEndpoint(f.baseUrl)) {
+      if (manual) setDiscoverError('请先填写 API Key，或勾选「本地 / 内网端点」');
       return;
     }
     const sig = `${f.id || ''}|${f.protocol}|${f.baseUrl.trim()}|${f.apiKey.trim()}|${f.privateOk}`;
@@ -180,18 +191,18 @@ export function ProviderManager({ settings }: { settings: AppSettings | null }) 
         setDiscoverInfo('端点可达，但没有返回可用的聊天模型（可手动填写模型名）');
         return;
       }
-      setDiscoverInfo(`已检测到 ${r.models.length} 个可用模型，点击下方列表选择`);
-      const keep = r.models.find((m) => m.id === f.model);
-      if (!keep) {
-        const first = pickDefaultModel(r.models);
-        if (first) applyDetectedModel(first);
+      setDiscoverInfo(`已检测到 ${r.models.length} 个可用模型，请点击下方列表自己选择（不会自动选中模型）`);
+      if (!r.models.find((m) => m.id === f.model)) {
+        // 不自动挑“默认模型”，避免用户误以为已经选好；让他自己点
+        setAutoFilled(false);
+        setCapabilityHint('');
       }
     } catch (e: unknown) {
       setDiscoverError(errMsg(e));
     } finally {
       setDiscovering(false);
     }
-  }, [applyDetectedModel]);
+  }, []);
 
   /** 地址/Key/协议输入稳定 800ms 后自动检测（换协议或换端点重新拉取） */
   useEffect(() => {
@@ -206,6 +217,7 @@ export function ProviderManager({ settings }: { settings: AppSettings | null }) 
     setDiscoverError('');
     setDiscoverInfo('');
     setAutoFilled(false);
+    setCapabilityHint('');
     discoverSig.current = '';
     setShowForm(true);
   };
@@ -231,6 +243,7 @@ export function ProviderManager({ settings }: { settings: AppSettings | null }) 
     setDiscoverError('');
     setDiscoverInfo('');
     setAutoFilled(false);
+    setCapabilityHint('');
     discoverSig.current = '';
     setShowForm(true);
   };
@@ -348,7 +361,7 @@ export function ProviderManager({ settings }: { settings: AppSettings | null }) 
           </span>
         </SectionTitle>
         <div className="text-xs text-slate-400 dark:text-slate-500 mb-3">
-          支持 OpenAI 兼容 / Anthropic / Gemini 三协议：填地址和 Key 后自动检测可用模型、匹配上下文与工具调用能力，激活后立即切换所有 AI 调用
+          支持 OpenAI 兼容 / Anthropic / Gemini 三协议：填地址和 Key 后自动检测可用模型；只有端点提供上下文/输出元数据时才自动回填，缺失部分留空由你确认。激活后才会切换所有 AI 调用
         </div>
         {state.providers.length === 0 ? (
           <div className="text-xs text-slate-400 dark:text-slate-500">暂无自定义厂商，当前使用 apps/server/.env 的配置</div>
@@ -512,24 +525,29 @@ export function ProviderManager({ settings }: { settings: AppSettings | null }) 
           )}
           <div className="mt-2">
             <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">当前模型（可直接手动填写）</div>
-            <Input placeholder="从上方列表选择，或手动输入模型名" value={form.model} onChange={(e) => { setAutoFilled(false); patch({ model: e.target.value }); setTestResult(null); }} />
+            <Input placeholder="从上方列表选择，或手动输入模型名" value={form.model} onChange={(e) => { setAutoFilled(false); setCapabilityHint('手动输入模型名，请确认下方能力参数'); patch({ model: e.target.value }); setTestResult(null); }} />
           </div>
           <div className="mt-3">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs text-slate-500 dark:text-slate-400">能力（自动匹配，可手动覆盖）</span>
-              {autoFilled && <Badge tone="teal">自动匹配</Badge>}
+              <span className="text-xs text-slate-500 dark:text-slate-400">能力（端点有元数据才自动回填，可手动覆盖）</span>
+              {autoFilled && <Badge tone="teal">已按模型元数据回填</Badge>}
             </div>
+            {capabilityHint && (
+              <div className={`mb-2 text-[11px] leading-5 ${autoFilled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                {capabilityHint}
+              </div>
+            )}
             <div className="grid sm:grid-cols-3 gap-2">
               <div>
                 <div className="text-[11px] text-slate-400 mb-1">上下文窗口（token）</div>
-                <Input placeholder="0 = 未知" inputMode="numeric" value={form.contextWindow} onChange={(e) => { setAutoFilled(false); patch({ contextWindow: e.target.value.replace(/\D/g, '') }); }} />
+                <Input placeholder="0 = 未知" inputMode="numeric" value={form.contextWindow} onChange={(e) => { setAutoFilled(false); setCapabilityHint('手动覆盖能力参数'); patch({ contextWindow: e.target.value.replace(/\D/g, '') }); }} />
               </div>
               <div>
                 <div className="text-[11px] text-slate-400 mb-1">单次最大输出（token）</div>
-                <Input placeholder="0 = 未知" inputMode="numeric" value={form.maxOutput} onChange={(e) => { setAutoFilled(false); patch({ maxOutput: e.target.value.replace(/\D/g, '') }); }} />
+                <Input placeholder="0 = 未知" inputMode="numeric" value={form.maxOutput} onChange={(e) => { setAutoFilled(false); setCapabilityHint('手动覆盖能力参数'); patch({ maxOutput: e.target.value.replace(/\D/g, '') }); }} />
               </div>
               <label className="flex items-end gap-2 pb-2 text-xs text-slate-500 dark:text-slate-400">
-                <input type="checkbox" checked={form.toolCalling} onChange={(e) => { setAutoFilled(false); patch({ toolCalling: e.target.checked }); }} className="rounded border-slate-300" />
+                <input type="checkbox" checked={form.toolCalling} onChange={(e) => { setAutoFilled(false); setCapabilityHint('手动设置工具调用能力'); patch({ toolCalling: e.target.checked }); }} className="rounded border-slate-300" />
                 支持工具调用
               </label>
             </div>

@@ -74,7 +74,10 @@ export class AuthService {
     return { token: this.sign(u), user: publicUser(u) };
   }
 
-  me(payload: AuthPayload) {
+  me(payload?: AuthPayload) {
+    // AUTH_MODE=none 时全局守卫直接放行、不会注入 req.user；此时 /auth/me 应明确 401，
+    // 而不是读 undefined.sub 抛 500（本地模式没有登录态是正常状态，不是服务器故障）。
+    if (!payload?.sub) throw new UnauthorizedException('未登录：当前实例未启用账号体系');
     const u = db.select().from(users).where(eq(users.id, payload.sub)).limit(1).all()[0];
     if (!u) throw new UnauthorizedException('用户不存在或已被移除');
     return publicUser(u);

@@ -224,6 +224,19 @@ export class ChatService {
       return {};
     }
   }
+  /**
+   * 本地小模型（Ollama 1B/2B 等）自动收窄工具面：55 个工具 schema 约 9k tokens，
+   * CPU 预填充就要数分钟。只对「本地地址 + 小模型名」生效；云端模型仍走 full。
+   * 可用 AGENT_TOOLS_PROFILE 显式覆盖，保持既有“默认 full、不静默削减”的纪律。
+   */
+  private toolProfile() {
+    if (process.env.AGENT_TOOLS_PROFILE) return resolveAgentToolProfile();
+    const c = this.ai.config;
+    const local = /localhost|127\.0\.0\.1|0\.0\.0\.0|host\.docker\.internal/i.test(c.baseUrl || '');
+    const small = /(mini|botpsy|1b|2b|0\.8b|0\.6b|qwen[^/]*0\.)/i.test(c.model || '');
+    return resolveAgentToolProfile(local && small ? 'chat-lite' : undefined);
+  }
+
 
   async answer(
     message: string,
@@ -250,9 +263,9 @@ export class ChatService {
         runId = undefined;
       }
     }
-    const toolSet = useTools ? this.tools.buildToolSet(projectId, runId, { user: opts.user }) : undefined;
+    const toolSet = useTools ? this.tools.buildToolSet(projectId, runId, { user: opts.user, profile: this.toolProfile().id }) : undefined;
     const toolNames = toolSet ? Object.keys(toolSet) : [];
-    this.logger.log(`[agent] non-stream useTools=${useTools} tools=${toolNames.length} profile=${resolveAgentToolProfile().id}${runId ? ` run=${runId.slice(0, 8)}` : ''}`);
+    this.logger.log(`[agent] non-stream useTools=${useTools} tools=${toolNames.length} profile=${this.toolProfile().id}${runId ? ` run=${runId.slice(0, 8)}` : ''}`);
 
     const chatOpts: ChatStreamOptions = {
       modelName: opts.model,
@@ -306,9 +319,9 @@ export class ChatService {
           runId = undefined;
         }
       }
-      const toolSet = useTools ? this.tools.buildToolSet(projectId, runId, { user: opts.user }) : undefined;
+      const toolSet = useTools ? this.tools.buildToolSet(projectId, runId, { user: opts.user, profile: this.toolProfile().id }) : undefined;
       const toolNames = toolSet ? Object.keys(toolSet) : [];
-      this.logger.log(`[agent] useTools=${useTools} tools=${toolNames.length} profile=${resolveAgentToolProfile().id}${runId ? ` run=${runId.slice(0, 8)}` : ''}`);
+      this.logger.log(`[agent] useTools=${useTools} tools=${toolNames.length} profile=${this.toolProfile().id}${runId ? ` run=${runId.slice(0, 8)}` : ''}`);
       const streamOpts: ChatStreamOptions = {
         modelName: opts.model,
         enableThinking: opts.enableThinking,

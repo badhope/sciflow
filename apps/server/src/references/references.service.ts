@@ -34,7 +34,8 @@ const updateSchema = z.object({
   id: z.string().min(1),
   patch: z.object({
     readingStatus: z.enum(['unread', 'reading', 'read', 'cited']).optional(),
-    tags: z.string().max(10000).optional(),
+    // 兼容 string[] 原样提交（前端表单/AI 工具常见）与 JSON 字符串两种契约
+    tags: z.union([z.string().max(10000), z.array(z.string().max(200)).max(100)]).optional(),
     notes: z.string().max(50000).nullable().optional(),
   }),
 });
@@ -243,7 +244,7 @@ export class ReferencesService {
   }
 
   /** PATCH /:id：阅读状态 / 标签 / 文献笔记（zod 校验） */
-  update(id: string, patch: { readingStatus?: string; tags?: string; notes?: string | null }) {
+  update(id: string, patch: { readingStatus?: string; tags?: string | string[]; notes?: string | null }) {
     const validated = updateSchema.parse({ id, patch });
     this.get(validated.id);
     const set: Record<string, unknown> = {};
@@ -261,11 +262,17 @@ export class ReferencesService {
        *     运行时却是 number，前端 tag.trim() 即崩）。
        * 现在统一走 isJsonStringArray，并把归一化后的字符串数组落库，保证读写口径一致。
        */
-      const rawTags = validated.patch.tags.trim();
-      if (rawTags !== '' && !isJsonStringArray(rawTags)) {
-        throw new BadRequestException('tags 必须是字符串数组的 JSON（例如 ["机器学习","综述"]）');
+      const tags = validated.patch.tags;
+      if (Array.isArray(tags)) {
+        // 数组直接落库：去空、去重、修剪，避免前端传 ['a','a',''] 产生脏标签
+        set.tags = JSON.stringify([...new Set(tags.map((t) => String(t).trim()).filter(Boolean))]);
+      } else {
+        const rawTags = tags.trim();
+        if (rawTags !== '' && !isJsonStringArray(rawTags)) {
+          throw new BadRequestException('tags 必须是字符串数组或字符串数组的 JSON（例如 ["机器学习","综述"]）');
+        }
+        set.tags = rawTags === '' ? '[]' : JSON.stringify(parseTagsJson(rawTags));
       }
-      set.tags = rawTags === '' ? '[]' : JSON.stringify(parseTagsJson(rawTags));
     }
     if (validated.patch.notes !== undefined) {
       set.notes = validated.patch.notes ?? '';

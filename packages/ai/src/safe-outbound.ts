@@ -83,6 +83,11 @@ export function allowPrivateFromEnv(): boolean {
   return process.env.ALLOW_PRIVATE_OUTBOUND === '1';
 }
 
+/** 桌面端单用户形态：只额外放行回环地址（本机 Ollama / llama.cpp），不放开整个内网 */
+function isLoopbackHost(host: string): boolean {
+  return host === '127.0.0.1' || host === '::1' || host === 'localhost';
+}
+
 /** 统一的受控 fetch；所有模型、目录、embedding 出站必须经由它。 */
 export async function safeOutboundFetch(
   input: string | URL | globalThis.Request,
@@ -98,8 +103,9 @@ export async function safeOutboundFetch(
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('出站仅支持 http/https');
   if (parsed.username || parsed.password) throw new Error('出站地址不允许内嵌用户名或密码');
-  const allowPrivate = opts.allowPrivate ?? allowPrivateFromEnv();
   const host = parsed.hostname.replace(/^\[|\]$/g, '');
+  const allowPrivate = opts.allowPrivate
+    ?? (allowPrivateFromEnv() || (process.env.SCIFLOW_DESKTOP === '1' && isLoopbackHost(host)));
   // AI_MOCK=1 时 mock 网关由 MSW 进程内拦截（不建真实 socket），仅允许该保留域名，其他地址照常校验。
   if (process.env.AI_MOCK === '1' && host === 'mock.local') {
     return globalThis.fetch(input as unknown as string | URL, init as globalThis.RequestInit) as Promise<globalThis.Response>;

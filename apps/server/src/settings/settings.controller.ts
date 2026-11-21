@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { SettingsService } from './settings.service';
+import { LocalModelsService } from './local-models.service';
 import { ProjectAccessService } from '../common/project-access.service';
 import { AdminGuard } from '../auth/admin.guard';
 import { AgentPolicyService, AGENT_ACCESS_MODES } from '../agent/agent-policy.service';
@@ -19,6 +20,7 @@ import { AgentPolicyService, AGENT_ACCESS_MODES } from '../agent/agent-policy.se
 export class SettingsController {
   constructor(
     private readonly settings: SettingsService,
+    private readonly localModels: LocalModelsService,
     private readonly access: ProjectAccessService,
     private readonly agentPolicy: AgentPolicyService,
   ) {}
@@ -98,6 +100,42 @@ export class SettingsController {
   @Delete('providers/:id')
   removeProvider(@Param('id') id: string) {
     return this.settings.removeProvider(id);
+  }
+
+  // ---------- 本地模型（推荐下载 / 校验 / 一键导入 Ollama） ----------
+  @Get('local-models')
+  listLocalModels() {
+    return this.localModels.list();
+  }
+
+  @Get('local-models/ollama')
+  ollamaStatus() {
+    return this.localModels.ollamaStatus();
+  }
+
+  @Get('local-models/:id/status')
+  localModelStatus(@Param('id') id: string) {
+    return this.localModels.status(id);
+  }
+
+  @Post('local-models/:id/download')
+  downloadLocalModel(@Param('id') id: string) {
+    return this.localModels.startDownload(id);
+  }
+
+  @Delete('local-models/:id/download')
+  cancelLocalModelDownload(@Param('id') id: string) {
+    return this.localModels.cancel(id);
+  }
+
+  @Post('local-models/:id/install')
+  installLocalModel(@Param('id') id: string) {
+    return this.localModels.install(id);
+  }
+
+  @Delete('local-models/:id')
+  removeLocalModel(@Param('id') id: string) {
+    return this.localModels.remove(id);
   }
 
   // ---------- 外部 MCP 服务器 ----------

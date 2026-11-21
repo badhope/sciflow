@@ -4,8 +4,9 @@ import { expect, test } from '@playwright/test';
  * 全界面真实鼠标巡检（不是“页面能打开”）。
  *
  * 覆盖：
- *  - 侧栏 12 个功能入口逐个点击，懒加载页面必须渲染出 main，且不能出现错误边界；
- *  - 设置页 12 个分区逐个点击，锚点必须存在且滚动到位；
+ *  - 侧栏 9 个一级入口逐个点击，懒加载页面必须渲染出 main，且不能出现错误边界；
+ *  - 实验与验证 / 写作与评审的二级 Tab 全部可达；
+ *  - 设置页全部分区逐个点击，锚点必须存在且滚动到位；
  *  - 外观主题切换按钮真实生效（html[data-theme] 变化）；
  *  - 无项目时创建项目，进入工作台并发送一条消息，助手回复非空。
  *
@@ -18,15 +19,13 @@ const API = process.env.E2E_API || 'http://127.0.0.1:43200';
  * 旧版 15 个平级入口已收成 3 组，测试按当前导航断言，避免用已下线标签误报。
  */
 const VIEWS = [
+  '科研对话',
   '项目驾驶舱',
   '研究设计',
   '证据库',
-  '实验记录',
+  '实验与验证',
   '写作与评审',
   '投稿辅助',
-  '长篇写作',
-  'Web 项目',
-  '内置浏览器',
   '记忆中心',
   '设置',
 ];
@@ -44,7 +43,7 @@ test.beforeAll(async ({ request }) => {
   }
 });
 
-test('侧栏 11 个入口逐个点击并渲染', async ({ page }) => {
+test('侧栏 9 个入口逐个点击并渲染', async ({ page }) => {
   await page.goto('/#/workspace');
   await page.waitForLoadState('networkidle');
   // 设置入口独立渲染在分组导航之后，因此用整个 aside 定位，而不是 nav[aria-label=功能导航]
@@ -67,6 +66,28 @@ test('侧栏 11 个入口逐个点击并渲染', async ({ page }) => {
     await expect(page.getByText(/页面加载失败|Something went wrong/i)).toHaveCount(0);
     await page.waitForTimeout(250);
   }
+});
+
+test('合并页二级 Tab 全部可达', async ({ page }) => {
+  // 实验与验证：实验记录 / Web 项目 / 内置浏览器
+  await page.goto('/#/experiments');
+  await page.waitForLoadState('networkidle');
+  for (const label of ['实验记录', 'Web 项目', '内置浏览器']) {
+    const tab = page.getByRole('tab', { name: label, exact: true }).first();
+    await expect(tab, `实验与验证缺少 Tab：${label}`).toBeVisible({ timeout: 20_000 });
+    await tab.click();
+    await expect(page.locator('main')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/页面加载失败|Something went wrong/i)).toHaveCount(0);
+  }
+
+  // 写作与评审：长篇写作是二级 Tab，不是一级入口
+  await page.goto('/#/write-review');
+  await page.waitForLoadState('networkidle');
+  const longform = page.getByRole('tab', { name: '长篇写作', exact: true }).first();
+  await expect(longform, '写作与评审缺少 Tab：长篇写作').toBeVisible({ timeout: 20_000 });
+  await longform.click();
+  await expect(page.locator('main')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/页面加载失败|Something went wrong/i)).toHaveCount(0);
 });
 
 test('设置页每个分区都能点开并定位', async ({ page }) => {

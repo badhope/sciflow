@@ -126,6 +126,82 @@ export function parseCatalog(protocol: ModelProtocol, raw: unknown): DiscoveredM
   }
 }
 
+/**
+ * Ollama 的 OpenAI 兼容 `/v1/models` 不返回上下文/输出元数据，只有 `/api/show`
+ * 才带 `parameters.num_ctx` 与 `model_info.*.context_length`。
+ * 这里只对明确的本机 Ollama 端点补能力，避免把任意 OpenAI 兼容网关当成 Ollama。
+ */
+function ollamaApiRoot(baseUrl: string): string | null {
+  try {
+    const u = new URL(baseUrl);
+    const host = u.hostname.replace(/^\[|\]$/g, '');
+    if (!['localhost', '127.0.0.1', '::1'].includes(host) || u.port !== '11434') return null;
+    const path = u.pathname.replace(/\/+$/, '').replace(/\/v1$/, '');
+    return `${u.origin}${path}`;
+  } catch {
+    return null;
+  }
+}
+
+function ollamaParameter(raw: unknown, name: string): number | undefined {
+  const parameters = typeof (raw as { parameters?: unknown })?.parameters === 'string'
+    ? String((raw as { parameters: string }).parameters)
+    : '';
+  const match = parameters.match(new RegExp(`(?:^|\\n)\\s*${name}\\s+([0-9]+)`, 'i'));
+  if (!match) return undefined;
+  const n = Number(match[1]);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
+}
+
+export function parseOllamaShowCapabilities(raw: unknown): { contextWindow?: number; maxOutput?: number } {
+  const info = (raw as { model_info?: Record<string, unknown> })?.model_info || {};
+  const contextKey = Object.keys(info).find((k) => k.endsWith('.context_length'));
+  const nativeContext = contextKey ? pickNumber(info[contextKey]) : undefined;
+  return {
+    // 运行时 `num_ctx` 才是实际可用上下文；模型原生 context_length 只作为兜底
+    contextWindow: ollamaParameter(raw, 'num_ctx') ?? nativeContext,
+    maxOutput: ollamaParameter(raw, 'num_predict'),
+  };
+}
+
+async function enrichOllamaCapabilities(
+  models: DiscoveredModel[],
+  baseUrl: string,
+  doFetch: typeof fetch,
+  timeoutMs: number,
+): Promise<DiscoveredModel[]> {
+  const root = ollamaApiRoot(baseUrl);
+  if (!root || models.length === 0) return models;
+  try {
+    const probe = await doFetch(`${root}/api/version`, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(Math.min(timeoutMs, 5000)),
+    });
+    if (!probe.ok) return models;
+  } catch {
+    return models;
+  }
+  return Promise.all(models.map(async (m) => {
+    try {
+      const res = await doFetch(`${root}/api/show`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ model: m.id }),
+        signal: AbortSignal.timeout(Math.min(timeoutMs, 5000)),
+      });
+      if (!res.ok) return m;
+      const caps = parseOllamaShowCapabilities(await res.json());
+      return {
+        ...m,
+        contextWindow: caps.contextWindow ?? m.contextWindow,
+        maxOutput: caps.maxOutput ?? m.maxOutput,
+      };
+    } catch {
+      return m;
+    }
+  }));
+}
+
 function catalogRequest(protocol: ModelProtocol, baseUrl: string, apiKey: string): { url: string; headers: Record<string, string> } {
   const base = baseUrl.replace(/\/+$/, '');
   const headers: Record<string, string> = { Accept: 'application/json' };
@@ -176,7 +252,8 @@ export async function fetchModelCatalog(opts: {
     } catch {
       return { ok: false, models: [], endpoint: url, status: res.status, error: `模型列表不是合法 JSON：${text.slice(0, 200)}` };
     }
-    const models = parseCatalog(protocol, json);
+    let models = parseCatalog(protocol, json);
+    models = await enrichOllamaCapabilities(models, opts.baseUrl, doFetch, timeoutMs);
     return { ok: true, models, endpoint: url, status: res.status };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);

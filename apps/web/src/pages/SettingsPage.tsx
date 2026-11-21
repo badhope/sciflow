@@ -8,6 +8,7 @@ import { Badge, Button, Card, CollapsibleCard, ErrorBox, Input, Modal, SectionTi
 import { HBar } from '../components/charts';
 import { SettingsProvider, useSettings } from './settings/settings-context';
 import { ProviderManager } from './settings/ProviderManager';
+import { LocalModels } from './settings/LocalModels';
 import { WebSearchSettings } from './settings/WebSearchSettings';
 import { UsageStats } from './settings/UsageStats';
 import { AuditLogPanel } from './settings/AuditLogPanel';
@@ -471,26 +472,25 @@ function SettingsLayout() {
   };
 
   /**
-   * 设置页分区导航：**必须与下方 DOM 的真实顺序一致**。
-   * 历史缺陷：导航顺序是 AI→角色→用量→路由→…→MCP→扩展→配置→自定义，
-   * 实际 DOM 是 AI→扩展→配置→角色→用量→…；且 settings-persona / settings-extensions /
-   * settings-config 三个锚点当时在 DOM 里不存在（点了没反应），settings-custom 是空 div。
-   * 现在按真实顺序组织，并把「连接测试」补进导航（原来有卡片却没有入口）。
+   * 设置页分区导航：按「用户要解决什么问题」分组，而不是按组件名分组。
+   * 历史缺陷：14 个锚点里有 3 个 DOM 不存在（ExtensionCenter/ConfigCenter/Persona 外层没 id），
+   * “连接测试”实际挂在快捷键卡片上；导航顺序与 DOM 顺序不一致，点击会乱跳。
+   * 现在压缩成 9 组，并保证每个 id 都真实存在、顺序与 DOM 一致：
+   *   外观 → AI 总览 → 模型接入（本地模型/厂商路由/连接测试）
+   *   → 权限与角色（权限档/角色技能）→ 搜索与自检（联网/环境）
+   *   → 扩展与工具（扩展中心/MCP）→ 配置中心 → 用量与审计
+   *   → 高级设置（快捷键/意图/提示词/流水线/质量权重）
    */
   const sections = useMemo(() => [
     { id: 'settings-appearance', label: '外观与主题' },
     { id: 'settings-ai', label: 'AI 服务' },
-    { id: 'settings-agent-access', label: 'AI 权限档' },
-    { id: 'settings-extensions', label: '扩展中心' },
+    { id: 'settings-model-hub', label: '模型接入' },
+    { id: 'settings-agent-governance', label: '权限与角色' },
+    { id: 'settings-retrieval', label: '搜索与自检' },
+    { id: 'settings-tooling', label: '扩展与工具' },
     { id: 'settings-config', label: '配置中心' },
-    { id: 'settings-persona', label: '角色与技能' },
-    { id: 'settings-usage', label: '用量成本' },
-    { id: 'settings-providers', label: '模型路由' },
-    { id: 'settings-web', label: '联网搜索' },
-    { id: 'settings-check', label: '环境自检' },
-    { id: 'settings-model-test', label: '连接测试' },
-    { id: 'settings-mcp', label: 'MCP 工具' },
-    { id: 'settings-custom', label: '高级自定义' },
+    { id: 'settings-observability', label: '用量与审计' },
+    { id: 'settings-custom', label: '高级设置' },
   ], []);
   /**
    * 跳转分区。
@@ -618,134 +618,134 @@ function SettingsLayout() {
         )}
       </Card>
 
-      {/* Agent 权限档：AI 能读什么、能改什么（默认不碰系统配置） */}
-      <div id="settings-agent-access"><AgentAccessSettings /></div>
+      {/* 模型接入：本地模型下载/导入 + 厂商路由 + 连接测试，合成一个语义组 */}
+      <div id="settings-model-hub" className="space-y-3 mb-4">
+        <LocalModels />
+        <ProviderManager settings={state.settings} />
+        <Card className="p-5" id="settings-model-test">
+          <SectionTitle extra={<Button onClick={testModel} disabled={testing || !model} variant="success">{testing ? <Loader2 size={14} className="animate-spin" /> : <FlaskConical size={14} />} 测试模型</Button>}>
+            <span className="flex items-center gap-2">
+              <FlaskConical size={16} className="text-teal-600" /> 模型连接测试
+            </span>
+          </SectionTitle>
+          <div className="flex gap-3 items-end">
+            <div className="flex-1">
+              <div className="text-xs text-slate-400 dark:text-slate-500 mb-1">选择模型实测连通性</div>
+              <Select
+                className="w-full"
+                options={[
+                  { value: '', label: '选择模型…' },
+                  ...(state.settings?.ai.models || []).map((m) => ({ value: m, label: m })),
+                ]}
+                value={model}
+                onChange={setModel}
+              />
+            </div>
+          </div>
+          {testResult && (
+            <div className={`mt-3 rounded-lg p-3 text-sm ${testResult.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-700'}`}>
+              <div className="flex items-center gap-2 font-medium">
+                <ModelIcon ok={testResult.ok} />
+                {testResult.model} · {testResult.latencyMs}ms
+              </div>
+              <div className="mt-1 text-slate-600 dark:text-slate-300">{testResult.reply}</div>
+            </div>
+          )}
+        </Card>
+      </div>
 
-      {/* 扩展中心：内置社区开源资产 + SciFlow 私有优势工具（默认全启用） */}
-      <div><ExtensionCenter /></div>
+      {/* 权限与角色：AI 能读什么/改什么 + 角色人设与技能 */}
+      <div id="settings-agent-governance" className="space-y-3 mb-4">
+        <AgentAccessSettings />
+        <PersonaSettings />
+      </div>
+
+      {/* 搜索与自检：联网 provider/兜底 + 数据库/AI/检索栈自检 */}
+      <div id="settings-retrieval" className="space-y-3 mb-4">
+        <WebSearchSettings />
+        <Card className="p-4 mb-4">
+          <SectionTitle extra={<Button onClick={runCheck} disabled={state.checking}>{state.checking ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />} 运行自检</Button>}>
+            <span className="flex items-center gap-2">
+              <Database size={16} className="text-teal-600" /> 环境自检
+            </span>
+          </SectionTitle>
+          {state.check && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3 text-sm">
+                <ModelIcon ok={state.check.database.ok} />
+                <span className="text-slate-600 dark:text-slate-300">数据库</span>
+                <span className="text-slate-400 dark:text-slate-500 text-xs truncate">{state.check.database.path}</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3 text-sm">
+                <ModelIcon ok={state.check.ai.ok} />
+                <span className="text-slate-600 dark:text-slate-300">AI 连通性（{state.check.ai.model}）</span>
+                <span className={`text-xs ${state.check.ai.ok ? 'text-emerald-600' : 'text-rose-500'}`}>
+                  {state.check.ai.ok ? `${state.check.ai.latencyMs}ms · ${state.check.ai.detail}` : state.check.ai.detail}
+                </span>
+              </div>
+              {state.check.retrieval && (
+                <div className="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <ModelIcon ok={state.check.retrieval.ok} />
+                    <span className="text-slate-600 dark:text-slate-300">检索栈</span>
+                    <span className="flex flex-wrap gap-1.5 text-xs">
+                      <Badge tone={state.check.retrieval.vector ? 'green' : 'amber'}>向量 {state.check.retrieval.vector ? '可用' : '降级'}</Badge>
+                      <Badge tone={state.check.retrieval.embeddingModel ? 'green' : 'amber'}>嵌入模型 {state.check.retrieval.embeddingModel ? '已配置' : '未配置'}</Badge>
+                      <Badge tone={state.check.retrieval.fullText ? 'green' : 'red'}>全文索引 {state.check.retrieval.fullText ? '可用' : '不可用'}</Badge>
+                    </span>
+                  </div>
+                  {state.check.retrieval.notes.length > 0 && (
+                    <ul className="mt-1.5 ml-6 list-disc text-[11px] text-amber-600 dark:text-amber-400 space-y-0.5">
+                      {state.check.retrieval.notes.map((n, i) => <li key={i}>{n}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* 扩展与工具：内置社区资产 + 自定义扩展 + MCP 工具清单 */}
+      <div id="settings-tooling" className="space-y-3 mb-4">
+        <ExtensionCenter />
+        <McpToolList />
+      </div>
 
       {/* 配置中心：角色库 / 约束工程 / 钩子 / 权限 / 预设 / 审计 */}
-      <div><ConfigCenterSettings /></div>
+      <div id="settings-config" className="mb-4"><ConfigCenterSettings /></div>
 
-      {/* 角色与技能（persona + skills） */}
-      <div><PersonaSettings /></div>
+      {/* 用量与审计：成本看板 + 可回溯审计流水 */}
+      <div id="settings-observability" className="space-y-3 mb-4">
+        <UsageStats />
+        <AuditLogPanel />
+      </div>
 
-      {/* Usage Stats */}
-      <div id="settings-usage"><UsageStats /></div>
-
-      {/* 安全与审计：审计流水 + 运行指标（企业部署的可回溯凭证与健康面板） */}
-      <div id="settings-audit"><AuditLogPanel /></div>
-
-      {/* Model Routing + Provider Manager */}
-      <div id="settings-providers"><ProviderManager settings={state.settings} /></div>
-
-      {/* F-3.4 联网搜索：provider 切换 + chat 兜底开关 */}
-      <div id="settings-web"><WebSearchSettings /></div>
-
-      {/* 环境自检 */}
-      <Card className="p-4 mb-4" id="settings-check">
-        <SectionTitle extra={<Button onClick={runCheck} disabled={state.checking}>{state.checking ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />} 运行自检</Button>}>
-          <span className="flex items-center gap-2">
-            <Database size={16} className="text-teal-600" /> 环境自检
-          </span>
-        </SectionTitle>
-        {state.check && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3 text-sm">
-              <ModelIcon ok={state.check.database.ok} />
-              <span className="text-slate-600 dark:text-slate-300">数据库</span>
-              <span className="text-slate-400 dark:text-slate-500 text-xs truncate">{state.check.database.path}</span>
-            </div>
-            <div className="flex items-center gap-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3 text-sm">
-              <ModelIcon ok={state.check.ai.ok} />
-              <span className="text-slate-600 dark:text-slate-300">AI 连通性（{state.check.ai.model}）</span>
-              <span className={`text-xs ${state.check.ai.ok ? 'text-emerald-600' : 'text-rose-500'}`}>
-                {state.check.ai.ok ? `${state.check.ai.latencyMs}ms · ${state.check.ai.detail}` : state.check.ai.detail}
-              </span>
-            </div>
-            {state.check.retrieval && (
-              <div className="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <ModelIcon ok={state.check.retrieval.ok} />
-                  <span className="text-slate-600 dark:text-slate-300">检索栈</span>
-                  <span className="flex flex-wrap gap-1.5 text-xs">
-                    <Badge tone={state.check.retrieval.vector ? 'green' : 'amber'}>向量 {state.check.retrieval.vector ? '可用' : '降级'}</Badge>
-                    <Badge tone={state.check.retrieval.embeddingModel ? 'green' : 'amber'}>嵌入模型 {state.check.retrieval.embeddingModel ? '已配置' : '未配置'}</Badge>
-                    <Badge tone={state.check.retrieval.fullText ? 'green' : 'red'}>全文索引 {state.check.retrieval.fullText ? '可用' : '不可用'}</Badge>
-                  </span>
-                </div>
-                {state.check.retrieval.notes.length > 0 && (
-                  <ul className="mt-1.5 ml-6 list-disc text-[11px] text-amber-600 dark:text-amber-400 space-y-0.5">
-                    {state.check.retrieval.notes.map((n, i) => <li key={i}>{n}</li>)}
-                  </ul>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </Card>
-
-      {/* 快捷键速查（F-3.2）：数据源 lib/hotkeys-docs，与真实注册一一对应（commands.test 锁定） */}
-      <Card className="p-4 mb-4" id="settings-model-test">
-        <SectionTitle>
-          <span className="flex items-center gap-2">
-            <Keyboard size={16} className="text-teal-600" /> 快捷键速查
-          </span>
-        </SectionTitle>
-        <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
-          {HOTKEY_DOCS.map((h) => (
-            <div key={`${h.combo}-${h.label}`} className="flex items-center justify-between gap-3 py-1 border-b border-slate-50 dark:border-slate-800/60 last:border-0">
-              <span className="text-xs text-slate-600 dark:text-slate-300 truncate">
-                {h.label}
-                <span className="ml-1.5 text-[11px] text-slate-400 dark:text-slate-500">{h.scope}</span>
-              </span>
-              <kbd className="shrink-0 text-[11px] text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 font-mono">
-                {hotkeyLabel(h)}
-              </kbd>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* 模型连接测试 */}
-      <Card className="p-5">
-        <SectionTitle extra={<Button onClick={testModel} disabled={testing || !model} variant="success">{testing ? <Loader2 size={14} className="animate-spin" /> : <FlaskConical size={14} />} 测试模型</Button>}>
-          <span className="flex items-center gap-2">
-            <FlaskConical size={16} className="text-teal-600" /> 模型连接测试
-          </span>
-        </SectionTitle>
-        <div className="flex gap-3 items-end">
-          <div className="flex-1">
-            <div className="text-xs text-slate-400 dark:text-slate-500 mb-1">选择模型实测连通性</div>
-            <Select
-              className="w-full"
-              options={[
-                { value: '', label: '选择模型…' },
-                ...(state.settings?.ai.models || []).map((m) => ({ value: m, label: m })),
-              ]}
-              value={model}
-              onChange={setModel}
-            />
-          </div>
-        </div>
-        {testResult && (
-          <div className={`mt-3 rounded-lg p-3 text-sm ${testResult.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-700'}`}>
-            <div className="flex items-center gap-2 font-medium">
-              <ModelIcon ok={testResult.ok} />
-              {testResult.model} · {testResult.latencyMs}ms
-            </div>
-            <div className="mt-1 text-slate-600 dark:text-slate-300">{testResult.reply}</div>
-          </div>
-        )}
-      </Card>
-
-      {/* MCP Tool List */}
-      <div id="settings-mcp"><McpToolList /></div>
-
-      {/* ===== 自定义中心（默认折叠 · 渐进披露） ===== */}
+      {/* 高级设置：快捷键 + 意图/提示词/流水线/质量权重（默认折叠，渐进披露） */}
       <div id="settings-custom" className="space-y-3">
-        <IntentEditor />      <PromptEditor />
-      <PipelineEditor />
+        <Card className="p-4">
+          <SectionTitle>
+            <span className="flex items-center gap-2">
+              <Keyboard size={16} className="text-teal-600" /> 快捷键速查
+            </span>
+          </SectionTitle>
+          <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
+            {HOTKEY_DOCS.map((h) => (
+              <div key={`${h.combo}-${h.label}`} className="flex items-center justify-between gap-3 py-1 border-b border-slate-50 dark:border-slate-800/60 last:border-0">
+                <span className="text-xs text-slate-600 dark:text-slate-300 truncate">
+                  {h.label}
+                  <span className="ml-1.5 text-[11px] text-slate-400 dark:text-slate-500">{h.scope}</span>
+                </span>
+                <kbd className="shrink-0 text-[11px] text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 font-mono">
+                  {hotkeyLabel(h)}
+                </kbd>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <IntentEditor />
+        <PromptEditor />
+        <PipelineEditor />
         <QualityWeightsEditor />
       </div>
     </div>

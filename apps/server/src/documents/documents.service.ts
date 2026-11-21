@@ -824,6 +824,18 @@ const CSL_TEMPLATE_MAP: Record<string, string> = {
 };
 
 /**
+ * 格式别名归一：外部调用方常把 GB/T 7714 写成 `gb7714`、`gb-t-7714`、`gbt7714`。
+ * 内部正式 key 是 `gbt`；不归一会静默回落 APA（实测导出结果与预期不符）。
+ */
+export function normalizeCiteFormat(format: string): string {
+  const raw = String(format || '').trim().toLowerCase().replace(/[\s_/]+/g, '-');
+  if (/^(gb-?t?-?7714|gbt-?7714|gb7714)(-\d{4})?$/.test(raw)) return 'gbt';
+  if (raw === 'bib' || raw === 'bibtex') return 'bibtex';
+  if (raw === 'ris') return 'ris';
+  return raw;
+}
+
+/**
  * 用 citation-js CSL 引擎渲染参考文献列表（替代手写的 formatCitation + formatRefEntry8）。
  * BibTeX 直接用 citation-js bibtex 输出。
  */
@@ -831,15 +843,16 @@ export function renderCitationsAsBibliography(
   rows: { reference: { id: string; title: string; authors: string | null; year: number | null; venue: string | null; doi: string | null } }[],
   format: string,
 ): string[] {
+  const normalized = normalizeCiteFormat(format);
   const entries = rows.map((row) => buildCslEntry(row.reference));
   const cite = new Cite(entries);
 
   // bibtex 走 citation-js 原生输出（标准 LaTeX 合规）
-  if (format === 'bibtex') {
+  if (normalized === 'bibtex') {
     return [cite.format('bibtex')];
   }
 
-  const template = CSL_TEMPLATE_MAP[format] || 'apa';
+  const template = CSL_TEMPLATE_MAP[normalized] || 'apa';
   const formatted = cite.format('bibliography', { format: 'text', template, lang: 'zh-CN' });
   return formatted.split('\n').filter((l) => l.trim());
 }
@@ -850,12 +863,13 @@ export function formatCitation(
   format: string,
   index: number,
 ): string {
-  const result = renderCitationsAsBibliography([{ reference: { ...ref, id: 'entry', authors: ref.authors || null, venue: ref.venue || null, doi: ref.doi || null } }], format);
+  const normalized = normalizeCiteFormat(format);
+  const result = renderCitationsAsBibliography([{ reference: { ...ref, id: 'entry', authors: ref.authors || null, venue: ref.venue || null, doi: ref.doi || null } }], normalized);
   let line = result[0] || '';
   // 顺序编码制官方样式（IEEE/GB-T/Nature/Vancouver/ACS）单条渲染会自带从 1 起的编号，
   // 这里剥离后重写为调用方指定的全局序号；著者-年样式（apa/chicago/springer）不编号。
   const NUMERIC_STYLES = ['ieee', 'vancouver', 'gbt', 'nature', 'acs'];
-  if (NUMERIC_STYLES.includes(format)) {
+  if (NUMERIC_STYLES.includes(normalized)) {
     // 官方样式自带编号形态各异：IEEE/GB-T "[1]"、Vancouver/Nature "1."、ACS "(1)"
     line = line.replace(/^\[\d+\]\s*/, '').replace(/^\d+\.\s*/, '').replace(/^\(\d+\)\s*/, '');
     return line ? `[${index}] ${line}` : '';

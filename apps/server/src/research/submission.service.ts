@@ -102,7 +102,7 @@ export class SubmissionService {
     quartile?: string;
     firstDecisionWeeks?: number | null;
     acceptanceRate?: number | null;
-    oa?: string;
+    oa?: string | boolean;
   }) {
     if (!body.name?.trim()) throw new BadRequestException('期刊名必填');
     const row = {
@@ -115,7 +115,9 @@ export class SubmissionService {
       quartile: body.quartile || '',
       firstDecisionWeeks: body.firstDecisionWeeks ?? null,
       acceptanceRate: body.acceptanceRate ?? null,
-      oa: body.oa || '',
+      // SQLite 只接受 string/number/null：前端历史版本可能把 oa 当布尔值提交，
+      // 这里统一归一成中文「是/否」，避免 500。
+      oa: typeof body.oa === 'boolean' ? (body.oa ? '是' : '否') : String(body.oa || ''),
       createdAt: Date.now(),
     };
     db.insert(journals).values(row).run();

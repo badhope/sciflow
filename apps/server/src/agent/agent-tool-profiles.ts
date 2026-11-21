@@ -13,7 +13,7 @@
  *  - 读写分组：project/document/quality/experiment 各自拆 read/write，
  *    研究角色只拿 read，实验角色才拿 write；未知新工具按 write 处理（安全默认）。
  */
-export type AgentToolProfileId = 'full' | 'research' | 'experiment' | 'config';
+export type AgentToolProfileId = 'full' | 'chat-lite' | 'research' | 'experiment' | 'config';
 
 export type AgentToolGroup =
   | 'literature'
@@ -134,6 +134,14 @@ export const AGENT_TOOL_PROFILES: Record<AgentToolProfileId, AgentToolProfile> =
       'submission_write',
       'chat',
     ],
+  },
+  'chat-lite': {
+    id: 'chat-lite',
+    label: '轻量对话',
+    // 本地 2B/1B 在 CPU 上被 55 个工具 schema 拖到 9k prompt，非流式请求基本超时。
+    // 这个 profile 只保留对话最常用的读取面：文献/知识/项目与文档读取/质量读取/记忆/任务/研究/对话。
+    // 写入类与配置、扩展、MCP、浏览器、实验执行都不暴露，需要时由用户在 Agent 页显式切换。
+    groups: ['literature', 'knowledge', 'project_read', 'document_read', 'quality_read', 'memory', 'task', 'research', 'chat'],
   },
   research: {
     id: 'research',

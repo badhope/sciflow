@@ -1,6 +1,12 @@
 packages:
   - apps/*
 
+# 桌面打包脚本会调用 pnpm 子命令；关闭运行前自动 install，避免在 CI 下执行
+# `pnpm install --production` 把 devDependencies（含 electron-builder/vite）裁掉。
+verifyDepsBeforeRun: false
+# 无 TTY 的云构建允许重建 node_modules，避免 ABORTED_REMOVE_MODULES_DIR_NO_TTY。
+confirmModulesPurge: false
+
 allowBuilds:
   better-sqlite3: true
   esbuild: true

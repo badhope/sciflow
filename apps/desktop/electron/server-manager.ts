@@ -138,6 +138,9 @@ export async function startServer(): Promise<ServerHandle> {
     // 桌面端页面来自 file://，Origin 为 null；后端仅监听回环 + 单用户定位，回环内全放行
     CORS_ORIGIN: '*',
     SCIFLOW_DESKTOP: '1',
+    // 桌面端是单用户本机应用，必须允许连接 127.0.0.1 上的 Ollama / llama.cpp；
+    // 服务端只监听回环，云元数据地址仍由出站守卫无条件拒绝。
+    ALLOW_PRIVATE_OUTBOUND: '1',
   };
   delete env.NODE_OPTIONS; // 避免外部 NODE_OPTIONS 注入内嵌 Node
 

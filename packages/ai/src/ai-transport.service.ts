@@ -42,6 +42,33 @@ export class AiEmptyResponseError extends Error {
   }
 }
 
+/**
+ * 本机 Ollama 的 OpenAI 兼容端点：默认给 /chat/completions 补 `think:false`。
+ * 1B 级 thinking 模型在长系统提示下会把 maxOutputTokens 全烧在 reasoning 上，
+ * 最终 content 为空（润色/评审/质量门实测 502 的根因之一）。云端网关不受影响。
+ */
+function withOllamaNoThink(fetchImpl: typeof safeOutboundFetch): typeof safeOutboundFetch {
+  return async (input, init = {}, opts) => {
+    try {
+      const rawUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const url = new URL(rawUrl);
+      if (url.port !== '11434' || !url.pathname.endsWith('/chat/completions')) return fetchImpl(input, init, opts);
+      const body = init.body;
+      if (typeof body !== 'string') return fetchImpl(input, init, opts);
+      const parsed = JSON.parse(body) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object' && parsed.think === undefined) {
+        parsed.think = false;
+        // Ollama 的 OpenAI 兼容层只认 reasoning_effort（think 字段会被忽略）；两者都带，兼容旧版/新版。
+        if (parsed.reasoning_effort === undefined) parsed.reasoning_effort = 'none';
+        return fetchImpl(input, { ...init, body: JSON.stringify(parsed) }, opts);
+      }
+    } catch {
+      // 非 JSON 请求体/非标准 URL 时保持原样
+    }
+    return fetchImpl(input, init, opts);
+  };
+}
+
 /** 单次模型调用的 token 用量（流式收尾或非流式返回） */
 export interface TokenUsage {
   promptTokens: number;
@@ -175,7 +202,9 @@ export class AiTransportService {
       return (url.protocol === 'http:' || url.protocol === 'https:')
         && !url.username && !url.password
         && !!this.fastModel.trim()
-        && (this.mockConnectionActive || !!this.apiKey);
+        // 本机 Ollama 的 OpenAI 兼容端点不需要 API Key；此前一律要求 apiKey，
+        // 导致「本地模型导入成功」后 /chat 仍 503「AI 服务未配置」。
+        && (this.mockConnectionActive || !!this.apiKey || this.isLocalRuntime());
     } catch {
       return false;
     }
@@ -414,7 +443,7 @@ ${augmentation}` };
       apiKey,
       headers: { Authorization: `Bearer ${apiKey}` },
       supportsStructuredOutputs: true,
-      fetch: safeOutboundFetch,
+      fetch: withOllamaNoThink(safeOutboundFetch),
       // 流式 usage：OpenAI 兼容端点默认不返回 usage 块，开启 includeUsage 后
       // AI SDK 会带 stream_options.include_usage，token 成本/上下文占比才不是全 0
       includeUsage: true,
@@ -428,6 +457,11 @@ ${augmentation}` };
    *  动态读取 env 以便测试注入；流式路径不适用（中途失败已有增量输出，无法安全重放）。 */
   protected fallbackModel(): string {
     return (process.env.AI_MODEL_FALLBACK || '').trim();
+  }
+
+  /** 是否为本机 Ollama OpenAI 兼容端点（用于关闭 thinking / 跳过 json_schema）。 */
+  protected isLocalRuntime(): boolean {
+    return /^(http:\/\/)?(127\.0\.0\.1|localhost):11434(\/|$)/.test(this.baseUrl);
   }
 
   /** 单模型生成（含 p-retry 指数退避）：complete 与降级链共用的最小生成单元 */
@@ -450,14 +484,34 @@ ${augmentation}` };
           messages: rest,
         };
         if (opts.jsonSchema) {
+          // 本地 1B 模型对 response_format json_schema 支持不稳定，直接走纯文本 JSON；
+          // 提示词本身已要求 JSON，上层 jsonOf 会做 jsonrepair。
+          if (this.isLocalRuntime()) {
+            const { text, usage } = await generateText({ ...callArgs, maxOutputTokens: Math.max(opts.maxTokens ?? 0, 4096) });
+            if (!text.trim()) throw new AiEmptyResponseError();
+            return { text, usage };
+          }
           // 结构化路径：走 generateObject（v7 中 response_format json_schema 仅由它下发）
-          const { object, usage } = await generateObject({
-            ...callArgs,
-            schema: aiJsonSchema(opts.jsonSchema.schema),
-          });
-          const text = JSON.stringify(object);
-          if (!text.trim()) throw new AiEmptyResponseError();
-          return { text, usage };
+          try {
+            const { object, usage } = await generateObject({
+              ...callArgs,
+              schema: aiJsonSchema(opts.jsonSchema.schema),
+            });
+            const text = JSON.stringify(object);
+            if (!text.trim()) throw new AiEmptyResponseError();
+            return { text, usage };
+          } catch (err: any) {
+            // 小参数本地模型（如 1B）常不支持 response_format json_schema，会返回截断 JSON 或
+            // AI_NoObjectGeneratedError。此时退回纯文本生成，仍让模型按提示词输出 JSON，
+            // 由上层 jsonOf 解析；比直接 502 更符合「本地模型只做轻任务」的降级口径。
+            if (err?.name === 'AI_NoObjectGeneratedError' || err?.name === 'AI_JSONParseError') {
+              this.logger.warn(`结构化输出失败，回退纯文本 JSON：${String(err?.message || err).slice(0, 80)}`);
+              const { text, usage } = await generateText({ ...callArgs, maxOutputTokens: Math.max(opts.maxTokens ?? 0, 4096) });
+              if (!text.trim()) throw new AiEmptyResponseError();
+              return { text, usage };
+            }
+            throw err;
+          }
         }
         const { text, usage } = await generateText(callArgs);
         if (!text.trim()) throw new AiEmptyResponseError();

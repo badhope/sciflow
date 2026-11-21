@@ -71,6 +71,13 @@ no-console-error`);
   const baseline = `e2e-${Date.now()}`;
   await page.getByLabel('基线名称').fill(baseline);
   await page.getByRole('button', { name: '保存为基线' }).click();
+  // 保存是异步落盘；等基线真正出现在列表里再比对，避免把「保存还没写完」误判成产品 404
+  await expect
+    .poll(async () => {
+      const list = await (await request.get(`${API}/api/browser/baselines`)).json();
+      return Array.isArray(list) ? list.some((b: { name: string }) => b.name === baseline) : false;
+    }, { timeout: 30_000 })
+    .toBe(true);
   await page.getByRole('button', { name: '比对基线' }).click();
   await expect(page.getByText('外观一致', { exact: false })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText(/差异 0\.00%/)).toBeVisible();

@@ -388,7 +388,7 @@ export class ConfigCenterService {
     const b = bundle as { roles?: unknown; constraints?: unknown; hooks?: unknown; permission?: { mode?: unknown } } | null;
     if (!b || typeof b !== 'object') throw new BadRequestException('配置包格式错误：需要 JSON 对象');
     const errors: string[] = [];
-    let rolesAdded = 0, constraintsAdded = 0, hooksAdded = 0;
+    let rolesAdded = 0, rolesUpdated = 0, constraintsAdded = 0, hooksAdded = 0;
     if (opts.merge === false) {
       // 覆盖模式：先快照将被删除的条目并写入审计（审计可证明「谁删了什么」）
       const doomedConstraints = sqlite.prepare("SELECT id, title FROM config_constraint WHERE source = 'user'").all() as { id: string; title: string }[];
@@ -411,11 +411,12 @@ export class ConfigCenterService {
         if (existing?.id) {
           sqlite.prepare('UPDATE config_role SET system_prompt = ?, is_default = ?, enabled = 1, updated_at = ? WHERE id = ?')
             .run(String(r?.systemPrompt || ''), r?.isDefault === true ? 1 : 0, nowMs(), existing.id);
+          rolesUpdated += 1;
         } else {
           sqlite.prepare('INSERT INTO config_role (id, name, system_prompt, is_default, enabled, created_at, updated_at) VALUES (?,?,?,?,1,?,?)')
             .run(randomUUID(), name, String(r?.systemPrompt || ''), r?.isDefault === true ? 1 : 0, nowMs(), nowMs());
+          rolesAdded += 1;
         }
-        rolesAdded += 1;
       }
     }
     if (Array.isArray(b.constraints)) {
@@ -457,8 +458,8 @@ export class ConfigCenterService {
     } else if (b.permission) {
       errors.push('permission: 已忽略（导入不自动改权限档，如需应用请显式 applyPermission）');
     }
-    this.audit({ actor, category: 'constraint', action: 'import', target: 'bundle', detail: JSON.stringify({ rolesAdded, constraintsAdded, hooksAdded, merge: opts.merge !== false, errors: errors.slice(0, 5) }) });
-    return { ok: true, rolesAdded, constraintsAdded, hooksAdded, errors };
+    this.audit({ actor, category: 'constraint', action: 'import', target: 'bundle', detail: JSON.stringify({ rolesAdded, rolesUpdated, constraintsAdded, hooksAdded, merge: opts.merge !== false, errors: errors.slice(0, 5) }) });
+    return { ok: true, rolesAdded, rolesUpdated, constraintsAdded, hooksAdded, errors };
   }
 
   /** 一次性快照：设置页一次请求拿全（角色/约束/钩子/权限/预设/审计/核心保护项） */

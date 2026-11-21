@@ -34,6 +34,18 @@ secrets/
 coverage/
 dist-desktop/
 
+# local model weights / adapters (never commit or package)
+*.gguf
+*.ggml
+*.safetensors
+*.onnx
+*.tflite
+*.mlmodel
+models/
+**/models/
+.ollama/
+llama.cpp/
+
 # database (local dev)
 *.db
 *.db-journal

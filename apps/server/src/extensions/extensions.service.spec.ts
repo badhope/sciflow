@@ -70,7 +70,9 @@ describe('扩展中心服务', () => {
   it('首次播种：内置资产全启用，含 public 与 private', () => {
     const rows = svc.list();
     expect(rows.length).toBeGreaterThanOrEqual(80);
-    expect(rows.every((r) => r.enabled === 1)).toBe(true);
+    // 远程 MCP 默认启用；需要本机 docker/pip 安装的 localhost MCP 默认关闭（避免“启用但连不上”）
+    expect(rows.filter((r) => r.enabled === 0).every((r) => r.kind === 'mcp')).toBe(true);
+    expect(rows.filter((r) => r.enabled === 1).length).toBeGreaterThanOrEqual(80);
     expect(rows.some((r) => r.visibility === 'private')).toBe(true);
     expect(rows.some((r) => r.source === 'builtin-public')).toBe(true);
     const kinds = new Set(rows.map((r) => r.kind));
@@ -90,10 +92,15 @@ describe('扩展中心服务', () => {
       expect(skills.some((s) => s.key === k), k).toBe(true);
     }
     expect(skills.some((s) => s.key.startsWith('skill-'))).toBe(true);
+    // 公开技能必须是「有正文」的技能：旧版只有 mode=reference 的空壳会让启用变成空标签
+    const publicSkills = skills.filter((s) => s.key.startsWith('skill-')) as { instructions?: string }[];
+    expect(publicSkills.length).toBeGreaterThanOrEqual(12);
+    expect(publicSkills.filter((s) => String(s.instructions || '').trim().length >= 80).length).toBeGreaterThanOrEqual(12);
     expect((sqlite.prepare("SELECT COUNT(*) c FROM config_role WHERE name='方法学家'").get() as { c: number }).c).toBe(1);
     expect((sqlite.prepare("SELECT COUNT(*) c FROM config_constraint WHERE source='extension'").get() as { c: number }).c).toBeGreaterThanOrEqual(8);
     expect((sqlite.prepare("SELECT COUNT(*) c FROM config_hook").get() as { c: number }).c).toBeGreaterThanOrEqual(4);
-    expect((sqlite.prepare("SELECT COUNT(*) c FROM mcp_server").get() as { c: number }).c).toBeGreaterThanOrEqual(2);
+    // 远程免安装 MCP 至少 4 个：Context7 / DeepWiki / Hugging Face / Microsoft Learn
+    expect((sqlite.prepare("SELECT COUNT(*) c FROM mcp_server").get() as { c: number }).c).toBeGreaterThanOrEqual(4);
   });
 
   it('停用资产会撤回投影（技能 disabled / 约束 enabled=0 / 钩子 enabled=0）', () => {

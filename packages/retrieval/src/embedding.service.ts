@@ -33,6 +33,8 @@ export type { EmbeddingBackend };
 export interface RemoteEmbedder {
   embedTexts(texts: string[], opts?: { model?: string }): Promise<number[][] | null>;
   readonly configured: boolean;
+  /** 当前厂商端点是否声明支持 /embeddings；Ollama 默认不支持，避免每次 RAG 都等两次失败重试 */
+  readonly supportsEmbeddings?: boolean;
 }
 
 /** DI 令牌：接口在运行期被擦除，必须显式字符串令牌绑定（AiService 在 KnowledgeModule 里 useExisting） */
@@ -79,10 +81,13 @@ export class EmbeddingService implements OnModuleInit {
   }
 
   private pickBackend(): EmbeddingBackend {
+    const explicitApi = String(process.env.EMBEDDING_PROVIDER || '').trim().toLowerCase() === 'api';
     return resolveEmbeddingBackend({
       provider: process.env.EMBEDDING_PROVIDER,
       hasLocalModel: hasLocalModel(),
-      aiConfigured: Boolean(this.remote?.configured),
+      // auto 模式下，本机 Ollama 默认没有 /embeddings；不要让它每次问答都先卡两次失败重试。
+      // 用户显式 EMBEDDING_PROVIDER=api（例如给 Ollama 加了 --embeddings）仍可强制启用。
+      aiConfigured: Boolean(this.remote?.configured) && (explicitApi || this.remote?.supportsEmbeddings !== false),
       mockMode: process.env.AI_MOCK === '1',
     });
   }

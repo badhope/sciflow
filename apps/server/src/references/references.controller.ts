@@ -184,7 +184,7 @@ export class ReferencesController {
   /** 更新阅读状态 / 标签 / 文献笔记 */
   @Patch(':id')
   @ApiOkResponse({ type: ReferenceDto })
-  update(@Param('id') id: string, @Body() body: { readingStatus?: string; tags?: string; notes?: string | null }, @Req() req: { user?: AuthPayload }) {
+  update(@Param('id') id: string, @Body() body: { readingStatus?: string; tags?: string | string[]; notes?: string | null }, @Req() req: { user?: AuthPayload }) {
     this.access.assertReference(id, req.user);
     return this.references.update(id, body);
   }

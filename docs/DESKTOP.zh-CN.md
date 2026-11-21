@@ -21,15 +21,19 @@ Electron 主进程启动内嵌 NestJS 后端（随机回环端口），然后用
   升级到 44+ 前先确认 better-sqlite3 已发布对应 ABI 的预编译包，或 CI runner 可重编。
 - **Windows 安装包 CI**：打 tag `v*` 触发 `.github/workflows/desktop-installer.yml`，
   在 GitHub runner 出 NSIS 安装包并附到 Release；`workflow_dispatch` 手动触发可下 artifact。
-- **构建环境变量**（本机与 CI 均建议显式设置）：`CI=true`（electron-builder 的
-  pnpm collector 会在工作区跑 production install，无 TTY 会交互卡死）、
-  `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`、
+- **构建环境变量**：`ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`、
   `ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/`
   （NSIS/7zip 等构建工具链走镜像，GitHub 直连被墙/抖动时必备）。
-  **构建会把工作区 dev 依赖剪掉**（electron-builder 的 pnpm collector 行为），
-  构建完成后必须重跑 `pnpm install --frozen-lockfile` 恢复开发树。
-- **pnpm 交互确认**：electron-builder 会在 bundle 内跑 `pnpm install --production`，
-  无 TTY 时必须 `CI=true`（或 `confirmModulesPurge=false`），否则打包中断。
+  `electron-builder.yml` 已内置 Electron 的 npmmirror；工具链镜像仍建议显式设置。
+- **pnpm 打包稳定性**：`pnpm-workspace.yaml` 已设 `verifyDepsBeforeRun: false` 与
+  `confirmModulesPurge: false`，禁止 pnpm 在 `dist:*` 前隐式执行
+  `pnpm install --production`（该行为会裁掉 electron-builder/vite 等 dev 依赖）。
+  因此不再需要“打包后重跑 pnpm install 恢复开发树”，也兼容无 TTY 的 CI。
+- **跨平台原生模块**：`better-sqlite3` 必须按目标平台下载预编译包。Linux 云构建打
+  Windows 包时使用 `prepare:resources:win`，显式传 `--platform=win32 --arch=x64`；
+  否则会把宿主 linux-x64 的 `.node` 装进安装包，运行时 `ERR_DLOPEN_FAILED`。
+- **Linux 打 Windows NSIS**：`electron-builder.yml` 使用 `toolsets.wine: "1.0.1"`，
+  不依赖系统 wine；首次会下载 Wine 11 工具带，后续走缓存。
 - **产物位置**：`apps/desktop/release/SciFlow-Setup-<version>-x64.exe`（dist 输出目录即 release/）。
 
 ## 2. 为什么不用 `file://`（重要，勿回退）
@@ -87,8 +91,11 @@ console errors: 0
 ## 6. 打包
 
 ```bash
-pnpm --filter @sciflow/desktop dist        # 完整安装包
-pnpm --filter @sciflow/desktop dist:dir    # 仅解包目录（快速验证）
+pnpm --filter @sciflow/desktop dist        # 当前平台完整安装包
+pnpm --filter @sciflow/desktop dist:win    # Windows NSIS（Linux 云构建也走这条）
+pnpm --filter @sciflow/desktop dist:dir    # 仅 Windows 解包目录（快速验证）
 ```
 
-前置（脚本已自动执行）：`build:main`（tsc）→ `build:web`（vite --base=./）→ `prepare-server.mjs`（deploy/裁剪/校验）。
+前置（脚本已自动执行）：`build:main`（tsc）→ `build:web`（vite --base=./）→
+`prepare-server.mjs`（deploy/裁剪/校验）。`dist:win` 走 `prepare:resources:win`，
+会按 win32-x64 拉取 `better-sqlite3` 预编译包；`dist:linux` / `dist:mac` 同理。

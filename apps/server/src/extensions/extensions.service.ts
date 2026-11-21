@@ -236,8 +236,8 @@ export class ExtensionsService {
       return row;
     }
     const id = randomUUID();
-    sqlite.prepare('INSERT INTO extension_asset (id, key, kind, name, description, source, repo, license, install, tags, manifest, enabled, visibility, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?,?,?)')
-      .run(id, parsed.key, parsed.kind, parsed.name.trim(), parsed.description || '', opts.source || 'user', parsed.repo || '', parsed.license || '', parsed.install || '', JSON.stringify(parsed.tags || []), JSON.stringify(parsed.manifest ?? {}), isPrivate ? 'private' : 'public', now(), now());
+    sqlite.prepare('INSERT INTO extension_asset (id, key, kind, name, description, source, repo, license, install, tags, manifest, enabled, visibility, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(id, parsed.key, parsed.kind, parsed.name.trim(), parsed.description || '', opts.source || 'user', parsed.repo || '', parsed.license || '', parsed.install || '', JSON.stringify(parsed.tags || []), JSON.stringify(parsed.manifest ?? {}), 1, isPrivate ? 'private' : 'public', now(), now());
     const row = this.get(id);
     this.project(row);
     return row;
@@ -646,6 +646,10 @@ export class ExtensionsService {
           const exists = sqlite.prepare('SELECT id FROM extension_asset WHERE key = ?').get(asset.key);
           if (!exists) this.insertBuiltin(asset);
         }
+        // 旧版公开技能只有 {mode: reference} 空壳：升级为带 instructions 的正文版，
+        // 并清掉已从目录移除的旧壳，避免用户看到「启用了但没有任何说明」的技能。
+        this.refreshBuiltinSkills();
+        this.migrateLocalMcpDefaults();
         return;
       }
       for (const asset of BUILTIN_EXTENSION_ASSETS) this.insertBuiltin(asset);
@@ -657,9 +661,78 @@ export class ExtensionsService {
     }
   }
 
+  /**
+   * 升级旧版「只有仓库链接、没有正文」的公开技能。
+   *
+   * 只刷新满足以下条件的行：source=builtin-public、kind=skill、旧 manifest 没有 instructions
+   * 或仍是 mode=reference。用户改过正文的技能不会被覆盖；已从新目录移除的旧壳会被清理，
+   * 同时从 app_setting.skills 投影中摘除，避免 UI 里留下永远无法生效的条目。
+   */
+  private refreshBuiltinSkills(): void {
+    const catalog = new Map(
+      BUILTIN_EXTENSION_ASSETS.filter((a) => a.kind === 'skill' && a.source === 'builtin-public').map((a) => [a.key, a]),
+    );
+    const rows = sqlite.prepare("SELECT * FROM extension_asset WHERE kind = 'skill' AND source = 'builtin-public'").all() as ExtensionRow[];
+    const removed: string[] = [];
+    for (const row of rows) {
+      const asset = catalog.get(row.key);
+      const manifest = this.readManifest(row.manifest);
+      if (!asset) {
+        // 仅清理旧版空壳；用户自己导入/改写的同 key 资产不动
+        if (!String(manifest.instructions || '').trim() || manifest.mode === 'reference') {
+          sqlite.prepare('DELETE FROM extension_asset WHERE id = ?').run(row.id);
+          removed.push(row.key);
+        }
+        continue;
+      }
+      if (!String(manifest.instructions || '').trim() || manifest.mode === 'reference') {
+        const nextManifest = JSON.stringify(asset.manifest || {});
+        sqlite.prepare('UPDATE extension_asset SET name = ?, description = ?, repo = ?, license = ?, install = ?, tags = ?, manifest = ?, updated_at = ? WHERE id = ?')
+          .run(asset.name, asset.description, asset.repo || '', asset.license || '', asset.install || '', JSON.stringify(asset.tags || []), nextManifest, now(), row.id);
+        this.project({ ...row, name: asset.name, description: asset.description, repo: asset.repo || '', license: asset.license || '', install: asset.install || '', tags: JSON.stringify(asset.tags || []), manifest: nextManifest, updatedAt: now() });
+      }
+    }
+    if (removed.length) {
+      const stored = this.readJson<{ id: string; key: string }[]>('skills', []);
+      this.writeJson('skills', stored.filter((s) => !removed.includes(s.key) && !removed.includes(String(s.id || '').replace(/^ext-/, ''))));
+      this.logger.log(`[extensions] 已清理 ${removed.length} 个旧版空壳技能：${removed.join(', ')}`);
+    }
+  }
+
+  /**
+   * 一次性迁移：旧版把所有 MCP 都默认启用，导致 localhost:3000/3001/8080 这类
+   * 未安装服务也显示「已启用」，用户一调用就连不上。这里只在首次升级时把它们停用；
+   * 用户后续手动启用不会再被覆盖（用 app_setting 标记保证幂等）。
+   */
+  private migrateLocalMcpDefaults(): void {
+    const marker = 'extensions_local_mcp_defaults_v2';
+    if (this.readJson<boolean>(marker, false)) return;
+    const rows = sqlite.prepare("SELECT * FROM extension_asset WHERE kind = 'mcp' AND source = 'builtin-public'").all() as ExtensionRow[];
+    let disabled = 0;
+    for (const row of rows) {
+      const manifest = this.readManifest(row.manifest);
+      const url = String(manifest.url || '');
+      if (!/^http:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:|\/)/i.test(url)) continue;
+      sqlite.prepare('UPDATE extension_asset SET enabled = 0, updated_at = ? WHERE id = ?').run(now(), row.id);
+      this.project({ ...row, enabled: 0 });
+      disabled += 1;
+    }
+    this.writeJson(marker, true);
+    if (disabled) this.logger.log(`[extensions] 已默认停用 ${disabled} 个未安装的 localhost MCP（按需手动启用）`);
+  }
+
+  private readManifest(raw: string): Record<string, unknown> {
+    try {
+      const v = JSON.parse(raw || '{}');
+      return v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
+    } catch {
+      return {};
+    }
+  }
+
   private insertBuiltin(asset: BuiltinAsset) {
-    sqlite.prepare('INSERT INTO extension_asset (id, key, kind, name, description, source, repo, license, install, tags, manifest, enabled, visibility, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?,?,?)')
-      .run(randomUUID(), asset.key, asset.kind, asset.name, asset.description, asset.source, asset.repo || '', asset.license || '', asset.install || '', JSON.stringify(asset.tags || []), JSON.stringify(asset.manifest || {}), asset.source === 'builtin-private' ? 'private' : 'public', now(), now());
+    sqlite.prepare('INSERT INTO extension_asset (id, key, kind, name, description, source, repo, license, install, tags, manifest, enabled, visibility, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(randomUUID(), asset.key, asset.kind, asset.name, asset.description, asset.source, asset.repo || '', asset.license || '', asset.install || '', JSON.stringify(asset.tags || []), JSON.stringify(asset.manifest || {}), asset.defaultEnabled === false ? 0 : 1, asset.source === 'builtin-private' ? 'private' : 'public', now(), now());
     const row = sqlite.prepare('SELECT * FROM extension_asset WHERE key = ?').get(asset.key) as ExtensionRow;
     // MCP 的远程端点写进 manifest.url（catalog 顶层 url 也合并进去）
     if (asset.url) {

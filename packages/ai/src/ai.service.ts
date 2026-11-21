@@ -592,6 +592,14 @@ ${response}`
    * 的附带能力，零额外配置即可让「向量 + 全文」混合检索真正跑起来。
    * 维度契约由调用方（EmbeddingService）守：这里只负责把向量原样返回，不做截断。
    */
+  /**
+   * OpenAI 兼容端点不一定实现 /embeddings；本机 Ollama 默认就没有（除非启动加 --embeddings）。
+   * RAG 在 auto 模式下据此直接降级全文检索，避免每次问答先等待两次 404 重试。
+   */
+  get supportsEmbeddings(): boolean {
+    return this.configured && !this.isLocalRuntime();
+  }
+
   async embedTexts(texts: string[], opts: { model?: string } = {}): Promise<number[][] | null> {
     if (!texts.length) return [];
     if (this.mockMode) return null; // mock 网关不实现 /embeddings，直接降级全文检索

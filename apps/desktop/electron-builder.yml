@@ -7,6 +7,17 @@ directories:
   output: release
   buildResources: build
 
+# 国内构建网络：Electron 二进制走 npmmirror，避免从 GitHub 下载 120MB+ 超时。
+# electron-builder 自身的 nsis/winCodeSign 工具链仍可用
+# ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ 指定。
+electronDownload:
+  mirror: https://npmmirror.com/mirrors/electron/
+
+# Linux 云构建没有系统 wine 时，使用 electron-builder 的 Wine 11 工具带，
+# 否则 NSIS 阶段的 elevate.exe 会直接 `spawn wine ENOENT`（本轮实测）。
+toolsets:
+  wine: "1.0.1"
+
 # asar 只装主进程/preload 编译产物（小），重资源走 extraResources（asar 外，原生模块必须）
 asar: true
 files:
@@ -21,8 +32,26 @@ files:
 # 全部生产依赖）会被静默丢弃 —— 实测 0.4.0→0.4.1 安装包从 1.42GB 掉到 100MB，应用启动即崩。
 # 规避方式：把 bundle 放进二级目录（resources/bundle/server），使相对路径不为 "node_modules"。
 extraResources:
+  # 发布包卫生：模型权重、适配器、本地数据库与密钥文件绝不进安装包。
+  # 这里再设一道过滤器；prepare-server.mjs 还会在生成 bundle 后做物理清理与断言。
   - from: resources/bundle
     to: bundle
+    filter:
+      - "**/*"
+      - "!**/*.gguf"
+      - "!**/*.ggml"
+      - "!**/*.safetensors"
+      - "!**/*.onnx"
+      - "!**/*.tflite"
+      - "!**/models/**"
+      - "!**/*.db"
+      - "!**/*.db-*"
+      - "!**/*.sqlite*"
+      - "!**/.env"
+      - "!**/.env.local"
+      - "!**/.env.production"
+      - "!**/.env.development"
+      - "!**/.env.test"
   - from: resources/web
     to: web
 
@@ -54,6 +83,10 @@ mac:
 linux:
   icon: build/icon.png
   category: Science
+  # pnpm workspace 包名是 @sciflow/desktop，默认 executableName 会变成 @sciflowdesktop，
+  # AppImage 明确拒绝 @ 字符；显式指定合法可执行名。
+  executableName: sciflow
+  syncDesktopName: true
   target:
     - AppImage
     - deb

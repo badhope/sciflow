@@ -10,6 +10,9 @@ import type { WebSearchConfig,
   ModelDiscoveryResult,
   ModelProtocol,
   ProviderTestResult,
+  LocalModelInfo,
+  LocalModelInstallResult,
+  OllamaStatus,
   Experiment,
   Journal,
   JournalMatchResult,
@@ -151,6 +154,20 @@ export const platform = {
     removeProvider: (id: string) => request<{ ok: boolean }>(`/api/settings/providers/${id}`, { method: 'DELETE' }),
     activateProvider: (id: string) =>
       request<{ ok: boolean; active: string }>(`/api/settings/providers/${id}/activate`, { method: 'POST' }),
+    /** 本地模型推荐目录 + 下载状态（内置 MiniCPM5-1B / BotPsy-0.8B） */
+    localModels: {
+      list: () => request<LocalModelInfo[]>('/api/settings/local-models'),
+      ollama: () => request<OllamaStatus>('/api/settings/local-models/ollama'),
+      download: (id: string) =>
+        request<LocalModelInfo>(`/api/settings/local-models/${id}/download`, { method: 'POST' }),
+      status: (id: string) => request<LocalModelInfo>(`/api/settings/local-models/${id}/status`),
+      cancel: (id: string) =>
+        request<LocalModelInfo>(`/api/settings/local-models/${id}/download`, { method: 'DELETE' }),
+      install: (id: string) =>
+        request<LocalModelInstallResult>(`/api/settings/local-models/${id}/install`, { method: 'POST' }),
+      remove: (id: string) =>
+        request<{ ok: boolean }>(`/api/settings/local-models/${id}`, { method: 'DELETE' }),
+    },
     listMcpServers: () => request<McpServerInfo[]>(`/api/settings/mcp-servers`),
     saveMcpServer: (p: { id?: string; name: string; url: string }) =>
       request<{ ok: boolean; id: string }>(`/api/settings/mcp-servers`, { method: 'POST', body: JSON.stringify(p) }),

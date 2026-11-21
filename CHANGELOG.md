@@ -1,8 +1,65 @@
 # Changelog
 
+## [Unreleased] - 2026-11-21
+
+### Added
+
+- **内置技能从“仓库链接”升级为可执行正文**：16 个公开技能（科研全流程、文献精读、PRISMA 综述、选题假设、去 AI 腔、LaTeX、筛选抽取、校对、写作论证、深度调研、自主循环、数据分析、博士基建、顶会规则、迭代自评、Office 交付）全部写入 138–212 字可注入说明；扩展中心可直接展开查看正文，对话系统提示按 1200 字/技能、8000 字总量预算注入。
+- **新增 4 个实测可连的远程 MCP**：Context7、DeepWiki、Hugging Face、Microsoft Learn。2026-11-21 逐一手工握手 + `tools/list` + 真实工具调用通过；新增 MCP 卡片展示端点与工具名，用户开箱即可看到“里面有什么”。
+- **默认聊天系统提示升级**：加入工具优先、证据分级、引用可溯源、事实/推断/建议分离、交付前自检与高风险边界，减少“看着专业但没有依据”的回答。
+
+### Changed
+
+- **设置页从 14 个碎片锚点压成 9 个语义组**：外观与主题 / AI 服务 / 模型接入（本地模型 + 厂商路由 + 连接测试）/ 权限与角色（权限档 + 角色技能）/ 搜索与自检（联网搜索 + 环境自检）/ 扩展与工具（扩展中心 + MCP）/ 配置中心 / 用量与审计 / 高级设置（快捷键 + 意图 + 提示词 + 流水线 + 质量权重）。所有锚点都有真实 DOM，导航顺序与页面顺序一致，修掉“连接测试”错挂快捷键卡片、Extension/Config/Persona 外层缺 id、`settings-audit` 不在导航的问题。
+- **本地小模型自动使用 `chat-lite` 工具档**：本机 Ollama + 1B/2B/0.8B 模型只暴露 18 个读取面工具（原 55 个），避免 9k tokens 工具 schema 把 CPU 预填充拖到超时；云端模型仍用 full，`AGENT_TOOLS_PROFILE` 可显式覆盖。
+
+### Fixed
+
+- **GB/T 7714 导出别名**：`gb7714` / `gb-t-7714` / `gbt7714` / `GB/T 7714` 统一归一为内部 `gbt`，不再静默回落 APA。
+- **文献标签契约**：`PATCH /references/{id}` 的 `tags` 同时接受字符串数组与 JSON 字符串，数组去空去重后落库，前端/AI 工具不再因“传数组”踩 400。
+- `GET /api/auth/me` 在 `AUTH_MODE=none` 且无 `req.user` 时不再 500，改为明确的 401「当前实例未启用账号体系」。
+- 期刊库 `POST /submission/journals-lib` 接受布尔 `oa`，入库归一为「是/否」，不再 500。
+- 配置导入对已存在角色只计 `rolesUpdated`，不再重复报 `rolesAdded`。
+- 长篇新建同名卷幂等：无章节的空卷复用，已有章节的同名卷明确 400，防止超时重试堆出多个空卷。
+- 本机 Ollama 无 API Key 也不再判为“AI 未配置”，修复导入本地模型后 `/chat` 仍 503 的问题；实测 2B 非流式对话 201 / 141.3s，18 工具。
+- **Windows 交叉打包的原生模块架构**：Linux 云构建原先给 `better-sqlite3` 下载宿主 `linux-x64` 预编译包，装进 Windows 安装包后会在 Electron 内报 `ERR_DLOPEN_FAILED`。新增 `prepare:resources:win`，显式 `--platform=win32 --arch=x64` 拉取 win32 预编译包；产物已用 `file` 校验为 `PE32+ DLL x86-64`。`dist:linux` / `dist:mac` 也分别走对应目标架构。
+- **pnpm 打包脚本误删 devDependencies**：pnpm 11 在运行 `dist:*` 前自动做依赖校验，CI 下会执行 `pnpm install --production`，把根目录 `electron-builder`、`vite` 等 656 个 dev 包裁掉，随后脚本 `electron-builder: not found`。已在 `pnpm-workspace.yaml` 显式设置 `verifyDepsBeforeRun: false` 与 `confirmModulesPurge: false`，打包不再触发隐式生产安装。
+- **Linux 上打 Windows NSIS 缺 wine**：`electron-builder.yml` 增加 `toolsets.wine: "1.0.1"`，NSIS 阶段不再 `spawn wine ENOENT`；Electron 二进制下载配置 npmmirror，避免 GitHub 120MB+ 超时。
+- 根目录的 `audit-probe.mjs` / `mcp-acceptance-server.mjs` 验收辅助脚本不再随 server bundle 进入安装包。
+
+### Security
+
+- **发布包卫生**：`.gitignore` 新增 `*.gguf` / `*.ggml` / `*.safetensors` / `*.onnx` / `*.tflite` / `models/`；electron-builder 的 `extraResources` 过滤器排除模型权重、数据库与真实 env；`prepare-server.mjs` 在 `pnpm deploy` 后物理清扫并对残留文件直接失败，禁止模型/Key/测试数据库/验收脚本随安装包外发。
+
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
+
+## [1.19.12] - 2026-11-20
+
+### Added
+
+- **本地模型推荐下载中心**：设置页新增「本地模型」，内置严格 <2B、上下文 ≥32K 的 MiniCPM5-1B（1.08B / 128K，ModelScope 国内源）与 BotPsy-0.8B（0.8B / 32K，工具调用专精）。支持下载进度/速度/取消、文件大小与 SHA256 校验、失败重试、模型文件删除。
+- **下载后一键适配**：探测本机 Ollama（`127.0.0.1:11434`），调用 `/api/create` 注册 GGUF，登记为可选 OpenAI-compatible provider；不自动激活、不替用户切换默认模型。未运行 Ollama 时返回可执行提示（`ollama serve`），不伪造成功。
+
+### Changed
+
+- 桌面端启动后端时显式设置 `ALLOW_PRIVATE_OUTBOUND=1`（单用户本机应用，仅监听回环），使本地 Ollama / llama.cpp provider 可用；服务端部署仍需自行设置该变量，云元数据地址继续无条件拒绝。
+- 本地 Ollama provider 现在会带 `contextWindow` / `maxOutput` / `toolCalling` 能力写库；写库用**实际运行上下文**（16K）而不是原生 128K/32K，设置页同时展示「原生上下文 / 本地运行」两个口径，避免界面声称 128K、Ollama 实际只开 4K 的错配。
+- **模型厂商能力选择不再串台/代选**：本地 Ollama 无 Key 时可检测（localhost 地址或勾选私有端点均放行）；检测后不再用 `flash/lite/mini` 启发式替用户选模型，模型名保持为空，等用户点选；切模型时上下文/输出/工具调用按新模型元数据重填，缺失字段清空而不是继承上一个模型值。Ollama `/v1/models` 不返回能力元数据，新增本机 `/api/show` 补齐（优先 `parameters.num_ctx` 作为运行时上下文，`num_predict` 作为最大输出，`model_info.*.context_length` 仅兜底）。
+
+### Fixed
+
+- **桌面端打包体积统计卡死**：`prepare-server.mjs` 用 `readdirSync({recursive:true})` 扫 `pnpm deploy` 的 `.pnpm` 目录，遇到相互指向的符号链接会陷入环，实测卡住 12 分钟不结束。改为逐层遍历并跳过符号链接，只统计真实文件。
+- **Ollama 0.40+ 一键导入 400**：旧实现发 `{name, modelfile}`，真实 Ollama 0.40.16 返回 `neither 'from' or 'files' was specified`。现改为先 `HEAD /api/blobs/<sha256>`（已存在则跳过重复上传），再用 `createReadStream` 流式上传 GGUF，最后按 `{model, files, parameters:{num_ctx}}` 创建；仅当旧版 Ollama 明确返回该 400 时才回退 Modelfile API。重复导入同一模型会复用同名 provider，不产生重复厂商。
+- **本地 thinking 模型空响应（润色/评审 502）**：Ollama 的 OpenAI 兼容 `/v1/chat/completions` 忽略 `think:false`，MiniCPM5-1B 会把 1024 输出预算全烧在 reasoning 上，最终 `content` 为空并抛 `AiEmptyResponseError`。传输层对 `127.0.0.1:11434` 自动补 `reasoning_effort:"none"`（Ollama 兼容层唯一生效的关闭思考参数），实测短句润色由 27.2s 空响应变为 13.5s 返回合法 JSON。结构化输出遇到 `AI_NoObjectGeneratedError` 时回退纯文本 JSON，避免直接 502。
+
+### Tests
+
+- 新增 `local-models.catalog.spec.ts`：校验所有推荐模型 <2B、上下文 ≥32K、固定 SHA256/文件名、无路径穿越 id，且运行上下文不高于原生上下文。
+- 服务端 115 文件 / 813 测试、Web 45 文件 / 245 测试通过；lint、双端 typecheck、双端 build、desktop main build / 5 个桌面资产测试通过。
+- **真实 Ollama 0.40.16 验收**：MiniCPM5-1B 657MB 下载 + SHA256 校验 + 新式 `/api/create`（blob 201，6.2s）→ provider 自动创建并激活；`/api/settings/providers/test` 9.7s 返回正常；SciFlow `/api/chat` 42 工具 + 7.3K 提示 106s 返回正确 GNN 解释；BotPsy-0.8B 首次加载 43.7s、SciFlow 对话 56s 返回正确过拟合解释；重复导入秒级完成且 provider 不重复。
+- Playwright 真实链路：`real-chat`（设置页建项目 → 科研对话 → 真实 SSE 回复）16.3s 通过；`local-models-real`（设置页本地模型 → 一键导入 → provider 登记但不自动切换）6.6s 通过；Mock 全量 E2E 11 passed / 1 skipped。
 
 ## [1.19.11] - 2026-11-20
 

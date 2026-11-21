@@ -6,6 +6,7 @@ import {
   parseAnthropicCatalog,
   parseCatalog,
   parseGoogleCatalog,
+  parseOllamaShowCapabilities,
   parseOpenAICompatibleCatalog,
 } from './model-catalog';
 
@@ -86,7 +87,47 @@ describe('normalizeProtocol / isChatModelId / parseCatalog', () => {
   });
 });
 
-describe('fetchModelCatalog', () => {
+describe('parseOllamaShowCapabilities / fetchModelCatalog', () => {
+  it('Ollama 优先读取运行时 num_ctx，并识别最大输出', () => {
+    expect(parseOllamaShowCapabilities({
+      parameters: 'num_ctx 16384\nnum_predict 2048',
+      model_info: { 'llama.context_length': 131072 },
+    })).toEqual({ contextWindow: 16384, maxOutput: 2048 });
+    expect(parseOllamaShowCapabilities({ model_info: { 'llama.context_length': '131072' } }))
+      .toEqual({ contextWindow: 131072, maxOutput: undefined });
+    expect(parseOllamaShowCapabilities({ parameters: 'stop <eos>' })).toEqual({ contextWindow: undefined, maxOutput: undefined });
+  });
+
+  it('本机 Ollama 目录会用 /api/show 补齐上下文与输出能力', async () => {
+    const original = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (url: string) => {
+      calls.push(String(url));
+      if (String(url).endsWith('/v1/models')) {
+        return new Response(JSON.stringify({ data: [{ id: 'sciflow-test-minicpm5-2b:latest' }] }), { status: 200 });
+      }
+      if (String(url).endsWith('/api/version')) {
+        return new Response(JSON.stringify({ version: '0.12.0' }), { status: 200 });
+      }
+      if (String(url).endsWith('/api/show')) {
+        return new Response(JSON.stringify({ parameters: 'num_ctx 16384', model_info: { 'llama.context_length': 131072 } }), { status: 200 });
+      }
+      return new Response('no', { status: 404 });
+    }) as unknown as typeof fetch;
+    try {
+      const r = await fetchModelCatalog({ baseUrl: 'http://127.0.0.1:11434/v1', apiKey: 'ollama', protocol: 'openai-compatible' });
+      expect(r.ok).toBe(true);
+      expect(r.models[0]).toMatchObject({ id: 'sciflow-test-minicpm5-2b:latest', contextWindow: 16384 });
+      expect(calls).toEqual([
+        'http://127.0.0.1:11434/v1/models',
+        'http://127.0.0.1:11434/api/version',
+        'http://127.0.0.1:11434/api/show',
+      ]);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
   it('按协议拼接 /models 并带对应鉴权头', async () => {
     const original = globalThis.fetch;
     const calls: { url: string; headers: Record<string, string> }[] = [];

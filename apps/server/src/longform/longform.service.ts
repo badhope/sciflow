@@ -22,6 +22,8 @@ export class LongformService {
   private readonly logger = new Logger(LongformService.name);
   /** 同一本书同时只允许一个写作任务，避免并发写同一章 */
   private readonly running = new Set<string>();
+  /** 同一本书同一个卷标题同时只允许一个生成计划，避免客户端超时重试写出重复空卷 */
+  private readonly planning = new Set<string>();
 
   constructor(private readonly ai: AiService) {}
 
@@ -83,11 +85,26 @@ export class LongformService {
     const volumeTitle = String(input?.title || '').trim();
     if (!volumeTitle) throw new BadRequestException('卷标题必填');
 
-    const lastSeq = db.select({ seq: longformVolumes.seq }).from(longformVolumes).where(eq(longformVolumes.bookId, bookId)).orderBy(desc(longformVolumes.seq)).get();
-    const seq = (lastSeq?.seq ?? 0) + 1;
+    const planningKey = `${bookId}:${volumeTitle}`;
+    if (this.planning.has(planningKey)) {
+      throw new BadRequestException('该卷正在生成章节计划，请等待当前请求完成，勿重复提交');
+    }
+    this.planning.add(planningKey);
+    try {
     const now = Date.now();
-    const volumeId = randomUUID();
-    db.insert(longformVolumes).values({ id: volumeId, bookId, seq, title: volumeTitle.slice(0, 200), goal: String(input.goal || '').slice(0, 2000), createdAt: now }).run();
+    // 幂等：同名卷已存在但没有任何章节，通常来自上一次客户端超时/中断；复用该卷，
+    // 不再插入第二个空卷。已有章节的同名卷则明确拒绝，避免把两卷内容混在一起。
+    const existing = db
+      .select()
+      .from(longformVolumes)
+      .where(and(eq(longformVolumes.bookId, bookId), eq(longformVolumes.title, volumeTitle.slice(0, 200))))
+      .orderBy(desc(longformVolumes.seq))
+      .get();
+    if (existing) {
+      const existingChapters = db.select({ id: longformChapters.id }).from(longformChapters).where(eq(longformChapters.volumeId, existing.id)).all();
+      if (existingChapters.length > 0) throw new BadRequestException('同名卷已存在且已有章节，请换一个卷标题');
+    }
+    const seq = existing?.seq ?? ((db.select({ seq: longformVolumes.seq }).from(longformVolumes).where(eq(longformVolumes.bookId, bookId)).orderBy(desc(longformVolumes.seq)).get()?.seq ?? 0) + 1);
 
     /**
      * 前情分两层：
@@ -126,6 +143,13 @@ export class LongformService {
       context: `longform:${bookId}:plan:v${seq}`,
     });
 
+    // 计划成功后才落卷：此前先落卷再接 AI，计划失败会留下永远没有章节的空卷（重试即重复）。
+    const volumeId = existing?.id ?? randomUUID();
+    if (existing) {
+      db.update(longformVolumes).set({ goal: String(input.goal || '').slice(0, 2000) }).where(eq(longformVolumes.id, volumeId)).run();
+    } else {
+      db.insert(longformVolumes).values({ id: volumeId, bookId, seq, title: volumeTitle.slice(0, 200), goal: String(input.goal || '').slice(0, 2000), createdAt: now }).run();
+    }
     const baseSeq = db.select({ seq: longformChapters.seq }).from(longformChapters).where(eq(longformChapters.bookId, bookId)).orderBy(desc(longformChapters.seq)).get()?.seq ?? 0;
     let i = 0;
     for (const ch of plan.chapters) {
@@ -152,6 +176,9 @@ export class LongformService {
     }
     db.update(longformBooks).set({ status: 'writing', updatedAt: Date.now() }).where(eq(longformBooks.id, bookId)).run();
     return this.getBook(bookId);
+    } finally {
+      this.planning.delete(planningKey);
+    }
   }
 
   // ---------- 章节写作 ----------

@@ -23,6 +23,6 @@ export class AuthController {
   /** 当前用户（req.user 由全局 JwtAuthGuard 注入） */
   @Get('me')
   me(@Req() req: { user?: import('./auth.service').AuthPayload }) {
-    return this.auth.me(req.user!);
+    return this.auth.me(req.user);
   }
 }

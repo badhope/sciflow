@@ -65,10 +65,10 @@ export function ExtensionCenter({ defaultKind }: { defaultKind?: ExtensionKind }
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div>
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
-            <Sparkles size={16} className="text-teal-600" /> 扩展中心（内置 {data.assets.length} 项，默认启用）
+            <Sparkles size={16} className="text-teal-600" /> 扩展中心（内置 {data.assets.length} 项，远程开箱可用）
           </div>
           <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-            社区开源资产随仓库内置、开箱即用；SciFlow 私有优势工具仅本机可见（不导出）。可关闭/删除，也可恢复内置。
+            远程 MCP 与技能正文随包内置，开箱可用；需本机安装的 MCP 默认关闭，装好后手动启用。SciFlow 私有工具仅本机可见（不导出）。
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -145,6 +145,36 @@ export function ExtensionCenter({ defaultKind }: { defaultKind?: ExtensionKind }
                 </span>
               </div>
               <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2">{a.description}</div>
+              {a.kind === 'skill' && (() => {
+                try {
+                  const m = JSON.parse(a.manifest || '{}') as { instructions?: string };
+                  const body = String(m.instructions || '').trim();
+                  if (!body) return null;
+                  return (
+                    <details className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                      <summary className="cursor-pointer text-teal-600 dark:text-teal-400 select-none">查看内置说明（{body.length} 字）</summary>
+                      <div className="mt-1 rounded-md bg-slate-50 dark:bg-slate-900/60 p-2 whitespace-pre-wrap leading-relaxed">{body}</div>
+                    </details>
+                  );
+                } catch {
+                  return null;
+                }
+              })()}
+              {a.kind === 'mcp' && (() => {
+                try {
+                  const m = JSON.parse(a.manifest || '{}') as { url?: string; tools?: string[] };
+                  return (
+                    <>
+                      {m.url && <div className="mt-0.5 text-[10px] text-slate-400 font-mono break-all">端点：{m.url}</div>}
+                      {Array.isArray(m.tools) && m.tools.length > 0 && (
+                        <div className="mt-0.5 text-[10px] text-slate-400">工具：{m.tools.join(' · ')}</div>
+                      )}
+                    </>
+                  );
+                } catch {
+                  return null;
+                }
+              })()}
               {a.repo && <div className="mt-0.5 text-[10px] text-slate-400 font-mono">github.com/{a.repo}</div>}
             </div>
           ))}

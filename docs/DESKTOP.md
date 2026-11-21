@@ -22,9 +22,14 @@ back to `file://`.
 `prepare-server.mjs` resolves the ABI for the current Electron version and tries
 three sources in order:
 
-1. The official GitHub prebuilt binary.
+1. The official GitHub prebuilt binary for the **target platform/arch**.
 2. The npmmirror binary mirror.
 3. A local `node-gyp` rebuild (requires Visual Studio C++ on Windows).
+
+Cross-building a Windows installer on Linux must use
+`prepare:resources:win` (or `dist:win`). It passes `--platform=win32 --arch=x64`
+to `prebuild-install`; otherwise a host linux-x64 `.node` file is packaged and
+the embedded server fails with `ERR_DLOPEN_FAILED` on Windows.
 
 The packaged server lives under `resources/bundle/server`; `extraResources` must
 keep that two-level layout. A flat layout silently drops the root
@@ -36,7 +41,12 @@ keep that two-level layout. A flat layout silently drops the root
 pnpm --filter @sciflow/desktop dev
 pnpm --filter @sciflow/desktop build
 pnpm --filter @sciflow/desktop dist
+pnpm --filter @sciflow/desktop dist:win
 ```
+
+`dist:win` builds the Windows NSIS installer even on Linux: it uses
+`prepare:resources:win` for win32-x64 native modules, downloads Electron from
+npmmirror, and uses the bundled Wine 11 toolset for the NSIS elevation helper.
 
 The production installer is built by
 `.github/workflows/desktop-installer.yml` on a `v*` tag or by manual dispatch.

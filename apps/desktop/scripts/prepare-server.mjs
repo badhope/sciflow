@@ -22,6 +22,15 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url)); // apps/desktop/scripts
 const desktopDir = path.resolve(here, '..'); // apps/desktop
 const repoRoot = path.resolve(desktopDir, '..', '..'); // 仓库根
+
+/** 读取 `--platform=win32 --arch=x64` 形式的构建目标参数 */
+function argValue(name, fallback) {
+  const prefix = `--${name}=`;
+  const hit = process.argv.find((a) => a.startsWith(prefix));
+  return hit ? hit.slice(prefix.length) : fallback;
+}
+const targetPlatform = argValue('platform', process.env.SCIFLOW_TARGET_PLATFORM || process.platform);
+const targetArch = argValue('arch', process.env.SCIFLOW_TARGET_ARCH || process.arch);
 const resourcesDir = path.join(desktopDir, 'resources');
 const bundleRoot = path.join(resourcesDir, 'bundle');
 const serverBundleDir = path.join(bundleRoot, 'server');
@@ -47,6 +56,52 @@ function dirSizeLite(d) {
     /* ignore */
   }
   return total;
+}
+
+/**
+ * 发布包卫生：模型权重、适配器、本地数据库、真实 env 文件一律不得进入 bundle。
+ *
+ * 为什么在 pnpm deploy 之后再做一次物理清扫：deploy 只按 package.json files 复制，
+ * 但用户可能把模型放在 server 包目录或某个依赖目录里；仅靠 electron-builder filter
+ * 无法覆盖「from 目录内新增文件」的情况，必须在生成物上做硬断言。
+ */
+const PRIVATE_WEIGHT_RE = /\.(gguf|ggml|safetensors|onnx|tflite|mlmodel)$/i;
+const PRIVATE_DB_RE = /\.(db|db-journal|db-shm|db-wal|sqlite|sqlite3)$/i;
+const PRIVATE_ENV_RE = /(^|\/)\.env(\.(local|production|development|test|staging|prod|dev))?$/i;
+
+function sweepPrivateArtifacts(rootDir) {
+  let removed = 0;
+  const leftovers = [];
+  const walk = (dir) => {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        // node_modules 很深，但模型权重通常出现在包根或 models/；继续递归以兜底
+        walk(full);
+        continue;
+      }
+      if (!e.isFile()) continue;
+      const rel = path.relative(rootDir, full).replaceAll('\\', '/');
+      // .env.example 是允许的模板，不含密钥
+      if (rel.endsWith('.env.example')) continue;
+      if (PRIVATE_WEIGHT_RE.test(e.name) || PRIVATE_DB_RE.test(e.name) || PRIVATE_ENV_RE.test(rel)) {
+        try {
+          fs.rmSync(full, { force: true });
+          removed += 1;
+        } catch {
+          leftovers.push(rel);
+        }
+      }
+    }
+  };
+  walk(rootDir);
+  return { removed, leftovers };
 }
 
 /**
@@ -101,11 +156,25 @@ async function main() {
     cwd: repoRoot,
     stdio: 'inherit',
     shell: true,
+    // 无 TTY 的 CI/云构建里，pnpm 会因需要清理 node_modules 而直接 abort：
+    // ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY。显式 CI=true 让部署在 headless 下可执行。
+    env: { ...process.env, CI: 'true' },
   });
   // deploy 不复制 .env（也不应该：密钥不入包），写一个空模板提示运行时经设置页/环境变量配置
   const bundleEnv = path.join(serverBundleDir, '.env.example');
   fs.writeFileSync(bundleEnv, '# 桌面端通常无需此文件：AI Key 在应用「设置」页配置（存本地数据库）。\n');
   ok(`server bundle 就绪：${serverBundleDir}`);
+
+  // ---------- 1.2 发布包卫生：模型/数据库/密钥物理清扫 ----------
+  step('清扫模型权重、本地数据库与真实 env 文件…');
+  const hygiene = sweepPrivateArtifacts(serverBundleDir);
+  if (hygiene.removed) ok(`已移除 ${hygiene.removed} 个不应随包发布的文件`);
+  if (hygiene.leftovers.length) {
+    console.error('[prepare] 以下文件无法移除（可能被占用），拒绝继续打包：');
+    for (const rel of hygiene.leftovers.slice(0, 10)) console.error('  ' + rel);
+    process.exit(1);
+  }
+  ok('发布包卫生检查通过：无模型权重、无本地数据库、无真实 env');
 
   // ---------- 1.5 Electron ABI：为内嵌 Node 重编原生模块 ----------
   // 背景：server bundle 的 better-sqlite3 在开发机按 Node ABI 编译；Electron 内嵌 Node 的 ABI
@@ -169,20 +238,24 @@ async function main() {
       let abi = '';
       try {
         const { createRequire } = await import('node:module');
-        const desktopRequire = createRequire(path.join(root, 'apps', 'desktop', 'package.json'));
-        const nodeAbi = desktopRequire('node-abi');
+        // pnpm 隔离布局下 node-abi 挂在 prebuild-install 的虚拟目录里，按包名前缀定位而不是硬编码版本号
+        const pnpmDir = path.join(repoRoot, 'node_modules', '.pnpm');
+        const prebuildDir = fs.readdirSync(pnpmDir).find((d) => d.startsWith('prebuild-install@'));
+        if (!prebuildDir) throw new Error('prebuild-install not found');
+        const prebuildRequire = createRequire(path.join(pnpmDir, prebuildDir, 'node_modules', 'prebuild-install', 'package.json'));
+        const nodeAbi = prebuildRequire('node-abi');
         abi = nodeAbi.getAbi(electronVersion, 'electron');
       } catch {
         console.warn('\x1b[33m[prepare]\x1b[0m node-abi 不可用，跳过镜像直链（仅影响②）');
       }
-      const platformTag = `${process.platform}-${process.arch}`;
+      const platformTag = `${targetPlatform}-${targetArch}`;
       const mirrorUrl = abi
         ? `https://registry.npmmirror.com/-/binary/better-sqlite3/v${pkgVer}/better-sqlite3-v${pkgVer}-electron-v${abi}-${platformTag}.tar.gz`
         : '';
 
       for (const attempt of [
-        { label: `GitHub 预编译包 (electron v${electronVersion})`, cmd: `npx --yes prebuild-install -r electron -t ${electronVersion} --verbose` },
-        ...(mirrorUrl ? [{ label: `npmmirror 镜像 (ABI ${abi})`, cmd: `npx --yes prebuild-install -r electron -t ${electronVersion} --download "${mirrorUrl}"` }] : []),
+        { label: `GitHub 预编译包 (electron v${electronVersion}, ${platformTag})`, cmd: `npx --yes prebuild-install -r electron -t ${electronVersion} --platform ${targetPlatform} --arch ${targetArch} --verbose` },
+        ...(mirrorUrl ? [{ label: `npmmirror 镜像 (ABI ${abi})`, cmd: `npx --yes prebuild-install -r electron -t ${electronVersion} --platform ${targetPlatform} --arch ${targetArch} --download "${mirrorUrl}"` }] : []),
       ]) {
         try {
           console.log(`\x1b[36m[prepare]\x1b[0m 尝试下载 ${attempt.label} …`);
@@ -318,6 +391,14 @@ async function main() {
     fs.rmSync(target, { recursive: true, force: true });
     stripped += 1;
   }
+  // 根目录的验收辅助脚本不应进入用户安装包
+  for (const name of ['audit-probe.mjs', 'mcp-acceptance-server.mjs']) {
+    const target = path.join(serverBundleDir, name);
+    if (!fs.existsSync(target)) continue;
+    strippedBytes += fs.statSync(target).size;
+    fs.rmSync(target, { force: true });
+    stripped += 1;
+  }
   // 递归删除 spec/test 与 sourcemap（安装包不需要，且会泄漏测试内部结构）
   const walkRemove = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -348,16 +429,24 @@ async function main() {
   // ---------- 3. 体积报告 ----------
   const dirSize = (d) => {
     let total = 0;
-    if (!fs.existsSync(d)) return 0;
-    for (const f of fs.readdirSync(d, { withFileTypes: true, recursive: true })) {
-      if (f.isFile()) {
-        try {
-          total += fs.statSync(path.join(f.parentPath ?? f.path, f.name)).size;
-        } catch {
-          /* race */
+    // 不能直接用 readdirSync({recursive:true})：pnpm deploy 的 .pnpm 目录含大量相互指向的
+    // 符号链接，递归扫描会在链接环里打转（本轮实测卡住 12 分钟未出体积报告）。
+    // 这里逐层遍历并跳过符号链接，只统计真实文件。
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (e.isSymbolicLink()) continue;
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (e.isFile()) {
+          try {
+            total += fs.lstatSync(full).size;
+          } catch {
+            /* race */
+          }
         }
       }
-    }
+    };
+    if (fs.existsSync(d)) walk(d);
     return total;
   };
   const mb = (n) => `${(n / 1024 / 1024).toFixed(1)} MB`;

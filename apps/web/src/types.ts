@@ -370,6 +370,52 @@ export interface ProviderTestResult {
   latencyMs: number;
 }
 
+/** 本地推荐模型（设置页「本地模型」目录项 + 实时状态） */
+export interface LocalModelInfo {
+  id: string;
+  name: string;
+  vendor: string;
+  params: string;
+  contextWindow: number;
+  runtimeContextWindow: number;
+  maxOutput: number;
+  license: string;
+  quantization: string;
+  sizeBytes: number;
+  sha256: string;
+  fileName: string;
+  ollamaName: string;
+  description: string;
+  highlights: string[];
+  note?: string;
+  recommended?: boolean;
+  toolCalling: boolean;
+  sources: { label: string; url: string }[];
+  installed: boolean;
+  downloadedBytes: number;
+  status: 'idle' | 'downloading' | 'verifying' | 'installed' | 'error' | 'cancelled';
+  error?: string;
+  speedBps: number;
+  filePath: string;
+  providerName?: string;
+}
+
+/** 本地模型导入结果：失败用 code 区分下一步动作 */
+export interface LocalModelInstallResult {
+  ok: boolean;
+  code?: 'NOT_DOWNLOADED' | 'OLLAMA_NOT_RUNNING' | 'OLLAMA_CREATE_FAILED' | 'PROVIDER_FAILED';
+  message?: string;
+  providerId?: string;
+  ollamaModel?: string;
+}
+
+/** 本机 Ollama 探测结果 */
+export interface OllamaStatus {
+  ok: boolean;
+  models?: number;
+  error?: string;
+}
+
 export interface McpServerInfo {
   id: string;
   name: string;
