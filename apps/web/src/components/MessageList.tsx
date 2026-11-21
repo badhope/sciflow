@@ -175,16 +175,16 @@ export function MessageList({
                   {m.content}
                 </div>
               )}
-              <div className="mt-1 flex items-center justify-end gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100">
+              <div className="mt-1 flex items-center justify-end gap-0.5 opacity-70 transition-opacity hover:opacity-100 focus-within:opacity-100">
                 {onCopy && (
                   <IconButton
-                    size={28}
+                    size={32}
                     label="复制提问"
-                    icon={copied === i ? <Check size={12} className="text-teal-600" /> : <Copy size={12} />}
+                    icon={copied === i ? <Check size={14} className="text-teal-600" /> : <Copy size={14} />}
                     onClick={() => handleCopy(i)}
                   />
                 )}
-                {onDelete && <IconButton size={28} tone="danger" label="删除提问" icon={<Trash2 size={12} />} onClick={() => onDelete(i)} />}
+                {onDelete && <IconButton size={32} tone="danger" label="删除提问" icon={<Trash2 size={14} />} onClick={() => onDelete(i)} />}
               </div>
             </div>
           </div>
@@ -215,24 +215,24 @@ export function MessageList({
               </div>
             )}
             {!m.streaming && (
-              <div className="mt-1 flex items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100">
+              <div className="mt-1 flex items-center gap-0.5 opacity-70 transition-opacity hover:opacity-100 focus-within:opacity-100">
                 {/* 问候语（前面没有用户提问）不渲染操作条：重试/删除在内核里本就是 no-op */}
                 {m.stopped && (onContinue || onRetry) && (
-                  <IconButton size={28} label="继续生成" icon={<PlayCircle size={12} />} onClick={() => (onContinue ? onContinue(i) : onRetry?.(i))} />
+                  <IconButton size={32} label="继续生成" icon={<PlayCircle size={14} />} onClick={() => (onContinue ? onContinue(i) : onRetry?.(i))} />
                 )}
                 {onRetry && i > 0 && messages[i - 1]?.role === 'user' && (
-                  <IconButton size={28} label="重新生成" icon={<RotateCcw size={12} />} onClick={() => onRetry(i)} />
+                  <IconButton size={32} label="重新生成" icon={<RotateCcw size={14} />} onClick={() => onRetry(i)} />
                 )}
                 {onCopy && (
                   <IconButton
-                    size={28}
+                    size={32}
                     label="复制回答"
-                    icon={copied === i ? <Check size={12} className="text-teal-600" /> : <Copy size={12} />}
+                    icon={copied === i ? <Check size={14} className="text-teal-600" /> : <Copy size={14} />}
                     onClick={() => handleCopy(i)}
                   />
                 )}
-                {onSendToWriting && <IconButton size={28} label="发送到写作页" icon={<FileText size={12} />} onClick={() => onSendToWriting(i)} />}
-                {onDelete && <IconButton size={28} tone="danger" label="删除回答" icon={<Trash2 size={12} />} onClick={() => onDelete(i)} />}
+                {onSendToWriting && <IconButton size={32} label="发送到写作页" icon={<FileText size={14} />} onClick={() => onSendToWriting(i)} />}
+                {onDelete && <IconButton size={32} tone="danger" label="删除回答" icon={<Trash2 size={14} />} onClick={() => onDelete(i)} />}
               </div>
             )}
           </div>
