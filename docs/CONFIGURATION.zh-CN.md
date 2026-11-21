@@ -77,13 +77,13 @@ sciflow config import my-config.json       # 幂等导入，重复导入不会�
 
 ---
 
-## 扩展中心：内置 100 条科研资产（v1.4）
+## 扩展中心：内置 99 条科研资产（v1.4）
 
 克隆下来就自带，默认全部启用，可在「设置 → 扩展中心」里按需关闭：
 
 | 类型 | 数量 | 内容 |
 |---|---|---|
-| MCP 服务器 | 25 | Context7、DeepWiki、Hugging Face、Microsoft Learn、OpenAlex、arXiv、Crossref、Paper Search、Zotero、BioMCP、Semantic Scholar、CNKI、Obsidian、NotebookLM、Basic Memory、Deep Research 等（附仓库/许可证/安装方式）。7 个公开 HTTP 端点开箱可连；PubMed/Europe PMC 默认关闭，医学用户按需启用；需本机安装的 stdio MCP 默认关闭 |
+| MCP 服务器 | 24 | Context7、DeepWiki、Hugging Face、Microsoft Learn、OpenAlex、arXiv、Crossref、Paper Search、Zotero、BioMCP、Semantic Scholar、CNKI、Obsidian、NotebookLM、Basic Memory、Deep Research 等（附仓库/许可证/安装方式）。7 个公开 HTTP 端点开箱可连；PubMed/Europe PMC 默认关闭，医学用户按需启用；需本机安装的 stdio MCP 默认关闭 |
 | 技能 Skills | 31 | Anthropic 官方 Skills、Academic Research Skills（53.9k★）、Codex/Claude 学术三件套、系统综述、Humanizer、Prism、LatteReview、文献发现与引用追踪、研究趋势计量、论文校对/写作模板，以及 13 项 SciFlow 私有优势工具（引用体检 / 统计口径审计 / 可复现方案 / 伦理扫描 / 图表规范 / 新颖性扫描 / 基金契合 / 投稿风险 / 审稿答辩 / 精读矩阵 / 实验计划 / 数据可用性 / 提示词加固） |
 | 角色 | 10 | 方法学家、统计顾问、期刊编辑、基金评审、数据管理员、伦理审查员、科研馆员、可复现性专员、图表设计师、审稿回复专家 |
 | 约束 | 10 | 引用可溯源、禁止编造、数值带单位、结构化输出、PRISMA、隐私不外泄、先声明假设、必写局限、AI 使用披露、聊天简洁 |

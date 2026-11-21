@@ -205,13 +205,6 @@ const MCP_ASSETS: BuiltinAsset[] = [
     manifest: { transport: 'http' },
   },
   {
-    key: 'mcp-mcp-obsidian-vault', kind: 'mcp', source: 'builtin-public', name: 'Obsidian Wiki（数字大脑）',
-    description: '让 agent 通过 Markdown 维护个人知识库（Zettelkasten 风格）。约 3.6k star。',
-    repo: 'Ar9av/obsidian-wiki', license: 'MIT',
-    install: 'git clone https://github.com/Ar9av/obsidian-wiki', tags: ['notes', 'knowledge'],
-    manifest: { transport: 'stdio' },
-  },
-  {
     key: 'mcp-llm-for-zotero', kind: 'mcp', source: 'builtin-public', name: 'LLM for Zotero（文献库研究代理）',
     description: '面向 Zotero 库的开源研究代理系统：整库问答、跨文献综合。约 3.4k star。',
     repo: 'yilewang/llm-for-zotero', license: 'MIT',

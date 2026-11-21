@@ -650,6 +650,7 @@ export class ExtensionsService {
         // 并清掉已从目录移除的旧壳，避免用户看到「启用了但没有任何说明」的技能。
         this.refreshBuiltinSkills();
         this.refreshBuiltinRemoteMcp();
+        this.pruneObsoleteBuiltinMcp();
         this.migrateLocalMcpDefaults();
         return;
       }
@@ -733,6 +734,26 @@ export class ExtensionsService {
       });
       this.logger.log('[extensions] 已将内置 arXiv MCP 升级为免安装远程端点');
     }
+  }
+
+  /**
+   * 清理已从目录下架的旧内置 MCP。
+   *
+   * 内置资产默认不可物理删除，但目录里已经不存在的条目会永远留在旧库的 UI 里。
+   * 这里只删 source=builtin-public、kind=mcp 且 key 不在当前目录的行，并同步摘掉
+   * 由它投影出来的 mcp_server，避免老用户升级后还看到无法运行的幽灵卡片。
+   */
+  private pruneObsoleteBuiltinMcp(): void {
+    const keys = new Set(BUILTIN_EXTENSION_ASSETS.filter((a) => a.kind === 'mcp').map((a) => a.key));
+    const rows = sqlite.prepare("SELECT * FROM extension_asset WHERE kind = 'mcp' AND source = 'builtin-public'").all() as ExtensionRow[];
+    const removed: string[] = [];
+    for (const row of rows) {
+      if (keys.has(row.key)) continue;
+      sqlite.prepare('DELETE FROM extension_asset WHERE id = ?').run(row.id);
+      sqlite.prepare('DELETE FROM mcp_server WHERE name = ?').run(row.name);
+      removed.push(row.key);
+    }
+    if (removed.length) this.logger.log(`[extensions] 已清理 ${removed.length} 个已下架的内置 MCP：${removed.join(', ')}`);
   }
 
   /**
