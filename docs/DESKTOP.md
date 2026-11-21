@@ -46,7 +46,11 @@ pnpm --filter @sciflow/desktop dist:win
 
 `dist:win` builds the Windows NSIS installer even on Linux: it uses
 `prepare:resources:win` for win32-x64 native modules, downloads Electron from
-npmmirror, and uses the bundled Wine 11 toolset for the NSIS elevation helper.
+npmmirror, and requires system Wine for the NSIS elevation helper. On Ubuntu
+22.04: `sudo dpkg --add-architecture i386 && sudo apt update && sudo apt install wine wine32`.
+The CI image already includes Wine. The bundled `wine@1.0.1` toolset is intentionally
+not used because its local extraction is incomplete and fails with `ntdll.dll` at
+the NSIS step.
 
 The production installer is built by
 `.github/workflows/desktop-installer.yml` on a `v*` tag or by manual dispatch.

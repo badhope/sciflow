@@ -24,7 +24,7 @@
 - 本机 Ollama 无 API Key 也不再判为“AI 未配置”，修复导入本地模型后 `/chat` 仍 503 的问题；实测 2B 非流式对话 201 / 141.3s，18 工具。
 - **Windows 交叉打包的原生模块架构**：Linux 云构建原先给 `better-sqlite3` 下载宿主 `linux-x64` 预编译包，装进 Windows 安装包后会在 Electron 内报 `ERR_DLOPEN_FAILED`。新增 `prepare:resources:win`，显式 `--platform=win32 --arch=x64` 拉取 win32 预编译包；产物已用 `file` 校验为 `PE32+ DLL x86-64`。`dist:linux` / `dist:mac` 也分别走对应目标架构。
 - **pnpm 打包脚本误删 devDependencies**：pnpm 11 在运行 `dist:*` 前自动做依赖校验，CI 下会执行 `pnpm install --production`，把根目录 `electron-builder`、`vite` 等 656 个 dev 包裁掉，随后脚本 `electron-builder: not found`。已在 `pnpm-workspace.yaml` 显式设置 `verifyDepsBeforeRun: false` 与 `confirmModulesPurge: false`，打包不再触发隐式生产安装。
-- **Linux 上打 Windows NSIS 缺 wine**：`electron-builder.yml` 增加 `toolsets.wine: "1.0.1"`，NSIS 阶段不再 `spawn wine ENOENT`；Electron 二进制下载配置 npmmirror，避免 GitHub 120MB+ 超时。
+- **Linux 上打 Windows NSIS 的 Wine 选择**：原先固定使用 electron-builder 的 `wine@1.0.1` 工具带，但该工具带在本机解包缺 `kernel32.dll`/`start.exe`，NSIS 阶段报 `ntdll.dll` 加载失败。改为使用系统 Wine（Ubuntu 22.04: `apt install wine wine32`），并保留 npmmirror 的 Electron 下载；CI 镜像本身自带 Wine。
 - 根目录的 `audit-probe.mjs` / `mcp-acceptance-server.mjs` 验收辅助脚本不再随 server bundle 进入安装包。
 
 ### Security

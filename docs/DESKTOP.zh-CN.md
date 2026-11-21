@@ -32,8 +32,11 @@ Electron 主进程启动内嵌 NestJS 后端（随机回环端口），然后用
 - **跨平台原生模块**：`better-sqlite3` 必须按目标平台下载预编译包。Linux 云构建打
   Windows 包时使用 `prepare:resources:win`，显式传 `--platform=win32 --arch=x64`；
   否则会把宿主 linux-x64 的 `.node` 装进安装包，运行时 `ERR_DLOPEN_FAILED`。
-- **Linux 打 Windows NSIS**：`electron-builder.yml` 使用 `toolsets.wine: "1.0.1"`，
-  不依赖系统 wine；首次会下载 Wine 11 工具带，后续走缓存。
+- **Linux 打 Windows NSIS**：需要系统 `wine`。Ubuntu 22.04 先执行
+  `sudo dpkg --add-architecture i386 && sudo apt update && sudo apt install wine wine32`。
+  `electron-builder.yml` 不再强制使用自带的 `wine@1.0.1` 工具带；该工具带在本机
+  解包不完整（缺 `kernel32.dll`/`start.exe`），会在 NSIS 阶段报 `ntdll.dll` 加载失败。
+  也可在装有 Wine 的 CI 镜像（如 `electronuserland/builder:wine`）里构建。
 - **产物位置**：`apps/desktop/release/SciFlow-Setup-<version>-x64.exe`（dist 输出目录即 release/）。
 
 ## 2. 为什么不用 `file://`（重要，勿回退）

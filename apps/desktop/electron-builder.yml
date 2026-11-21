@@ -13,10 +13,9 @@ directories:
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
 
-# Linux 云构建没有系统 wine 时，使用 electron-builder 的 Wine 11 工具带，
-# 否则 NSIS 阶段的 elevate.exe 会直接 `spawn wine ENOENT`（本轮实测）。
-toolsets:
-  wine: "1.0.1"
+# NSIS 阶段的 elevate.exe 需要 Wine；使用系统 wine（Ubuntu: apt install wine wine32）。
+# electron-builder 自带的 wine@1.0.1 工具带在本机解包不完整（缺 kernel32/start.exe），
+# 会导致 `failed to load ntdll.dll`，因此不再固定使用该工具带。
 
 # asar 只装主进程/preload 编译产物（小），重资源走 extraResources（asar 外，原生模块必须）
 asar: true
