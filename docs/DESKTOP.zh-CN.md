@@ -25,6 +25,8 @@ Electron 主进程启动内嵌 NestJS 后端（随机回环端口），然后用
   `ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/`
   （NSIS/7zip 等构建工具链走镜像，GitHub 直连被墙/抖动时必备）。
   `electron-builder.yml` 已内置 Electron 的 npmmirror；工具链镜像仍建议显式设置。
+  若 `7zip@1.0.0` 从 GitHub 下载卡住（本机实测下载停在 639 KB），可设
+  `ELECTRON_BUILDER_7ZIP_PATH=/path/to/7zip-bin/package/linux/x64/7za` 直接复用本地 7za。
 - **pnpm 打包稳定性**：`pnpm-workspace.yaml` 已设 `verifyDepsBeforeRun: false` 与
   `confirmModulesPurge: false`，禁止 pnpm 在 `dist:*` 前隐式执行
   `pnpm install --production`（该行为会裁掉 electron-builder/vite 等 dev 依赖）。

@@ -56,7 +56,7 @@ const modelsPayload = {
   ok: true,
   models: [
     { id: 'glm-5.3', contextWindow: 202_000, maxOutput: 131_072, toolCalling: true },
-    { id: 'u2-flash', contextWindow: 1_048_576, maxOutput: 131_072, toolCalling: true },
+    { id: 'test-model', contextWindow: 1_048_576, maxOutput: 131_072, toolCalling: true },
     { id: 'deepseek-v4.1-flash', contextWindow: 1_048_576, maxOutput: 393_216, toolCalling: true },
     { id: 'sciflow-test-minicpm5-2b:latest' },
   ],
@@ -92,7 +92,7 @@ describe('ProviderManager 界面流程', () => {
     testProvider.mockReset();
     saveProvider.mockReset();
     discoverModels.mockResolvedValue(modelsPayload);
-    testProvider.mockResolvedValue({ ok: true, reply: '正常', model: 'u2-flash', latencyMs: 345 });
+    testProvider.mockResolvedValue({ ok: true, reply: '正常', model: 'test-model', latencyMs: 345 });
   });
 
   it('填入地址与 Key 后自动检测模型并展开可选列表，选中回填能力', async () => {
@@ -109,7 +109,7 @@ describe('ProviderManager 界面流程', () => {
       protocol: 'openai-compatible',
     });
 
-    const list = await screen.findByText('u2-flash');
+    const list = await screen.findByText('test-model');
     expect(list).toBeTruthy();
     expect(screen.getByText('glm-5.3')).toBeTruthy();
     expect(screen.queryByText('deepseek-v4.1-flash')).toBeTruthy();
@@ -159,12 +159,12 @@ describe('ProviderManager 界面流程', () => {
     await userEvent.click(screen.getByRole('button', { name: /添加厂商/ }));
     await userEvent.type(screen.getByPlaceholderText('https://api.example.com/v1'), 'https://maas-api.example.com/v1');
     await userEvent.type(screen.getByPlaceholderText('sk-...'), 'form-secret-key');
-    await screen.findByText('u2-flash');
-    await userEvent.click(screen.getByText('u2-flash'));
+    await screen.findByText('test-model');
+    await userEvent.click(screen.getByText('test-model'));
 
     await userEvent.click(screen.getByRole('button', { name: /测试连接/ }));
     await waitFor(() => expect(testProvider).toHaveBeenCalledTimes(1));
-    expect(testProvider.mock.calls[0][0]).toMatchObject({ baseUrl: 'https://maas-api.example.com/v1', apiKey: 'form-secret-key', model: 'u2-flash' });
+    expect(testProvider.mock.calls[0][0]).toMatchObject({ baseUrl: 'https://maas-api.example.com/v1', apiKey: 'form-secret-key', model: 'test-model' });
     expect(await screen.findByText(/连接成功|345ms|正常/)).toBeTruthy();
     expect(saveProvider).not.toHaveBeenCalled();
   });
@@ -176,27 +176,27 @@ describe('ProviderManager 界面流程', () => {
     await userEvent.type(screen.getByPlaceholderText('https://api.example.com/v1'), 'https://maas-api.example.com/v1');
     await userEvent.type(screen.getByPlaceholderText('sk-...'), 'bad-key');
     expect(await screen.findByText(/HTTP 401/)).toBeTruthy();
-    expect(screen.queryByText('u2-flash')).toBeNull();
+    expect(screen.queryByText('test-model')).toBeNull();
   });
 
   it('常见厂商快捷填充只写地址与协议，不预置模型名', async () => {
     render(<ProviderManager settings={settings} />);
     await userEvent.click(screen.getByRole('button', { name: /添加厂商/ }));
-    await userEvent.click(screen.getByRole('button', { name: 'UniSound MaaS' }));
-    expect((screen.getByPlaceholderText('https://api.example.com/v1') as HTMLInputElement).value).toBe('https://maas-api.unisound.com/v1');
+    await userEvent.click(screen.getByRole('button', { name: 'DeepSeek' }));
+    expect((screen.getByPlaceholderText('https://api.example.com/v1') as HTMLInputElement).value).toBe('https://api.deepseek.com/v1');
     expect((screen.getByPlaceholderText('从上方列表选择，或手动输入模型名') as HTMLInputElement).value).toBe('');
   });
 
   it('已保存厂商列表展示协议与能力摘要', async () => {
     const providers: ModelProvider[] = [{
-      id: 'p1', name: 'UniSound', baseUrl: 'https://maas-api.unisound.com/v1', apiKey: '****abcd', model: 'u2-flash',
+      id: 'p1', name: '自建兼容网关', baseUrl: 'https://gateway.example.com/v1', apiKey: '****abcd', model: 'test-model',
       protocol: 'openai-compatible', contextWindow: 1_048_576, maxOutput: 131_072, toolCalling: 1,
-      models: [{ id: 'u2-flash' }], isActive: 1, createdAt: 0,
+      models: [{ id: 'test-model' }], isActive: 1, createdAt: 0,
     }];
     settingsState.providers = providers;
     try {
       render(<ProviderManager settings={settings} />);
-      const row = screen.getByText('UniSound').closest('div')!.parentElement!;
+      const row = screen.getByText('自建兼容网关').closest('div')!.parentElement!;
       expect(within(row).getByText('激活中')).toBeTruthy();
       expect(within(row).getByText('OpenAI 兼容')).toBeTruthy();
       expect(within(row).getByText('上下文 1M')).toBeTruthy();

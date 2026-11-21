@@ -24,7 +24,6 @@ const QUICK_PROVIDERS: {
   { name: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', protocol: 'openai-compatible', region: 'cn' },
   { name: 'Kimi（月之暗面）', baseUrl: 'https://api.moonshot.cn/v1', protocol: 'openai-compatible', region: 'cn' },
   { name: '豆包·火山方舟', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', protocol: 'openai-compatible', region: 'cn' },
-  { name: 'UniSound MaaS', baseUrl: 'https://maas-api.unisound.com/v1', protocol: 'openai-compatible', region: 'cn' },
   { name: '硅基流动 SiliconFlow', baseUrl: 'https://api.siliconflow.cn/v1', protocol: 'openai-compatible', region: 'cn' },
   { name: '百度千帆', baseUrl: 'https://qianfan.baidubce.com/v2', protocol: 'openai-compatible', region: 'cn' },
   { name: 'Ollama 本地', baseUrl: 'http://localhost:11434/v1', protocol: 'openai-compatible', privateOk: true, region: 'local' },
@@ -441,7 +440,7 @@ export function ProviderManager({ settings }: { settings: AppSettings | null }) 
         <div className="grid sm:grid-cols-2 gap-3">
           <div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">厂商名称</div>
-            <Input placeholder="如 UniSound MaaS" value={form.name} onChange={(e) => patch({ name: e.target.value })} />
+            <Input placeholder="如 自建兼容网关" value={form.name} onChange={(e) => patch({ name: e.target.value })} />
           </div>
           <div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">协议（主流三选一）</div>

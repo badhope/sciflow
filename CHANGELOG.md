@@ -25,6 +25,7 @@
 - **Windows 交叉打包的原生模块架构**：Linux 云构建原先给 `better-sqlite3` 下载宿主 `linux-x64` 预编译包，装进 Windows 安装包后会在 Electron 内报 `ERR_DLOPEN_FAILED`。新增 `prepare:resources:win`，显式 `--platform=win32 --arch=x64` 拉取 win32 预编译包；产物已用 `file` 校验为 `PE32+ DLL x86-64`。`dist:linux` / `dist:mac` 也分别走对应目标架构。
 - **pnpm 打包脚本误删 devDependencies**：pnpm 11 在运行 `dist:*` 前自动做依赖校验，CI 下会执行 `pnpm install --production`，把根目录 `electron-builder`、`vite` 等 656 个 dev 包裁掉，随后脚本 `electron-builder: not found`。已在 `pnpm-workspace.yaml` 显式设置 `verifyDepsBeforeRun: false` 与 `confirmModulesPurge: false`，打包不再触发隐式生产安装。
 - **Linux 上打 Windows NSIS 的 Wine 选择**：原先固定使用 electron-builder 的 `wine@1.0.1` 工具带，但该工具带在本机解包缺 `kernel32.dll`/`start.exe`，NSIS 阶段报 `ntdll.dll` 加载失败。改为使用系统 Wine（Ubuntu 22.04: `apt install wine wine32`），并保留 npmmirror 的 Electron 下载；CI 镜像本身自带 Wine。
+- **发布包彻底移除测试模型/厂商模板**：删除 `UniSound MaaS` 快捷预置与「如 UniSound MaaS」占位；U2 只留在历史测试记录，不再出现在安装包或厂商列表。测试夹具改为通用 `test-model` / 自建兼容网关。
 - 根目录的 `audit-probe.mjs` / `mcp-acceptance-server.mjs` 验收辅助脚本不再随 server bundle 进入安装包。
 
 ### Security

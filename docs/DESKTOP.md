@@ -50,7 +50,8 @@ npmmirror, and requires system Wine for the NSIS elevation helper. On Ubuntu
 22.04: `sudo dpkg --add-architecture i386 && sudo apt update && sudo apt install wine wine32`.
 The CI image already includes Wine. The bundled `wine@1.0.1` toolset is intentionally
 not used because its local extraction is incomplete and fails with `ntdll.dll` at
-the NSIS step.
+the NSIS step. If the `7zip@1.0.0` GitHub download stalls, point
+`ELECTRON_BUILDER_7ZIP_PATH` at a local `7zip-bin` `linux/x64/7za` binary instead.
 
 The production installer is built by
 `.github/workflows/desktop-installer.yml` on a `v*` tag or by manual dispatch.
