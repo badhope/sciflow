@@ -649,6 +649,7 @@ export class ExtensionsService {
         // 旧版公开技能只有 {mode: reference} 空壳：升级为带 instructions 的正文版，
         // 并清掉已从目录移除的旧壳，避免用户看到「启用了但没有任何说明」的技能。
         this.refreshBuiltinSkills();
+        this.refreshBuiltinRemoteMcp();
         this.migrateLocalMcpDefaults();
         return;
       }
@@ -696,6 +697,41 @@ export class ExtensionsService {
       const stored = this.readJson<{ id: string; key: string }[]>('skills', []);
       this.writeJson('skills', stored.filter((s) => !removed.includes(s.key) && !removed.includes(String(s.id || '').replace(/^ext-/, ''))));
       this.logger.log(`[extensions] 已清理 ${removed.length} 个旧版空壳技能：${removed.join(', ')}`);
+    }
+  }
+
+  /**
+   * 一次性升级：把旧版「本地 stdio、需自己安装」的内置 arXiv MCP 换成免安装远程端点。
+   *
+   * 只改 source=builtin-public 且 manifest 没有 url 的旧行；用户自建/导入的同 key 资产不动。
+   * 升级后 `project` 会把远程端点写进 mcp_server，旧库用户也能开箱即用。
+   */
+  private refreshBuiltinRemoteMcp(): void {
+    const keys = new Set(['mcp-arxiv']);
+    const catalog = new Map(
+      BUILTIN_EXTENSION_ASSETS.filter((a) => a.kind === 'mcp' && keys.has(a.key)).map((a) => [a.key, a]),
+    );
+    const rows = sqlite.prepare("SELECT * FROM extension_asset WHERE kind = 'mcp' AND source = 'builtin-public'").all() as ExtensionRow[];
+    for (const row of rows) {
+      const asset = catalog.get(row.key);
+      if (!asset) continue;
+      const manifest = this.readManifest(row.manifest);
+      if (String(manifest.url || '').trim()) continue; // 已经是远程端点
+      const nextManifest = JSON.stringify(asset.manifest || {});
+      sqlite.prepare('UPDATE extension_asset SET name = ?, description = ?, repo = ?, license = ?, install = ?, tags = ?, manifest = ?, updated_at = ? WHERE id = ?')
+        .run(asset.name, asset.description, asset.repo || '', asset.license || '', asset.install || '', JSON.stringify(asset.tags || []), nextManifest, now(), row.id);
+      this.project({
+        ...row,
+        name: asset.name,
+        description: asset.description,
+        repo: asset.repo || '',
+        license: asset.license || '',
+        install: asset.install || '',
+        tags: JSON.stringify(asset.tags || []),
+        manifest: nextManifest,
+        updatedAt: now(),
+      });
+      this.logger.log('[extensions] 已将内置 arXiv MCP 升级为免安装远程端点');
     }
   }
 

@@ -77,18 +77,18 @@ sciflow config import my-config.json       # 幂等导入，重复导入不会�
 
 ---
 
-## 扩展中心：内置 87 条科研资产（v1.4）
+## 扩展中心：内置 100 条科研资产（v1.4）
 
 克隆下来就自带，默认全部启用，可在「设置 → 扩展中心」里按需关闭：
 
 | 类型 | 数量 | 内容 |
 |---|---|---|
-| MCP 服务器 | 20 | Context7、DeepWiki、arXiv、Paper Search、Zotero、BioMCP、Semantic Scholar、CNKI、Obsidian、NotebookLM、Basic Memory、Deep Research 等（附仓库/许可证/安装方式；Context7 与 DeepWiki 为公开 HTTP 端点可直接连） |
-| 技能 Skills | 31 | Anthropic 官方 Skills、Academic Research Skills（53.9k★）、Codex/Claude 学术三件套、系统综述、Humanizer、Prism、LatteReview、论文校对/写作模板，以及 13 项 SciFlow 私有优势工具（引用体检 / 统计口径审计 / 可复现方案 / 伦理扫描 / 图表规范 / 新颖性扫描 / 基金契合 / 投稿风险 / 审稿答辩 / 精读矩阵 / 实验计划 / 数据可用性 / 提示词加固） |
+| MCP 服务器 | 25 | Context7、DeepWiki、Hugging Face、Microsoft Learn、OpenAlex、arXiv、Crossref、Paper Search、Zotero、BioMCP、Semantic Scholar、CNKI、Obsidian、NotebookLM、Basic Memory、Deep Research 等（附仓库/许可证/安装方式）。7 个公开 HTTP 端点开箱可连；PubMed/Europe PMC 默认关闭，医学用户按需启用；需本机安装的 stdio MCP 默认关闭 |
+| 技能 Skills | 31 | Anthropic 官方 Skills、Academic Research Skills（53.9k★）、Codex/Claude 学术三件套、系统综述、Humanizer、Prism、LatteReview、文献发现与引用追踪、研究趋势计量、论文校对/写作模板，以及 13 项 SciFlow 私有优势工具（引用体检 / 统计口径审计 / 可复现方案 / 伦理扫描 / 图表规范 / 新颖性扫描 / 基金契合 / 投稿风险 / 审稿答辩 / 精读矩阵 / 实验计划 / 数据可用性 / 提示词加固） |
 | 角色 | 10 | 方法学家、统计顾问、期刊编辑、基金评审、数据管理员、伦理审查员、科研馆员、可复现性专员、图表设计师、审稿回复专家 |
 | 约束 | 10 | 引用可溯源、禁止编造、数值带单位、结构化输出、PRISMA、隐私不外泄、先声明假设、必写局限、AI 使用披露、聊天简洁 |
 | 钩子 | 4 | 结尾自检、风险提示、流水线先提纲、隐私拦截（关键词命中即拦） |
-| 提示词模板 | 12 | 润色（Nature 风格/降重）、翻译、IMRaD 大纲、论点先行起草、七维评审、缺口分析、结构化提取、证据综合、Cover Letter、审稿回复、选刊 |
+| 提示词模板 | 20 | 润色（Nature 风格/降重）、翻译、IMRaD 大纲、论点先行起草、七维评审、缺口分析、结构化提取、证据综合、Cover Letter、审稿回复、选刊，另补主题矩阵综述、单篇三遍法精读、四句法摘要、研究设计七问、可执行实验、同口径文献对比、期刊图表规范、投稿邮件状态解析 |
 
 **四种添加方式**（每个资产面板都有入口）：手填模板、粘贴 SKILL.md / 模板 JSON / MCP JSON、拖拽 `.md/.json/.zip`（自动解析包内 SKILL.md 与 JSON）、一键 AI 生成（按模板出草稿，确认后保存）。第五种：在对话里直接让 AI 调用 `extension.*` 工具。
 

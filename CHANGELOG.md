@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.19.13] - 2026-11-22
+
+### Added
+
+- **内置资产从 87 条扩到 100 条**：新增 OpenAlex、Crossref、PubMed/Europe PMC 三个免 Key 远程 MCP，arXiv 从“需本机 pip 安装”的 stdio 条目升级为同一 key 的远程端点；新增「文献发现与引用追踪」「研究趋势计量」两套科研技能，提示词模板从 12 个补到 20 个（补齐 19 个可自定义工具 key 的全部缺口）。
+- **新增 `literature.discover` Agent 工具**：直接复用 OpenAlex / Crossref / arXiv 三源检索、相关性门禁、TTL 缓存与逐源可达性提示；只读、不写本地文献库，返回真实标题/作者/年份/期刊/DOI/摘要/引用数。Agent 工具面从 63 个增至 64 个。
+- **升级迁移**：旧库中 `mcp-arxiv` 的 stdio 空配置会自动刷新为远程端点并写入 `mcp_server`，无需用户重装或手填 URL。
+
+### Changed
+
+- 扩展中心统计与文档同步为 100 条：Skills 31、MCP 25、Roles 10、Constraints 10、Hooks 4、Prompts 20。7 个公开 HTTP MCP 开箱可连；PubMed、需本机安装的 stdio MCP 默认关闭。
+
+### Notes
+
+- 新增学术 MCP 均为第三方公共托管（`caseyjhand.com`），非官方端点，匿名访问有每日预算/限流；描述中已标注，失效时可按仓库自建。OpenAlex 官方 `mcp.openalex.org` 本次实测 502，未采用。
+- `literature.discover` 会把检索词发送到公共 API；敏感选题应改用本地文献库。发布包仍不携带任何模型权重、API Key 或测试 provider。
+
 ## [Unreleased] - 2026-11-21
 
 ### Added

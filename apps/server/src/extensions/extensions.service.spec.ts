@@ -7,7 +7,7 @@ import type { AiService } from '../ai/ai.service';
 
 /**
  * 扩展中心契约（v1.4）：
- * - 内置目录随启动幂等播种（≈87 条，public/private 两类），默认全启用
+ * - 内置目录随启动幂等播种（≈100 条，public/private 两类），默认启用；需本机安装的 MCP 除外
  * - 启用/停用真实投影到各子系统（技能→app_setting.skills、约束/钩子/角色/提示词/MCP）
  * - 私有优势工具不进导出包
  * - 四种导入格式（SKILL.md / 模板 JSON / MCP JSON / ZIP）与错误定位
@@ -77,6 +77,10 @@ describe('扩展中心服务', () => {
     expect(rows.some((r) => r.source === 'builtin-public')).toBe(true);
     const kinds = new Set(rows.map((r) => r.kind));
     for (const k of ['skill', 'mcp', 'role', 'constraint', 'hook', 'prompt']) expect(kinds.has(k as never), k).toBe(true);
+    // arXiv 只保留一个内置条目，且默认走免安装远程端点（避免本地 stdio 与远程重复）
+    const arxiv = rows.filter((r) => r.key === 'mcp-arxiv');
+    expect(arxiv).toHaveLength(1);
+    expect(JSON.parse(arxiv[0].manifest).url).toBe('https://arxiv.caseyjhand.com/mcp');
   });
 
   it('导出包排除 private 私有优势工具', () => {

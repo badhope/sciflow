@@ -19,6 +19,12 @@ describe('MCP research role tools', () => {
     expect(byName.get('research.novelty')!.inputSchema.required).toEqual(['projectId', 'topic']);
   });
 
+  it('exposes key-free public literature discovery without writing the local library', () => {
+    expect(byName.has('literature.discover')).toBe(true);
+    expect(byName.get('literature.discover')!.inputSchema.required).toEqual(['query']);
+    expect(byName.get('literature.discover')!.description).toContain('OpenAlex');
+  });
+
   it('exposes submission readiness with project + document inputs', () => {
     expect(byName.has('submission.readiness')).toBe(true);
     expect(byName.get('submission.readiness')!.inputSchema.required).toEqual(['projectId', 'documentId']);
@@ -54,6 +60,7 @@ describe('MCP research role tools', () => {
 
   it('resolves legacy tool names to canonical names', () => {
     expect(resolveMcpToolName('reference.search')).toBe('literature.search');
+    expect(resolveMcpToolName('reference.discover')).toBe('literature.discover');
     expect(resolveMcpToolName('config.inspect')).toBe('config.snapshot');
     expect(resolveMcpToolName('document.write')).toBe('document.update');
     expect(resolveMcpToolName('document.get')).toBe('document.get');

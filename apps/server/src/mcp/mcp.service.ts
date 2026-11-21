@@ -22,6 +22,7 @@ import { NoveltyService } from '../research/novelty.service';
 import { SubmissionReadinessService } from '../research/submission-readiness.service';
 import { SubmissionPackageService } from '../research/submission-package.service';
 import { ResearchBriefService } from '../research-brief/research-brief.service';
+import { ScholarSearchService, summarizeScholarSources } from '../research/scholar-search.service';
 import type { AuthPayload } from '../auth/auth.service';
 
 /** MCP 工具定义（符合 Model Context Protocol 2026 的 Tool 结构：name/description/inputSchema） */
@@ -41,6 +42,7 @@ interface McpTool {
  */
 export const MCP_TOOL_ALIASES: Record<string, string> = {
   'reference.search': 'literature.search',
+  'reference.discover': 'literature.discover',
   'reference.summarize': 'literature.summarize',
   'reference.extract': 'references.extract',
   'reference.evidence': 'references.evidence',
@@ -105,6 +107,7 @@ export class McpService {
     private readonly novelty: NoveltyService,
     private readonly readiness: SubmissionReadinessService,
     private readonly submissionPackage: SubmissionPackageService,
+    private readonly scholar: ScholarSearchService,
   ) {
     this.tools = [
       {
@@ -143,6 +146,38 @@ export class McpService {
         },
         handler: async (args) =>
           this.novelty.check(String(args.topic), String(args.projectId), args.searchQuery ? String(args.searchQuery) : undefined),
+      },
+      {
+        name: 'literature.discover',
+        description: '公开学术检索（免 Key）：把检索词发给 OpenAlex / Crossref / arXiv，返回真实论文元数据（标题/作者/年份/期刊/DOI/摘要/引用数）与逐源可达性提示。只读、不写本地库；会把检索词发送到公共 API，敏感选题请改用本地库。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: '主检索词，建议英文；中文主题请补英文同义词' },
+            keywords: { type: 'array', items: { type: 'string' }, description: '可选：最多 4 组补充检索词（同义词/方法词），与 query 合并去重' },
+            limit: { type: 'number', default: 8, description: '每个检索词在每个源返回条数，默认 8，服务端最多 20' },
+          },
+          required: ['query'],
+        },
+        handler: async (args) => {
+          const missing = noProjectHint(args, ['query']);
+          if (missing) return { error: missing };
+          if (!this.scholar.isEnabledNow()) {
+            return { status: 'disabled', notice: '学术检索已关闭（设置 scholar_search=off）。可在设置中开启，或改用本地文献库 / DOI 导入。', hits: [], sources: [] };
+          }
+          const keywords = [
+            String(args.query),
+            ...(Array.isArray(args.keywords) ? args.keywords.map((k: unknown) => String(k)) : []),
+          ]
+            .map((k) => k.trim())
+            .filter(Boolean)
+            .filter((k, i, all) => all.findIndex((x) => x.toLowerCase() === k.toLowerCase()) === i)
+            .slice(0, 4);
+          const perQuery = Math.min(Math.max(Number(args.limit) || 8, 1), 20);
+          const outcome = await this.scholar.searchWithStatus(keywords, perQuery);
+          const summary = summarizeScholarSources(outcome.sources, outcome.hits.length);
+          return { query: keywords, perQuery, ...outcome, ...summary };
+        },
       },
       {
         name: 'literature.summarize',

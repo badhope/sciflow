@@ -68,11 +68,33 @@ const MCP_ASSETS: BuiltinAsset[] = [
     manifest: { transport: 'http', url: 'https://learn.microsoft.com/api/mcp', tools: ['microsoft_docs_search', 'microsoft_code_sample_search', 'microsoft_docs_fetch'] },
   },
   {
-    key: 'mcp-arxiv', kind: 'mcp', source: 'builtin-public', name: 'arXiv MCP（预印本检索与全文）',
-    description: '本地 MCP：检索 arXiv、下载 PDF、按章节读 LaTeX、导出 BibTeX。约 3.2k star。',
-    repo: 'blazickjp/arxiv-mcp-server', license: 'Apache-2.0',
-    install: 'pip install arxiv-mcp-server（stdio，需以 HTTP 方式暴露后接入）', tags: ['literature', 'arxiv'],
-    manifest: { transport: 'stdio', command: 'uvx arxiv-mcp-server', tools: ['search_papers', 'download_paper', 'read_paper'] },
+    key: 'mcp-openalex', kind: 'mcp', source: 'builtin-public', name: 'OpenAlex（全球学术图谱）',
+    description: '270M+ 学术作品的检索、作者/机构/主题、引用网络与趋势聚合。公共托管 Streamable HTTP，2026-11-22 实测可连；非官方托管，匿名有每日预算与限流。',
+    repo: 'cyanheads/openalex-mcp-server', license: 'Apache-2.0', url: 'https://openalex.caseyjhand.com/mcp',
+    install: '远程 HTTP：https://openalex.caseyjhand.com/mcp（也可按仓库自建 stdio/HTTP）', tags: ['literature', 'citation', 'trends', 'remote'],
+    manifest: { transport: 'http', url: 'https://openalex.caseyjhand.com/mcp', tools: ['openalex_resolve_name', 'openalex_search_entities', 'openalex_analyze_trends', 'openalex_get_citation_graph', 'openalex_describe_fields'] },
+  },
+  {
+    key: 'mcp-crossref-remote', kind: 'mcp', source: 'builtin-public', name: 'Crossref（DOI 与出版元数据）',
+    description: '检索 188M+ 作品、按 DOI 取出版元数据与参考文献、查期刊/资助方。公共托管 Streamable HTTP，2026-11-22 实测可连，无需 Key。',
+    repo: 'cyanheads/crossref-mcp-server', license: 'Apache-2.0', url: 'https://crossref.caseyjhand.com/mcp',
+    install: '远程 HTTP：https://crossref.caseyjhand.com/mcp（也可按仓库自建）', tags: ['literature', 'doi', 'metadata', 'remote'],
+    manifest: { transport: 'http', url: 'https://crossref.caseyjhand.com/mcp', tools: ['crossref_search_works', 'crossref_get_work', 'crossref_get_references', 'crossref_search_journals', 'crossref_search_funders', 'crossref_get_member', 'crossref_get_prefix'] },
+  },
+  {
+    key: 'mcp-pubmed-remote', kind: 'mcp', source: 'builtin-public', name: 'PubMed / Europe PMC（生物医学）',
+    description: 'PubMed 与 Europe PMC 检索、全文、引用、MeSH、相关文献与引用指标。公共托管 Streamable HTTP，2026-11-22 实测可连，无需 Key；医学用户再启用。',
+    repo: 'cyanheads/pubmed-mcp-server', license: 'Apache-2.0', url: 'https://pubmed.caseyjhand.com/mcp',
+    defaultEnabled: false,
+    install: '远程 HTTP：https://pubmed.caseyjhand.com/mcp（也可按仓库自建）', tags: ['biomedical', 'pubmed', 'mesh', 'remote'],
+    manifest: { transport: 'http', url: 'https://pubmed.caseyjhand.com/mcp', tools: ['pubmed_search_articles', 'pubmed_fetch_articles', 'pubmed_fetch_fulltext', 'pubmed_format_citations', 'pubmed_find_related', 'pubmed_spell_check', 'pubmed_lookup_mesh', 'pubmed_lookup_citation', 'pubmed_convert_ids', 'pubmed_fetch_citation_metrics', 'pubmed_europepmc_search', 'pubmed_europepmc_fetch'] },
+  },
+  {
+    key: 'mcp-arxiv', kind: 'mcp', source: 'builtin-public', name: 'arXiv（预印本检索与全文）',
+    description: '检索 arXiv、按 ID 取元数据、读 HTML/PDF 全文、列分类。公共托管 Streamable HTTP，2026-11-22 实测可连，无需 Key；非官方托管，失效可按仓库自建。',
+    repo: 'cyanheads/arxiv-mcp-server', license: 'Apache-2.0', url: 'https://arxiv.caseyjhand.com/mcp',
+    install: '远程 HTTP：https://arxiv.caseyjhand.com/mcp（也可 npx @cyanheads/arxiv-mcp-server 自建）', tags: ['literature', 'arxiv', 'fulltext', 'remote'],
+    manifest: { transport: 'http', url: 'https://arxiv.caseyjhand.com/mcp', tools: ['arxiv_search_papers', 'arxiv_get_metadata', 'arxiv_read_paper', 'arxiv_list_categories'] },
   },
   {
     key: 'mcp-paper-search', kind: 'mcp', source: 'builtin-public', name: 'Paper Search MCP（多库学术搜索）',
@@ -311,6 +333,18 @@ const SKILL_ASSETS: BuiltinAsset[] = [
     '完成初稿后做三轮自评：①逻辑：每节是否回答研究问题，是否存在跳跃；②证据：每个事实是否有来源，引用是否支持原句；③表达：是否有重复、歧义、未定义缩写。每轮列出「问题→位置→修改→复检结果」，直到无高危问题。不要用「已优化」代替具体修改，也不要把「模型觉得没问题」当作通过标准。',
     ['review', 'loop'],
   ),
+  skillAsset(
+    'skill-openalex-citation-chase', '文献发现与引用追踪',
+    '把主题拆成英文检索式，跨 OpenAlex / Crossref / arXiv 取证，并用引用网络做前向与后向追踪。',
+    '做文献发现时先把主题拆成 2-4 组英文检索式（概念词、同义词、方法词），用 literature.discover 或 OpenAlex / Crossref / arXiv 检索；结果按 DOI 去重，保留 OpenAlex ID、DOI、年份、来源。相关性先看标题与摘要是否真的回答研究问题，不按引用数排序。对核心论文做引用追踪：后向读参考文献找奠基工作，前向读施引文献找最新进展；把候选分为核心证据、背景、方法参考、需排除四类，并记录排除理由。中文主题必须补英文检索词；找不到全文标「仅摘要」，不得据标题编造结论。',
+    ['literature', 'openalex', 'citation', 'search'],
+  ),
+  skillAsset(
+    'skill-research-trends', '研究趋势计量',
+    '用 OpenAlex 聚合做年份、国家、机构与主题趋势，区分存量、增量与质量，不把发文量当影响力。',
+    '做领域趋势分析时先固定检索式、时间窗、文献类型与数据源，再按年、国家/地区、机构、主题、期刊分组计数。报告每个分组的总量与占比，区分存量与年度新增；发文量只说明活跃度，不等于质量或影响力，引用指标要说明口径与窗口。对突然增长的主题检查是否由会议/特刊/数据库收录策略造成。输出可复现的检索式、数据快照日期、主要图表与三条局限；不得用单年峰值预测长期趋势。',
+    ['trends', 'openalex', 'bibliometrics'],
+  ),
 ];
 /** 本项目撰写的角色（无第三方版权） */
 function roleAsset(key: string, name: string, prompt: string, description: string, tags: string[] = []): BuiltinAsset {
@@ -392,6 +426,14 @@ const PROMPT_ASSETS: BuiltinAsset[] = [
   promptAsset('cover-letter-fit', 'cover_letter', 'Cover Letter·契合度', '撰写投稿封面信：一句话贡献、与期刊 scope 的契合点、创新性、伦理与数据声明、推荐审稿人建议。控制在 350 词内。', '投稿封面信'),
   promptAsset('response-letter', 'response_letter', '审稿回复信·逐条', '把审稿意见逐条编号，每条给「意见原文 / 我们的回应 / 修改位置（页行）/ 修改摘要」。礼貌、具体、可核查。', '逐条审稿回复'),
   promptAsset('journal-match', 'journalsMatch', '选刊·匹配度', '根据标题与摘要推荐 5 本期刊，每本给：匹配理由、近三年相关发文方向、审稿周期（若已知）、风险提示。不得编造影响因子。', '选刊匹配建议'),
+  promptAsset('summarize-topic-matrix', 'summarizeLiterature', '文献综述·主题矩阵', '按「背景 → 方法簇 → 证据冲突 → 研究空白 → 未来方向」组织综述，不要逐篇罗列。每个主题先给一句主张，再列 3-5 条证据（作者/年份/DOI），标注支持、部分支持或矛盾；最后给检索式与未解问题。找不到证据写「未检索到」，不得用常识补。', '主题矩阵式文献综述'),
+  promptAsset('deep-dive-three-pass', 'deepDivePaper', '单篇精读·三遍法', '按三遍法精读：①标题/摘要/结论判断相关性；②图表/方法提取设计、样本、基线、指标；③复现细节与局限核对假设、统计前提、消融。输出 12 维矩阵：问题、假设、数据、方法、基线、指标、主结果、消融、局限、可复现性、可引用点、可借鉴点。缺失写「未报告」，引用给页码或章节。', '单篇论文三遍法精读'),
+  promptAsset('abstract-four-sentence', 'generateAbstract', '摘要关键词·四句法', '摘要严格四句：问题与缺口、方法与数据、主要结果（带效应量与置信区间）、结论与意义。不写「首次」「重大突破」等无法验证的评价。随后给 5-8 个关键词，优先使用领域受控词表；英文摘要与中文摘要语义一致，不增加原文没有的结果。', '四句法摘要与关键词'),
+  promptAsset('design-review-seven', 'designReview', '研究设计诊断·七问', '按七问审查研究设计：问题与方法是否匹配、变量如何操作化、抽样与偏倚、对照与混杂、样本量与功效、统计前提、可复现性。每问给风险等级、证据位置与可执行修改；无法判断时写明缺什么信息，不假设数据分布。', '研究设计七问诊断'),
+  promptAsset('experiment-executable', 'experimentDesign', '实验设计·可执行', '输出可执行实验计划：自变量、因变量、控制变量、分组与随机化、盲法、样本量估算依据、主/次结局、统计检验与前提、失败回退、产物与随机种子。每个步骤写清输入、操作、预期输出与验收标准；不得省略对照组。', '可执行实验计划'),
+  promptAsset('paper-comparison-schema', 'paperComparison', '文献对比·同口径', '把文献放进同一张对比表：研究问题、数据与样本、方法、基线、指标、主结果、效应量/置信区间、局限、可复现性。缺失字段写「未报告」，不要用不同口径的数字直接排名；最后给 3 条可比性限制与后续验证建议。', '同口径文献对比'),
+  promptAsset('figures-journal-spec', 'generateFigures', '图表生成·期刊规范', '先判断数据适合的点图、箱线图、Kaplan-Meier 或热图，不默认柱状图。输出图注：图表类型、样本量、误差线含义、统计检验、单位与来源。坐标轴单位齐全，配色兼顾色盲与灰度打印，分辨率满足期刊要求；不得截断坐标轴制造差异。', '期刊规范图表与图注'),
+  promptAsset('submission-email-state', 'parseSubmissionEmail', '投稿邮件解析·状态机', '解析编辑部邮件，输出：当前状态（收稿/送审/审稿中/决定中/修回/接收/拒稿）、置信度、依据原文、下一步动作与截止日期。区分「建议」与「已决定」，不把模板客套话当成接收；信息不足时列出需人工确认的字段。', '投稿邮件状态解析'),
 ];
 
 /** SciFlow 自研优势工具（private，不导出、不对外） */
