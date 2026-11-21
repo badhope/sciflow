@@ -1,6 +1,7 @@
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
+import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { MermaidBlock } from '../../components/MermaidBlock';
@@ -39,7 +40,7 @@ export function WritingPreview({
       {content.trim() ? (
         <>
           <ReactMarkdown
-          remarkPlugins={[remarkMath]}
+          remarkPlugins={[remarkMath, remarkGfm]}
           rehypePlugins={[rehypeKatex]}
           components={{
             // 包一层容器拿到 language-mermaid：pre > code 两层都要接管，否则 pre 会把 figure 再包成代码块

@@ -248,6 +248,24 @@ export function WorkspacePage({
    * ——「跑完了却说没产出」。现在把「本任务对应的文档」提到最前；无任务时取最新一篇。
    */
   const effectiveDocId = docId ?? task?.documentId ?? initialDocId ?? docs[docs.length - 1]?.id ?? null;
+
+  /**
+   * 对话里让 AI 新建文档后，文档列表缓存仍是旧的空数组，右侧预览会一直停在
+   * 「还没有文档」。流式结束后识别 document_create 工具调用，主动刷新列表并清掉
+   * 显式选择，让最新一篇文档自动进入预览。
+   */
+  const handledDocCreate = useRef<number>(-1);
+  useEffect(() => {
+    if (streaming) return;
+    const idx = messages.length - 1;
+    const last = messages[idx];
+    if (idx < 0 || last?.role !== 'assistant') return;
+    if (handledDocCreate.current === idx) return;
+    handledDocCreate.current = idx;
+    void qc.invalidateQueries({ queryKey: qk.docs(project.id) });
+    if (last.toolCalls?.some((c) => c.name === 'document_create')) setDocId(null);
+  }, [streaming, messages, project.id, qc]);
+
   useEffect(() => {
     if (task?.documentId) {
       void qc.invalidateQueries({ queryKey: qk.docs(project.id) });

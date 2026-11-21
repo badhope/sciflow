@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Streamdown } from 'streamdown';
 import remarkMath from 'remark-math';
+import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { Brain, Check, Copy, FileText, Loader2, PlayCircle, Quote, RotateCcw, Square, Trash2, Wrench } from 'lucide-react';
@@ -43,7 +44,7 @@ function AssistantBody({ m }: { m: ChatMessage }) {
         </details>
       ) : null}
       {m.content ? (
-        <Streamdown mode={m.streaming ? 'streaming' : 'static'} remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+        <Streamdown mode={m.streaming ? 'streaming' : 'static'} remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
           {m.content}
         </Streamdown>
       ) : m.streaming ? (
