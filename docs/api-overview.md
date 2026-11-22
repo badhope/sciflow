@@ -32,7 +32,7 @@ document is the authoritative contract; this page is a map of the surface.
 | Submission | `/api/submission` | journal fit, library, cover letter, reply, tracking |
 | Judgment | `/api/judgment` | intent classification |
 | Experiments | `/api/experiments` | run Python, list, detail, update, delete |
-| Chat | `/api/chat` | one-shot answer, SSE streaming |
+| Chat | `/api/chat` | one-shot answer, SSE streaming, cloud session CRUD, full-text session search |
 | Memory | `/api/memory` | write, list, delete |
 | MCP | `/api/mcp` | info, tools, call, external discovery and call |
 | Settings | `/api/settings` | read, connection check, provider CRUD, MCP server CRUD |

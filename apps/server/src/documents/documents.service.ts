@@ -10,6 +10,7 @@ import { documents, citations, references, polishRecords, qualityReports, review
 import { checkPaperQuality } from '../common/quality-audit';
 import { auditCitations } from '../common/citation-audit';
 import { buildManuscriptDocx } from './manuscript-docx';
+import { buildManuscriptPptx, buildManuscriptXlsx } from './office-export';
 import { AiService } from '../ai/ai.service';
 import { ReferencesService } from '../references/references.service';
 import { splitTailBlock } from '../pipeline/tail-blocks';
@@ -385,6 +386,27 @@ export class DocumentsService {
     this.createSnapshot(id, `恢复「${title}」到 v${version} 前的自动快照`);
     db.update(documents).set({ content: next, updatedAt: Date.now() }).where(eq(documents.id, id)).run();
     return { content: next, changed: true };
+  }
+
+  /**
+   * 全文恢复到某个历史版本：恢复前自动快照当前全文，防止“恢复错版本”无路可退。
+   * 只改 content/version/updatedAt；标题、状态、引用锚点等元数据保持当前值。
+   */
+  restoreVersion(id: string, version: number) {
+    const doc = this.get(id);
+    const target = this.parseVersions(doc).find((v) => v.version === version);
+    if (!target) throw new BadRequestException(`未找到版本 v${version}`);
+    const current = doc.content ?? '';
+    if (target.content === current) {
+      return { changed: false, content: current, version: doc.version ?? 1, restoredVersion: target.version };
+    }
+    this.createSnapshot(id, `恢复全文到 v${version} 前的自动快照`);
+    const nextVersion = (doc.version ?? 1) + 1;
+    db.update(documents)
+      .set({ content: target.content, version: nextVersion, updatedAt: Date.now() })
+      .where(eq(documents.id, id))
+      .run();
+    return { changed: true, content: target.content, version: nextVersion, restoredVersion: target.version };
   }
 
   /**
@@ -778,6 +800,32 @@ export class DocumentsService {
       base64: built.buffer.toString('base64'),
       filename: built.filename,
     };
+  }
+
+  async exportPptx(id: string) {
+    const doc = this.get(id);
+    const outline = parseJson<{ title: string; sections: { title: string; subsections: string[] }[] }>(doc.outline, EMPTY_OUTLINE);
+    const refList = this.listCitations(id).map((r) => r.reference);
+    const built = await buildManuscriptPptx({
+      title: doc.title || '',
+      outline,
+      content: doc.content || '',
+      refs: refList.map((r) => ({ title: r.title, authors: r.authors, year: r.year, venue: r.venue, doi: r.doi })),
+    });
+    return { base64: built.buffer.toString('base64'), filename: built.filename };
+  }
+
+  exportXlsx(id: string) {
+    const doc = this.get(id);
+    const outline = parseJson<{ title: string; sections: { title: string; subsections: string[] }[] }>(doc.outline, EMPTY_OUTLINE);
+    const refList = this.listCitations(id).map((r) => r.reference);
+    const built = buildManuscriptXlsx({
+      title: doc.title || '',
+      outline,
+      content: doc.content || '',
+      refs: refList.map((r) => ({ title: r.title, authors: r.authors, year: r.year, venue: r.venue, doi: r.doi })),
+    });
+    return { base64: built.buffer.toString('base64'), filename: built.filename };
   }
 
   private getRefsForPrompt(documentId: string): string {

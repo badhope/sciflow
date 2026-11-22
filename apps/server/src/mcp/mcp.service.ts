@@ -24,6 +24,7 @@ import { SubmissionReadinessService } from '../research/submission-readiness.ser
 import { SubmissionPackageService } from '../research/submission-package.service';
 import { ResearchBriefService } from '../research-brief/research-brief.service';
 import { ScholarSearchService, summarizeScholarSources } from '../research/scholar-search.service';
+import { CodeDiagnosticsService } from '../web-sandbox/code-diagnostics.service';
 import { isOpenWorldTool, isReadOnlyTool } from '../agent/tool-safety';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -110,6 +111,7 @@ export class McpService {
     private readonly readiness: SubmissionReadinessService,
     private readonly submissionPackage: SubmissionPackageService,
     private readonly scholar: ScholarSearchService,
+    private readonly diagnostics?: CodeDiagnosticsService,
   ) {
     this.tools = [
       {
@@ -1291,6 +1293,26 @@ export class McpService {
         }),
       },
     ];
+    if (this.diagnostics) {
+      this.tools.push({
+        name: 'code.diagnostics',
+        description: '对一段 TypeScript/JavaScript 代码做内存内类型与语法诊断（不读本地工程，不落盘）',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: { type: 'string', description: '待诊断代码，最多 100000 字符' },
+            language: { type: 'string', enum: ['typescript', 'javascript'], default: 'typescript' },
+            filename: { type: 'string', description: '可选文件名，如 input.tsx' },
+          },
+          required: ['code'],
+        },
+        handler: async (args) => this.diagnostics!.diagnose(
+          String(args.code ?? ''),
+          args.language === 'javascript' ? 'javascript' : 'typescript',
+          args.filename ? String(args.filename) : undefined,
+        ),
+      });
+    }
   }
 
   /** 工具清单（MCP tools/list 语义）；readOnly 供 Agent harness 判定自动重试与外部客户端注解。 */
@@ -1412,6 +1434,86 @@ export class McpService {
     }
   }
 
+  // ---------- MCP prompts：可复用科研工作流模板 ----------
+
+  /** prompts/list 描述；build 不返回给客户端，避免把内部模板函数序列化出去。 */
+  listPrompts() {
+    return this.promptCatalog().map(({ build: _build, ...prompt }) => prompt);
+  }
+
+  /** prompts/get：把参数填进模板；缺必填参数直接报可读错误。 */
+  getPrompt(name: string, args: Record<string, unknown>): { description: string; text: string } | null {
+    const prompt = this.promptCatalog().find((p) => p.name === name);
+    if (!prompt) return null;
+    for (const arg of prompt.arguments) {
+      if (arg.required && !String(args[arg.name] ?? '').trim()) {
+        throw new HttpException(`prompt ${name} 缺少参数：${arg.name}`, HttpStatus.BAD_REQUEST);
+      }
+    }
+    return { description: prompt.description, text: prompt.build(args) };
+  }
+
+  private promptCatalog(): {
+    name: string;
+    title: string;
+    description: string;
+    arguments: { name: string; description: string; required: boolean }[];
+    build: (args: Record<string, unknown>) => string;
+  }[] {
+    return [
+      {
+        name: 'sciflow.research.plan',
+        title: '研究计划',
+        description: '把一个研究主题拆成可审计的问题、假设、协议、风险与工具预算。',
+        arguments: [
+          { name: 'topic', description: '研究主题', required: true },
+          { name: 'projectId', description: '项目 ID（可选，用于读取项目现状）', required: false },
+        ],
+        build: (args) => `你是 SciFlow 的研究计划助手。请围绕“${String(args.topic)}”制定研究计划。\n先读取项目现状与已有文献（可用 project.get/document.list/literature.search/quality.overview），再输出：研究问题、可证伪假设、实验或分析协议、数据与伦理风险、预期产出、所需工具与步数预算。\n计划要能被 research.plan_audit 审计；不要编造未读取的文献或数据。${args.projectId ? `\n项目 ID：${String(args.projectId)}` : ''}`,
+      },
+      {
+        name: 'sciflow.literature.review',
+        title: '批判性文献综述',
+        description: '围绕主题做有证据边界的文献综述，区分共识、争议与空白。',
+        arguments: [
+          { name: 'topic', description: '综述主题', required: true },
+          { name: 'scope', description: '时间/领域/方法范围', required: false },
+        ],
+        build: (args) => `请围绕“${String(args.topic)}”做批判性文献综述。${args.scope ? `范围：${String(args.scope)}。` : ''}\n要求：先检索再下结论；按共识、争议、方法缺陷、研究空白分组；每条判断尽量给出文献证据；检索不到就明确说检索不到，不要用常识补位。`,
+      },
+      {
+        name: 'sciflow.paper.polish',
+        title: '论文段落润色',
+        description: '保持事实、数字和引用不变，改善学术表达与逻辑衔接。',
+        arguments: [
+          { name: 'text', description: '待润色正文', required: true },
+          { name: 'venue', description: '目标期刊/风格（可选）', required: false },
+        ],
+        build: (args) => `请润色下面的论文段落。${args.venue ? `目标期刊/风格：${String(args.venue)}。` : ''}\n硬约束：不改变事实、数字、引用和结论强度；不新增未提供的文献；只提升清晰度、逻辑衔接和学术语气。\n\n${String(args.text)}`,
+      },
+      {
+        name: 'sciflow.review.response',
+        title: '审稿意见逐条回应',
+        description: '把审稿意见拆成可执行修改项，生成克制的逐条回应草稿。',
+        arguments: [
+          { name: 'comments', description: '审稿意见原文', required: true },
+          { name: 'tone', description: '回应语气，如克制/直接', required: false },
+        ],
+        build: (args) => `请把以下审稿意见逐条拆解并起草回应。语气：${String(args.tone || '克制、证据优先')}。\n每条按“审稿人担心什么 / 我们同意什么 / 具体改了什么 / 证据在哪”组织；不要辩解式空话，不要承诺未做的实验。\n\n${String(args.comments)}`,
+      },
+      {
+        name: 'sciflow.submission.readiness',
+        title: '投稿就绪检查',
+        description: '按目标期刊要求检查稿件、引用、图表与声明是否齐备。',
+        arguments: [
+          { name: 'projectId', description: '项目 ID', required: true },
+          { name: 'journal', description: '目标期刊（可选）', required: false },
+        ],
+        build: (args) => `请检查项目 ${String(args.projectId)} 的投稿就绪度。${args.journal ? `目标期刊：${String(args.journal)}。` : ''}\n调用 submission.readiness 与 quality.overview，输出阻塞项、提醒项、可直接修复项；不要把“看起来像论文”当成就绪。`,
+      },
+    ];
+  }
+
   // ---------- 官方 MCP SDK（协议层：stdio / Streamable HTTP 双传输） ----------
 
   /**
@@ -1422,13 +1524,13 @@ export class McpService {
   async buildSdkServer(user?: AuthPayload): Promise<Server> {
     // SDK 冷导入约 20s（schema/zod 体积大）：只在真正需要 MCP 协议时加载，
     // 普通 HTTP/Agent 路径不背这个启动成本。
-    const [{ Server }, { ListToolsRequestSchema, CallToolRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, ListResourceTemplatesRequestSchema }] = await Promise.all([
+    const [{ Server }, { ListToolsRequestSchema, CallToolRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, ListResourceTemplatesRequestSchema, ListPromptsRequestSchema, GetPromptRequestSchema }] = await Promise.all([
       import('@modelcontextprotocol/sdk/server/index.js'),
       import('@modelcontextprotocol/sdk/types.js'),
     ]);
     const server = new Server(
       { name: 'sciflow', version: APP_VERSION },
-      { capabilities: { tools: {}, resources: {} } },
+      { capabilities: { tools: {}, resources: {}, prompts: {} } },
     );
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: this.tools.map((t) => ({
@@ -1463,6 +1565,16 @@ export class McpService {
     server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
       const text = this.readResourceText(String(req.params.uri || ''), user);
       return { contents: [{ uri: req.params.uri, mimeType: 'application/json', text }] };
+    });
+    // MCP prompts：把可复用的科研工作流模板暴露给 Claude Desktop / Cursor 等客户端。
+    server.setRequestHandler(ListPromptsRequestSchema, async () => ({ prompts: this.listPrompts() }));
+    server.setRequestHandler(GetPromptRequestSchema, async (req) => {
+      const prompt = this.getPrompt(String(req.params.name || ''), (req.params.arguments || {}) as Record<string, unknown>);
+      if (!prompt) throw new HttpException(`未知 prompt：${req.params.name}`, HttpStatus.NOT_FOUND);
+      return {
+        description: prompt.description,
+        messages: [{ role: 'user', content: { type: 'text', text: prompt.text } }],
+      };
     });
     return server;
   }

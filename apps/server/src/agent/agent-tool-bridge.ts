@@ -14,6 +14,8 @@ import { randomUUID } from 'node:crypto';
 import { envInt } from '../common/env';
 import { profileAllowsTool, resolveAgentToolProfile, type AgentToolProfile } from './agent-tool-profiles';
 import { AgentPolicyService } from './agent-policy.service';
+import { SkillRegistryService } from './skill-registry.service';
+import { AiService } from '../ai/ai.service';
 import { redactSensitive, shouldRedactForMode } from '../common/redaction';
 import { isReadOnlyTool, isRetryableToolError } from './tool-safety';
 import { readSpilledToolOutput, spillToolText, toolResultText } from './tool-output-store';
@@ -73,6 +75,10 @@ const TOOL_OUTPUT_TOTAL_CHARS = envInt('AGENT_TOOL_OUTPUT_TOTAL_CHARS', 160_000,
 const TOOL_RETRIES = envInt('AGENT_TOOL_RETRIES', 2, { min: 0, max: 4 });
 /** 同一轮内并行执行的工具上限；模型一步返回多个 tool_call 时防止打爆本地模型/外部 API。 */
 const TOOL_CONCURRENCY = envInt('AGENT_TOOL_CONCURRENCY', 3, { min: 1, max: 16 });
+/** 同一会话内并行子代理上限：子代理各自有工具循环，数量不设限会把网关和本地 CPU 打满。 */
+const SUBAGENT_CONCURRENCY = envInt('AGENT_SUBAGENT_CONCURRENCY', 2, { min: 1, max: 8 });
+/** 子代理默认最多 8 步；超过后必须汇报当前结论，避免子代理变成无底洞。 */
+const SUBAGENT_MAX_STEPS = envInt('AGENT_SUBAGENT_MAX_STEPS', 8, { min: 2, max: 20 });
 
 /** 工具暴露模式：full=直接暴露全部允许工具；dynamic=只暴露核心工具 + tool_search/tool_invoke。 */
 const TOOL_MODE: 'full' | 'dynamic' = process.env.AGENT_TOOL_MODE === 'dynamic' ? 'dynamic' : 'full';
@@ -92,6 +98,7 @@ const DYNAMIC_CORE = new Set([
   'memory.search',
   'chat.answer',
   'research.plan_audit',
+  'code.diagnostics',
 ]);
 
 type BridgeTool = ReturnType<McpService['list']>[number];
@@ -136,6 +143,8 @@ export class AgentToolBridge {
     private readonly approvals?: ApprovalService,
     private readonly plans?: PlanAuthorizationService,
     private readonly policy?: AgentPolicyService,
+    private readonly skills?: SkillRegistryService,
+    private readonly ai?: AiService,
   ) {}
 
   /** 把一轮真实 token 记到当前项目生效的计划上；无计划/未启用时静默跳过。 */
@@ -187,9 +196,9 @@ export class AgentToolBridge {
    *  - **工具作用域**：opts.profile 收窄暴露面（默认 full，等价既有行为），见 agent-tool-profiles.ts；
    *  - **主体透传**：opts.user 必须传给 MCP 层，否则企业模式下每个工具都过不了项目归属校验。
    */
-  buildToolSet(projectId?: string, runId?: string, opts?: { profile?: string; user?: AuthPayload }): ToolSet {
+  buildToolSet(projectId?: string, runId?: string, opts?: { profile?: string; user?: AuthPayload; allowTask?: boolean }): ToolSet {
     const allow = new Set(
-      (process.env.AGENT_TOOLS_ALLOW || 'literature.search,literature.discover,literature.summarize,knowledge.query,outline.generate,writing.polish,writing.translate,writing.review,research.novelty,research.plan,research.plan_audit,research.experiment,research.critic,research.expert,submission.match,submission.cover,submission.reply,submission.track,submission.readiness,submission.email,submission.track.create,references.extract,references.evidence,project.list,project.get,research.brief.get,research.brief.update,project.create,project.update,document.list,document.get,document.create,document.update,document.snapshot,document.revise_section,quality.audit,quality.overview,quality.history,experiment.run,experiment.list,experiment.get,browser.open,browser.text,browser.verify,browser.close,memory.search,memory.add,writing.draft,chat.answer,config.snapshot,config.set_permission,config.upsert_role,config.upsert_constraint,config.delete_constraint,config.upsert_hook,config.apply_preset,config.preview,extension.list,extension.create,extension.toggle,extension.generate,mcp.external.list,mcp.external.discover,mcp.external.call')
+      (process.env.AGENT_TOOLS_ALLOW || 'literature.search,literature.discover,literature.summarize,knowledge.query,outline.generate,writing.polish,writing.translate,writing.review,research.novelty,research.plan,research.plan_audit,research.experiment,research.critic,research.expert,submission.match,submission.cover,submission.reply,submission.track,submission.readiness,submission.email,submission.track.create,references.extract,references.evidence,project.list,project.get,research.brief.get,research.brief.update,project.create,project.update,document.list,document.get,document.create,document.update,document.snapshot,document.revise_section,code.diagnostics,quality.audit,quality.overview,quality.history,experiment.run,experiment.list,experiment.get,browser.open,browser.text,browser.verify,browser.close,memory.search,memory.add,writing.draft,chat.answer,config.snapshot,config.set_permission,config.upsert_role,config.upsert_constraint,config.delete_constraint,config.upsert_hook,config.apply_preset,config.preview,extension.list,extension.create,extension.toggle,extension.generate,mcp.external.list,mcp.external.discover,mcp.external.call')
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean),
@@ -316,6 +325,132 @@ export class AgentToolBridge {
         return traceNative('read_tool_output', args, t0, page);
       },
     });
+    // 技能按需加载：系统提示只带索引，模型需要执行细则时再读正文。
+    if (this.skills) {
+      set.skill_read = aiTool({
+        description: '读取一个已启用技能的完整执行说明。系统提示只提供技能索引；需要具体步骤、约束或模板时调用本工具。',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            key: { type: 'string', description: '技能 key、名称或扩展 id；从技能索引中取' },
+          },
+          required: ['key'],
+        }),
+        execute: async (args: { key?: string }) => {
+          const t0 = Date.now();
+          ctx.calls.n += 1;
+          if (ctx.calls.n > MAX_TOOL_CALLS) {
+            return traceNative('skill_read', args as Record<string, unknown>, t0, { error: `工具调用次数已达上限（${MAX_TOOL_CALLS} 次）` }, false, 'tool call limit');
+          }
+          const result = this.skills!.read(String(args?.key ?? ''));
+          if (!result) {
+            return traceNative('skill_read', args as Record<string, unknown>, t0, {
+              error: '未找到该技能，或它已被停用。请只使用技能索引里的 key。',
+            }, false, 'skill not found');
+          }
+          ctx.outputChars += toolResultText(result).length;
+          return traceNative('skill_read', args as Record<string, unknown>, t0, result);
+        },
+      });
+    }
+    // 子代理：独立上下文 + 独立工具集，主代理只拿最终摘要；避免主会话被中间检索/读文撑爆。
+    if (this.ai && opts?.allowTask !== false) {
+      const subagentLimit = pLimit(SUBAGENT_CONCURRENCY);
+      set.task = aiTool({
+        description:
+          '派发一个独立子代理执行探索/评审/整理任务。子代理有自己的上下文和工具循环，只把最终摘要返回；适合长文阅读、批量文献核实、独立复核。不要用它代替普通一步工具调用。',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            description: { type: 'string', description: '任务短标题，便于轨迹展示' },
+            prompt: { type: 'string', description: '交给子代理的完整任务说明；不要只写关键词' },
+            subagent_type: {
+              type: 'string',
+              enum: ['general', 'explore', 'review'],
+              description: 'general=综合执行，explore=只读探索，review=独立复核',
+            },
+            max_steps: { type: 'number', description: '子代理最多工具循环步数，默认 8，最大 20' },
+          },
+          required: ['prompt'],
+        }),
+        execute: async (args: {
+          description?: string;
+          prompt?: string;
+          subagent_type?: string;
+          max_steps?: number;
+        }, options?: { abortSignal?: AbortSignal }) => {
+          const t0 = Date.now();
+          ctx.calls.n += 1;
+          if (ctx.calls.n > MAX_TOOL_CALLS) {
+            return traceNative('task', args as Record<string, unknown>, t0, { error: `工具调用次数已达上限（${MAX_TOOL_CALLS} 次）` }, false, 'tool call limit');
+          }
+          if (!projectId) {
+            return traceNative('task', args as Record<string, unknown>, t0, { error: '子代理需要项目上下文；请先打开一个项目。' }, false, 'missing project');
+          }
+          const prompt = String(args?.prompt ?? '').trim();
+          if (prompt.length < 10) {
+            return traceNative('task', args as Record<string, unknown>, t0, { error: 'prompt 太短；请写清目标、范围、期望输出。' }, false, 'invalid prompt');
+          }
+          if (prompt.length > 8_000) {
+            return traceNative('task', args as Record<string, unknown>, t0, { error: 'prompt 超过 8000 字；请先压缩任务说明。' }, false, 'prompt too long');
+          }
+          if (TOOL_OUTPUT_TOTAL_CHARS - ctx.outputChars < 1_000) {
+            return traceNative('task', args as Record<string, unknown>, t0, { error: '本轮工具输出预算已不足，无法再派发子代理。请先总结当前结果。' }, false, 'output budget exhausted');
+          }
+          return subagentLimit(async () => {
+            let subRunId: string | undefined;
+            let subTokens = 0;
+            try {
+              subRunId = this.trace?.startRun({
+                projectId,
+                source: 'subagent',
+                input: `${args.description || '子任务'}：${prompt.slice(0, 200)}`,
+                model: this.ai!.config.model,
+              });
+              const typeHint =
+                args.subagent_type === 'explore'
+                  ? '你只做只读探索，不要修改项目数据。'
+                  : args.subagent_type === 'review'
+                    ? '你独立复核，优先找反例、缺口和事实错误，不要迎合主代理结论。'
+                    : '你独立完成子任务，过程中不要向用户提问。';
+              const subTools = this.buildToolSet(projectId, subRunId, {
+                profile: ctx.profile.id,
+                user: ctx.user,
+                allowTask: false,
+              });
+              const answer = await this.ai!.chatWithToolsContext(
+                prompt,
+                [],
+                `你是 SciFlow 子代理。项目 ID：${projectId}。${typeHint}\n只返回完成任务所需的结果、证据和未解决项；不要复述主对话，不要假装看过未读取的内容。`,
+                {
+                  modelName: this.ai!.config.model,
+                  tools: subTools,
+                  maxSteps: Math.min(Math.max(Number(args.max_steps) || SUBAGENT_MAX_STEPS, 2), 20),
+                  signal: options?.abortSignal,
+                  onUsage: (usage) => { subTokens += usage.totalTokens || 0; },
+                },
+                '你是严谨的科研子代理，输出要可核验、简洁，不编造来源。',
+              );
+              const clipped = answer.length > 12_000 ? answer.slice(0, 12_000) + '\n…（子代理输出已截断）' : answer;
+              const payload = {
+                status: 'done',
+                runId: subRunId || '',
+                output: clipped,
+                chars: answer.length,
+                truncated: answer.length > 12_000,
+                tokens: subTokens,
+              };
+              if (subRunId) this.trace?.finishRun(subRunId, { status: 'done', outputSummary: clipped, totalTokens: subTokens });
+              ctx.outputChars += toolResultText(payload).length;
+              return traceNative('task', args as Record<string, unknown>, t0, payload);
+            } catch (e: any) {
+              if (subRunId) this.trace?.finishRun(subRunId, { status: options?.abortSignal?.aborted ? 'cancelled' : 'error', error: e?.message || String(e), totalTokens: subTokens });
+              return traceNative('task', args as Record<string, unknown>, t0, { error: `子代理执行失败：${e?.message || e}` }, false, 'subagent failed');
+            }
+          });
+        },
+      });
+    }
     // 审批：有副作用的工具先问用户，拒绝时给出可读原因让模型换路径。
     if (this.approvals) {
       set.request_approval = aiTool({

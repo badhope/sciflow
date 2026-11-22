@@ -1,6 +1,8 @@
 import type { CitationAudit,
   CitationRow,
   CiteStyle,
+  ChatSessionDetail,
+  ChatSessionSummary,
   DashboardOverview,
   Doc,
   DocVersionEntry,
@@ -53,6 +55,11 @@ export const writing = {
     reviseSection: (id: string, title: string, reviewPoints: string) =>
       request<{ content: string; changed: boolean }>(`/api/documents/${id}/sections/revise`, {
         method: 'POST', body: JSON.stringify({ title, reviewPoints }),
+      }),
+    /** 全文恢复到历史版本：恢复前自动快照当前全文，可再恢复回来 */
+    restoreVersion: (id: string, version: number) =>
+      request<{ changed: boolean; content: string; version: number; restoredVersion: number }>(`/api/documents/${id}/versions/${version}/restore`, {
+        method: 'POST',
       }),
     /** 段落级恢复：只回滚指定章节，恢复前自动快照全文 */
     restoreSection: (id: string, version: number, title: string) =>
@@ -112,6 +119,10 @@ export const writing = {
       request<{ markdown: string; filename: string }>(`/api/documents/${id}/export`),
     exportDocx: (id: string) =>
       request<{ base64: string; filename: string }>(`/api/documents/${id}/export-docx`),
+    exportPptx: (id: string) =>
+      request<{ base64: string; filename: string }>(`/api/documents/${id}/export-pptx`),
+    exportXlsx: (id: string) =>
+      request<{ base64: string; filename: string }>(`/api/documents/${id}/export-xlsx`),
     abstract: (id: string) => request<{ abstract: string; keywords: string[] }>(`/api/documents/${id}/abstract`, { method: 'POST' }),
     /** 版本命名（PATCH versions JSON 内嵌 name，幂等覆盖；version 不存在/被历史上限淘汰返回 400），返回更新后的 versions 数组 */
     setVersionName: (id: string, version: number, name: string) =>
@@ -149,11 +160,31 @@ export const writing = {
   chat: {
     answer: (message: string, history: { role: string; content: string }[] = [], projectId?: string) =>
       request<{ answer: string }>('/api/chat', { method: 'POST', body: JSON.stringify({ message, history, projectId }) }),
-    /** 项目最近对话摘要（对话历史侧栏） */
-    sessions: (projectId: string) =>
-      request<{ sessions: { id: string; summary: string; messageCount: number; totalTokens: number; createdAt: number }[] }>(
-        `/api/chat/sessions?projectId=${projectId}`,
-      ),
+    /** 项目会话列表（标题/摘要/置顶/归档/全文搜索） */
+    sessions: (projectId: string, opts: { q?: string; includeArchived?: boolean } = {}) => {
+      const qs = new URLSearchParams({ projectId });
+      if (opts.q) qs.set('q', opts.q);
+      if (opts.includeArchived) qs.set('includeArchived', '1');
+      return request<{ sessions: ChatSessionSummary[] }>(`/api/chat/sessions?${qs.toString()}`);
+    },
+    /** 打开完整会话（messages 为 StoredChatMessage[]） */
+    getSession: (id: string, projectId: string) =>
+      request<ChatSessionDetail>(`/api/chat/sessions/${encodeURIComponent(id)}?projectId=${encodeURIComponent(projectId)}`),
+    /** 创建会话（可带本地 id，localStorage 迁移幂等） */
+    createSession: (body: { projectId: string; id?: string; title?: string; messages?: unknown[]; branch?: Record<string, unknown>; summary?: string }) =>
+      request<ChatSessionDetail>('/api/chat/sessions', { method: 'POST', body: JSON.stringify(body) }),
+    /** 消息变更后同步完整会话 */
+    saveSession: (id: string, projectId: string, body: { title?: string; messages?: unknown[]; branch?: Record<string, unknown>; summary?: string }) =>
+      request<ChatSessionDetail>(`/api/chat/sessions/${encodeURIComponent(id)}?projectId=${encodeURIComponent(projectId)}`, {
+        method: 'PUT', body: JSON.stringify(body),
+      }),
+    /** 重命名/置顶/归档 */
+    patchSession: (id: string, projectId: string, patch: { title?: string; pinned?: boolean; archived?: boolean; summary?: string }) =>
+      request<ChatSessionDetail>(`/api/chat/sessions/${encodeURIComponent(id)}?projectId=${encodeURIComponent(projectId)}`, {
+        method: 'PATCH', body: JSON.stringify(patch),
+      }),
+    deleteSession: (id: string, projectId: string) =>
+      request<{ ok: boolean }>(`/api/chat/sessions/${encodeURIComponent(id)}?projectId=${encodeURIComponent(projectId)}`, { method: 'DELETE' }),
   },
   memory: {
     /** projectId 必传（企业模式下服务端强制）：记忆是项目级资源，跨项目混列会泄露他人研究摘要 */

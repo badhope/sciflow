@@ -23,6 +23,7 @@ export const AGENT_ACCESS_MODES: { value: AgentAccessMode; label: string; descri
 ];
 
 const READ_ONLY_TOOLS = new Set([
+  'code.diagnostics',
   'literature.search',
   'literature.discover',
   'literature.summarize',

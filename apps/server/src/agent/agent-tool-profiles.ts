@@ -40,6 +40,7 @@ export type AgentToolGroup =
   | 'submission_write';
 /** 精确分组优先：同一前缀下读写工具必须分开（否则 research 会误拿 document.update） */
 const TOOL_GROUP_EXACT: Record<string, AgentToolGroup> = {
+  'code.diagnostics': 'experiment_read',
   'project.list': 'project_read',
   'project.get': 'project_read',
   'project.create': 'project_write',

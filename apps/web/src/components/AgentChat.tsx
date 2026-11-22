@@ -19,6 +19,7 @@ export interface AgentChatThreadProps {
   onContinue?: (index: number) => void;
   onStop?: () => void;
   onDelete?: (index: number) => void;
+  onEdit?: (index: number, nextText: string) => void;
   onCite?: (source: NonNullable<ChatMessage['sources']>[number]) => void;
   onSendToWriting?: (index: number) => void;
   onFollowUp?: (followUp: string, index: number) => void;
@@ -44,6 +45,7 @@ export function AgentChatThread({
   onContinue,
   onStop,
   onDelete,
+  onEdit,
   onCite,
   onSendToWriting,
   onFollowUp,
@@ -79,6 +81,7 @@ export function AgentChatThread({
         onContinue={(i) => onContinue?.(i)}
         onStop={onStop}
         onDelete={onDelete}
+        onEdit={onEdit}
         onCite={onCite}
         onSendToWriting={onSendToWriting}
         onFollowUp={onFollowUp}

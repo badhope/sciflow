@@ -161,6 +161,14 @@ export class DocumentsController {
     return this.documents.restoreSection(id, Number(body.version), String(body.title || ''));
   }
 
+  /** 全文恢复到历史版本：恢复前自动快照当前全文，可再恢复回来 */
+  @Post(':id/versions/:version/restore')
+  @HttpCode(HttpStatus.OK)
+  restoreVersion(@Param('id') id: string, @Param('version') version: number, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
+    return this.documents.restoreVersion(id, Number(version));
+  }
+
   /** 创建手动版本快照（对标 git commit）：显式点保存当前内容快照 + commit message（幂等） */
   @Post(':id/snapshot')
   @HttpCode(HttpStatus.OK)
@@ -250,6 +258,20 @@ export class DocumentsController {
   exportMarkdown(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
     this.access.assertDocument(id, req.user);
     return this.documents.exportMarkdown(id);
+  }
+
+  /** 导出 PPTX 演示稿（标题/大纲/正文/参考文献） */
+  @Get(':id/export-pptx')
+  async exportPptx(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
+    return this.documents.exportPptx(id);
+  }
+
+  /** 导出 XLSX（正文/大纲/参考文献三张表） */
+  @Get(':id/export-xlsx')
+  async exportXlsx(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
+    return this.documents.exportXlsx(id);
   }
 
   /** 导出 Word(.docx) 全文（交稿/投稿） */

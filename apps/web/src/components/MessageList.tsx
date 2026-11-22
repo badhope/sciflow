@@ -4,7 +4,7 @@ import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { AlertCircle, Brain, Check, Circle, Copy, FileText, Loader2, PlayCircle, Quote, RotateCcw, Square, Trash2, Wrench, X } from 'lucide-react';
+import { AlertCircle, Brain, Check, Circle, Copy, FileText, Loader2, Paperclip, Pencil, PlayCircle, Quote, RotateCcw, Square, Trash2, Wrench, X } from 'lucide-react';
 import type { ChatMessage } from '../lib/chat-session';
 import { IconButton } from './ui';
 
@@ -180,6 +180,8 @@ export interface MessageListProps {
   onContinue?: (index: number) => void;
   onStop?: () => void;
   onDelete?: (index: number) => void;
+  /** 编辑用户消息并从该点分支重发 */
+  onEdit?: (index: number, nextText: string) => void;
   onCite?: (s: Source) => void;
   onSendToWriting?: (index: number) => void;
   /** 后续追问建议点击（科研问答页；点击即以该问题续发） */
@@ -205,6 +207,7 @@ export function MessageList({
   onContinue,
   onStop,
   onDelete,
+  onEdit,
   onCite,
   onSendToWriting,
   onFollowUp,
@@ -213,6 +216,8 @@ export function MessageList({
   className = '',
 }: MessageListProps) {
   const [copied, setCopied] = useState<number | null>(null);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [draft, setDraft] = useState('');
 
   const handleCopy = (i: number) => {
     onCopy?.(i);
@@ -228,13 +233,45 @@ export function MessageList({
         m.role === 'user' ? (
           <div key={`${i}-user`} className="group flex justify-end">
             <div className="min-w-0 max-w-[88%]">
-              {userBubble === 'bubble' ? (
+              {editing === i ? (
+                <div className="rounded-xl border border-teal-400 bg-[var(--card)] p-2">
+                  <textarea
+                    autoFocus
+                    rows={3}
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    className="w-full resize-y rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-900"
+                    aria-label="编辑用户消息"
+                  />
+                  <div className="mt-1.5 flex items-center justify-end gap-1.5">
+                    <button type="button" className="text-xs px-2 py-1 text-slate-500 hover:text-slate-700" onClick={() => setEditing(null)}>取消</button>
+                    <button
+                      type="button"
+                      className="rounded-md bg-teal-600 px-2.5 py-1 text-xs text-white disabled:opacity-50"
+                      disabled={!draft.trim()}
+                      onClick={() => { onEdit?.(i, draft); setEditing(null); }}
+                    >
+                      保存并重新生成
+                    </button>
+                  </div>
+                </div>
+              ) : userBubble === 'bubble' ? (
                 <div data-testid="user-message" className="bubble-user whitespace-pre-wrap break-words rounded-2xl rounded-br-sm px-4 py-2.5 text-sm leading-relaxed">{m.content}</div>
               ) : (
                 <div className="whitespace-pre-wrap break-words rounded-xl bg-teal-600/10 px-3.5 py-2.5 text-sm leading-relaxed text-slate-800 dark:bg-teal-400/10 dark:text-slate-100">
                   {m.content}
                 </div>
               )}
+              {m.attachments && m.attachments.length > 0 ? (
+                <div className="mt-1.5 flex flex-wrap justify-end gap-1">
+                  {m.attachments.map((a) => (
+                    <span key={`${a.name}-${a.mime}`} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400" title={a.name}>
+                      {a.mime.startsWith('image/') ? <Paperclip size={9} /> : <FileText size={9} />}
+                      <span className="max-w-[140px] truncate">{a.name}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <div className="mt-1 flex items-center justify-end gap-0.5 opacity-70 transition-opacity hover:opacity-100 focus-within:opacity-100">
                 {onCopy && (
                   <IconButton
@@ -243,6 +280,9 @@ export function MessageList({
                     icon={copied === i ? <Check size={14} className="text-teal-600" /> : <Copy size={14} />}
                     onClick={() => handleCopy(i)}
                   />
+                )}
+                {onEdit && editing !== i && (
+                  <IconButton size={32} label="编辑并分支" icon={<Pencil size={14} />} onClick={() => { setEditing(i); setDraft(m.content); }} />
                 )}
                 {onDelete && <IconButton size={32} tone="danger" label="删除提问" icon={<Trash2 size={14} />} onClick={() => onDelete(i)} />}
               </div>

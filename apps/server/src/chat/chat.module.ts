@@ -5,6 +5,7 @@ import { WebSearchModule } from '../websearch/websearch.module';
 import { AgentTraceModule } from '../agent/agent-trace.module';
 import { AiModule } from '../ai/ai.module';
 import { ChatService } from './chat.service';
+import { BackgroundRunService } from './background-run.service';
 import { ChatController } from './chat.controller';
 import { ChatSessionService } from './chat-session.service';
 import { CompactionService } from './compaction.service';
@@ -14,7 +15,7 @@ import { ResearchBriefModule } from '../research-brief/research-brief.module';
 @Module({
   imports: [AiModule, MemoryModule, KnowledgeModule, WebSearchModule, AgentTraceModule, ConfigModule, ResearchBriefModule],
   controllers: [ChatController],
-  providers: [ChatService, ChatSessionService, CompactionService],
-  exports: [ChatService, ChatSessionService, CompactionService], // RAG 注入逻辑（contextFor）可被 McpModule 等复用
+  providers: [ChatService, ChatSessionService, CompactionService, BackgroundRunService],
+  exports: [ChatService, ChatSessionService, CompactionService, BackgroundRunService], // RAG 注入逻辑（contextFor）可被 McpModule 等复用
 })
 export class ChatModule {}

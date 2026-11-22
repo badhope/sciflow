@@ -208,9 +208,17 @@ NotebookLM 式本地知识库：上传资料 → 分块 → BM25+向量混合检
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | POST | `/api/chat` | 一次性问答（JSON 返回完整答案） |
-| POST | `/api/chat/stream` | **SSE 流式问答** |
+| POST | `/api/chat/stream` | **SSE 流式问答**；body 可带 `sessionId`/`sessionTitle` 把完整消息同步到会话 |
+| GET | `/api/chat/sessions` | 项目会话列表；`q` 跨标题/摘要/完整消息搜索，`includeArchived=1` 含归档 |
+| GET | `/api/chat/sessions/:id` | 打开完整会话（消息与分支状态） |
+| POST | `/api/chat/sessions` | 创建会话（可带本地 id，幂等迁移） |
+| PUT | `/api/chat/sessions/:id` | 幂等保存完整消息（不覆盖服务端摘要） |
+| PATCH | `/api/chat/sessions/:id` | 改名/置顶/归档/更新摘要 |
+| DELETE | `/api/chat/sessions/:id` | 删除会话 |
 
 两个入口在传入 `projectId` 且 Agent 工具开启时都会注入工具集（同一套 `AgentToolBridge`、同样的步数上限与轨迹落库）；非流式入口返回完整答案，不返回工具增量。
+
+`chat_session` 是会话主记录：旧摘要行保留 `summary_only=1` 只参与跨会话记忆注入；新会话行保存 `title`、`messages_json`、`branch_json`、`pinned`、`archived`、`last_message_at`。前端仍以 localStorage 作离线缓存，启动时与服务端列表合并，刷新/换设备可恢复。
 
 **SSE 协议**（`POST /api/chat/stream`）：
 - 响应头 `Content-Type: text/event-stream`。

@@ -3,7 +3,7 @@
 **English** · [简体中文](product-roadmap.zh-CN.md)
 
 
-Last reviewed: 2026-11-22 · Current release: **1.19.13**
+Last reviewed: 2026-11-23 · Current release: **1.19.15**
 
 This document states what exists today, what is deliberately out of scope, and
 what is planned next. It is the single source of truth for product scope; the
@@ -41,6 +41,7 @@ decision not to build it.
 | --- | --- | --- | --- |
 | Topic | Topic validation and research plan | Shipped | Planner agent produces goals, sub-questions, search strategy, sections and risks |
 | Topic | Novelty pre-check | Shipped | Academic sources when reachable; when the library is unreachable or disabled it degrades to a deterministic local-evidence check (library overlap + topic specificity) and always labels the result as offline rather than guessing |
+| Conversation | Cloud sessions | Shipped | `chat_session` stores full messages and summaries; pin, archive, cross-session full-text search, and refresh recovery, with local storage as an offline cache only |
 | Literature | Online academic search | Shipped | OpenAlex, Crossref, arXiv in parallel, TTL cached, no API key required |
 | Literature | Web search fallback | Shipped | Keyless domestic provider with a reachability diagnostic |
 | Literature | Library management | Shipped | Import, fingerprint dedup, reading status machine, BibTeX and RIS exchange |

@@ -3407,6 +3407,37 @@
         ]
       }
     },
+    "/documents/{id}/versions/{version}/restore": {
+      "post": {
+        "operationId": "DocumentsController_restoreVersion",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
     "/documents/{id}/snapshot": {
       "post": {
         "operationId": "DocumentsController_createSnapshot",
@@ -3700,6 +3731,52 @@
     "/documents/{id}/export": {
       "get": {
         "operationId": "DocumentsController_exportMarkdown",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/documents/{id}/export-pptx": {
+      "get": {
+        "operationId": "DocumentsController_exportPptx",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/documents/{id}/export-xlsx": {
+      "get": {
+        "operationId": "DocumentsController_exportXlsx",
         "parameters": [
           {
             "name": "id",
@@ -4637,6 +4714,97 @@
         ]
       }
     },
+    "/chat/background": {
+      "post": {
+        "operationId": "ChatController_startBackground",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackgroundJobRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Chat"
+        ]
+      },
+      "get": {
+        "operationId": "ChatController_listBackground",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/chat/background/{id}": {
+      "get": {
+        "operationId": "ChatController_getBackground",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/chat/background/{id}/cancel": {
+      "post": {
+        "operationId": "ChatController_cancelBackground",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
     "/chat/stream": {
       "post": {
         "operationId": "ChatController_stream",
@@ -4665,6 +4833,166 @@
       "get": {
         "operationId": "ChatController_listSessions",
         "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Chat"
+        ]
+      },
+      "post": {
+        "operationId": "ChatController_createSession",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChatSessionBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/chat/sessions/{id}": {
+      "get": {
+        "operationId": "ChatController_getSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Chat"
+        ]
+      },
+      "put": {
+        "operationId": "ChatController_saveSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveChatSessionBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Chat"
+        ]
+      },
+      "patch": {
+        "operationId": "ChatController_patchSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchChatSessionBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Chat"
+        ]
+      },
+      "delete": {
+        "operationId": "ChatController_deleteSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "projectId",
             "required": true,
@@ -6664,6 +6992,251 @@
         "summary": "停止远程控制网关并吊销当前手机会话",
         "tags": [
           "remote"
+        ]
+      }
+    },
+    "/shares": {
+      "post": {
+        "operationId": "ShareController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShareRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Share"
+        ]
+      },
+      "get": {
+        "operationId": "ShareController_list",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Share"
+        ]
+      }
+    },
+    "/shares/{id}/revoke": {
+      "post": {
+        "operationId": "ShareController_revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Share"
+        ]
+      }
+    },
+    "/public/shares/{token}": {
+      "get": {
+        "operationId": "PublicShareController_get",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "PublicShare"
+        ]
+      }
+    },
+    "/schedules": {
+      "post": {
+        "operationId": "ScheduleController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateScheduleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Schedule"
+        ]
+      },
+      "get": {
+        "operationId": "ScheduleController_list",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Schedule"
+        ]
+      }
+    },
+    "/schedules/{id}": {
+      "patch": {
+        "operationId": "ScheduleController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScheduleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Schedule"
+        ]
+      },
+      "delete": {
+        "operationId": "ScheduleController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Schedule"
+        ]
+      }
+    },
+    "/schedules/{id}/run": {
+      "post": {
+        "operationId": "ScheduleController_runNow",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Schedule"
         ]
       }
     }
@@ -9435,6 +10008,28 @@
           }
         }
       },
+      "ChatAttachmentDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "文件名"
+          },
+          "mime": {
+            "type": "string",
+            "description": "MIME 类型，如 application/pdf、image/png"
+          },
+          "data": {
+            "type": "string",
+            "description": "base64 内容（不含 data: 前缀）"
+          }
+        },
+        "required": [
+          "name",
+          "mime",
+          "data"
+        ]
+      },
       "ChatRequestBody": {
         "type": "object",
         "properties": {
@@ -9442,6 +10037,13 @@
             "type": "string",
             "description": "本轮用户提问",
             "example": "图神经网络的消息传递机制是什么？"
+          },
+          "attachments": {
+            "description": "本轮附件（PDF/文本/CSV/图片，最多 4 个）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatAttachmentDto"
+            }
           },
           "history": {
             "type": "array",
@@ -9469,11 +10071,127 @@
           "webSearch": {
             "type": "boolean",
             "description": "本轮强制联网搜索（输入区「联网」开关，按轮生效）"
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "当前会话 ID：用于把完整消息同步到 chat_session"
+          },
+          "sessionTitle": {
+            "type": "string",
+            "description": "当前会话标题（首轮可空，服务端会从首条用户消息派生）"
           }
         },
         "required": [
           "message"
         ]
+      },
+      "BackgroundJobRequest": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "description": "项目 ID"
+          },
+          "message": {
+            "type": "string",
+            "description": "后台任务的用户消息"
+          },
+          "sessionKey": {
+            "type": "string",
+            "description": "会话键；同一键串行，不同键可并行",
+            "default": "default"
+          },
+          "model": {
+            "type": "string",
+            "description": "显式模型 ID"
+          }
+        },
+        "required": [
+          "projectId",
+          "message"
+        ]
+      },
+      "CreateChatSessionBody": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "description": "项目 ID"
+          },
+          "id": {
+            "type": "string",
+            "description": "会话 ID；前端 localStorage 迁移时传入，保证幂等"
+          },
+          "title": {
+            "type": "string",
+            "description": "会话标题"
+          },
+          "messages": {
+            "type": "array",
+            "description": "完整消息数组（StoredChatMessage[]）",
+            "items": {
+              "type": "object"
+            }
+          },
+          "branch": {
+            "type": "object",
+            "description": "分支状态（activeLeafId 等）",
+            "additionalProperties": true
+          },
+          "summary": {
+            "type": "string",
+            "description": "摘要（仅导入旧会话时使用）"
+          }
+        },
+        "required": [
+          "projectId"
+        ]
+      },
+      "SaveChatSessionBody": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "会话标题"
+          },
+          "messages": {
+            "type": "array",
+            "description": "完整消息数组（StoredChatMessage[]）",
+            "items": {
+              "type": "object"
+            }
+          },
+          "branch": {
+            "type": "object",
+            "description": "分支状态（activeLeafId 等）",
+            "additionalProperties": true
+          },
+          "summary": {
+            "type": "string",
+            "description": "摘要（可选；常规同步不要覆盖服务端摘要）"
+          }
+        }
+      },
+      "PatchChatSessionBody": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "会话标题"
+          },
+          "pinned": {
+            "type": "boolean",
+            "description": "置顶"
+          },
+          "archived": {
+            "type": "boolean",
+            "description": "归档"
+          },
+          "summary": {
+            "type": "string",
+            "description": "摘要"
+          }
+        }
       },
       "WebProjectDto": {
         "type": "object",
@@ -9769,6 +10487,120 @@
           "addresses",
           "publicUrlConfigured"
         ]
+      },
+      "CreateShareRequest": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "description": "项目 ID"
+          },
+          "targetType": {
+            "type": "string",
+            "description": "目标类型；当前只支持 document",
+            "enum": [
+              "document"
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "description": "文档 ID"
+          },
+          "expiresInDays": {
+            "type": "number",
+            "description": "有效天数，默认 30，范围 1-365"
+          }
+        },
+        "required": [
+          "projectId",
+          "targetType",
+          "targetId"
+        ]
+      },
+      "CreateScheduleRequest": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "cadence": {
+            "type": "string",
+            "enum": [
+              "once",
+              "hourly",
+              "daily",
+              "weekly"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "任务发给 Agent 的消息"
+          },
+          "minuteOfHour": {
+            "type": "number"
+          },
+          "hourOfDay": {
+            "type": "number"
+          },
+          "weekday": {
+            "type": "number",
+            "description": "0=周日 … 6=周六"
+          },
+          "sessionKey": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "delayMinutes": {
+            "type": "number",
+            "description": "仅 once：多少分钟后触发"
+          }
+        },
+        "required": [
+          "projectId",
+          "name",
+          "cadence",
+          "message"
+        ]
+      },
+      "UpdateScheduleRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "cadence": {
+            "type": "string",
+            "enum": [
+              "once",
+              "hourly",
+              "daily",
+              "weekly"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "minuteOfHour": {
+            "type": "number"
+          },
+          "hourOfDay": {
+            "type": "number"
+          },
+          "weekday": {
+            "type": "number"
+          },
+          "model": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
       }
     }
   }

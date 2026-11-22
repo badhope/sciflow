@@ -58,6 +58,31 @@ describe('文档与引用完整性', () => {
     expect(db.select().from(documents).where(eq(documents.id, 'evil')).get()).toBeUndefined();
   });
 
+  it('全文恢复历史版本：恢复前自动快照，可再恢复回去', () => {
+    docs.update(docId, { content: '版本 A 正文' });
+    docs.update(docId, { content: '版本 B 正文' });
+    const before = docs.get(docId);
+    expect(before.content).toBe('版本 B 正文');
+    expect(before.version).toBe(3);
+    const versions = JSON.parse(before.versions) as { version: number; content: string }[];
+    const v2 = versions.find((v) => v.content === '版本 A 正文');
+    expect(v2).toBeTruthy();
+
+    const restored = docs.restoreVersion(docId, v2!.version);
+    expect(restored.changed).toBe(true);
+    expect(restored.content).toBe('版本 A 正文');
+    expect(restored.version).toBe(4);
+    const after = docs.get(docId);
+    expect(after.content).toBe('版本 A 正文');
+    const snapshots = JSON.parse(after.versions) as { version: number; content: string; commitMessage?: string }[];
+    expect(snapshots.some((v) => v.content === '版本 B 正文' && /恢复全文/.test(v.commitMessage || ''))).toBe(true);
+
+    // 再恢复到刚才的 B，验证「恢复动作本身也可回退」
+    const b = snapshots.find((v) => v.content === '版本 B 正文');
+    const back = docs.restoreVersion(docId, b!.version);
+    expect(back.content).toBe('版本 B 正文');
+  });
+
   it('删除文档级联清理质检/审稿意见/实验（H2）', () => {
     const now = Date.now();
     db.insert(qualityReports).values({ id: 'qr-1', documentId: docId, totalScore: 70, scores: '{}', feedback: '', createdAt: now }).run();

@@ -17,7 +17,7 @@ import { sqlite } from '../db/database';
 import { AiService } from '../ai/ai.service';
 import { ConfigCenterService } from '../config/config-center.service';
 import { BUILTIN_EXTENSION_ASSETS, EXTENSION_KINDS, type BuiltinAsset, type ExtensionKind } from './extension-catalog';
-import { SettingsService } from '../settings/settings.service';
+import { BUILTIN_SKILLS } from '../common/skill-catalog';
 
 export interface ExtensionRow {
   id: string;
@@ -485,7 +485,7 @@ export class ExtensionsService {
     const stored = this.readJson<{ id: string; key: string; name: string; description: string; instructions?: string; enabled: number; builtin: number }[]>('skills', []);
     // 必须保留内置 4 项技能（AgentToolBridge 用它们的 key 裁剪工具；缺失会被当作全部关闭）
     const skills = [...stored];
-    for (const b of SettingsService.BUILTIN_SKILLS) {
+    for (const b of BUILTIN_SKILLS) {
       if (!skills.some((s) => s.key === b.key)) skills.unshift({ id: `builtin-${b.key}`, ...b, enabled: 1, builtin: 1 });
     }
     const idx = skills.findIndex((s) => s.id === `ext-${row.key}`);

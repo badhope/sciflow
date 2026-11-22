@@ -98,4 +98,79 @@ describe('ChatSessionService', () => {
     // 项目隔离：其他项目的摘要不能混进来
     expect(svc.listSummaries('other-project')).toHaveLength(0);
   });
+
+  it('create/list/get/delete 完整会话，旧摘要行不出现在可打开列表', () => {
+    svc = new ChatSessionService({ complete: async () => '' } as any);
+    const created = svc.createConversation(TEST_PROJECT, {
+      id: 'conv-1',
+      title: '图神经网络讨论',
+      messages: [
+        { id: 'm1', role: 'user', content: '图神经网络的消息传递是什么？', createdAt: 1000 },
+        { id: 'm2', parentId: 'm1', role: 'assistant', content: '邻居聚合与更新。', createdAt: 2000 },
+      ],
+      branch: { activeLeafId: 'm2' },
+    });
+    expect(created.title).toBe('图神经网络讨论');
+    expect(created.messageCount).toBe(2);
+    expect(created.messages).toHaveLength(2);
+    expect(created.branch.activeLeafId).toBe('m2');
+
+    // 旧摘要行：只参与 injectPastSummary，不进入可打开会话。
+    db.insert(chatSessions).values({
+      id: 'legacy-1', projectId: TEST_PROJECT, title: '旧摘要', summary: '旧摘要内容',
+      messagesJson: '[]', branchJson: '{}', messageCount: 2, totalTokens: 20,
+      pinned: 0, archived: 0, lastMessageAt: null, source: 'legacy-summary', summaryOnly: 1,
+      createdAt: 3000, updatedAt: 3000,
+    }).run();
+    expect(svc.listConversations(TEST_PROJECT).map((s) => s.id)).toEqual(['conv-1']);
+
+    expect(svc.getConversation(TEST_PROJECT, 'conv-1').messages[1].content).toContain('邻居聚合');
+    expect(() => svc.getConversation('other-project', 'conv-1')).toThrow(/会话不存在/);
+    svc.deleteConversation(TEST_PROJECT, 'conv-1');
+    expect(() => svc.getConversation(TEST_PROJECT, 'conv-1')).toThrow(/会话不存在/);
+  });
+
+  it('saveConversation 幂等 upsert，并支持全文搜索', () => {
+    svc = new ChatSessionService({ complete: async () => '' } as any);
+    svc.createConversation(TEST_PROJECT, { id: 'conv-search', title: '初稿' });
+    const saved = svc.saveConversation(TEST_PROJECT, 'conv-search', {
+      title: 'CRISPR 脱靶分析',
+      messages: [
+        { role: 'user', content: '请比较 CRISPR 脱靶检测方法', createdAt: 1000 },
+        { role: 'assistant', content: 'GUIDE-seq 与 CFD 是常见方案。', createdAt: 2000 },
+      ],
+    });
+    expect(saved.title).toBe('CRISPR 脱靶分析');
+    expect(saved.messageCount).toBe(2);
+    expect(svc.listConversations(TEST_PROJECT, { q: 'GUIDE-seq' }).map((s) => s.id)).toEqual(['conv-search']);
+    expect(svc.listConversations(TEST_PROJECT, { q: '不存在的关键词' })).toHaveLength(0);
+  });
+
+  it('置顶/归档影响列表排序与可见性', () => {
+    svc = new ChatSessionService({ complete: async () => '' } as any);
+    svc.createConversation(TEST_PROJECT, { id: 'old', title: '旧会话' });
+    svc.createConversation(TEST_PROJECT, { id: 'new', title: '新会话' });
+    svc.patchConversation(TEST_PROJECT, 'old', { pinned: true });
+    expect(svc.listConversations(TEST_PROJECT).map((s) => s.id)).toEqual(['old', 'new']);
+    svc.patchConversation(TEST_PROJECT, 'new', { archived: true });
+    expect(svc.listConversations(TEST_PROJECT).map((s) => s.id)).toEqual(['old']);
+    expect(svc.listConversations(TEST_PROJECT, { includeArchived: true }).map((s) => s.id)).toEqual(['old', 'new']);
+    svc.patchConversation(TEST_PROJECT, 'new', { archived: false });
+    expect(svc.listConversations(TEST_PROJECT).map((s) => s.id)).toEqual(['old', 'new']);
+  });
+
+  it('recordSummary 带 sessionId 时更新现有会话而不是新增一行', async () => {
+    const aiComplete = vi.fn(async () => '本轮结论：方法 A 更稳。');
+    svc = new ChatSessionService({ complete: aiComplete } as any);
+    svc.createConversation(TEST_PROJECT, { id: 'conv-summary', title: '方法比较' });
+    await svc.recordSummary(TEST_PROJECT, [
+      { role: 'user', content: '比较 A/B 方法' },
+      { role: 'assistant', content: 'A 更稳。' },
+    ], 321, 'conv-summary', '方法比较');
+    const rows = db.select().from(chatSessions).all().filter((s) => s.projectId === TEST_PROJECT);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].summary).toContain('方法 A 更稳');
+    expect(rows[0].messageCount).toBe(2);
+    expect(rows[0].totalTokens).toBe(321);
+  });
 });

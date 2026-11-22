@@ -352,10 +352,20 @@ export function WritingPage({
     }
   };
 
-  const restoreSnapshot = (s: VersionSnapshot) => {
-    setContent(s.content);
-    toast('success', `已恢复到 v${s.version}（防抖自动保存将写回）`);
-    setDiffModalOpen(false);
+  const restoreSnapshot = async (s: VersionSnapshot) => {
+    if (!docId) return;
+    try {
+      const restored = await api.documents.restoreVersion(docId, s.version);
+      const fresh = await api.documents.get(docId);
+      setDoc(fresh);
+      setContent(restored.content);
+      setSavedAt(Date.now());
+      toast('success', `已恢复全文到 v${s.version}（恢复前已自动快照，可再恢复）`);
+      setDiffModalOpen(false);
+      void qc.invalidateQueries({ queryKey: qk.doc(docId) });
+    } catch (e: unknown) {
+      toast('error', `恢复失败：${errMsg(e)}`);
+    }
   };
 
   /** 手动创建版本快照：固化为不可变版本（可命名/对比/恢复），后端内容一致时幂等跳过 */
@@ -604,6 +614,34 @@ export function WritingPage({
       toast('success', 'Word 文档已导出（含标题/大纲/正文/参考文献）');
     } catch {
       toast('error', 'Word 导出失败');
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const exportPpt = async () => {
+    if (!doc) return;
+    try {
+      setAiBusy(true);
+      const { base64, filename } = await api.documents.exportPptx(doc.id);
+      downloadBase64(filename, base64, 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+      toast('success', 'PPTX 演示稿已导出（标题/大纲/正文/参考文献）');
+    } catch {
+      toast('error', 'PPTX 导出失败');
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const exportExcel = async () => {
+    if (!doc) return;
+    try {
+      setAiBusy(true);
+      const { base64, filename } = await api.documents.exportXlsx(doc.id);
+      downloadBase64(filename, base64, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      toast('success', 'XLSX 已导出（正文/大纲/参考文献）');
+    } catch {
+      toast('error', 'XLSX 导出失败');
     } finally {
       setAiBusy(false);
     }
@@ -878,6 +916,8 @@ export function WritingPage({
             project={project}
             onExportFull={exportFullDoc}
             onExportWord={exportWord}
+            onExportPpt={exportPpt}
+            onExportExcel={exportExcel}
             aiBusy={aiBusy}
           />
         </Suspense>

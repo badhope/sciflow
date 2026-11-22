@@ -29,7 +29,8 @@ function collectControllers(dir: string, acc: string[] = []): string[] {
   return acc;
 }
 
-const ALLOWED = new Set(['auth.controller.ts', 'health.controller.ts']);
+// share.controller.ts 仅把 `GET /public/shares/:token` 标为 Public；创建/撤销/列表仍走项目归属校验。
+const ALLOWED = new Set(['auth.controller.ts', 'health.controller.ts', 'share.controller.ts']);
 
 describe('鉴权面契约：@Public() 白名单', () => {
   const controllers = collectControllers(SRC);
@@ -38,7 +39,7 @@ describe('鉴权面契约：@Public() 白名单', () => {
     expect(controllers.length).toBeGreaterThanOrEqual(18);
   });
 
-  it('除 auth / health 外，任何 controller 都不得标注 @Public()', () => {
+  it('除 auth / health / 公开分享读取外，任何 controller 都不得标注 @Public()', () => {
     const violations: string[] = [];
     for (const file of controllers) {
       const name = path.basename(file);

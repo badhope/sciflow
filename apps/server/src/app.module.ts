@@ -30,6 +30,8 @@ import { ExperimentsModule } from './experiments/experiments.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { WebSearchModule } from './websearch/websearch.module';
 import { RemoteModule } from './remote/remote.module';
+import { ShareModule } from './share/share.module';
+import { ScheduleModule } from './schedule/schedule.module';
 import { HealthController } from './health.controller';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 
@@ -75,6 +77,8 @@ import { HttpExceptionFilter } from './common/http-exception.filter';
     ExperimentsModule,
     DashboardModule,
     RemoteModule,
+    ShareModule,
+    ScheduleModule,
   ],
   controllers: [HealthController],
   providers: [

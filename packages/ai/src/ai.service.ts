@@ -126,7 +126,7 @@ export class AiService extends AiTransportService {
     const sys = chatOpts.tools
       ? `${this.resolveSystem(customSystemPrompt)}${TOOL_USE_NOTE}`
       : this.resolveSystem(customSystemPrompt);
-    return this.completeWithTools([{ role: 'system', content: sys }, ...history, { role: 'user', content: question }], {
+    return this.completeWithTools([{ role: 'system', content: sys }, ...history, { role: 'user', content: question, parts: chatOpts.userParts }], {
       context: chatOpts.writing ? 'chatWriting' : 'chat',
       modelName: chatOpts.modelName,
       signal: chatOpts.signal,
@@ -140,7 +140,7 @@ export class AiService extends AiTransportService {
     const sys = context
       ? `${this.resolveSystem(customSystemPrompt)}\n\n【当前项目上下文】\n${context}\n\n${CONTEXT_NOTE}${toolNote}`
       : this.resolveSystem(customSystemPrompt);
-    return this.completeWithTools([{ role: 'system', content: sys }, ...history, { role: 'user', content: question }], {
+    return this.completeWithTools([{ role: 'system', content: sys }, ...history, { role: 'user', content: question, parts: chatOpts.userParts }], {
       context: chatOpts.writing ? 'chatWriting' : 'chat',
       modelName: chatOpts.modelName,
       signal: chatOpts.signal,
@@ -153,7 +153,7 @@ export class AiService extends AiTransportService {
     const sys = context
       ? `${this.resolveSystem(customSystemPrompt)}\n\n【当前项目上下文】\n${context}\n\n${CONTEXT_NOTE}${TOOL_USE_NOTE}`
       : this.resolveSystem(customSystemPrompt);
-    return this.completeStream([{ role: 'system', content: sys }, ...history, { role: 'user', content: question }], {
+    return this.completeStream([{ role: 'system', content: sys }, ...history, { role: 'user', content: question, parts: streamOpts.userParts }], {
       context: streamOpts.writing ? 'chatWriting' : 'chat',
       modelName: streamOpts.modelName,
       enableThinking: streamOpts.enableThinking,
@@ -169,7 +169,7 @@ export class AiService extends AiTransportService {
     const sys = streamOpts.tools
       ? `${this.resolveSystem(customSystemPrompt)}${TOOL_USE_NOTE}`
       : this.resolveSystem(customSystemPrompt);
-    return this.completeStream([{ role: 'system', content: sys }, ...history, { role: 'user', content: question }], {
+    return this.completeStream([{ role: 'system', content: sys }, ...history, { role: 'user', content: question, parts: streamOpts.userParts }], {
       context: streamOpts.writing ? 'chatWriting' : 'chat',
       modelName: streamOpts.modelName,
       enableThinking: streamOpts.enableThinking,
@@ -678,4 +678,4 @@ ${response}`
 }
 
 export type ReviewResult = Awaited<ReturnType<AiService['reviewPaper']>>;
-export { ChatMessage, ChatStreamOptions, CompleteOptions } from './ai-transport.service';
+export { ChatMessage, ChatStreamOptions, CompleteOptions, ChatContentPart } from './ai-transport.service';

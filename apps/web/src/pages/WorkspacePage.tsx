@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Brain, Check, Download, ExternalLink, FilePlus2, Globe, Loader2, MessageSquare, Navigation, Pencil,
-  PlayCircle, Plus, Quote, Search, Send, Sparkles, Square, Trash2, Workflow,
+  Copy, Paperclip, PlayCircle, Plus, Quote, Search, Send, Share2, Sparkles, Square, Trash2, Workflow, X,
+  Pin, Archive, ArchiveRestore, Cloud,
 } from 'lucide-react';
 import { PIPELINE_STEPS } from '@sciflow/core/pipeline-steps';
 import { api } from '../api/client';
@@ -23,7 +24,9 @@ import { EvidenceChain, type ChainNode } from '../components/EvidenceChain';
 import { useSplitDrag } from '../lib/split-drag';
 import { useHotkeys } from '../lib/hotkeys';
 import { useAsyncAction } from '../lib/async';
-import { useChatSession, parseFollowUps, FOLLOWUP_HINT, type ChatMessage, type SendOptions } from '../lib/chat-session';
+import { useChatSession, parseFollowUps, FOLLOWUP_HINT, type ChatAttachment, type ChatMessage, type SendOptions } from '../lib/chat-session';
+import { CHAT_ATTACHMENT_ACCEPT, CHAT_ATTACHMENT_MAX_FILES, readChatAttachment } from '../lib/chat-attachments';
+import { shares, absoluteShareUrl, type ShareLinkInfo } from '../api/shares';
 import { useProjectDocs, useProjectKnowledge, useProjectRefs } from '../lib/queries';
 import { useTabActive } from '../lib/tab-visibility';
 import { qk } from '../lib/query-keys';
@@ -32,8 +35,9 @@ import { useAgentInbox } from '../lib/agent-inbox';
 import {
   createSession, deriveTitle, loadActiveSessionId, loadDraft, loadSessions, saveActiveSessionId, saveDraft, saveSessions,
   type ChatSession,
+  type StoredMessage,
 } from './chat/chat-sessions';
-import type { ChatSource, Doc, IntentResult, KnowledgeDoc, Outline, PipelineTask, Project } from '../types';
+import type { ChatSessionDetail, ChatSessionSummary, ChatSource, Doc, IntentResult, KnowledgeDoc, Outline, PipelineTask, Project } from '../types';
 import { Badge, Button, ConfirmDialog, Empty, ErrorBox, Input, Modal, downloadText } from '../components/ui';
 import { WritingPreview } from './writing/WritingPreview';
 import { ProjectStatsBar } from './dashboard/ProjectStatsBar';
@@ -55,6 +59,34 @@ import { ProjectStatsBar } from './dashboard/ProjectStatsBar';
 
 /** 步骤中文名：单一来源 packages/core/pipeline-steps（此前本页另写一份，标签与设置页漂移） */
 const STEP_LABELS: Record<string, string> = Object.fromEntries(PIPELINE_STEPS.map((s) => [s.key, s.label]));
+
+/** 服务端会话摘要 → 本地会话壳；已有本地完整消息时保留消息，只更新元信息。 */
+function mergeServerSession(existing: ChatSession | undefined, s: ChatSessionSummary): ChatSession {
+  return {
+    id: s.id,
+    title: s.title || existing?.title || '新对话',
+    createdAt: existing?.createdAt ?? s.createdAt,
+    updatedAt: Math.max(existing?.updatedAt ?? 0, s.updatedAt),
+    messages: existing?.messages ?? [],
+    pinned: s.pinned,
+    archived: s.archived,
+    messageCount: s.messageCount,
+  };
+}
+
+/** 服务端完整会话 → 本地会话（消息字段与 ChatMessage 兼容，保留 id/parentId 供 A2 分支使用）。 */
+function fromServerDetail(d: ChatSessionDetail): ChatSession {
+  return {
+    id: d.id,
+    title: d.title || '新对话',
+    createdAt: d.createdAt,
+    updatedAt: d.updatedAt,
+    messages: d.messages as unknown as StoredMessage[],
+    pinned: d.pinned,
+    archived: d.archived,
+    messageCount: d.messageCount,
+  };
+}
 
 /** Slash 快捷指令（对话直达高频科研动作） */
 
@@ -101,9 +133,54 @@ export function WorkspacePage({
     return saved && sessions.some((s) => s.id === saved) ? saved : (sessions[0]?.id ?? createSession().id);
   });
   const [input, setInput] = useState(() => loadDraft(project.id, activeId));
+  const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
+  const addAttachments = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const slots = CHAT_ATTACHMENT_MAX_FILES - pendingAttachments.length;
+    if (slots <= 0) {
+      setError(`最多 ${CHAT_ATTACHMENT_MAX_FILES} 个附件`);
+      return;
+    }
+    try {
+      const parsed = await Promise.all(Array.from(files).slice(0, slots).map(readChatAttachment));
+      setPendingAttachments((prev) => [...prev, ...parsed].slice(0, CHAT_ATTACHMENT_MAX_FILES));
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareInfo, setShareInfo] = useState<ShareLinkInfo | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [sessionFilter, setSessionFilter] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
+  const [sessionSyncError, setSessionSyncError] = useState('');
   const [renamingSession, setRenamingSession] = useState<{ id: string; title: string } | null>(null);
   const [deletingSession, setDeletingSession] = useState<{ id: string; title: string } | null>(null);
+  const sessionsRef = useRef(sessions);
+  const serverHydratedRef = useRef(false);
+  useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
+
+  /** 从服务端拉完整会话；本地已有完整消息时直接用本地，避免每次打开都发请求。 */
+  const loadSession = useCallback(async (id: string): Promise<ChatSession | null> => {
+    const local = sessionsRef.current.find((s) => s.id === id);
+    if (local && local.messages.length) return local;
+    if (local && local.messageCount === 0) return local;
+    try {
+      const detail = await api.chat.getSession(id, project.id);
+      const merged = fromServerDetail(detail);
+      const next = [merged, ...sessionsRef.current.filter((s) => s.id !== id)];
+      sessionsRef.current = next;
+      setSessions(next);
+      saveSessions(project.id, next);
+      return merged;
+    } catch {
+      return local ?? null;
+    }
+  }, [project.id]);
 
   // ── 对话内核（onSend=意图旁路；doneTransform=followUps 解析；onMessagesChange=会话落盘） ──
   const [error, setError] = useState('');
@@ -114,24 +191,43 @@ export function WorkspacePage({
     (ms: ChatMessage[]) => {
       const clean = ms.filter((m) => !m.streaming);
       if (!clean.some((m) => m.role === 'user')) return;
-      setSessions((prev) => {
-        const now = Date.now();
-        const prevCur = prev.find((s) => s.id === activeId);
-        const msgs = clean.map(({ streaming: _s, ...rest }) => rest);
-        // 内容未变（如打开旧会话触发内核持久化）不 bump updatedAt、不重排：
-        // 会话排序语义是「最后发言」，不是「最后打开」
-        const changed = JSON.stringify(msgs) !== JSON.stringify(prevCur?.messages ?? []);
+      const now = Date.now();
+      const prevCur = sessionsRef.current.find((s) => s.id === activeId);
+      const msgs = clean.map(({ streaming: _s, ...rest }) => rest);
+      // 内容未变（如打开旧会话触发内核持久化）不 bump updatedAt、不重排：
+      // 会话排序语义是「最后发言」，不是「最后打开」
+      const changed = JSON.stringify(msgs) !== JSON.stringify(prevCur?.messages ?? []);
+      const title = deriveTitle(clean);
+      if (changed) {
         const current: ChatSession = {
           id: activeId,
-          title: deriveTitle(clean),
+          title,
           createdAt: prevCur?.createdAt ?? now,
-          updatedAt: changed ? now : (prevCur?.updatedAt ?? now),
+          updatedAt: now,
           messages: msgs,
+          pinned: prevCur?.pinned,
+          archived: prevCur?.archived,
+          messageCount: msgs.length,
         };
-        const next = changed ? [current, ...prev.filter((s) => s.id !== activeId)] : prev.map((s) => (s.id === activeId ? current : s));
+        const next = [current, ...sessionsRef.current.filter((s) => s.id !== activeId)];
+        sessionsRef.current = next;
+        setSessions(next);
         saveSessions(project.id, next);
-        return next;
-      });
+        setSessionSyncError('');
+        void api.chat.saveSession(activeId, project.id, { title, messages: msgs })
+          .then((detail) => {
+            // 服务端返回的摘要/消息数为准；不覆盖本地消息，避免流式刚结束时把显示内容改掉
+            setSessions((prev) => {
+              const synced = prev.map((s) => s.id === detail.id
+                ? { ...s, title: detail.title || s.title, pinned: detail.pinned, archived: detail.archived, messageCount: detail.messageCount, updatedAt: Math.max(s.updatedAt, detail.updatedAt) }
+                : s);
+              sessionsRef.current = synced;
+              saveSessions(project.id, synced);
+              return synced;
+            });
+          })
+          .catch((e) => setSessionSyncError(e instanceof Error ? e.message : String(e)));
+      }
       saveActiveSessionId(project.id, activeId);
     },
     [activeId, project.id],
@@ -179,12 +275,20 @@ export function WorkspacePage({
 
   // ── 数据层（React Query）──────────────────────────────────
   const docsQuery = useProjectDocs(project.id);
-  // 服务端沉淀摘要（chat_session 落库）：点击注入为对话背景
+  // 服务端完整会话（跨设备/清缓存恢复；同时用于摘要区）
   const [sessionContext, setSessionContext] = useState<string | null>(null);
-  const summariesQuery = useQuery({
-    queryKey: ['chat-summaries', project.id],
-    queryFn: () => api.chat.sessions(project.id),
-    enabled: showSessionsPanel,
+  const serverSessionsQuery = useQuery({
+    queryKey: ['chat-sessions', project.id],
+    queryFn: () => api.chat.sessions(project.id, { includeArchived: true }),
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  });
+  // 会话全文搜索走后端（标题/摘要/完整消息 JSON），不把 50 条上限带进搜索语义
+  const serverSearchQuery = useQuery({
+    queryKey: ['chat-session-search', project.id, sessionFilter],
+    queryFn: () => api.chat.sessions(project.id, { q: sessionFilter.trim(), includeArchived: true }),
+    enabled: showSessionsPanel && !!sessionFilter.trim(),
+    staleTime: 10_000,
   });
   // 知识库清单（来源卡「引用进草稿」用）
   const [citeSource, setCiteSource] = useState<ChatSource | null>(null);
@@ -193,6 +297,33 @@ export function WorkspacePage({
   // @ 提及数据源：文献与知识库资料（仅在需要时拉取，避免首屏多两个请求）
   const refsQuery = useProjectRefs(project.id, { staleTime: 60_000 });
   const kbDocsQuery = useProjectKnowledge(project.id, { staleTime: 60_000 });
+
+  // 服务端会话合并：本地有完整消息则保留，服务端补元信息；服务端独有会话先落壳，打开时再拉详情。
+  const chatResetRef = useRef(chat.reset);
+  useEffect(() => {
+    chatResetRef.current = chat.reset;
+  }, [chat.reset]);
+  useEffect(() => {
+    const list = serverSessionsQuery.data?.sessions;
+    if (!list?.length) return;
+    const map = new Map(sessionsRef.current.map((s) => [s.id, s]));
+    for (const s of list) map.set(s.id, mergeServerSession(map.get(s.id), s));
+    const next = [...map.values()].sort((a, b) => (Number(!!b.pinned) - Number(!!a.pinned)) || (b.updatedAt - a.updatedAt));
+    sessionsRef.current = next;
+    setSessions(next);
+    saveSessions(project.id, next);
+    if (!serverHydratedRef.current) {
+      serverHydratedRef.current = true;
+      // 换设备/清缓存后本地没有会话：自动打开服务端最近一条，并拉完整消息。
+      if (!next.some((s) => s.id === activeId) && next[0]) {
+        setActiveId(next[0].id);
+        saveActiveSessionId(project.id, next[0].id);
+        void loadSession(next[0].id).then((s) => {
+          if (s) chatResetRef.current(s.messages as ChatMessage[]);
+        });
+      }
+    }
+  }, [serverSessionsQuery.data, project.id, activeId, loadSession]);
 
   useEffect(() => {
     api.settings.get().then((s) => setModels(s.ai.models || [])).catch(() => undefined);
@@ -310,11 +441,13 @@ export function WorkspacePage({
     enableThinking: thinking || undefined,
     webSearch: webSearch || undefined,
     messageSuffix: FOLLOWUP_HINT,
+    sessionId: activeId,
+    sessionTitle: sessions.find((s) => s.id === activeId)?.title || deriveTitle(messages),
   });
 
   const send = () => {
     const text = input.trim();
-    if (!text || streaming) return;
+    if ((!text && pendingAttachments.length === 0) || streaming) return;
     // @ 提及：把被引用的对象整理成一行上下文说明，让模型知道用户指的是哪一份材料。
     // 正文内容由服务端按 docContext/RAG 注入，这里只负责声明范围，避免重复传输长文本。
     const mentions = extractMentions(text);
@@ -328,7 +461,9 @@ export function WorkspacePage({
     setSlashDismissed(false);
     setMention(null);
     saveDraft(project.id, activeId, '');
-    chat.send(withMentions, chatOpts());
+    const attachments = pendingAttachments;
+    setPendingAttachments([]);
+    chat.send(withMentions, { ...chatOpts(), attachments });
   };
 
   // Esc 停止（统一快捷键注册表；生成中才生效，输入框内也响应）
@@ -426,16 +561,21 @@ export function WorkspacePage({
   // ── 会话管理 ─────────────────────────────────────────────
   const startNewSession = () => {
     const s = createSession();
-    setSessions((prev) => [s, ...prev]);
+    const next = [s, ...sessionsRef.current];
+    sessionsRef.current = next;
+    setSessions(next);
+    saveSessions(project.id, next);
     setActiveId(s.id);
     saveActiveSessionId(project.id, s.id);
     chat.reset([]);
     setInput('');
     setIntent(null);
+    // 先建服务端壳，后续消息直接 PUT 到同一 id；失败不阻塞本地使用。
+    void api.chat.createSession({ projectId: project.id, id: s.id, title: s.title }).catch(() => undefined);
   };
 
-  const openSession = (id: string) => {
-    const target = sessions.find((s) => s.id === id);
+  const openSession = async (id: string) => {
+    const target = await loadSession(id);
     if (!target) return;
     setActiveId(id);
     saveActiveSessionId(project.id, id);
@@ -444,29 +584,61 @@ export function WorkspacePage({
     setIntent(null);
   };
 
-  const deleteSession = (id: string) => {
-    const next = sessions.filter((s) => s.id !== id);
+  const deleteSession = async (id: string) => {
+    const next = sessionsRef.current.filter((s) => s.id !== id);
+    sessionsRef.current = next;
     setSessions(next);
     saveSessions(project.id, next);
+    void api.chat.deleteSession(id, project.id).catch(() => undefined);
     if (id === activeId) {
       const fallback = next[0];
-      setActiveId(fallback?.id ?? createSession().id);
-      chat.reset(fallback?.messages.length ? (fallback.messages as ChatMessage[]) : []);
+      const fallbackId = fallback?.id ?? createSession().id;
+      setActiveId(fallbackId);
+      saveActiveSessionId(project.id, fallbackId);
+      if (fallback) {
+        const loaded = await loadSession(fallback.id);
+        chat.reset(loaded?.messages.length ? (loaded.messages as ChatMessage[]) : []);
+      } else {
+        chat.reset([]);
+      }
     }
   };
 
   const renameSession = (id: string, title: string) => {
-    setSessions((prev) => {
-      const next = prev.map((s) => (s.id === id ? { ...s, title, updatedAt: Date.now() } : s));
-      saveSessions(project.id, next);
-      return next;
-    });
+    const next = sessionsRef.current.map((s) => (s.id === id ? { ...s, title, updatedAt: Date.now() } : s));
+    sessionsRef.current = next;
+    setSessions(next);
+    saveSessions(project.id, next);
+    void api.chat.patchSession(id, project.id, { title }).catch((e) => setSessionSyncError(e instanceof Error ? e.message : String(e)));
   };
 
-  const filteredSessions = useMemo(
-    () => (sessionFilter.trim() ? sessions.filter((s) => s.title.toLowerCase().includes(sessionFilter.trim().toLowerCase())) : sessions),
-    [sessions, sessionFilter],
-  );
+  const togglePinned = (s: ChatSession) => {
+    const pinned = !s.pinned;
+    const next = sessionsRef.current.map((x) => (x.id === s.id ? { ...x, pinned } : x));
+    sessionsRef.current = next;
+    setSessions(next);
+    saveSessions(project.id, next);
+    void api.chat.patchSession(s.id, project.id, { pinned }).catch((e) => setSessionSyncError(e instanceof Error ? e.message : String(e)));
+  };
+
+  const toggleArchived = (s: ChatSession) => {
+    const archived = !s.archived;
+    const next = sessionsRef.current.map((x) => (x.id === s.id ? { ...x, archived } : x));
+    sessionsRef.current = next;
+    setSessions(next);
+    saveSessions(project.id, next);
+    // 归档后默认列表隐藏；当前会话保持打开，避免用户“点了归档却跳到别的会话”。
+    void api.chat.patchSession(s.id, project.id, { archived }).catch((e) => setSessionSyncError(e instanceof Error ? e.message : String(e)));
+  };
+
+  const filteredSessions = useMemo(() => {
+    const query = sessionFilter.trim();
+    // 搜索命中只提供“哪些会话匹配”；置顶/归档等本地乐观状态不能被一次旧查询结果覆盖。
+    const base = query && serverSearchQuery.data
+      ? serverSearchQuery.data.sessions.map((s) => sessions.find((x) => x.id === s.id) ?? mergeServerSession(undefined, s))
+      : sessions;
+    return base.filter((s) => showArchived || !s.archived);
+  }, [sessions, sessionFilter, serverSearchQuery.data, showArchived]);
 
   // ── 流水线 ───────────────────────────────────────────────
   const runPipeline = useMutation({
@@ -593,6 +765,25 @@ export function WorkspacePage({
     });
   };
 
+  const createShare = async () => {
+    if (!effectiveDocId || shareBusy) return;
+    setShareBusy(true);
+    try {
+      const info = await shares.create({ projectId: project.id, targetType: 'document', targetId: effectiveDocId });
+      setShareInfo(info);
+      setShareOpen(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
+  const copyShare = async () => {
+    if (!shareInfo) return;
+    try { await navigator.clipboard.writeText(absoluteShareUrl(shareInfo.path)); } catch { /* 非安全上下文静默 */ }
+  };
+
   return (
     <div className="h-full flex flex-col gap-3">
       {/* 顶栏：文档流 & 流水线入口 */}
@@ -621,6 +812,11 @@ export function WorkspacePage({
           <Download size={14} /> 导出
         </Button>
         {effectiveDocId && (
+          <Button variant="outline" onClick={() => void createShare()} loading={shareBusy} title="生成只读分享链接">
+            <Share2 size={14} /> 分享
+          </Button>
+        )}
+        {effectiveDocId && (
           <Button variant="outline" className="lg:hidden" onClick={() => setShowPreview(true)} title="查看文档预览">
             <ExternalLink size={14} /> 预览
           </Button>
@@ -636,6 +832,24 @@ export function WorkspacePage({
           </span>
         )}
       </div>
+
+      <Modal open={shareOpen} title="只读分享链接" onClose={() => setShareOpen(false)} width="max-w-lg">
+        {shareInfo ? (
+          <div className="space-y-3">
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              任何人拿到此链接都可只读查看《{shareInfo.title}》的当前快照；有效期至 {shareInfo.expiresAt ? new Date(shareInfo.expiresAt).toLocaleDateString() : '永久'}。
+            </div>
+            <div className="flex gap-2">
+              <input readOnly value={absoluteShareUrl(shareInfo.path)} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs dark:border-slate-700 dark:bg-slate-800" onFocus={(e) => e.currentTarget.select()} />
+              <Button onClick={() => void copyShare()}><Copy size={13} /> 复制</Button>
+            </div>
+            <div className="text-[11px] text-slate-400">撤销后链接立即失效；已打开的页面刷新后也无法再读取。</div>
+            <div className="flex justify-end">
+              <Button variant="ghost" onClick={async () => { await shares.revoke(shareInfo.id, project.id); setShareOpen(false); setShareInfo(null); }}>撤销链接</Button>
+            </div>
+          </div>
+        ) : <div className="text-sm text-slate-500">正在生成…</div>}
+      </Modal>
 
       {/* 项目上下文：复用共享体征条，全部走本页已有 docs/refs/kb/pipeline 查询，不新增请求 */}
       <ProjectStatsBar
@@ -664,15 +878,21 @@ export function WorkspacePage({
       {/* 会话面板：本地多会话（管理）+ 服务端沉淀摘要（注入对话背景） */}
       {showSessionsPanel && (
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shrink-0 max-h-[300px] overflow-y-auto space-y-4">
-          <section aria-label="本地会话">
+          <section aria-label="会话">
             <div className="flex items-center gap-2 mb-2">
-              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">本地会话（{sessions.length}）</div>
+              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">会话（{filteredSessions.length}{showArchived ? '' : ` / ${sessions.length}`}）</div>
+              {serverSessionsQuery.isFetching && <Cloud size={12} className="text-teal-500 animate-pulse" aria-label="正在同步服务端会话" />}
+              <button
+                className="text-[11px] text-slate-400 hover:text-teal-600"
+                onClick={() => setShowArchived((v) => !v)}
+                title={showArchived ? '隐藏已归档会话' : '显示已归档会话'}
+              >{showArchived ? '隐藏归档' : '显示归档'}</button>
               <div className="relative ml-auto w-40">
                 <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   value={sessionFilter}
                   onChange={(e) => setSessionFilter(e.target.value)}
-                  placeholder="搜索会话"
+                  placeholder="搜索会话（含正文）"
                   aria-label="搜索会话"
                   className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-transparent pl-7 pr-2 py-1 text-[11px] outline-none focus:border-teal-500"
                 />
@@ -681,6 +901,9 @@ export function WorkspacePage({
                 <Plus size={12} /> 新对话
               </Button>
             </div>
+            {sessionSyncError && (
+              <div className="mb-1.5 text-[11px] text-rose-600 dark:text-rose-400">会话同步失败：{sessionSyncError}</div>
+            )}
             {filteredSessions.length === 0 && <div className="text-xs text-slate-400 py-2">暂无会话，发送第一条消息后自动创建</div>}
             <div className="space-y-1">
               {filteredSessions.map((s) => (
@@ -692,14 +915,27 @@ export function WorkspacePage({
                     s.id === activeId
                       ? 'border-teal-300 bg-teal-50/70 dark:bg-teal-900/20 dark:border-teal-700'
                       : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60'
-                  }`}
-                  onClick={() => openSession(s.id)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') openSession(s.id); }}
+                  } ${s.archived ? 'opacity-70' : ''}`}
+                  onClick={() => void openSession(s.id)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void openSession(s.id); }}
                 >
-                  <MessageSquare size={12} className="text-slate-400 shrink-0" />
+                  {s.pinned ? <Pin size={12} className="text-teal-500 shrink-0" /> : <MessageSquare size={12} className="text-slate-400 shrink-0" />}
                   <span className="text-xs text-slate-700 dark:text-slate-200 truncate flex-1">{s.title}</span>
-                  <span className="text-[11px] text-slate-400 shrink-0">{new Date(s.updatedAt).toLocaleDateString('zh-CN')} · {s.messages.length} 条</span>
+                  {s.archived && <span className="text-[10px] text-slate-400 shrink-0">已归档</span>}
+                  <span className="text-[11px] text-slate-400 shrink-0">{new Date(s.updatedAt).toLocaleDateString('zh-CN')} · {s.messages.length || s.messageCount || 0} 条</span>
                   <span className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); togglePinned(s); }}
+                      className={`p-1 rounded ${s.pinned ? 'text-teal-600' : 'text-slate-400 hover:text-teal-600'}`}
+                      aria-label={s.pinned ? `取消置顶 ${s.title}` : `置顶 ${s.title}`}
+                      title={s.pinned ? '取消置顶' : '置顶'}
+                    ><Pin size={11} /></button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleArchived(s); }}
+                      className="p-1 text-slate-400 hover:text-amber-600 rounded"
+                      aria-label={s.archived ? `恢复会话 ${s.title}` : `归档会话 ${s.title}`}
+                      title={s.archived ? '恢复' : '归档'}
+                    >{s.archived ? <ArchiveRestore size={11} /> : <Archive size={11} />}</button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setRenamingSession({ id: s.id, title: s.title }); }}
                       className="p-1 text-slate-400 hover:text-teal-600 rounded"
@@ -715,14 +951,14 @@ export function WorkspacePage({
               ))}
             </div>
           </section>
-          <section aria-label="沉淀摘要">
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-2">沉淀摘要（服务端 · 点击引用其摘要作为对话背景）</div>
-            {summariesQuery.isLoading && <div className="text-xs text-slate-400">加载中…</div>}
-            {!summariesQuery.isLoading && (summariesQuery.data?.sessions?.length ?? 0) === 0 && (
-              <div className="text-xs text-slate-400">暂无沉淀（完成一次问答后自动摘要落库）</div>
+          <section aria-label="会话摘要">
+            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-2">会话摘要（服务端 · 点击引用其摘要作为对话背景）</div>
+            {serverSessionsQuery.isLoading && <div className="text-xs text-slate-400">加载中…</div>}
+            {!serverSessionsQuery.isLoading && (serverSessionsQuery.data?.sessions?.length ?? 0) === 0 && (
+              <div className="text-xs text-slate-400">暂无摘要（完成一次问答后自动摘要落库）</div>
             )}
             <div className="space-y-1.5">
-              {(summariesQuery.data?.sessions ?? []).map((sess) => (
+              {(serverSessionsQuery.data?.sessions ?? []).map((sess) => (
                 <button
                   key={sess.id}
                   className={`w-full text-left rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
@@ -794,6 +1030,7 @@ export function WorkspacePage({
             onContinue={(i) => chat.cont(i, chatOpts())}
             onStop={chat.stop}
             onDelete={(i) => chat.remove(i)}
+            onEdit={(i, next) => chat.edit(i, next, chatOpts())}
             onCite={(src) => openCite(src)}
             onSendToWriting={(i) => void sendWriting.run(i)}
             onFollowUp={(f, i) => chat.send(f, { ...chatOpts(), baseMessages: messages.slice(0, i + 1) })}
@@ -942,7 +1179,36 @@ export function WorkspacePage({
                 ))}
               </div>
             )}
+            {pendingAttachments.length > 0 && (
+              <div className="mb-1.5 flex flex-wrap gap-1.5">
+                {pendingAttachments.map((a, i) => (
+                  <span key={`${a.name}-${i}`} className="inline-flex max-w-full items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 py-1 text-[11px] text-teal-700 dark:border-teal-800 dark:bg-teal-500/10 dark:text-teal-300">
+                    <Paperclip size={11} />
+                    <span className="max-w-[180px] truncate">{a.name}</span>
+                    <button type="button" onClick={() => setPendingAttachments((list) => list.filter((_, j) => j !== i))} className="text-teal-600 hover:text-rose-500 dark:text-teal-400" aria-label={`移除 ${a.name}`}>
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={CHAT_ATTACHMENT_ACCEPT}
+                className="hidden"
+                onChange={(e) => { void addAttachments(e.target.files); e.currentTarget.value = ''; }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={streaming || pendingAttachments.length >= CHAT_ATTACHMENT_MAX_FILES}
+                className="flex items-center gap-1 text-[11px] rounded-md px-1.5 py-1 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700 disabled:opacity-40"
+                title="上传 PDF、文本、CSV 或图片（最多 4 个）"
+              >
+                <Paperclip size={12} /> 附件{pendingAttachments.length ? ` · ${pendingAttachments.length}` : ''}
+              </button>
               <button
                 onClick={() => setWebSearch((v) => !v)}
                 aria-pressed={webSearch}
@@ -1004,7 +1270,7 @@ export function WorkspacePage({
                   <Square size={14} /> 停止
                 </Button>
               ) : (
-                <Button onClick={send} disabled={!input.trim()} title="发送">
+                <Button onClick={send} disabled={(!input.trim() && pendingAttachments.length === 0) || streaming} title="发送">
                   <Send size={14} /> 发送
                 </Button>
               )}
@@ -1127,11 +1393,11 @@ export function WorkspacePage({
       <ConfirmDialog
         open={!!deletingSession}
         title="删除会话？"
-        description={`将删除本地会话「${deletingSession?.title ?? ''}」及其全部消息。此操作不可撤销。`}
+        description={`将删除会话「${deletingSession?.title ?? ''}」及其全部消息（本地缓存和服务端记录）。此操作不可撤销。`}
         confirmText="删除"
         danger
         onClose={() => setDeletingSession(null)}
-        onConfirm={() => { if (deletingSession) deleteSession(deletingSession.id); setDeletingSession(null); }}
+        onConfirm={() => { if (deletingSession) void deleteSession(deletingSession.id); setDeletingSession(null); }}
       />
 
       {/* 工具审批：有副作用的操作先经用户确认 */}

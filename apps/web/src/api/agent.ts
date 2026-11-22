@@ -24,6 +24,40 @@ export type ApprovalItem = components['schemas']['AgentApprovalDto'];
 /** Agent 指标：类型来自 OpenAPI 生成 contract（AgentMetricsDto）。 */
 export type AgentMetrics = components['schemas']['AgentMetricsDto'];
 
+export interface BackgroundJob {
+  id: string;
+  projectId: string;
+  sessionKey: string;
+  message: string;
+  model: string;
+  status: 'queued' | 'running' | 'done' | 'error' | 'cancelled';
+  output: string;
+  error: string;
+  runId: string;
+  totalTokens: number;
+  createdAt: number;
+  startedAt: number | null;
+  finishedAt: number | null;
+}
+
+export interface AgentSchedule {
+  id: string;
+  projectId: string;
+  name: string;
+  cadence: 'once' | 'hourly' | 'daily' | 'weekly';
+  minuteOfHour: number;
+  hourOfDay: number;
+  weekday: number;
+  message: string;
+  sessionKey: string;
+  model: string;
+  enabled: number;
+  lastRunAt: number | null;
+  nextRunAt: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export const agent = {
   /** 项目 Agent 执行历史列表 */
   executions: (projectId: string, limit = 20) =>
@@ -70,4 +104,27 @@ export const agent = {
       method: 'POST',
       body: JSON.stringify({ approved }),
     }),
+
+  /** 后台多会话执行器：入队后立即返回，服务端继续跑 */
+  startBackground: (body: { projectId: string; message: string; sessionKey?: string; model?: string }) =>
+    request<BackgroundJob>('/api/chat/background', { method: 'POST', body: JSON.stringify(body) }),
+  backgroundJobs: (projectId: string, limit = 20) =>
+    request<{ jobs: BackgroundJob[] }>(`/api/chat/background?projectId=${encodeURIComponent(projectId)}&limit=${limit}`),
+  backgroundJob: (id: string) => request<BackgroundJob>(`/api/chat/background/${id}`),
+  cancelBackground: (id: string) =>
+    request<BackgroundJob>(`/api/chat/background/${id}/cancel`, { method: 'POST' }),
+
+  schedules: (projectId: string) =>
+    request<{ schedules: AgentSchedule[] }>(`/api/schedules?projectId=${encodeURIComponent(projectId)}`),
+  createSchedule: (body: {
+    projectId: string; name: string; cadence: 'once' | 'hourly' | 'daily' | 'weekly';
+    message: string; minuteOfHour?: number; hourOfDay?: number; weekday?: number; delayMinutes?: number;
+    model?: string;
+  }) => request<AgentSchedule>('/api/schedules', { method: 'POST', body: JSON.stringify(body) }),
+  updateSchedule: (id: string, projectId: string, body: { enabled?: boolean; message?: string; name?: string }) =>
+    request<AgentSchedule>(`/api/schedules/${id}?projectId=${encodeURIComponent(projectId)}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteSchedule: (id: string, projectId: string) =>
+    request<{ deleted: boolean }>(`/api/schedules/${id}?projectId=${encodeURIComponent(projectId)}`, { method: 'DELETE' }),
+  runSchedule: (id: string, projectId: string) =>
+    request<{ job: BackgroundJob }>(`/api/schedules/${id}/run?projectId=${encodeURIComponent(projectId)}`, { method: 'POST' }),
 };

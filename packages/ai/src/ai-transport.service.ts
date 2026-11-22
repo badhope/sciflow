@@ -26,9 +26,15 @@ export function normalizeApiKey(raw: unknown): string {
   return value;
 }
 
+export type ChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image'; image: string; mediaType?: string };
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  /** 多模态内容（仅当前用户轮使用）；有值时 content 仍保留纯文本，供摘要/持久化/日志读取。 */
+  parts?: ChatContentPart[];
 }
 
 /**
@@ -93,6 +99,8 @@ export interface ChatStreamOptions {
   onUsage?: (usage: TokenUsage) => void;
   /** 长文写作档：继承 pipeline 论文约束，不注入 500 字聊天简洁约束 */
   writing?: boolean;
+  /** 当前用户轮的多模态内容；历史消息仍只传纯文本，避免重复上传大文件。 */
+  userParts?: ChatContentPart[];
 }
 
 export interface CompleteOptions {
@@ -391,7 +399,9 @@ ${augmentation}` };
       .map((m) => m.content)
       .join('\n\n')
       .trim();
-    const rest = messages.filter((m) => m.role !== 'system') as unknown as ModelMessage[];
+    const rest = messages.filter((m) => m.role !== 'system').map((m) => (
+      m.parts?.length ? { role: m.role, content: m.parts } : { role: m.role, content: m.content }
+    )) as unknown as ModelMessage[];
     return { instructions: sys || undefined, rest };
   }
 
@@ -782,6 +792,9 @@ ${augmentation}` };
         const pt = usage?.inputTokens ?? 0;
         const ct = usage?.outputTokens ?? 0;
         this.logLlmCall({ caller, model, promptTokens: pt, completionTokens: ct, latencyMs: Date.now() - t0, success: true });
+        try {
+          opts.onUsage?.({ promptTokens: pt, completionTokens: ct, totalTokens: pt + ct });
+        } catch { /* 记账失败不影响主流程 */ }
         return r.text ?? '';
       });
     } catch (err: any) {

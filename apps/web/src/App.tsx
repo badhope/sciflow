@@ -1,4 +1,4 @@
-import { Component, lazy, useCallback, useContext, useEffect, useMemo, useRef, useState, createContext, type ReactNode } from 'react';
+import { Component, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, createContext, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { HashRouter, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Download, Upload, MessageSquare } from 'lucide-react';
@@ -32,6 +32,7 @@ const VerificationPage = lazy(() => import('./pages/VerificationPage').then((m) 
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const MemoryPage = lazy(() => import('./pages/MemoryPage').then((m) => ({ default: m.MemoryPage })));
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage').then((m) => ({ default: m.WorkspacePage })));
+const PublicSharePage = lazy(() => import('./pages/PublicSharePage').then((m) => ({ default: m.PublicSharePage })));
 /** 页面级骨架与加载壳已收敛到 components/LazyPage，路由与二级 Tab 共用一套实现。 */
 
 export type View =
@@ -1178,12 +1179,24 @@ function normalizeBareRoute(): void {
   window.location.replace(`/#/${seg}${rest ? `/${rest}` : ''}${window.location.search}`);
 }
 
+function RootRoutes() {
+  const location = useLocation();
+  if (location.pathname.startsWith('/share/')) {
+    return (
+      <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-sm text-slate-500">正在打开分享…</div>}>
+        <PublicSharePage token={decodeURIComponent(location.pathname.slice('/share/'.length))} />
+      </Suspense>
+    );
+  }
+  return <AppInner />;
+}
+
 export default function App() {
   if (typeof window !== 'undefined') normalizeBareRoute();
   return (
     <HashRouter>
       <ErrorBoundary>
-        <AppInner />
+        <RootRoutes />
       </ErrorBoundary>
     </HashRouter>
   );

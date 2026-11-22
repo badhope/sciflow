@@ -274,12 +274,18 @@ export async function request<T>(url: string, opts?: RequestInit): Promise<T> {
 export function streamChat(opts: {
   message: string;
   history?: { role: 'user' | 'assistant'; content: string }[];
+  /** 当前轮附件（PDF/文本/CSV/图片）；base64 不含 data: 前缀 */
+  attachments?: { name: string; mime: string; data: string }[];
   projectId?: string;
   docContext?: string;
   model?: string;
   enableThinking?: boolean;
   /** 本轮强制联网搜索（输入区「联网」开关） */
   webSearch?: boolean;
+  /** 当前会话 ID：服务端把完整消息落 chat_session */
+  sessionId?: string;
+  /** 当前会话标题（首轮可空，服务端从首条用户消息派生） */
+  sessionTitle?: string;
   signal?: AbortSignal;
   onDelta?: (text: string) => void;
   onReasoning?: (text: string) => void;
@@ -317,12 +323,15 @@ export function streamChat(opts: {
     },
     body: JSON.stringify({
       message: opts.message,
+      attachments: opts.attachments,
       history: opts.history || [],
       projectId: opts.projectId,
       docContext: opts.docContext,
       model: opts.model,
       enableThinking: opts.enableThinking,
       webSearch: opts.webSearch,
+      sessionId: opts.sessionId,
+      sessionTitle: opts.sessionTitle,
     }),
     signal: ctrl.signal,
   })

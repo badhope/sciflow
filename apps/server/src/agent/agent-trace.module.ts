@@ -10,12 +10,14 @@ import { AgentMetricsService } from './agent-metrics.service';
 import { AgentHarnessController } from './agent-harness.controller';
 import { AgentPolicyService } from './agent-policy.service';
 import { McpModule } from '../mcp/mcp.module';
+import { AiModule } from '../ai/ai.module';
+import { SkillRegistryService } from './skill-registry.service';
 
 @Module({
-  imports: [McpModule],
-  providers: [AgentTraceService, AgentToolBridge, TaskListService, ApprovalService, PlanAuthorizationService, AgentMetricsService, AgentPolicyService, OtelExportService],
+  imports: [McpModule, AiModule],
+  providers: [AgentTraceService, AgentToolBridge, TaskListService, ApprovalService, PlanAuthorizationService, AgentMetricsService, AgentPolicyService, OtelExportService, SkillRegistryService],
   controllers: [AgentTraceController, AgentHarnessController],
-  exports: [AgentTraceService, AgentToolBridge, TaskListService, ApprovalService, PlanAuthorizationService, AgentMetricsService, AgentPolicyService],
+  exports: [AgentTraceService, AgentToolBridge, TaskListService, ApprovalService, PlanAuthorizationService, AgentMetricsService, AgentPolicyService, SkillRegistryService],
 })
 export class AgentTraceModule {}
 

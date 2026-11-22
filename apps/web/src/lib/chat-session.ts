@@ -3,9 +3,18 @@ import { streamChat } from '../api/client';
 import { applyStreamDelta } from '../api/stream-accumulator';
 import type { ChatSource } from '../types';
 
+export interface ChatAttachment {
+  name: string;
+  mime: string;
+  /** base64（不含 data: 前缀），用于本轮重发/重试 */
+  data: string;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  /** 用户消息的附件；只在当前轮发送，历史轮不重传 */
+  attachments?: ChatAttachment[];
   reasoning?: string;
   sources?: ChatSource[];
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
@@ -66,6 +75,11 @@ export interface SendOptions {
   webSearch?: boolean;
   model?: string;
   enableThinking?: boolean;
+  attachments?: ChatAttachment[];
+  /** 当前会话 ID（服务端完整会话落库） */
+  sessionId?: string;
+  /** 当前会话标题（服务端首轮摘要落库用） */
+  sessionTitle?: string;
   /** 覆盖发送前的 messages（重试/继续时传入截断后的历史） */
   baseMessages?: ChatMessage[];
   /** 覆盖用户消息文本（继续生成时是固定指令，不显示为普通提问） */
@@ -140,10 +154,10 @@ export function useChatSession(opts: {
   const send = useCallback(
     (text: string, o: SendOptions) => {
       const trimmed = text.trim();
-      if (!trimmed || streaming) return;
+      if ((!trimmed && !(o.attachments?.length)) || streaming) return;
       opts.onSend?.(trimmed);
       const history = (o.baseMessages ?? messages).filter((m) => !m.streaming);
-      const userMsg: ChatMessage = { role: 'user', content: o.displayText ?? trimmed, createdAt: Date.now() };
+      const userMsg: ChatMessage = { role: 'user', content: o.displayText ?? trimmed, createdAt: Date.now(), attachments: o.attachments };
       setMessages([...history, userMsg, { role: 'assistant', content: '', streaming: true, createdAt: Date.now(), model: o.model }]);
       setStreaming(true);
 
@@ -153,12 +167,15 @@ export function useChatSession(opts: {
 
       abortRef.current = streamChat({
         message: o.messageSuffix ? `${trimmed}${o.messageSuffix}` : trimmed,
+        attachments: o.attachments,
         history: history.map((m) => ({ role: m.role, content: m.content })),
         projectId: o.projectId,
         docContext,
         webSearch: o.webSearch || undefined,
         model: o.model,
         enableThinking: o.enableThinking,
+        sessionId: o.sessionId,
+        sessionTitle: o.sessionTitle,
         onDelta: (full) => patchLast((m) => ({ content: applyStreamDelta({ content: m.content, reasoning: m.reasoning ?? '' }, { content: full }).content })),
         onReasoning: (full) => patchLast((m) => ({ reasoning: applyStreamDelta({ content: m.content, reasoning: m.reasoning ?? '' }, { reasoning: full }).reasoning })),
         onSources: (src) => patchLast({ sources: src }),
@@ -224,7 +241,7 @@ export function useChatSession(opts: {
     const userIndex = assistantIndex - 1;
     if (userIndex < 0) return;
     const userText = messages[userIndex]?.content ?? '';
-    send(userText, { ...o, baseMessages: messages.slice(0, userIndex) });
+    send(userText, { ...o, attachments: messages[userIndex]?.attachments, baseMessages: messages.slice(0, userIndex) });
   }, [messages, send, streaming]);
 
   /** 断点续写：把已收的部分回答作为历史带入，显式要求接着写（「继续生成」按钮；空内容时退化为重试） */
@@ -244,7 +261,8 @@ export function useChatSession(opts: {
 
   const edit = useCallback((userIndex: number, nextText: string, o: SendOptions) => {
     if (streaming || !nextText.trim()) return;
-    send(nextText, { ...o, baseMessages: messages.slice(0, userIndex) });
+    // 编辑用户消息 = 从该点重新分支：丢弃该消息之后的所有回答，保留原附件。
+    send(nextText, { ...o, attachments: messages[userIndex]?.attachments, baseMessages: messages.slice(0, userIndex) });
   }, [messages, send, streaming]);
 
   const remove = useCallback((index: number) => {

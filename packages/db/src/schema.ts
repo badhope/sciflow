@@ -836,16 +836,32 @@ export const webSearchCache = sqliteTable('web_search_cache', {
 
 export type WebSearchCache = typeof webSearchCache.$inferSelect;
 
-/** 对话会话摘要（跨会话记忆注入：新对话启动时自动注入最近 N 轮摘要作为上下文，对标 Cursor 长上下文） */
+/** 对话会话（完整消息 + 滚动摘要；摘要用于跨会话记忆注入，对标 Cursor 长上下文） */
 export const chatSessions = sqliteTable('chat_session', {
   id: text('id').primaryKey(),
   projectId: text('project_id').notNull(),
-  /** 摘要内容（≤500 字） */
+  /** 会话标题（首条用户消息派生，可手动改名） */
+  title: text('title').default(''),
+  /** 滚动摘要（≤500 字，供 injectPastSummary 使用） */
   summary: text('summary').default(''),
+  /** 完整消息 JSON（StoredMessage[]；含 id/parentId 时即为分支树节点） */
+  messagesJson: text('messages_json').default('[]'),
+  /** 分支状态 JSON：{activeLeafId?: string}；A2 会在此基础上扩展 */
+  branchJson: text('branch_json').default('{}'),
   /** 本轮对话消息数（不含 system） */
   messageCount: integer('message_count').notNull(),
   /** 本轮 token 用量 */
   totalTokens: integer('total_tokens').notNull(),
+  /** 置顶（0/1） */
+  pinned: integer('pinned').default(0),
+  /** 归档（0/1）：归档后不在默认列表展示，仍可搜索/恢复 */
+  archived: integer('archived').default(0),
+  /** 最后一条消息时间；无消息时等于 createdAt */
+  lastMessageAt: integer('last_message_at'),
+  /** 来源：cloud=前端服务端会话；legacy-summary=旧摘要账本；migrated=本地迁移 */
+  source: text('source').default('cloud'),
+  /** 旧摘要行=1（无完整消息），只参与 injectPastSummary，不作为可打开会话 */
+  summaryOnly: integer('summary_only').default(0),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });
@@ -918,6 +934,26 @@ export const agentPlans = sqliteTable('agent_plan', {
 
 export type AgentPlan = typeof agentPlans.$inferSelect;
 
+/** 后台多会话执行器任务（HTTP 请求立即返回，队列在服务端继续跑）。
+ *  session_key 允许同一项目并行多个独立会话；status: queued/running/done/error/cancelled。 */
+export const agentBackgroundJobs = sqliteTable('agent_background_job', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  sessionKey: text('session_key').default('default'),
+  message: text('message').notNull(),
+  model: text('model').default(''),
+  status: text('status').default('queued'),
+  output: text('output').default(''),
+  error: text('error').default(''),
+  runId: text('run_id').default(''),
+  totalTokens: integer('total_tokens').default(0),
+  createdAt: integer('created_at').notNull(),
+  startedAt: integer('started_at'),
+  finishedAt: integer('finished_at'),
+});
+
+export type AgentBackgroundJob = typeof agentBackgroundJobs.$inferSelect;
+
 /** 项目级研究 Brief：研究问题 / 范围 / 方法 / 约束 / 成功标准，供 Agent 自动注入与用户维护。 */
 export const researchBriefs = sqliteTable('research_brief', {
   projectId: text('project_id').primaryKey(),
@@ -930,3 +966,40 @@ export const researchBriefs = sqliteTable('research_brief', {
 });
 
 export type ResearchBrief = typeof researchBriefs.$inferSelect;
+
+/** 公开只读分享链接（snapshot 为创建时内容快照，撤销/过期后不可读）。 */
+export const shareLinks = sqliteTable('share_link', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  targetType: text('target_type').notNull(), // document（当前支持）
+  targetId: text('target_id').notNull(),
+  token: text('token').notNull(),
+  title: text('title').default(''),
+  snapshot: text('snapshot').default('{}'),
+  createdAt: integer('created_at').notNull(),
+  expiresAt: integer('expires_at'),
+  revokedAt: integer('revoked_at'),
+});
+
+export type ShareLink = typeof shareLinks.$inferSelect;
+
+/** 定时任务：复用 BackgroundRunService 入队执行，支持一次/每小时/每天/每周。 */
+export const agentSchedules = sqliteTable('agent_schedule', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  name: text('name').notNull(),
+  cadence: text('cadence').notNull(), // once | hourly | daily | weekly
+  minuteOfHour: integer('minute_of_hour').default(0),
+  hourOfDay: integer('hour_of_day').default(9),
+  weekday: integer('weekday').default(1), // 0=周日
+  message: text('message').notNull(),
+  sessionKey: text('session_key').default('schedule'),
+  model: text('model').default(''),
+  enabled: integer('enabled').default(1),
+  lastRunAt: integer('last_run_at'),
+  nextRunAt: integer('next_run_at').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type AgentSchedule = typeof agentSchedules.$inferSelect;

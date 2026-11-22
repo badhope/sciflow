@@ -381,6 +381,8 @@ export interface DocExporterProps {
   project: { id: string; name?: string };
   onExportFull: () => void;
   onExportWord: () => void;
+  onExportPpt: () => void;
+  onExportExcel: () => void;
   aiBusy: boolean;
 }
 
@@ -393,7 +395,7 @@ function safeName(title: string, ext: string): string {
  * 导出面板：Markdown / Word 走后端接口（含大纲、引用等完整结构）；
  * LaTeX / HTML 在前端本地转换（mdToLatex / mdToHtmlSync 是纯函数，无需网络）。
  */
-export function DocExporter({ doc, content, onExportFull, onExportWord, aiBusy }: DocExporterProps) {
+export function DocExporter({ doc, content, onExportFull, onExportWord, onExportPpt, onExportExcel, aiBusy }: DocExporterProps) {
   const title = doc?.title || '论文';
   const hasContent = Boolean(content?.trim());
 
@@ -420,6 +422,12 @@ export function DocExporter({ doc, content, onExportFull, onExportWord, aiBusy }
       </button>
       <button className={btn} onClick={onExportWord} disabled={aiBusy}>
         导出 Word
+      </button>
+      <button className={btn} onClick={onExportPpt} disabled={aiBusy} title="标题/大纲/正文/参考文献生成 PPTX">
+        导出 PPTX
+      </button>
+      <button className={btn} onClick={onExportExcel} disabled={aiBusy} title="正文/大纲/参考文献三张表">
+        导出 XLSX
       </button>
       <button className={btn} onClick={exportLatex} disabled={aiBusy || !hasContent} title="Markdown → LaTeX(.tex)，本地转换，适合期刊投稿">
         导出 LaTeX

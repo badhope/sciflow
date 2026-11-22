@@ -543,6 +543,27 @@ export interface ChatSource {
   referenceYear?: number | null;
 }
 
+/** 服务端会话列表项（GET /api/chat/sessions） */
+export interface ChatSessionSummary {
+  id: string;
+  projectId: string;
+  title: string;
+  summary: string;
+  messageCount: number;
+  totalTokens: number;
+  pinned: boolean;
+  archived: boolean;
+  lastMessageAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 服务端完整会话（GET /api/chat/sessions/:id） */
+export interface ChatSessionDetail extends ChatSessionSummary {
+  messages: Array<Record<string, unknown>>;
+  branch: Record<string, unknown>;
+}
+
 /** 学习复盘取数（GET /api/knowledge/:id）：单文档全部分块正文（按 seq 升序） */
 export interface KnowledgeChunkDetail {
   id: string;

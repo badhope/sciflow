@@ -38,10 +38,17 @@ export default defineConfig({
         manualChunks(id: string) {
           if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) return 'react';
           if (id.includes('node_modules/lucide-react')) return 'ui';
+          // 其余重依赖交给路由级 lazy + Rollup 自然分块：
+          // 手动把 mermaid/recharts/markdown 合成 vendor chunk 会把共享模块拖进首屏，
+          // 也会把 mermaid 12 种图表合成 ~5MB 的单文件。
+          if (id.includes('node_modules/diff/')) return 'diff';
+          if (id.includes('node_modules/docx')) return 'docx';
           return undefined;
         },
       },
     },
-    chunkSizeWarningLimit: 900,
+    // elkjs 的 elk.bundled.js 是单文件 1.5MB（gzip ~450KB），只在 flowchart-elk 图表里懒加载；
+    // 首屏体积由 check:chunk-budget 的 450KB raw / 250KB gzip 预算单独守。
+    chunkSizeWarningLimit: 1600,
   },
 });

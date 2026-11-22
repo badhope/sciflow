@@ -1940,6 +1940,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/documents/{id}/versions/{version}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DocumentsController_restoreVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/documents/{id}/snapshot": {
         parameters: {
             query?: never;
@@ -2124,6 +2140,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["DocumentsController_exportMarkdown"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/documents/{id}/export-pptx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DocumentsController_exportPptx"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/documents/{id}/export-xlsx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DocumentsController_exportXlsx"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2660,6 +2708,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chat/background": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ChatController_listBackground"];
+        put?: never;
+        post: operations["ChatController_startBackground"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat/background/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ChatController_getBackground"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat/background/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ChatController_cancelBackground"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chat/stream": {
         parameters: {
             query?: never;
@@ -2685,11 +2781,27 @@ export interface paths {
         };
         get: operations["ChatController_listSessions"];
         put?: never;
-        post?: never;
+        post: operations["ChatController_createSession"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/chat/sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ChatController_getSession"];
+        put: operations["ChatController_saveSession"];
+        post?: never;
+        delete: operations["ChatController_deleteSession"];
+        options?: never;
+        head?: never;
+        patch: operations["ChatController_patchSession"];
         trace?: never;
     };
     "/settings/agent-access": {
@@ -3816,6 +3928,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ShareController_list"];
+        put?: never;
+        post: operations["ShareController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ShareController_revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/shares/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PublicShareController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ScheduleController_list"];
+        put?: never;
+        post: operations["ScheduleController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schedules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["ScheduleController_remove"];
+        options?: never;
+        head?: never;
+        patch: operations["ScheduleController_update"];
+        trace?: never;
+    };
+    "/schedules/{id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ScheduleController_runNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4876,12 +5084,22 @@ export interface components {
             /** @description 成功标准 */
             successCriteria?: string;
         };
+        ChatAttachmentDto: {
+            /** @description 文件名 */
+            name: string;
+            /** @description MIME 类型，如 application/pdf、image/png */
+            mime: string;
+            /** @description base64 内容（不含 data: 前缀） */
+            data: string;
+        };
         ChatRequestBody: {
             /**
              * @description 本轮用户提问
              * @example 图神经网络的消息传递机制是什么？
              */
             message: string;
+            /** @description 本轮附件（PDF/文本/CSV/图片，最多 4 个） */
+            attachments?: components["schemas"]["ChatAttachmentDto"][];
             /** @description 历史消息（role/content） */
             history?: Record<string, never>[];
             /** @description 项目 ID：用于知识库 RAG 与项目记忆检索 */
@@ -4894,6 +5112,61 @@ export interface components {
             enableThinking?: boolean;
             /** @description 本轮强制联网搜索（输入区「联网」开关，按轮生效） */
             webSearch?: boolean;
+            /** @description 当前会话 ID：用于把完整消息同步到 chat_session */
+            sessionId?: string;
+            /** @description 当前会话标题（首轮可空，服务端会从首条用户消息派生） */
+            sessionTitle?: string;
+        };
+        BackgroundJobRequest: {
+            /** @description 项目 ID */
+            projectId: string;
+            /** @description 后台任务的用户消息 */
+            message: string;
+            /**
+             * @description 会话键；同一键串行，不同键可并行
+             * @default default
+             */
+            sessionKey: string;
+            /** @description 显式模型 ID */
+            model?: string;
+        };
+        CreateChatSessionBody: {
+            /** @description 项目 ID */
+            projectId: string;
+            /** @description 会话 ID；前端 localStorage 迁移时传入，保证幂等 */
+            id?: string;
+            /** @description 会话标题 */
+            title?: string;
+            /** @description 完整消息数组（StoredChatMessage[]） */
+            messages?: Record<string, never>[];
+            /** @description 分支状态（activeLeafId 等） */
+            branch?: {
+                [key: string]: unknown;
+            };
+            /** @description 摘要（仅导入旧会话时使用） */
+            summary?: string;
+        };
+        SaveChatSessionBody: {
+            /** @description 会话标题 */
+            title?: string;
+            /** @description 完整消息数组（StoredChatMessage[]） */
+            messages?: Record<string, never>[];
+            /** @description 分支状态（activeLeafId 等） */
+            branch?: {
+                [key: string]: unknown;
+            };
+            /** @description 摘要（可选；常规同步不要覆盖服务端摘要） */
+            summary?: string;
+        };
+        PatchChatSessionBody: {
+            /** @description 会话标题 */
+            title?: string;
+            /** @description 置顶 */
+            pinned?: boolean;
+            /** @description 归档 */
+            archived?: boolean;
+            /** @description 摘要 */
+            summary?: string;
         };
         WebProjectDto: {
             /** @description Web 项目 ID */
@@ -5013,6 +5286,46 @@ export interface components {
             publicUrlConfigured: boolean;
             /** @description 需要用户处理的提示，如未检测到局域网地址 */
             hint?: string;
+        };
+        CreateShareRequest: {
+            /** @description 项目 ID */
+            projectId: string;
+            /**
+             * @description 目标类型；当前只支持 document
+             * @enum {string}
+             */
+            targetType: "document";
+            /** @description 文档 ID */
+            targetId: string;
+            /** @description 有效天数，默认 30，范围 1-365 */
+            expiresInDays?: number;
+        };
+        CreateScheduleRequest: {
+            projectId: string;
+            name: string;
+            /** @enum {string} */
+            cadence: "once" | "hourly" | "daily" | "weekly";
+            /** @description 任务发给 Agent 的消息 */
+            message: string;
+            minuteOfHour?: number;
+            hourOfDay?: number;
+            /** @description 0=周日 … 6=周六 */
+            weekday?: number;
+            sessionKey?: string;
+            model?: string;
+            /** @description 仅 once：多少分钟后触发 */
+            delayMinutes?: number;
+        };
+        UpdateScheduleRequest: {
+            name?: string;
+            /** @enum {string} */
+            cadence?: "once" | "hourly" | "daily" | "weekly";
+            message?: string;
+            minuteOfHour?: number;
+            hourOfDay?: number;
+            weekday?: number;
+            model?: string;
+            enabled?: boolean;
         };
     };
     responses: never;
@@ -8040,6 +8353,26 @@ export interface operations {
             };
         };
     };
+    DocumentsController_restoreVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     DocumentsController_createSnapshot: {
         parameters: {
             query?: never;
@@ -8272,6 +8605,44 @@ export interface operations {
         };
     };
     DocumentsController_exportMarkdown: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DocumentsController_exportPptx: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DocumentsController_exportXlsx: {
         parameters: {
             query?: never;
             header?: never;
@@ -9071,6 +9442,84 @@ export interface operations {
             };
         };
     };
+    ChatController_listBackground: {
+        parameters: {
+            query: {
+                projectId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatController_startBackground: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BackgroundJobRequest"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatController_getBackground: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatController_cancelBackground: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ChatController_stream: {
         parameters: {
             query?: never;
@@ -9102,6 +9551,119 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatController_createSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateChatSessionBody"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatController_getSession: {
+        parameters: {
+            query: {
+                projectId: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatController_saveSession: {
+        parameters: {
+            query: {
+                projectId: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveChatSessionBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatController_deleteSession: {
+        parameters: {
+            query: {
+                projectId: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatController_patchSession: {
+        parameters: {
+            query: {
+                projectId: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchChatSessionBody"];
+            };
+        };
         responses: {
             200: {
                 headers: {
@@ -10939,6 +11501,193 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RemoteAccessStatusDto"];
                 };
+            };
+        };
+    };
+    ShareController_list: {
+        parameters: {
+            query: {
+                projectId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ShareController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateShareRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ShareController_revoke: {
+        parameters: {
+            query: {
+                projectId: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicShareController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_list: {
+        parameters: {
+            query: {
+                projectId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateScheduleRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_remove: {
+        parameters: {
+            query: {
+                projectId: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_update: {
+        parameters: {
+            query: {
+                projectId: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateScheduleRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleController_runNow: {
+        parameters: {
+            query: {
+                projectId: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

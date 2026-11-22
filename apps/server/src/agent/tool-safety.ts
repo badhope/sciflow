@@ -5,6 +5,7 @@
  * 中带 readOnlyHint；写工具不自动重试，避免“请求已成功但响应丢失”时重复落库。
  */
 const READ_ONLY_TOOLS = new Set<string>([
+  'code.diagnostics',
   'project.list',
   'project.get',
   'document.list',

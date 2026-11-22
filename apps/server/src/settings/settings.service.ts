@@ -6,6 +6,7 @@ import { DB_PATH, db, sqlite, vecLoaded } from '../db/database';
 import { mcpServers } from '../db/schema';
 import { encryptSecret, decryptSecret } from '../common/secret-crypto';
 import { allowPrivateOutbound, checkOutboundUrl } from '../common/outbound-guard';
+import { BUILTIN_SKILLS as SKILL_CATALOG } from '../common/skill-catalog';
 import { fetchModelCatalog, normalizeProtocol, type DiscoveredModel } from '../common/model-catalog';
 import { safeOutboundFetch } from '../common/safe-outbound';
 import { EmbeddingService } from '../knowledge/embedding.service';
@@ -361,12 +362,7 @@ export class SettingsService {
 
   // ---------- 角色定义与技能（persona + skills，对标 Dify/Coze 的人设与技能管理） ----------
   /** 内置技能（不可删除、可启停；name/description 与真实能力对应） */
-  static readonly BUILTIN_SKILLS: { key: string; name: string; description: string }[] = [
-    { key: 'literature_search', name: '文献检索', description: '检索项目文献库（标题/作者/摘要/全文），需要引用具体文献时使用' },
-    { key: 'knowledge_qa', name: '知识库问答', description: '基于已上传资料（RAG）回答，回答标注来源文档，事实优先来自资料' },
-    { key: 'writing_assist', name: '写作辅助', description: '大纲生成、章节起草、润色、降重、翻译等写作类操作' },
-    { key: 'web_research', name: '联网检索', description: '检索公开网页作为背景参考，注意甄别时效与权威性' },
-  ];
+  static readonly BUILTIN_SKILLS = SKILL_CATALOG;
 
   /** 读取角色与技能配置：角色库默认角色优先，app_setting 兼容旧版；技能始终读 app_setting */
   getPersona() {

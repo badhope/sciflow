@@ -12,7 +12,9 @@ import { resolveAgentToolProfile } from '../agent/agent-tool-profiles';
 import { ConfigCenterService } from '../config/config-center.service';
 import { loadDefaultRole } from '../common/prompt-augmentation';
 import { isLongformWritingRequest } from './writing-intent';
+import { prepareChatTurn, type ChatAttachmentInput } from './chat-attachments';
 import { AgentTraceService } from '../agent/agent-trace.service';
+import { SkillRegistryService } from '../agent/skill-registry.service';
 import { ResearchBriefService } from '../research-brief/research-brief.service';
 import { db } from '../db/database';
 import { projects, appSettings } from '../db/schema';
@@ -64,6 +66,8 @@ interface ChatRuntimeOptions {
   webSearch?: boolean;
   /** 当前请求主体：企业模式下必须透传到 MCP 工具层做项目归属校验 */
   user?: AuthPayload;
+  /** 当前轮附件（PDF/文本/CSV/图片）；只作用于当前轮，不重放进历史。 */
+  attachments?: ChatAttachmentInput[];
 }
 
 /** 兼容旧配置：单块片段下限。实际注入取 max(本值, KNOWLEDGE_PASSAGE_CHARS)，默认 800 */
@@ -86,6 +90,7 @@ export class ChatService {
     private readonly trace: AgentTraceService,
     private readonly config: ConfigCenterService,
     private readonly researchBrief?: ResearchBriefService,
+    private readonly skills?: SkillRegistryService,
   ) {}
 
   /** 组装项目上下文：程序/情景记忆 + 知识库检索片段（NotebookLM 式 RAG 注入）；同时返回去重后的来源列表
@@ -192,35 +197,16 @@ export class ChatService {
     return { context: parts.join('\n\n'), sources };
   }
 
-  /** 读取全局角色与技能配置（设置→角色与技能）：自定义系统提示词 + 启用的技能清单 */
-  private personaConfig(): { systemPrompt?: string; skillsDesc?: string } {
+  /** 读取全局角色与技能索引：只注入技能名称/用途，正文由 skill_read 按需读取。 */
+  private personaConfig(): { systemPrompt?: string; skillsIndex?: string } {
     try {
       const read = (key: string): string => db.select().from(appSettings).where(eq(appSettings.key, key)).get()?.value ?? '';
       // 配置中心角色库优先：设置页「角色」页签保存的默认角色即对话角色；
       // 旧版 system_prompt（persona 面板）保留兼容，仅当角色库无默认角色时使用。
       const role = loadDefaultRole();
       const sys = role?.systemPrompt?.trim() ? role.systemPrompt : read('system_prompt');
-      let skills: { name: string; description: string; instructions?: string; enabled: number }[] = [];
-      try {
-        skills = JSON.parse(read('skills') || '[]');
-      } catch {
-        skills = [];
-      }
-      if (!Array.isArray(skills)) skills = [];
-      // 技能正文真正注入（此前只注入一句 description，启用技能等于启用标签）：
-      // 单条截断 1200 字、总量 8000 字，避免 30 个技能把系统提示撑爆。
-      let budget = 8000;
-      const desc = skills
-        .filter((s) => s.enabled !== 0 && s.description)
-        .map((s) => {
-          const body = String(s.instructions || '').trim();
-          if (!body || budget <= 0) return `- ${s.name}：${s.description}`;
-          const take = body.slice(0, Math.min(1200, budget));
-          budget -= take.length;
-          return `- ${s.name}：${s.description}\n  执行说明：${take}`;
-        })
-        .join('\n');
-      return { systemPrompt: sys.trim() || undefined, skillsDesc: desc || undefined };
+      const skillsIndex = this.skills?.indexText() ?? '';
+      return { systemPrompt: sys.trim() || undefined, skillsIndex: skillsIndex || undefined };
     } catch {
       return {};
     }
@@ -244,8 +230,13 @@ export class ChatService {
     history: ChatMessage[] = [],
     projectId?: string,
     docContext?: string,
-    opts: Pick<ChatRuntimeOptions, 'model' | 'webSearch' | 'user'> = {},
+    opts: Pick<ChatRuntimeOptions, 'model' | 'webSearch' | 'user' | 'signal' | 'attachments'> & {
+      onUsage?: (usage: { totalTokens: number }) => void;
+      onRunStarted?: (runId: string) => void;
+    } = {},
   ) {
+    const prepared = await prepareChatTurn(message, opts.attachments);
+    const promptText = prepared.message;
     // 非流式入口同样执行 chat:before 钩子（block 在此拦截；prompt_inject 由 AI 层注入）
     const before = await this.config.runEventHooks('chat:before', { text: message, projectId }, 'chat');
     if (before.blocked) throw new BadRequestException(before.blocked);
@@ -260,6 +251,7 @@ export class ChatService {
     if (useTools && projectId) {
       try {
         runId = this.trace.startRun({ projectId, source: 'chat', input: message, model: opts.model || this.ai.config.model });
+        if (runId) opts.onRunStarted?.(runId);
       } catch {
         runId = undefined;
       }
@@ -268,28 +260,50 @@ export class ChatService {
     const toolNames = toolSet ? Object.keys(toolSet) : [];
     this.logger.log(`[agent] non-stream useTools=${useTools} tools=${toolNames.length} profile=${this.toolProfile().id}${runId ? ` run=${runId.slice(0, 8)}` : ''}`);
 
+    let answerTokens = 0;
     const chatOpts: ChatStreamOptions = {
       modelName: opts.model,
+      signal: opts.signal,
       // 聊天入口写论文时切到 writing 档：继承 pipeline 论文约束，不继承 500 字简短约束。
       writing: isLongformWritingRequest(message, docContext),
+      onUsage: (usage) => {
+        answerTokens += usage.totalTokens || 0;
+        opts.onUsage?.(usage);
+      },
+      ...(prepared.parts ? { userParts: prepared.parts } : {}),
       ...(toolSet && toolNames.length ? { tools: toolSet, maxSteps: 12 } : {}),
     };
     const persona = this.personaConfig();
-    const fullContext = persona.skillsDesc ? `${context}\n\n【可用技能】\n${persona.skillsDesc}\n（回答需要时可利用对应技能获取事实依据）` : context;
-    const answerText = fullContext
-      ? await this.ai.chatWithToolsContext(message, effectiveHistory, fullContext, chatOpts, persona.systemPrompt)
-      : await this.ai.chatWithTools(message, effectiveHistory, chatOpts, persona.systemPrompt);
-    if (runId) {
-      try {
-        this.trace.finishRun(runId, { status: 'done', outputSummary: `chat 工具会话（${toolNames.length} 个工具可用）` });
-      } catch { /* 轨迹收尾失败不影响对话 */ }
+    const fullContext = persona.skillsIndex
+      ? `${context}\n\n【技能索引】\n${persona.skillsIndex}\n（需要完整执行说明时调用 skill_read；不要凭索引猜步骤）`
+      : context;
+    try {
+      const answerText = fullContext
+        ? await this.ai.chatWithToolsContext(promptText, effectiveHistory, fullContext, chatOpts, persona.systemPrompt)
+        : await this.ai.chatWithTools(promptText, effectiveHistory, chatOpts, persona.systemPrompt);
+      if (runId) {
+        try {
+          this.trace.finishRun(runId, { status: opts.signal?.aborted ? 'cancelled' : 'done', outputSummary: `chat 工具会话（${toolNames.length} 个工具可用）`, totalTokens: answerTokens });
+        } catch { /* 轨迹收尾失败不影响对话 */ }
+      }
+      return { answer: answerText, sources };
+    } catch (e: any) {
+      if (runId) {
+        try {
+          this.trace.finishRun(runId, {
+            status: opts.signal?.aborted ? 'cancelled' : 'error',
+            error: e?.message || String(e),
+            totalTokens: answerTokens,
+          });
+        } catch { /* 轨迹收尾失败不影响对话 */ }
+      }
+      throw e;
     }
-    return { answer: answerText, sources };
   }
 
   /** 异步记录本轮会话摘要（流结束后由 controller 触发，fire-and-forget） */
-  recordSessionSummary(projectId: string, messages: ChatMessage[], totalTokens: number): void {
-    void this.chatSession.recordSummary(projectId, messages, totalTokens);
+  recordSessionSummary(projectId: string, messages: ChatMessage[], totalTokens: number, sessionId?: string, title?: string): void {
+    void this.chatSession.recordSummary(projectId, messages, totalTokens, sessionId, title);
   }
 
   /** 项目最近会话摘要列表（供前端"对话历史"面板） */
@@ -305,6 +319,8 @@ export class ChatService {
       this.logger.log(`[compact] 压缩 ${compacted.beforeChars} → ${compacted.afterChars} 字符，归纳 ${compacted.droppedTurns} 轮`);
     }
     return this.contextFor(projectId, message, docContext, effectiveHistory.length, opts.webSearch === true).then(async ({ context, sources }) => {
+      const prepared = await prepareChatTurn(message, opts.attachments);
+      const promptText = prepared.message;
       // chat:before 钩子：block 类型在此拦截（抛错由 controller 转为 SSE error 事件）
       const before = await this.config.runEventHooks('chat:before', { text: message, projectId }, 'chat');
       if (before.blocked) throw new BadRequestException(before.blocked);
@@ -337,14 +353,17 @@ export class ChatService {
           streamTokens = Number(usage.totalTokens) || 0;
           if (projectId && useTools) this.tools.recordPlanTokens(projectId, usage.totalTokens);
         },
+        ...(prepared.parts ? { userParts: prepared.parts } : {}),
         // 配置中心工具可多次调用（一次对话里完成角色+约束+钩子等），步数上限提高到 12
         ...(toolSet && toolNames.length ? { tools: toolSet, maxSteps: 12 } : {}),
       };
       const persona = this.personaConfig();
-      const fullContext = persona.skillsDesc ? `${context}\n\n【可用技能】\n${persona.skillsDesc}\n（回答需要时可利用对应技能获取事实依据）` : context;
+      const fullContext = persona.skillsIndex
+        ? `${context}\n\n【技能索引】\n${persona.skillsIndex}\n（需要完整执行说明时调用 skill_read；不要凭索引猜步骤）`
+        : context;
       const stream = fullContext
-        ? await this.ai.streamChatWithContext(message, effectiveHistory, fullContext, streamOpts, persona.systemPrompt)
-        : await this.ai.streamChat(message, effectiveHistory, streamOpts, persona.systemPrompt);
+        ? await this.ai.streamChatWithContext(promptText, effectiveHistory, fullContext, streamOpts, persona.systemPrompt)
+        : await this.ai.streamChat(promptText, effectiveHistory, streamOpts, persona.systemPrompt);
       return { stream: this.trackRunStream(stream, runId, toolNames.length, () => streamTokens), sources };
     });
   }

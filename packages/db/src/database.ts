@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema';
 import { configureSecrets, encryptLegacyKeys } from './secret-crypto';
+import { MIGRATIONS, runMigrations } from './migrations';
 
 const DATA_DIR = process.env.DATABASE_PATH
   ? path.dirname(path.resolve(process.env.DATABASE_PATH))
@@ -749,13 +750,22 @@ CREATE INDEX IF NOT EXISTS idx_web_search_query ON web_search_cache(query);
 sqlite.exec(`CREATE TABLE IF NOT EXISTS chat_session (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
+  title TEXT DEFAULT '',
   summary TEXT DEFAULT '',
+  messages_json TEXT DEFAULT '[]',
+  branch_json TEXT DEFAULT '{}',
   message_count INTEGER NOT NULL,
   total_tokens INTEGER NOT NULL,
+  pinned INTEGER DEFAULT 0,
+  archived INTEGER DEFAULT 0,
+  last_message_at INTEGER,
+  source TEXT DEFAULT 'cloud',
+  summary_only INTEGER DEFAULT 0,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_chat_session_project ON chat_session(project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_session_project_last ON chat_session(project_id, last_message_at DESC);
 `);
 
 
@@ -809,25 +819,9 @@ CREATE INDEX IF NOT EXISTS idx_agent_plan_project ON agent_plan(project_id, crea
 CREATE INDEX IF NOT EXISTS idx_agent_plan_status ON agent_plan(status, approved_at DESC);
 `);
 
-ensureColumn('memory_log', 'embedding', 'BLOB');
+runMigrations(sqlite, MIGRATIONS, console);
 
-/** 轻量迁移：为旧库补齐新列（CREATE TABLE IF NOT EXISTS 不会修改已有表） */
-function ensureColumn(table: string, column: string, ddl: string) {
-  const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
-  if (!cols.some((c) => c.name === column)) {
-    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
-    console.log(`[DB] 迁移：${table} 新增列 ${column}`);
-  }
-}
-ensureColumn('pipeline_task', 'trace', "TEXT DEFAULT '[]'");
-// Research 阶段跨库检索增强：命中 0 引导文案（null）+ 命中>0 命中摘要 JSON（''）
-ensureColumn('pipeline_task', 'research_notice', "TEXT");
-ensureColumn('pipeline_task', 'research_meta', "TEXT DEFAULT ''");
-/** 迁移：旧库新增 fulltext 列 + 全文索引（LIKE 兜底 + BM25 回退用） */
-ensureColumn('knowledge_chunk', 'context', "TEXT DEFAULT ''");
-ensureColumn('knowledge_chunk', 'vector', "TEXT DEFAULT '[]'");
-// 向量 ANN 检索：新增 embedding 列 + vec0 虚拟表（若 sqlite-vec 扩展可用）
-ensureColumn('knowledge_chunk', 'embedding', 'BLOB');
+// 向量 ANN 检索：embedding 列由迁移 v2 补齐后，再建 vec0 虚拟表（若 sqlite-vec 扩展可用）
 try {
   sqlite.exec(`
     CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_chunks_embedding USING vec0(
@@ -838,109 +832,6 @@ try {
   console.log('[DB] 向量检索虚拟表已就绪（knowledge_chunks_embedding vec0）');
 } catch (e: any) {
   console.warn(`[DB] vec0 虚拟表创建失败（依赖 sqlite-vec 扩展）: ${e?.message || e}`);
-}
-// 文献库↔知识库打通（#5）：旧库补齐 reference_id 可空外键列
-ensureColumn('knowledge_doc', 'reference_id', "TEXT");
-// 科研高级功能：reference 阅读状态 / 去重指纹 / 重复指向
-ensureColumn('reference', 'reading_status', "TEXT DEFAULT 'unread'");
-ensureColumn('reference', 'fingerprint', "TEXT DEFAULT ''");
-ensureColumn('reference', 'is_duplicate_of', "TEXT DEFAULT ''");
-// 路线图差距 #11：文献笔记
-ensureColumn('reference', 'notes', "TEXT DEFAULT ''");
-// v1.9 查询路径索引（必须在 fingerprint 列补齐之后建：老库里该列由上面的 ensureColumn 添加，
-// 若提前放在建表 DDL 里会因列不存在而整段事务失败）
-sqlite.exec('CREATE INDEX IF NOT EXISTS idx_reference_project_fp ON reference(project_id, fingerprint)');
-// 路线图差距 #22：项目级系统提示 projectPreface
-ensureColumn('project', 'preface', "TEXT DEFAULT ''");
-// 差距 #1：自定义大纲模板（JSON 字符串数组）；旧库补齐默认 '[]'
-ensureColumn('project', 'templates', "TEXT DEFAULT '[]'");
-// 调用类型：llm=模型调用，tool=工具调用（分开统计，避免工具污染 token 成本看板）
-ensureColumn('llm_call_log', 'kind', "TEXT DEFAULT 'llm'");
-// 项目级工具指标：旧库补列；空串表示全局/历史行
-ensureColumn('llm_call_log', 'project_id', "TEXT DEFAULT ''");
-sqlite.exec('CREATE INDEX IF NOT EXISTS idx_llm_project ON llm_call_log(project_id)');
-// 企业模式（AUTH_MODE=jwt）：项目归属，用于按用户隔离数据（防 IDOR）
-ensureColumn('project', 'owner_id', "TEXT DEFAULT ''");
-sqlite.exec('CREATE INDEX IF NOT EXISTS idx_project_owner ON project(owner_id)');
-// 沙箱多运行时：老行默认 python，新行可写 node / shell
-ensureColumn('experiment', 'runtime', "TEXT DEFAULT 'python'");
-// 模型厂商 v1.2：协议 / 能力自动匹配（上下文窗口、最大输出、工具调用）/ 检测到的模型目录
-ensureColumn('model_provider', 'protocol', "TEXT DEFAULT 'openai-compatible'");
-ensureColumn('model_provider', 'context_window', 'INTEGER DEFAULT 0');
-ensureColumn('model_provider', 'max_output', 'INTEGER DEFAULT 0');
-ensureColumn('model_provider', 'tool_calling', 'INTEGER DEFAULT 1');
-ensureColumn('model_provider', 'models', "TEXT DEFAULT '[]'");
-// 质量报告来源拆分：客观门禁分 / LLM 参考分 / 专家审核预留
-ensureColumn('quality_report', 'objective_score', 'INTEGER');
-ensureColumn('quality_report', 'objective_dimensions', "TEXT DEFAULT '[]'");
-ensureColumn('quality_report', 'llm_score', 'INTEGER');
-ensureColumn('quality_report', 'llm_scores', "TEXT DEFAULT '{}'");
-ensureColumn('quality_report', 'expert_score', 'INTEGER');
-ensureColumn('quality_report', 'expert_status', "TEXT DEFAULT 'unreviewed'");
-ensureColumn('document', 'revision_queue', "TEXT DEFAULT '{}'");
-ensureColumn('review_comment', 'quote', "TEXT DEFAULT ''");
-ensureColumn('review_comment', 'anchor_start', 'INTEGER');
-ensureColumn('review_comment', 'anchor_end', 'INTEGER');
-// 配置中心 v1.3：钩子唯一性（同名同事件同类型只允许一条，防重复注入）+ 审计只追加（触发器兜底）
-try {
-  sqlite.exec('CREATE UNIQUE INDEX IF NOT EXISTS ux_config_hook_name_event_type ON config_hook(name, event, type)');
-} catch (e: any) {
-  console.warn(`[DB] config_hook 唯一索引创建失败（可能存在历史重复，需先清理）: ${e?.message || e}`);
-}
-sqlite.exec(`
-CREATE TRIGGER IF NOT EXISTS trg_config_audit_no_update
-BEFORE UPDATE ON config_audit
-BEGIN
-  SELECT RAISE(ABORT, 'config_audit 只追加：禁止 UPDATE');
-END;
-CREATE TRIGGER IF NOT EXISTS trg_config_audit_no_delete
-BEFORE DELETE ON config_audit
-BEGIN
-  SELECT RAISE(ABORT, 'config_audit 只追加：禁止 DELETE');
-END;
-`);
-
-// ---------- 迁移：knowledge_chunk_fts 从 unicode61 升级到 trigram ----------
-// 原因：unicode61 不切分 CJK（整段中文是一个 token），中文短语检索永远命中不到；
-// trigram 支持 >=3 字符子串匹配（含 CJK），配合 buildTrigramQuery 的 3-gram OR 展开。
-{
-  const row = sqlite
-    .prepare(`
-      SELECT sql FROM sqlite_master WHERE type='table' AND name='knowledge_chunk_fts'
-    `)
-    .get() as { sql?: string } | undefined;
-  if (row?.sql && /unicode61/.test(row.sql)) {
-    const reindex = () => {
-      sqlite.exec(`
-        DROP TRIGGER IF EXISTS knowledge_chunk_fts_ai;
-        DROP TRIGGER IF EXISTS knowledge_chunk_fts_ad;
-        DROP TRIGGER IF EXISTS knowledge_chunk_fts_au;
-        DROP TABLE IF EXISTS knowledge_chunk_fts;
-        CREATE VIRTUAL TABLE knowledge_chunk_fts USING fts5(
-          chunk_id UNINDEXED,
-          content,
-          tokenize='trigram'
-        );
-        INSERT INTO knowledge_chunk_fts(chunk_id, content) SELECT id, content FROM knowledge_chunk;
-        CREATE TRIGGER knowledge_chunk_fts_ai AFTER INSERT ON knowledge_chunk BEGIN
-          INSERT INTO knowledge_chunk_fts(chunk_id, content) VALUES (new.id, new.content);
-        END;
-        CREATE TRIGGER knowledge_chunk_fts_ad AFTER DELETE ON knowledge_chunk BEGIN
-          DELETE FROM knowledge_chunk_fts WHERE chunk_id = old.id;
-        END;
-        CREATE TRIGGER knowledge_chunk_fts_au AFTER UPDATE ON knowledge_chunk BEGIN
-          UPDATE knowledge_chunk_fts SET content = new.content WHERE chunk_id = old.id;
-        END;
-      `);
-    };
-    try {
-      reindex();
-      const n = (sqlite.prepare('SELECT COUNT(*) AS c FROM knowledge_chunk_fts').get() as { c: number }).c;
-      console.log(`[DB] 迁移: knowledge_chunk_fts 已切换到 trigram tokenizer（重建索引 ${n} 块）`);
-    } catch (e: any) {
-      console.warn(`[DB] FTS trigram 迁移失败（保留 unicode61）: ${e?.message || e}`);
-    }
-  }
 }
 
 /** 期刊库种子：内置国内主流期刊（仅写领域定位等事实描述；ISSN/IF/分区等不确定指标一律 NULL，禁止编造） */
@@ -974,12 +865,8 @@ encryptLegacyKeys(
 );
 
 /**
- * 数据库 schema 初始化（保留 ensureColumn 用于旧库 backward-compat 迁移）。
- * 新能力上线需要的列，在 DDL 里加 CREATE TABLE IF NOT EXISTS 自然兼容新库；
- * 已有的旧库走 ensureColumn 补齐。
- *
- * ⚠️ 未来大版本 schema 变化请用 `pnpm --filter @sciflow/server db:push`
- *    （drizzle-kit migration）替代手写 ensureColumn。
+ * 数据库 schema 初始化：DDL 负责新库，版本化迁移账本负责旧库补列。
+ * 新 schema 变化请追加 `packages/db/src/migrations.ts` 版本，不要回到手写 ensureColumn。
  */
 
 export const db: BetterSQLite3Database<typeof schema> = drizzle(sqlite, { schema });

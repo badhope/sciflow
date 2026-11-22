@@ -2,6 +2,10 @@ import type { ChatSource } from '../../types';
 
 /** 一条对话消息（本地会话存储的持久化形态；与内核 ChatMessage 对齐但去掉瞬态字段） */
 export interface StoredMessage {
+  /** 会话内稳定消息 id（A2 分支树用；旧数据可空） */
+  id?: string;
+  /** 父消息 id（A2 分支树用；根为空） */
+  parentId?: string;
   role: 'user' | 'assistant';
   content: string;
   reasoning?: string;
@@ -12,6 +16,8 @@ export interface StoredMessage {
   error?: string;
   model?: string;
   createdAt?: number;
+  attachments?: { name: string; mime: string; data: string }[];
+  toolCalls?: unknown[];
 }
 
 export interface ChatSession {
@@ -20,6 +26,11 @@ export interface ChatSession {
   createdAt: number;
   updatedAt: number;
   messages: StoredMessage[];
+  /** 服务端会话置顶/归档；本地旧数据默认 false */
+  pinned?: boolean;
+  archived?: boolean;
+  /** 服务端消息数（列表未取完整消息时用于判断是否需要拉详情） */
+  messageCount?: number;
 }
 
 const KEY = (projectId: string) => `sciflow.chat.sessions.${projectId}`;
