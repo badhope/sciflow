@@ -40,6 +40,18 @@ importers:
 
   .:
     devDependencies:
+      '@ai-sdk/anthropic':
+        specifier: 4.0.78
+        version: 4.0.78(zod@4.6.6)
+      '@ai-sdk/google':
+        specifier: 4.0.93
+        version: 4.0.93(zod@4.6.6)
+      '@ai-sdk/openai-compatible':
+        specifier: ^3.0.67
+        version: 3.0.67(zod@4.6.6)
+      '@nestjs/common':
+        specifier: ^11.2.6
+        version: 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@playwright/test':
         specifier: ^1.64.0
         version: 1.64.0
@@ -49,9 +61,18 @@ importers:
       '@vitest/coverage-v8':
         specifier: 5.0.4
         version: 5.0.4(vitest@5.0.4)
+      ai:
+        specifier: ^7.0.137
+        version: 7.0.137(zod@4.6.6)
+      better-sqlite3:
+        specifier: 12.11.1
+        version: 12.11.1
       concurrently:
         specifier: ^10.0.5
         version: 10.0.5
+      drizzle-orm:
+        specifier: 0.45.3
+        version: 0.45.3(@libsql/client@0.18.0)(@opentelemetry/api@1.10.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)(pg@8.23.1)
       eslint:
         specifier: ^10.12.0
         version: 10.12.0(jiti@2.7.0)(supports-color@10.2.2)
@@ -67,15 +88,36 @@ importers:
       globals:
         specifier: ^17.13.0
         version: 17.13.0
+      jsonrepair:
+        specifier: ^3.15.0
+        version: 3.15.0
+      msw:
+        specifier: ^3.0.3
+        version: 3.0.3(@types/node@26.6.4)(graphql@16.14.2)(typescript@5.9.3)(vite@8.3.6(@types/node@26.6.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
+      p-limit:
+        specifier: ^7.3.3
+        version: 7.3.3
+      p-retry:
+        specifier: ^9.0.0
+        version: 9.0.0
       prettier:
         specifier: ^3.9.10
         version: 3.9.10
       promptfoo:
         specifier: ^0.126.0
         version: 0.126.0(@anthropic-ai/claude-agent-sdk@0.3.283(@anthropic-ai/sdk@1.6.0(zod@4.6.6))(@modelcontextprotocol/sdk@1.32.2(@cfworker/json-schema@4.1.4)(zod@4.6.6))(zod@4.6.6))(@aws-sdk/credential-provider-node@3.972.86)(@aws-sdk/credential-providers@3.1150.0)(@cfworker/json-schema@4.1.4)(@openai/codex-sdk@0.156.1)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.4)(@types/better-sqlite3@7.6.13)(@types/json-schema@7.0.15)(@types/node@26.6.4)(better-sqlite3@12.11.1)(jks-js@1.1.7)(pg@8.23.1)(playwright@1.64.0)(socks@2.8.10)(supports-color@10.2.2)
+      sqlite-vec:
+        specifier: 0.1.9
+        version: 0.1.9
       typescript-eslint:
         specifier: ^8.71.2
         version: 8.71.2(eslint@10.12.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
+      undici:
+        specifier: ^8.12.4
+        version: 8.12.4
+      zod:
+        specifier: ^4.6.6
+        version: 4.6.6
 
   apps/desktop:
     dependencies:
@@ -136,25 +178,25 @@ importers:
         version: 1.0.2(@langchain/core@1.2.17(@opentelemetry/api@1.10.0)(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.10.0))(openai@7.32.0(@aws-sdk/credential-provider-node@3.972.86)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.4)(undici@8.12.4)(ws@8.22.0)(zod@4.6.6))(ws@8.22.0))
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.1
-        version: 1.32.1(@cfworker/json-schema@4.1.4)(supports-color@10.2.2)(zod@4.6.6)
+        version: 1.32.1(@cfworker/json-schema@4.1.4)(zod@4.6.6)
       '@nestjs/common':
         specifier: ^11.0.0
-        version: 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2)
+        version: 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/core':
         specifier: ^11.0.0
-        version: 11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/platform-express@11.2.6)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+        version: 11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.2.6)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/jwt':
         specifier: ^12.0.2
-        version: 12.0.2(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))
+        version: 12.0.2(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))
       '@nestjs/platform-express':
         specifier: ^11.0.0
-        version: 11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/core@11.2.6)(supports-color@10.2.2)
+        version: 11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.6)(supports-color@10.2.2)
       '@nestjs/swagger':
         specifier: ^11.4.7
-        version: 11.4.7(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/core@11.2.6)(reflect-metadata@0.2.2)
+        version: 11.4.7(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.6)(reflect-metadata@0.2.2)
       '@nestjs/throttler':
         specifier: ^6.4.0
-        version: 6.7.1(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/core@11.2.6)(reflect-metadata@0.2.2)
+        version: 6.7.1(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.6)(reflect-metadata@0.2.2)
       ai:
         specifier: ^7.0.137
         version: 7.0.137(zod@4.6.6)
@@ -196,10 +238,10 @@ importers:
         version: 3.15.0
       msw:
         specifier: ^3.0.3
-        version: 3.0.3(@types/node@22.20.4)(graphql@16.14.2)(supports-color@10.2.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
+        version: 3.0.3(@types/node@22.20.4)(graphql@16.14.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
       nestjs-pino:
         specifier: ^5.3.1
-        version: 5.3.1(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/core@11.2.6)(pino-http@11.0.0)(pino@10.4.0)(rxjs@7.8.2)
+        version: 5.3.1(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.6)(pino-http@11.0.0)(pino@10.4.0)(rxjs@7.8.2)
       node-llama-cpp:
         specifier: ^3.12.0
         version: 3.22.1(supports-color@10.2.2)(typescript@5.9.3)
@@ -272,7 +314,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^5.0.4
-        version: 5.0.4(@opentelemetry/api@1.10.0)(@types/node@22.20.4)(@vitest/coverage-v8@5.0.4)(happy-dom@21.0.4)(msw@3.0.3(@types/node@22.20.4)(graphql@16.14.2)(supports-color@10.2.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
+        version: 5.0.4(@opentelemetry/api@1.10.0)(@types/node@22.20.4)(@vitest/coverage-v8@5.0.4)(happy-dom@21.0.4)(msw@3.0.3(@types/node@22.20.4)(graphql@16.14.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
 
   apps/web:
     dependencies:
@@ -7167,8 +7209,8 @@ packages:
     resolution: {integrity: sha512-u3xV3X7uzvi5b1MncmZo3i2Aw222Zk1keqLA1YkHldREkAhAqi65wuPfe7lHx8H/Wzy+8CE7S7uS3jekIM5s8g==}
     engines: {node: '>=8'}
 
-  uint8array-extras@1.5.0:
-    resolution: {integrity: sha512-rvKSBiC5zqCCiDZ9kAOszZcDvdAHwwIKJG33Ykj43OKcWsnmcBRL09YTU4nOeHZ8Y2a7l1MgTd08SBe9A8Qj6A==}
+  uint8array-extras@1.6.0:
+    resolution: {integrity: sha512-8iAasVS4wUx0gPLjH8Xtz2PeDzTSiy8QiLGu2DT3X5GU+egFEQhpnbtkehbAwjvDcxIERmCYcysiODFmE3Ud0Q==}
     engines: {node: '>=18'}
 
   underscore@1.13.8:
@@ -9146,7 +9188,7 @@ snapshots:
       zod: 4.6.6
     optional: true
 
-  '@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.4)(supports-color@10.2.2)(zod@4.6.6)':
+  '@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.4)(zod@4.6.6)':
     dependencies:
       '@hono/node-server': 2.1.9(hono@4.13.19)
       ajv: 8.20.0
@@ -9156,8 +9198,8 @@ snapshots:
       cross-spawn: 7.0.6
       eventsource: 3.0.2
       eventsource-parser: 3.1.1
-      express: 5.3.0(supports-color@10.2.2)
-      express-rate-limit: 8.7.1(express@5.3.0(supports-color@10.2.2))(supports-color@10.2.2)
+      express: 5.3.0
+      express-rate-limit: 8.7.1(express@5.3.0)
       hono: 4.13.19
       jose: 6.2.12
       json-schema-typed: 8.0.2
@@ -9180,8 +9222,8 @@ snapshots:
       cross-spawn: 7.0.6
       eventsource: 3.0.2
       eventsource-parser: 3.1.1
-      express: 5.3.0(supports-color@10.2.2)
-      express-rate-limit: 8.7.1(express@5.3.0(supports-color@10.2.2))(supports-color@10.2.2)
+      express: 5.3.0
+      express-rate-limit: 8.7.1(express@5.3.0)
       hono: 4.13.19
       jose: 6.2.12
       json-schema-typed: 8.0.2
@@ -9219,7 +9261,7 @@ snapshots:
 
   '@msw/url@0.1.2': {}
 
-  '@mswjs/interceptors@0.45.7(supports-color@10.2.2)':
+  '@mswjs/interceptors@0.45.7':
     dependencies:
       '@open-draft/until': 3.0.1
       '@types/debug': 4.1.13
@@ -9276,9 +9318,9 @@ snapshots:
 
   '@neon-rs/load@0.0.4': {}
 
-  '@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2)':
+  '@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)':
     dependencies:
-      file-type: 21.3.4(supports-color@10.2.2)
+      file-type: 21.3.4
       iterare: 1.2.1
       load-esm: 1.0.3
       reflect-metadata: 0.2.2
@@ -9288,9 +9330,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@nestjs/core@11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/platform-express@11.2.6)(reflect-metadata@0.2.2)(rxjs@7.8.2)':
+  '@nestjs/core@11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.2.6)(reflect-metadata@0.2.2)(rxjs@7.8.2)':
     dependencies:
-      '@nestjs/common': 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2)
+      '@nestjs/common': 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)
       fast-safe-stringify: 2.1.1
       iterare: 1.2.1
       path-to-regexp: 8.4.2
@@ -9299,23 +9341,23 @@ snapshots:
       tslib: 2.8.1
       uid: 2.0.2
     optionalDependencies:
-      '@nestjs/platform-express': 11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/core@11.2.6)(supports-color@10.2.2)
+      '@nestjs/platform-express': 11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.6)(supports-color@10.2.2)
 
-  '@nestjs/jwt@12.0.2(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))':
+  '@nestjs/jwt@12.0.2(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))':
     dependencies:
-      '@nestjs/common': 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2)
+      '@nestjs/common': 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@types/jsonwebtoken': 9.0.10
       jsonwebtoken: 9.0.3
 
-  '@nestjs/mapped-types@2.1.1(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(reflect-metadata@0.2.2)':
+  '@nestjs/mapped-types@2.1.1(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)':
     dependencies:
-      '@nestjs/common': 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2)
+      '@nestjs/common': 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)
       reflect-metadata: 0.2.2
 
-  '@nestjs/platform-express@11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/core@11.2.6)(supports-color@10.2.2)':
+  '@nestjs/platform-express@11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.6)(supports-color@10.2.2)':
     dependencies:
-      '@nestjs/common': 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2)
-      '@nestjs/core': 11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/platform-express@11.2.6)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/common': 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core': 11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.2.6)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       cors: 2.8.6
       express: 5.2.1(supports-color@10.2.2)
       multer: 2.5.0
@@ -9324,22 +9366,22 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@nestjs/swagger@11.4.7(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/core@11.2.6)(reflect-metadata@0.2.2)':
+  '@nestjs/swagger@11.4.7(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.6)(reflect-metadata@0.2.2)':
     dependencies:
       '@microsoft/tsdoc': 0.16.0
-      '@nestjs/common': 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2)
-      '@nestjs/core': 11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/platform-express@11.2.6)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/mapped-types': 2.1.1(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(reflect-metadata@0.2.2)
+      '@nestjs/common': 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core': 11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.2.6)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/mapped-types': 2.1.1(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)
       js-yaml: 5.4.3
       lodash: 4.18.1
       path-to-regexp: 8.4.2
       reflect-metadata: 0.2.2
       swagger-ui-dist: 5.32.13
 
-  '@nestjs/throttler@6.7.1(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/core@11.2.6)(reflect-metadata@0.2.2)':
+  '@nestjs/throttler@6.7.1(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.6)(reflect-metadata@0.2.2)':
     dependencies:
-      '@nestjs/common': 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2)
-      '@nestjs/core': 11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/platform-express@11.2.6)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/common': 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core': 11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.2.6)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       reflect-metadata: 0.2.2
 
   '@noble/hashes@1.8.0': {}
@@ -9979,7 +10021,7 @@ snapshots:
 
   '@tinyhttp/content-disposition@2.2.4': {}
 
-  '@tokenizer/inflate@0.4.1(supports-color@10.2.2)':
+  '@tokenizer/inflate@0.4.1':
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
       token-types: 6.1.2
@@ -10429,7 +10471,7 @@ snapshots:
       obug: 3.0.0
       std-env: 4.3.0
       tinyrainbow: 3.2.0
-      vitest: 5.0.4(@opentelemetry/api@1.10.0)(@types/node@22.20.4)(@vitest/coverage-v8@5.0.4)(happy-dom@21.0.4)(msw@3.0.3(@types/node@22.20.4)(graphql@16.14.2)(supports-color@10.2.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
+      vitest: 5.0.4(@opentelemetry/api@1.10.0)(@types/node@26.6.4)(@vitest/coverage-v8@5.0.4)(happy-dom@21.0.4)(msw@3.0.3(@types/node@26.6.4)(graphql@16.14.2)(typescript@5.9.3)(vite@8.3.6(@types/node@26.6.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(vite@8.3.6(@types/node@26.6.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
 
   '@vitest/istanbul-lib-coverage@1.0.2': {}
 
@@ -10437,14 +10479,14 @@ snapshots:
     dependencies:
       '@vitest/istanbul-lib-coverage': 1.0.2
 
-  '@vitest/mocker@5.0.4(msw@3.0.3(@types/node@22.20.4)(graphql@16.14.2)(supports-color@10.2.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))':
+  '@vitest/mocker@5.0.4(msw@3.0.3(@types/node@22.20.4)(graphql@16.14.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@vitest/spy': 5.0.4
       estree-walker: 3.0.3
       magic-string: 1.4.3
     optionalDependencies:
-      msw: 3.0.3(@types/node@22.20.4)(graphql@16.14.2)(supports-color@10.2.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
+      msw: 3.0.3(@types/node@22.20.4)(graphql@16.14.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
       vite: 8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)
 
   '@vitest/mocker@5.0.4(msw@3.0.3(@types/node@26.6.4)(graphql@16.14.2)(typescript@5.9.3)(vite@8.3.6(@types/node@26.6.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(vite@8.3.6(@types/node@26.6.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))':
@@ -10715,7 +10757,7 @@ snapshots:
 
   bluebird@3.7.2: {}
 
-  body-parser@2.4.0(supports-color@10.2.2):
+  body-parser@2.4.0:
     dependencies:
       bytes: 3.1.2
       content-type: 2.1.0
@@ -11813,10 +11855,10 @@ snapshots:
 
   exponential-backoff@3.1.3: {}
 
-  express-rate-limit@8.7.1(express@5.3.0(supports-color@10.2.2))(supports-color@10.2.2):
+  express-rate-limit@8.7.1(express@5.3.0):
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
-      express: 5.3.0(supports-color@10.2.2)
+      express: 5.3.0
       ip-address: 10.7.4
     transitivePeerDependencies:
       - supports-color
@@ -11824,7 +11866,7 @@ snapshots:
   express@5.2.1(supports-color@10.2.2):
     dependencies:
       accepts: 2.0.0
-      body-parser: 2.4.0(supports-color@10.2.2)
+      body-parser: 2.4.0
       content-disposition: 1.1.0
       content-type: 1.0.5
       cookie: 0.7.2
@@ -11834,7 +11876,7 @@ snapshots:
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
-      finalhandler: 2.1.1(supports-color@10.2.2)
+      finalhandler: 2.1.1
       fresh: 2.0.0
       http-errors: 2.0.1
       merge-descriptors: 2.0.0
@@ -11846,7 +11888,7 @@ snapshots:
       qs: 6.17.1
       range-parser: 1.3.0
       router: 2.2.0(supports-color@10.2.2)
-      send: 1.2.1(supports-color@10.2.2)
+      send: 1.2.1
       serve-static: 2.2.1
       statuses: 2.0.2
       type-is: 2.1.0
@@ -11854,10 +11896,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  express@5.3.0(supports-color@10.2.2):
+  express@5.3.0:
     dependencies:
       accepts: 2.0.0
-      body-parser: 2.4.0(supports-color@10.2.2)
+      body-parser: 2.4.0
       content-disposition: 2.0.1
       content-type: 2.1.0
       cookie: 0.7.2
@@ -11867,7 +11909,7 @@ snapshots:
       encodeurl: 2.0.1
       escape-html: 1.0.3
       etag: 1.8.1
-      finalhandler: 2.1.1(supports-color@10.2.2)
+      finalhandler: 2.1.1
       fresh: 2.0.0
       http-errors: 2.0.1
       merge-descriptors: 2.0.0
@@ -11878,8 +11920,8 @@ snapshots:
       proxy-addr: 2.0.8
       qs: 6.17.1
       range-parser: 1.3.0
-      router: 2.3.0(supports-color@10.2.2)
-      send: 1.2.1(supports-color@10.2.2)
+      router: 2.3.0
+      send: 1.2.1
       serve-static: 2.2.1
       statuses: 2.0.2
       type-is: 2.1.0
@@ -11948,12 +11990,12 @@ snapshots:
     dependencies:
       flat-cache: 6.1.23
 
-  file-type@21.3.4(supports-color@10.2.2):
+  file-type@21.3.4:
     dependencies:
-      '@tokenizer/inflate': 0.4.1(supports-color@10.2.2)
+      '@tokenizer/inflate': 0.4.1
       strtok3: 10.3.5
       token-types: 6.1.2
-      uint8array-extras: 1.5.0
+      uint8array-extras: 1.6.0
     transitivePeerDependencies:
       - supports-color
 
@@ -11969,7 +12011,7 @@ snapshots:
     dependencies:
       filename-reserved-regex: 3.0.0
 
-  finalhandler@2.1.1(supports-color@10.2.2):
+  finalhandler@2.1.1:
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
       encodeurl: 2.0.1
@@ -13508,11 +13550,11 @@ snapshots:
 
   ms@2.1.3: {}
 
-  msw@3.0.3(@types/node@22.20.4)(graphql@16.14.2)(supports-color@10.2.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)):
+  msw@3.0.3(@types/node@22.20.4)(graphql@16.14.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)):
     dependencies:
       '@inquirer/confirm': 6.4.0(@types/node@22.20.4)
       '@msw/url': 0.1.2
-      '@mswjs/interceptors': 0.45.7(supports-color@10.2.2)
+      '@mswjs/interceptors': 0.45.7
       cookie: 2.0.1
       headers-polyfill: 5.0.1
       is-node-process: 1.2.0
@@ -13534,7 +13576,7 @@ snapshots:
     dependencies:
       '@inquirer/confirm': 6.4.0(@types/node@26.6.4)
       '@msw/url': 0.1.2
-      '@mswjs/interceptors': 0.45.7(supports-color@10.2.2)
+      '@mswjs/interceptors': 0.45.7
       cookie: 2.0.1
       headers-polyfill: 5.0.1
       is-node-process: 1.2.0
@@ -13609,10 +13651,10 @@ snapshots:
     dependencies:
       content-type: 2.1.0
 
-  nestjs-pino@5.3.1(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/core@11.2.6)(pino-http@11.0.0)(pino@10.4.0)(rxjs@7.8.2):
+  nestjs-pino@5.3.1(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.6)(pino-http@11.0.0)(pino@10.4.0)(rxjs@7.8.2):
     dependencies:
-      '@nestjs/common': 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2)
-      '@nestjs/core': 11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/platform-express@11.2.6)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/common': 11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core': 11.2.6(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.2.6)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       pino: 10.4.0
       pino-http: 11.0.0
       rxjs: 7.8.2
@@ -14208,7 +14250,7 @@ snapshots:
       csv-stringify: 6.9.0
       dedent: 1.7.2
       drizzle-orm: 0.45.3(@libsql/client@0.18.0)(@opentelemetry/api@1.10.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)(pg@8.23.1)
-      express: 5.3.0(supports-color@10.2.2)
+      express: 5.3.0
       exsolve: 1.2.0
       fast-deep-equal: 3.1.3
       fast-safe-stringify: 2.1.1
@@ -14699,7 +14741,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  router@2.3.0(supports-color@10.2.2):
+  router@2.3.0:
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
       depd: 2.0.0
@@ -14716,7 +14758,7 @@ snapshots:
 
   rxjs@7.8.2:
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
 
   safe-buffer@5.1.2: {}
 
@@ -14752,7 +14794,7 @@ snapshots:
 
   semver@7.8.5: {}
 
-  send@1.2.1(supports-color@10.2.2):
+  send@1.2.1:
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
       encodeurl: 2.0.1
@@ -14778,7 +14820,7 @@ snapshots:
       encodeurl: 2.0.1
       escape-html: 1.0.3
       parseurl: 1.3.3
-      send: 1.2.1(supports-color@10.2.2)
+      send: 1.2.1
     transitivePeerDependencies:
       - supports-color
 
@@ -15323,7 +15365,7 @@ snapshots:
     dependencies:
       '@lukeed/csprng': 1.1.0
 
-  uint8array-extras@1.5.0: {}
+  uint8array-extras@1.6.0: {}
 
   underscore@1.13.8:
     optional: true
@@ -15498,10 +15540,10 @@ snapshots:
       jiti: 2.7.0
       tsx: 4.23.15
 
-  vitest@5.0.4(@opentelemetry/api@1.10.0)(@types/node@22.20.4)(@vitest/coverage-v8@5.0.4)(happy-dom@21.0.4)(msw@3.0.3(@types/node@22.20.4)(graphql@16.14.2)(supports-color@10.2.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)):
+  vitest@5.0.4(@opentelemetry/api@1.10.0)(@types/node@22.20.4)(@vitest/coverage-v8@5.0.4)(happy-dom@21.0.4)(msw@3.0.3(@types/node@22.20.4)(graphql@16.14.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.4(msw@3.0.3(@types/node@22.20.4)(graphql@16.14.2)(supports-color@10.2.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
+      '@vitest/mocker': 5.0.4(msw@3.0.3(@types/node@22.20.4)(graphql@16.14.2)(typescript@5.9.3)(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)))(vite@8.3.6(@types/node@22.20.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15))
       chai: 6.3.0
       es-module-lexer: 2.3.2
       expect-type: 1.4.0

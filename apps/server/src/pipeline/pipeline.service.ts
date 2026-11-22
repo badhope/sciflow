@@ -603,19 +603,53 @@ export class PipelineService implements OnModuleInit {
    * 这里剥掉模型复述的标题与自造参考文献块；真正的参考文献由 citation renderer 统一渲染。
    */
   static sanitizeSectionDraft(raw: string, sectionTitle: string): string {
-    let text = String(raw || '').trim();
+    let text = String(raw || '').replace(/\r\n?/g, '\n').trim();
     if (!text) return '';
     const NL = String.fromCharCode(10);
     // 去掉开头的代码围栏
     text = text.replace(new RegExp('^```(?:markdown|md)?\\s*' + NL, 'i'), '').replace(new RegExp(NL + '```\\s*$'), '');
+
+    /**
+     * 真实模型（deepseek-v4.1-flash）会在正文前输出一段「起草提纲 / 文献覆盖核对」
+     * 的内部记录，甚至先给 blockquote、再重复一次章节标题。这些内容不会写进论文，
+     * 但旧 sanitizer 只剥「开头恰好是标题」的情况，导致内部记录与同名标题进入成稿。
+     * 这里先清掉内部过程块，再剥标题；质量门另有确定性硬伤兜底，避免漏网后静默通过。
+     */
+    const internalWord = '起草提纲|章节提纲|文献覆盖核对|内部记录|核对用|不纳入论文正文';
+    // 1) 以内部记录为标题的整段（到下一个二级标题为止）
+    text = text.replace(
+      new RegExp(`(^|\\n)#{2,4}\\s*[^\\n]*?(?:${internalWord})[^\\n]*\\n[\\s\\S]*?(?=\\n#{2}\\s|$)`, 'gi'),
+      '$1',
+    );
+    // 2) 开头单独的引用块/说明段（模型常写成 "> 起草提纲…"）
+    const lines = text.split(NL);
+    let start = 0;
+    while (start < lines.length && lines[start].trim() === '') start += 1;
+    if (start < lines.length && /^\s*>/.test(lines[start]) && new RegExp(internalWord).test(lines[start])) {
+      start += 1;
+      while (start < lines.length && lines[start].trim() !== '') start += 1;
+      text = lines.slice(start).join(NL).trim();
+    }
+    // 3) 开头复述的标题（允许带序号，如 "## 3 问题定义…"；标点/空白差异也兼容）
+    const normTitle = (value: string) =>
+      value.replace(/^\s*\d+[.、]?\s*/, '').replace(/[\s：:，,。.、]/g, '').toLowerCase();
+    const target = normTitle(sectionTitle);
+    for (let pass = 0; pass < 3; pass += 1) {
+      const first = text.match(/^#{1,4}\s*([^\n]+)\n+/);
+      if (!first) break;
+      if (normTitle(first[1]) !== target) break;
+      text = text.slice(first[0].length).trim();
+    }
+    // 4) 正文中间再次出现的同名标题：只删标题行，不删其下属内容
     const esc = sectionTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // 剥掉开头复述的标题（允许带序号，如 "## 3 问题定义…"）
-    text = text.replace(new RegExp(`^#{1,4}\\s*(?:\\d+[.、]?\\s*)?${esc}\\s*${NL}+`, 'i'), '');
+    text = text.replace(new RegExp(`^#{1,4}\\s*(?:\\d+[.、]?\\s*)?${esc}\\s*$`, 'gim'), '').trim();
     // 截断模型自造的参考文献/引用列表块（从其标题起到文末）
     const cut = text.search(new RegExp(NL + '#{2,4}\\s*(参考文献|References|引用文献)\\s*' + NL, 'i'));
     if (cut >= 0) text = text.slice(0, cut);
     // 末尾孤立的 "参考文献：" 行
     text = text.replace(new RegExp(NL + '+参考文献[:：]?\\s*$', 'i'), '');
+    // 清理被删标题留下的连续空行
+    text = text.replace(/\n{3,}/g, '\n\n');
     return text.trim();
   }
 

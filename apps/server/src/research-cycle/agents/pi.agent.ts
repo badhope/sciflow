@@ -57,6 +57,9 @@ const PI_SYSTEM = [
   '5. 不确定的地方写明保守假设，不要编造具体文献数值或数据集名称。',
   '6. 输出要紧凑：predictions 2-4 条、variables 2-5 个、steps 3-6 步，每条一句话，避免长段落导致 JSON 被截断。',
   '7. 若给了【相关文献线索】，可据此说明研究背景或选择对照组；但不得把摘要里没写的数据当成已知事实，也不要在输出里编造引文。',
+  '8. 协议必须能在 120 秒 Python 沙箱内跑完：模拟记录总数控制在 2000 条以内；若问题需要更大样本，先设计最小可验证闭环并在 rationale 里写明缩样依据。',
+  '9. protocol.steps 只写可执行的模拟/统计步骤（生成数据、训练或计算、检验、输出），不要写查新门、构念门、复核门等流程套话。',
+  '10. 协议必须能在离线 Python 沙箱执行；若问题本质是人工评审、真实实验或外部数据，请设计可模拟的代理协议并明确局限，不要要求人工盲评、联网或下载数据。',
 ].join('\n');
 
 /** 文献线索块：只给标题/年份/载体的紧凑列表，控制 token 且便于模型引用 */
@@ -90,6 +93,8 @@ export async function planWithPi(ai: AiService, input: PiPlanInput): Promise<PiP
         `【这是第 ${input.iteration + 1} 轮】`,
         '请先在 questionEcho 里逐字复述上面的研究问题，再给出假设与协议。',
         '假设与协议必须只针对这个研究问题，不得替换成别的主题。',
+        '【输出 JSON 模板：字段名和层级必须完全一致，不得改写为 hypotheses/字符串 design】',
+        '{"questionEcho":"……","hypothesis":{"statement":"……","rationale":"……","predictions":["……"]},"protocol":{"design":{"objective":"……","variables":[{"name":"……","role":"……"}],"controls":["……"],"sample":"……","analysis":"……","steps":["……"]}}}',
         briefBlock(input.brief),
         memoryBlock(input.memory),
         literatureBlock(input.literature),
@@ -102,7 +107,8 @@ export async function planWithPi(ai: AiService, input: PiPlanInput): Promise<PiP
     context: input.context || 'research-cycle:pi',
     // 修订轮要同时带 hypothesis + protocol（含变量/步骤），2000 token 实测会被截断成非法 JSON；
     // 4000 给足余量，同时提示词要求字段紧凑，避免又顶到上限。
-    maxTokens: 4000,
+    // 实测 deepseek-v4.1-flash 会先写很长的 rationale，6000 才能稳定收住 JSON。
+    maxTokens: 6000,
     // PI 用强模型档：研究设计对小模型来说是最难的一步（实测 flash 档会跑题）。
     // 未配置 strong 模型时 resolveModel 会回落到 fast，行为不变。
     model: 'strong',

@@ -202,6 +202,20 @@ describe('checkPaperQuality 硬伤与扣分', () => {
     const r = checkPaperQuality(doc);
     expect(r.hardFails.some((f) => f.includes('重复段落'))).toBe(true);
   });
+
+  it('重复章节标题 → 硬伤，不能靠章节数增加拿结构分', () => {
+    const doc = GOOD_PAPER.replace('## 结论\n', '## 引言\n\n重复的引言正文。\n\n## 结论\n');
+    const r = checkPaperQuality(doc, { standard: 'draft', minChars: 200 });
+    expect(r.hardFails.some((f) => f.includes('重复章节标题'))).toBe(true);
+    expect(r.totalScore).toBeLessThanOrEqual(40);
+  });
+
+  it('正文残留起草过程记录 → 硬伤', () => {
+    const doc = GOOD_PAPER.replace('## 引言\n', '## 引言\n\n> 起草提纲与文献覆盖核对（内部记录，不纳入论文正文）：背景→缺口。\n\n');
+    const r = checkPaperQuality(doc, { standard: 'draft', minChars: 200 });
+    expect(r.hardFails.some((f) => f.includes('起草过程记录'))).toBe(true);
+    expect(r.totalScore).toBeLessThanOrEqual(40);
+  });
 });
 
 describe('checkPaperQuality 长篇零引用', () => {

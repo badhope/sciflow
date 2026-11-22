@@ -215,3 +215,36 @@ describe('LongformService 分卷续写', () => {
     expect(out.markdown).toContain('第1章');
   });
 });
+
+describe('LongformService 摘要兜底', () => {
+  let pid: string;
+  let bookId: string;
+  beforeEach(() => {
+    pid = randomUUID();
+    db.insert(projects).values({ id: pid, name: '摘要兜底', description: '', createdAt: Date.now(), updatedAt: Date.now() }).run();
+  });
+  afterEach(() => {
+    db.delete(longformBooks).where(eq(longformBooks.projectId, pid)).run();
+    db.delete(projects).where(eq(projects.id, pid)).run();
+  });
+
+  it('摘要空响应时正文仍落库为 done，并用正文截断兜底', async () => {
+    const ai = {
+      completeStructured: async () => ({ chapters: [{ title: '第1章 空摘要', goal: 'g', beats: ['b'], entities: [] }] }),
+      complete: async (_m: unknown[], o: any) => {
+        if (o?.maxTokens === 400) throw new Error('AiEmptyResponseError: 模型返回空内容');
+        return '正文'.repeat(300);
+      },
+    } as unknown as AiService;
+    const svc = new LongformService(ai);
+    const book = svc.createBook({ projectId: pid, title: '空摘要书', premise: '' });
+    bookId = book.id;
+    await svc.addVolume(bookId, { title: '第一卷', chapters: 1 });
+    const r = await svc.writeNextChapter(bookId);
+    expect(r.chapter?.seq).toBe(1);
+    expect(r.error).toBeUndefined();
+    const detail = svc.getBook(bookId);
+    expect(detail.chapters[0].status).toBe('done');
+    expect(detail.chapters[0].summary.length).toBeGreaterThan(8);
+  });
+});

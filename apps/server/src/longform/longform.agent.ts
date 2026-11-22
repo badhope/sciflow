@@ -136,15 +136,53 @@ export async function draftChapter(ai: AiService, input: ChapterDraftInput): Pro
     maxTokens: Math.min(16_000, Math.max(3000, Math.round(input.targetChars * 2.2))),
     model: 'strong',
   });
-  return String(raw || '').trim();
+  return sanitizeChapterBody(String(raw || ''), input.chapterTitle);
+}
+
+/**
+ * 真实模型经常把章节标题写成正文第一行（`## 第一章 …`），而 compile 又会再加一次标题，
+ * 结果成稿里出现重复章节标题。入库前统一剥掉：
+ *  - 首行 Markdown 标题若与本章标题同名（或就是「第 X 章」）则删除；
+ *  - 删除整段代码围栏残留；
+ *  - 不动正文中间的小标题，避免误删场景。
+ */
+export function sanitizeChapterBody(raw: string, chapterTitle: string): string {
+  let body = raw.replace(/\r\n/g, '\n').trim();
+  body = body.replace(/^```[a-z]*\n/i, '').replace(/\n```$/i, '').trim();
+  const lines = body.split('\n');
+  let start = 0;
+  while (start < lines.length && !lines[start].trim()) start++;
+  const first = (lines[start] || '').trim();
+  const heading = first.match(/^#{1,6}\s+(.{1,80})$/);
+  if (heading) {
+    const text = heading[1].replace(/\s+/g, '').replace(/^[#*_]+|[#*_]+$/g, '');
+    const title = chapterTitle.replace(/\s+/g, '');
+    if (text === title || text.includes(title) || /^第[一二三四五六七八九十百千万0-9]+章/.test(text)) {
+      start++;
+      while (start < lines.length && !lines[start].trim()) start++;
+    }
+  }
+  return lines.slice(start).join('\n').trim();
 }
 
 /** 章节摘要压缩：把刚落盘的正文压成 1-2 句前情，供后续章节使用 */
 export async function summarizeChapter(ai: AiService, title: string, body: string, context?: string): Promise<string> {
   const messages = [
-    { role: 'system' as const, content: '把给定章节正文压成 1-2 句前情摘要：只写「谁在哪里做了什么、结果如何、留下什么未解决」，不要评价文笔。' },
+    {
+      role: 'system' as const,
+      content: [
+        '你是长篇小说的连续性编辑，只输出 1-2 句前情摘要。',
+        '严禁使用「收到」「请告诉我」「你可以」「可选」「希望我」等对话式回复；不要评价文笔，不要给建议，不要列选项。',
+        '格式：谁在哪里做了什么；结果如何；留下什么未解决冲突。',
+      ].join('\n'),
+    },
     { role: 'user' as const, content: `【章节】${title}\n\n【正文】\n${body.slice(0, 6000)}` },
   ];
   const raw = await ai.complete(messages, { temperature: 0.2, context: context || 'longform:summary', maxTokens: 400, model: 'fast' });
   return String(raw || '').trim().slice(0, 600);
+}
+
+/** 摘要是否是「收到正文、请选择下一步」这类无效对话（真实模型偶发） */
+export function isBadSummary(summary: string): boolean {
+  return /^(收到|好的|以下是|你希望)|请告诉我|你可以选择|可选[：:]|希望我|需要我|润色\/精修|结构诊断/.test(summary);
 }

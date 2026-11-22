@@ -59,7 +59,10 @@ export class ResearchRecordsService {
       .from(researchClaims)
       .where(eq(researchClaims.programId, programId))
       .orderBy(desc(researchClaims.createdAt))
-      .all();
+      .all()
+      // 存储字段叫 status，但研究循环/驾驶舱与对外 API 的语义是「结论 verdict」；
+      // 只返回 status 会让 status()/UI 里的 verdict 永远是 null（真实循环踩到过）。
+      .map((row) => ({ ...row, verdict: row.status }));
   }
 
   getClaim(claimId: string) {

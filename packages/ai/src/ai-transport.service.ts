@@ -10,6 +10,7 @@ import { safeOutboundFetch } from './safe-outbound';
 import { loadPromptAugmentation } from './prompt-augmentation';
 import { generateText, generateObject, streamText, stepCountIs, jsonSchema as aiJsonSchema, type ModelMessage, type LanguageModelUsage } from 'ai';
 import type { LanguageModel, ToolSet } from 'ai';
+import { jsonrepair } from 'jsonrepair';
 import { decryptSecret } from '../../db/src/secret-crypto';
 import { sqlite } from '../../db/src/database';
 import { db } from '../../db/src/database';
@@ -597,20 +598,92 @@ ${augmentation}` };
     const t0 = Date.now();
     const model = this.resolveModel(opts);
     const caller = opts.context || 'general';
+
+    /**
+     * 真实模型（deepseek-v4.1-flash 等 OpenAI-compatible 网关）不一定支持
+     * response_format=json_schema。实测它会无视 generateObject 的 schema，直接回一段
+     * Markdown「假设/协议」，导致研究循环第一步就 AI_NoObjectGeneratedError。
+     *
+     * 这里把 Zod schema 转成 JSON Schema 文本塞进 system，让模型在纯文本路径也能看到
+     * 字段约束；generateObject 仍优先走原生结构化输出，失败后再用同一份带 schema 的
+     * prompt 走 generateText + jsonrepair 兜底。兜底仍用同一 Zod schema 校验，绝不放过
+     * 结构不合法的对象。
+     */
+    const zodSchema = schema as unknown as { toJSONSchema?: () => Record<string, unknown> };
+    let schemaText = '';
+    try {
+      schemaText = zodSchema.toJSONSchema ? JSON.stringify(zodSchema.toJSONSchema()) : '';
+    } catch {
+      schemaText = '';
+    }
+    const formatHint = [
+      '【结构化输出硬约束】',
+      '只输出一个合法 JSON 对象，不要 Markdown 标题、解释、前后缀或代码围栏。',
+      '所有字段必须严格符合下面的 JSON Schema；无法确定的字段按 schema 的默认值或空数组处理，不要省略必填字段。',
+      schemaText ? `JSON Schema：${schemaText}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
     return this.limit(async () =>
       pRetry(
         async () => {
           const { instructions, rest } = this.splitSystemMessages(this.withConfigAugmentation(messages, caller));
-          const { object, usage } = await generateObject({
-            model: this.buildModel(model),
-            temperature: opts.temperature ?? 0.3,
-            maxOutputTokens: opts.maxTokens ?? this.defaultMaxOutput(),
-            abortSignal: AiTransportService.withTimeout(opts.signal),
-            schema,
-            instructions,
-            messages: rest,
-          });
-          return { object: object as T, usage };
+          const structuredInstructions = [instructions, formatHint].filter(Boolean).join('\n\n');
+          try {
+            const { object, usage } = await generateObject({
+              model: this.buildModel(model),
+              temperature: opts.temperature ?? 0.3,
+              maxOutputTokens: opts.maxTokens ?? this.defaultMaxOutput(),
+              abortSignal: AiTransportService.withTimeout(opts.signal),
+              schema,
+              schemaName: caller.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'structured_output',
+              schemaDescription: '严格按给定 JSON Schema 返回对象；只输出 JSON。',
+              instructions: structuredInstructions,
+              messages: rest,
+            });
+            return { object: object as T, usage };
+          } catch (err: any) {
+            const name = String(err?.name || '');
+            const recoverable =
+              name === 'AI_NoObjectGeneratedError' ||
+              name === 'AI_JSONParseError' ||
+              name === 'AI_TypeValidationError' ||
+              /JSON|schema|object/i.test(String(err?.message || ''));
+            if (!recoverable) throw err;
+            this.logger.warn(`结构化输出回退纯文本 JSON：${String(err?.message || err?.name || err).slice(0, 100)}`);
+            const { text, usage } = await generateText({
+              model: this.buildModel(model),
+              temperature: opts.temperature ?? 0.3,
+              maxOutputTokens: Math.max(opts.maxTokens ?? 0, 4096),
+              abortSignal: AiTransportService.withTimeout(opts.signal),
+              instructions: structuredInstructions,
+              messages: [
+                ...rest,
+                {
+                  role: 'user' as const,
+                  content: '请严格按上面的 JSON Schema 输出。只返回一个 JSON 对象，不要任何解释或 Markdown。',
+                },
+              ],
+            });
+            let candidate = text.trim();
+            // 兼容模型偶尔加的 ```json 围栏；jsonrepair 会处理其余近合法 JSON。
+            candidate = candidate.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+            const firstBrace = candidate.indexOf('{');
+            const lastBrace = candidate.lastIndexOf('}');
+            if (firstBrace >= 0 && lastBrace > firstBrace) candidate = candidate.slice(firstBrace, lastBrace + 1);
+            const parsed = (schema as any).safeParse(JSON.parse(jsonrepair(candidate))) as {
+              success: boolean;
+              data?: T;
+              error?: { message: string };
+            };
+            if (!parsed.success) {
+              const validationError = new Error(`结构化输出不符合 schema：${(parsed.error?.message || 'unknown').slice(0, 300)}`);
+              (validationError as any).text = text.slice(0, 600);
+              throw validationError;
+            }
+            return { object: parsed.data as T, usage };
+          }
         },
         { retries: 2, factor: 2, minTimeout: 1000, maxTimeout: 15_000, onFailedAttempt: (err) => { throw err; } },
       ),

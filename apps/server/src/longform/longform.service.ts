@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
 import { longformBooks, longformVolumes, longformChapters } from '../db/schema';
 import { AiService } from '../ai/ai.service';
-import { planChapters, draftChapter, summarizeChapter } from './longform.agent';
+import { planChapters, draftChapter, summarizeChapter, isBadSummary, sanitizeChapterBody } from './longform.agent';
 import { checkConsistency } from './longform.consistency';
 
 /**
@@ -228,7 +228,20 @@ export class LongformService {
       });
       if (!body || body.length < 200) throw new Error(`生成内容过短（${body?.length ?? 0} 字），疑似模型截断`);
 
-      const summary = await summarizeChapter(this.ai, next.title, body, `longform:${bookId}:summary${next.seq}`);
+      /**
+       * 摘要只是「下一章的前情记忆」，不是章节交付物。真实模型偶发空响应时，
+       * 旧逻辑会把整章标成 failed——正文其实已经生成并付了 token，重写还会重复计费。
+       * 摘要失败/为空时用正文开头的确定性摘要兜底，章节保持 done，后续章节仍有前情。
+       */
+      let summary = '';
+      try {
+        summary = await summarizeChapter(this.ai, next.title, body, `longform:${bookId}:summary${next.seq}`);
+      } catch (e: any) {
+        this.logger.warn(`[longform] ${bookId.slice(0, 8)} 第 ${next.seq} 章摘要失败，使用正文截断兜底：${String(e?.message || e).slice(0, 120)}`);
+      }
+      if (!summary || summary.trim().length < 8 || isBadSummary(summary)) {
+        summary = `${next.title}：${body.replace(/\s+/g, ' ').trim().slice(0, 180)}`;
+      }
       const chars = (body.match(/[\u4e00-\u9fa5]/g) || []).length || body.length;
       db.update(longformChapters)
         .set({ content: body, summary, chars, status: 'done', error: '', updatedAt: Date.now() })
@@ -236,6 +249,8 @@ export class LongformService {
         .run();
       this.logger.log(`[longform] ${bookId.slice(0, 8)} 第 ${next.seq} 章完成 ${chars} 字`);
       const fresh = db.select().from(longformChapters).where(eq(longformChapters.bookId, bookId)).all();
+      const allDone = fresh.length > 0 && fresh.every((c) => c.status === 'done');
+      if (allDone) db.update(longformBooks).set({ status: 'completed', updatedAt: Date.now() }).where(eq(longformBooks.id, bookId)).run();
       return { done: false, chapter: { id: next.id, seq: next.seq, title: next.title, chars }, stats: this.stats(fresh) };
     } catch (e: any) {
       const msg = String(e?.message || e).slice(0, 600);
@@ -301,7 +316,7 @@ export class LongformService {
   compile(bookId: string) {
     const book = this.getBook(bookId);
     const done = book.chapters.filter((c) => c.status === 'done');
-    const body = done.map((c) => `## ${c.title}\n\n${c.content}`).join('\n\n');
+    const body = done.map((c) => `## ${c.title}\n\n${sanitizeChapterBody(c.content || '', c.title)}`).join('\n\n');
     return {
       title: book.title,
       chapters: done.length,

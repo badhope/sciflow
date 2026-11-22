@@ -287,6 +287,32 @@ export function checkPaperQuality(
   const duplicateParagraphs = [...seen.values()].filter((n) => n >= 3).length;
   if (duplicateParagraphs >= 1) hardFails.push(`重复段落 ${duplicateParagraphs} 组（同段出现 ≥3 次，疑似拼接/回炉叠加）`);
 
+  /**
+   * 重复章节标题：真实模型（deepseek-v4.1-flash）在分章起草时会先给一段
+   * 「章节提纲/文献覆盖核对」的内部记录，再重复输出一次 `## 章节名`。
+   * 旧检查器只看章节数量，重复标题反而让 sections 变多、结构分更高，
+   * 于是一篇含重复标题与起草过程记录的稿子拿到 98 分并「通过」。
+   * 这里用确定性规则把重复标题与内部过程记录判为硬伤，质量门会回炉。
+   */
+  const sectionTitleKeys = sections.map((s) =>
+    s.title
+      .replace(/^\s*\d+[.、]?\s*/, '')
+      .replace(/[\s：:，,。.、]/g, '')
+      .toLowerCase(),
+  );
+  const titleCounts = new Map<string, number>();
+  for (const key of sectionTitleKeys) titleCounts.set(key, (titleCounts.get(key) || 0) + 1);
+  const duplicateSectionGroups = [...titleCounts.values()].filter((n) => n > 1).length;
+  if (duplicateSectionGroups > 0) {
+    hardFails.push(`重复章节标题 ${duplicateSectionGroups} 组（同名二级标题出现多次，疑似起草拼接/回炉叠加）`);
+  }
+
+  // 起草过程记录：不能进入成稿（模型内部提纲、覆盖核对、AI 自检记录等）
+  const internalMetaHits = countMatches(body, /(起草提纲|章节提纲|文献覆盖核对|内部记录|核对用|不纳入论文正文)/g);
+  if (internalMetaHits > 0) {
+    hardFails.push(`正文残留起草过程记录 ${internalMetaHits} 处（如「起草提纲/内部记录/覆盖核对」）`);
+  }
+
   // 长篇正文零引用 → 硬伤（SCI 论文不可能没有任何文献支撑；短稿/回归 fixture 不触发）
   if (chars >= 5000 && citationNumbers.length === 0) hardFails.push(`长篇正文（${chars} 字符）没有任何 [n] 引用锚点`);
 

@@ -28,4 +28,23 @@ describe('sanitizeSectionDraft', () => {
   it('空输入返回空串', () => {
     expect(PipelineService.sanitizeSectionDraft('', '引言')).toBe('');
   });
+  it('清掉真实模型插入的起草提纲/覆盖核对内部记录', () => {
+    const raw = '## 章节提纲与文献覆盖核对（起草前）\n\n- 覆盖核对：大纲拟覆盖 [Ref:1]–[Ref:5]\n\n## 引言：问题界定\n\n正文第一段。';
+    const out = PipelineService.sanitizeSectionDraft(raw, '引言：问题界定');
+    expect(out).toBe('正文第一段。');
+    expect(out).not.toContain('覆盖核对');
+  });
+  it('清掉开头 blockquote 内部记录并合并重复标题', () => {
+    const raw = '> 起草提纲与文献覆盖核对（内部记录，不纳入论文正文）：背景→假设→贡献。\n\n## 引言：问题界定\n\n### 写作假设\n\n正文。';
+    const out = PipelineService.sanitizeSectionDraft(raw, '引言：问题界定');
+    expect(out).toBe('### 写作假设\n\n正文。');
+    expect(out).not.toContain('内部记录');
+  });
+  it('正文中再次出现同名标题时只删标题行', () => {
+    const raw = '开头内容。\n\n## 4 评估协议设计\n\n后续正文。';
+    const out = PipelineService.sanitizeSectionDraft(raw, '评估协议设计');
+    expect(out).toBe('开头内容。\n\n后续正文。');
+    expect(out).not.toContain('## 4 评估协议设计');
+    expect(out).toContain('后续正文');
+  });
 });
