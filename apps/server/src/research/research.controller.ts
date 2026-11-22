@@ -3,6 +3,8 @@ import { ApiOkResponse } from '@nestjs/swagger';
 import { ResearchService } from './research.service';
 import { NoveltyService } from './novelty.service';
 import { NoveltyCheckDto, NoveltyCheckRequestDto } from './novelty.dto';
+import { auditResearchPlan } from './plan-audit';
+import { PlanAuditRequestDto, PlanAuditResultDto } from './plan-audit.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -34,6 +36,22 @@ export class ResearchController {
     this.access.assertProject(body?.projectId, req.user);
     if (!body?.topic?.trim()) throw new BadRequestException('topic 不能为空');
     return this.novelty.check(body.topic.trim(), body.projectId, body.searchQuery?.trim());
+  }
+
+  /** 计划确定性审计：零 LLM，可直接审未保存正文；与 research.plan_audit 工具同一实现 */
+  @Post('plan-audit')
+  @ApiOkResponse({ type: PlanAuditResultDto })
+  planAudit(
+    @Body() body: PlanAuditRequestDto,
+    @Req() req: { user?: AuthPayload },
+  ) {
+    if (body?.projectId) this.access.assertProject(body.projectId, req.user);
+    if (typeof body?.content !== 'string') throw new BadRequestException('content 必须是字符串');
+    if (body.title !== undefined && typeof body.title !== 'string') throw new BadRequestException('title 必须是字符串');
+    const content = body.content;
+    if (!content.trim()) throw new BadRequestException('content 不能为空');
+    if (content.length > 500_000) throw new BadRequestException('计划正文过长（上限 500000 字）');
+    return auditResearchPlan(content, body.title || '');
   }
 
   @Post('design-review')

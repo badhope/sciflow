@@ -27,7 +27,7 @@ document is the authoritative contract; this page is a map of the surface.
 | References | `/api/references` | search, screening, coding matrix, graph, import, DOI check, review |
 | Knowledge | `/api/knowledge` | upload, list, hybrid search, passage context, bind, delete |
 | Pipeline | `/api/pipeline` | start, list, detail, confirm outline, stop, delete |
-| Research | `/api/research` | design review, comparison, simulated review, comments, response letter |
+| Research | `/api/research` | plan audit, design review, comparison, simulated review, comments, response letter |
 | Quality | `/api/quality` | score a document, history, latest, export comments |
 | Submission | `/api/submission` | journal fit, library, cover letter, reply, tracking |
 | Judgment | `/api/judgment` | intent classification |

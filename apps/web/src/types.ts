@@ -648,6 +648,46 @@ export interface ResearchDesignResult {
   paperCount: number;
 }
 
+/** 研究计划确定性审计（零 LLM；不替代论文质量评分） */
+export type PlanAuditSeverity = 'blocker' | 'warning' | 'info';
+export type PlanAuditCategory =
+  | 'sample'
+  | 'timeline'
+  | 'construct'
+  | 'measurement'
+  | 'novelty'
+  | 'journal'
+  | 'references'
+  | 'terminology';
+export interface PlanAuditFinding {
+  id: string;
+  severity: PlanAuditSeverity;
+  category: PlanAuditCategory;
+  message: string;
+  evidence?: string;
+  suggestion: string;
+}
+export interface PlanAuditMetrics {
+  t1Target?: number;
+  pairedTarget?: number;
+  attritionPct?: number;
+  t1Weeks?: string;
+  t2Weeks?: string;
+  gapWeeks?: number;
+  lagWeeks?: number;
+}
+export interface PlanAuditResult {
+  ok: boolean;
+  title: string;
+  chars: number;
+  score: number;
+  blockers: number;
+  warnings: number;
+  findings: PlanAuditFinding[];
+  metrics: PlanAuditMetrics;
+  summary: string;
+}
+
 export interface PaperComparisonResult {
   summary: string;
   rows: { paper: string; 研究问题: string; 方法: string; 主要结论: string; 局限: string }[];

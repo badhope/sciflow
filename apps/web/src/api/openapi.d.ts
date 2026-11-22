@@ -724,6 +724,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/research/plan-audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ResearchController_planAudit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/research/design-review": {
         parameters: {
             query?: never;
@@ -4226,6 +4242,68 @@ export interface components {
             /** @description 本次学术源命中总数（未去重前） */
             hitCount: number;
         };
+        PlanAuditRequestDto: {
+            /** @description 项目 ID；传入时校验当前用户是否有权访问该项目 */
+            projectId?: string;
+            /** @description 文档标题；仅用于结果回显与引用时效检查 */
+            title?: string;
+            /** @description 研究计划正文（Markdown/纯文本均可），上限 500000 字 */
+            content: string;
+        };
+        PlanAuditFindingDto: {
+            /** @description 规则 ID，如 sample-flow / timeline-lag */
+            id: string;
+            /**
+             * @description 严重度
+             * @enum {string}
+             */
+            severity: "blocker" | "warning" | "info";
+            /**
+             * @description 规则分类
+             * @enum {string}
+             */
+            category: "sample" | "timeline" | "construct" | "measurement" | "novelty" | "journal" | "references" | "terminology";
+            /** @description 问题说明 */
+            message: string;
+            /** @description 触发规则的原文证据 */
+            evidence?: string;
+            /** @description 可执行修复建议 */
+            suggestion: string;
+        };
+        PlanAuditMetricsDto: {
+            /** @description T1 目标样本量 */
+            t1Target?: number;
+            /** @description 配对样本目标量 */
+            pairedTarget?: number;
+            /** @description 预计流失率（百分比） */
+            attritionPct?: number;
+            /** @description T1 收集周次，如 W7-W8 */
+            t1Weeks?: string;
+            /** @description T2 收集周次，如 W9-W9 */
+            t2Weeks?: string;
+            /** @description 名义设计间隔（周） */
+            lagWeeks?: number;
+            /** @description 排期实际间隔（周） */
+            gapWeeks?: number;
+        };
+        PlanAuditResultDto: {
+            /** @description 是否通过硬门禁（无 blocker） */
+            ok: boolean;
+            /** @description 回显标题 */
+            title: string;
+            /** @description 审计正文字数 */
+            chars: number;
+            /** @description 确定性评分：100 - 18*blockers - 6*warnings，最低 0 */
+            score: number;
+            /** @description blocker 数量 */
+            blockers: number;
+            /** @description warning 数量 */
+            warnings: number;
+            findings: components["schemas"]["PlanAuditFindingDto"][];
+            metrics: components["schemas"]["PlanAuditMetricsDto"];
+            /** @description 一句话结论 */
+            summary: string;
+        };
         ProjectQualityOverviewItemDto: {
             /** @description 文档 ID */
             documentId: string;
@@ -5944,6 +6022,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NoveltyCheckDto"];
+                };
+            };
+        };
+    };
+    ResearchController_planAudit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanAuditRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanAuditResultDto"];
                 };
             };
         };

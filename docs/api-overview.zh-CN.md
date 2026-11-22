@@ -146,6 +146,7 @@ NotebookLM 式本地知识库：上传资料 → 分块 → BM25+向量混合检
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
+| POST | `/api/research/plan-audit` | 研究计划确定性审计（零 LLM，审未保存正文；返回 blockers/warnings/metrics） |
 | POST | `/api/research/design-review` | 研究设计评审 |
 | POST | `/api/research/comparison` | 论文对比 |
 | POST | `/api/research/review` | 模拟审稿 |

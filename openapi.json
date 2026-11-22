@@ -1232,6 +1232,37 @@
         ]
       }
     },
+    "/research/plan-audit": {
+      "post": {
+        "operationId": "ResearchController_planAudit",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanAuditRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanAuditResultDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Research"
+        ]
+      }
+    },
     "/research/design-review": {
       "post": {
         "operationId": "ResearchController_designReview",
@@ -7814,6 +7845,163 @@
           "notice",
           "sources",
           "hitCount"
+        ]
+      },
+      "PlanAuditRequestDto": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "description": "项目 ID；传入时校验当前用户是否有权访问该项目"
+          },
+          "title": {
+            "type": "string",
+            "description": "文档标题；仅用于结果回显与引用时效检查"
+          },
+          "content": {
+            "type": "string",
+            "description": "研究计划正文（Markdown/纯文本均可），上限 500000 字"
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "PlanAuditFindingDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "规则 ID，如 sample-flow / timeline-lag"
+          },
+          "severity": {
+            "type": "string",
+            "description": "严重度",
+            "enum": [
+              "blocker",
+              "warning",
+              "info"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "description": "规则分类",
+            "enum": [
+              "sample",
+              "timeline",
+              "construct",
+              "measurement",
+              "novelty",
+              "journal",
+              "references",
+              "terminology"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "问题说明"
+          },
+          "evidence": {
+            "type": "string",
+            "description": "触发规则的原文证据"
+          },
+          "suggestion": {
+            "type": "string",
+            "description": "可执行修复建议"
+          }
+        },
+        "required": [
+          "id",
+          "severity",
+          "category",
+          "message",
+          "suggestion"
+        ]
+      },
+      "PlanAuditMetricsDto": {
+        "type": "object",
+        "properties": {
+          "t1Target": {
+            "type": "number",
+            "description": "T1 目标样本量"
+          },
+          "pairedTarget": {
+            "type": "number",
+            "description": "配对样本目标量"
+          },
+          "attritionPct": {
+            "type": "number",
+            "description": "预计流失率（百分比）"
+          },
+          "t1Weeks": {
+            "type": "string",
+            "description": "T1 收集周次，如 W7-W8"
+          },
+          "t2Weeks": {
+            "type": "string",
+            "description": "T2 收集周次，如 W9-W9"
+          },
+          "lagWeeks": {
+            "type": "number",
+            "description": "名义设计间隔（周）"
+          },
+          "gapWeeks": {
+            "type": "number",
+            "description": "排期实际间隔（周）"
+          }
+        }
+      },
+      "PlanAuditResultDto": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "是否通过硬门禁（无 blocker）"
+          },
+          "title": {
+            "type": "string",
+            "description": "回显标题"
+          },
+          "chars": {
+            "type": "number",
+            "description": "审计正文字数"
+          },
+          "score": {
+            "type": "number",
+            "description": "确定性评分：100 - 18*blockers - 6*warnings，最低 0"
+          },
+          "blockers": {
+            "type": "number",
+            "description": "blocker 数量"
+          },
+          "warnings": {
+            "type": "number",
+            "description": "warning 数量"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanAuditFindingDto"
+            }
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/PlanAuditMetricsDto"
+          },
+          "summary": {
+            "type": "string",
+            "description": "一句话结论"
+          }
+        },
+        "required": [
+          "ok",
+          "title",
+          "chars",
+          "score",
+          "blockers",
+          "warnings",
+          "findings",
+          "metrics",
+          "summary"
         ]
       },
       "ProjectQualityOverviewItemDto": {

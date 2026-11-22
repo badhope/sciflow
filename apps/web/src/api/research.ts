@@ -15,6 +15,7 @@ import type {
   KnowledgeSearchHit,
   NoveltyCheckResult,
   PaperComparisonResult,
+  PlanAuditResult,
   PipelineStepConfig,
   QualityReport,
   ProjectQualityOverview,
@@ -135,6 +136,9 @@ export const research = {
         method: 'POST',
         body: JSON.stringify({ projectId, topic, searchQuery }),
       }),
+    /** 研究计划确定性审计：零 LLM，审计当前编辑器内容（含未保存改动） */
+    planAudit: (body: { projectId?: string; title?: string; content: string }) =>
+      request<PlanAuditResult>('/api/research/plan-audit', { method: 'POST', body: JSON.stringify(body) }),
     designReview: (idea: string, papers: { title: string; year?: number | null; venue?: string; abstract?: string }[]) =>
       request<ResearchDesignResult>(`/api/research/design-review`, { method: 'POST', body: JSON.stringify({ idea, papers }) }),
     comparison: (papers: { title: string; year?: number | null; venue?: string; abstract?: string }[]) =>

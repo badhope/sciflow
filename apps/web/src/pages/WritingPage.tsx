@@ -1,13 +1,13 @@
 import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ChevronRight, FileText, ListTree, Loader2, MessageSquare, Plus, Sparkles, Trash2,
+  ChevronRight, FileText, ListTree, Loader2, MessageSquare, Plus, ShieldCheck, Sparkles, Trash2,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { ChatPanel } from './ChatPanel';
 import { ToastContext } from '../App';
 import type {
   CitationRow, Doc, DocVersionEntry, Experiment, ObjectiveQualityReport, Outline, Project, QualityReport,
-  Reference, ResearchDesignResult, ReviewComment, SimulatedReviewResult,
+  PlanAuditResult, Reference, ResearchDesignResult, ReviewComment, SimulatedReviewResult,
 } from '../types';
 import type { VersionSnapshot } from './VersionDiffModal';
 import {
@@ -15,6 +15,7 @@ import {
   downloadBase64, downloadText, jsonText,
 } from '../components/ui';
 import { HBar } from '../components/charts';
+import { PlanAuditModal } from '../components/PlanAuditModal';
 import { useHotkeys } from '../lib/hotkeys';
 import { useDocumentActions } from '../lib/document-actions';
 import { useProjectDocs, useProjectRefs } from '../lib/queries';
@@ -83,6 +84,10 @@ export function WritingPage({
   const [outline, setOutline] = useState<Outline | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [error, setError] = useState('');
+  const [planAuditOpen, setPlanAuditOpen] = useState(false);
+  const [planAuditBusy, setPlanAuditBusy] = useState(false);
+  const [planAuditError, setPlanAuditError] = useState('');
+  const [planAuditResult, setPlanAuditResult] = useState<PlanAuditResult | null>(null);
   const docActions = useDocumentActions(docId);
   const [topicInput, setTopicInput] = useState('');
   const [sectionTarget, setSectionTarget] = useState('');
@@ -768,6 +773,25 @@ export function WritingPage({
     }
   };
 
+  const runPlanAudit = async () => {
+    if (!content.trim()) {
+      toast('info', '先写入研究问题、样本、测量与排期，再运行计划审计');
+      return;
+    }
+    setPlanAuditOpen(true);
+    setPlanAuditBusy(true);
+    setPlanAuditError('');
+    setPlanAuditResult(null);
+    try {
+      const r = await api.research.planAudit({ projectId: project.id, title: doc?.title || '', content });
+      setPlanAuditResult(r);
+    } catch (e: unknown) {
+      setPlanAuditError(errMsg(e));
+    } finally {
+      setPlanAuditBusy(false);
+    }
+  };
+
   /* ============ UI 组装 ============ */
 
   const newDocDialog = (
@@ -920,6 +944,16 @@ export function WritingPage({
             <Plus size={14} aria-hidden="true" />
           </Button>
         </div>
+        <Button
+          variant="outline"
+          onClick={() => void runPlanAudit()}
+          className="px-2.5 py-1 shrink-0"
+          title="零 LLM 检查研究计划的样本流、排期、构念、查新与选刊"
+          disabled={!docId || planAuditBusy}
+        >
+          {planAuditBusy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <ShieldCheck size={13} aria-hidden="true" />}
+          计划审计
+        </Button>
         <Button variant="outline" onClick={() => setChatOpen(true)} className="px-2.5 py-1 shrink-0" title="打开 AI 写作助手">
           <Sparkles size={13} aria-hidden="true" /> AI 助手
         </Button>
@@ -1120,6 +1154,14 @@ export function WritingPage({
           }}
         />
       </ShellDrawer>
+
+      <PlanAuditModal
+        open={planAuditOpen}
+        onClose={() => setPlanAuditOpen(false)}
+        loading={planAuditBusy}
+        error={planAuditError}
+        result={planAuditResult}
+      />
 
       {/* 新建文档弹窗（空态与主界面共用） */}
       {newDocDialog}
