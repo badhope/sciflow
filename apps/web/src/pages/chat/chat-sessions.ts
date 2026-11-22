@@ -5,7 +5,7 @@ export interface StoredMessage {
   /** 会话内稳定消息 id（A2 分支树用；旧数据可空） */
   id?: string;
   /** 父消息 id（A2 分支树用；根为空） */
-  parentId?: string;
+  parentId?: string | null;
   role: 'user' | 'assistant';
   content: string;
   reasoning?: string;
@@ -31,6 +31,8 @@ export interface ChatSession {
   archived?: boolean;
   /** 服务端消息数（列表未取完整消息时用于判断是否需要拉详情） */
   messageCount?: number;
+  /** 分支树当前叶子（A2） */
+  branch?: { activeLeafId?: string | null };
 }
 
 const KEY = (projectId: string) => `sciflow.chat.sessions.${projectId}`;

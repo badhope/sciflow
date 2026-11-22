@@ -20,6 +20,8 @@ export interface AgentChatThreadProps {
   onStop?: () => void;
   onDelete?: (index: number) => void;
   onEdit?: (index: number, nextText: string) => void;
+  branches?: Record<string, import('../lib/chat-branch').BranchMeta>;
+  onSwitchBranch?: (messageId: string, direction: -1 | 1) => void;
   onCite?: (source: NonNullable<ChatMessage['sources']>[number]) => void;
   onSendToWriting?: (index: number) => void;
   onFollowUp?: (followUp: string, index: number) => void;
@@ -46,6 +48,8 @@ export function AgentChatThread({
   onStop,
   onDelete,
   onEdit,
+  branches,
+  onSwitchBranch,
   onCite,
   onSendToWriting,
   onFollowUp,
@@ -82,6 +86,8 @@ export function AgentChatThread({
         onStop={onStop}
         onDelete={onDelete}
         onEdit={onEdit}
+        branches={branches}
+        onSwitchBranch={onSwitchBranch}
         onCite={onCite}
         onSendToWriting={onSendToWriting}
         onFollowUp={onFollowUp}

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Brain, Check, Download, ExternalLink, FilePlus2, Globe, Loader2, MessageSquare, Navigation, Pencil,
   Copy, Paperclip, PlayCircle, Plus, Quote, Search, Send, Share2, Sparkles, Square, Trash2, Workflow, X,
-  Pin, Archive, ArchiveRestore, Cloud,
+  Pin, Archive, ArchiveRestore, Cloud, GitBranch,
 } from 'lucide-react';
 import { PIPELINE_STEPS } from '@sciflow/core/pipeline-steps';
 import { api } from '../api/client';
@@ -25,6 +25,7 @@ import { useSplitDrag } from '../lib/split-drag';
 import { useHotkeys } from '../lib/hotkeys';
 import { useAsyncAction } from '../lib/async';
 import { useChatSession, parseFollowUps, FOLLOWUP_HINT, type ChatAttachment, type ChatMessage, type SendOptions } from '../lib/chat-session';
+import { activeBranchSummary } from '../lib/chat-branch';
 import { CHAT_ATTACHMENT_ACCEPT, CHAT_ATTACHMENT_MAX_FILES, readChatAttachment } from '../lib/chat-attachments';
 import { shares, absoluteShareUrl, type ShareLinkInfo } from '../api/shares';
 import { useProjectDocs, useProjectKnowledge, useProjectRefs } from '../lib/queries';
@@ -71,7 +72,16 @@ function mergeServerSession(existing: ChatSession | undefined, s: ChatSessionSum
     pinned: s.pinned,
     archived: s.archived,
     messageCount: s.messageCount,
+    branch: existing?.branch,
   };
+}
+
+/** 会话抽屉的分支标签：只对已有 activeLeaf 的新会话计算，旧线性会话不误报。 */
+function sessionBranchLabel(s: ChatSession): string | null {
+  const leaf = s.branch?.activeLeafId ?? null;
+  if (!leaf || !s.messages.length) return null;
+  const summary = activeBranchSummary(s.messages, leaf);
+  return summary ? `${summary.index + 1}/${summary.count}` : null;
 }
 
 /** 服务端完整会话 → 本地会话（消息字段与 ChatMessage 兼容，保留 id/parentId 供 A2 分支使用）。 */
@@ -85,6 +95,7 @@ function fromServerDetail(d: ChatSessionDetail): ChatSession {
     pinned: d.pinned,
     archived: d.archived,
     messageCount: d.messageCount,
+    branch: { activeLeafId: typeof d.branch?.activeLeafId === 'string' ? d.branch.activeLeafId : null },
   };
 }
 
@@ -188,7 +199,7 @@ export function WorkspacePage({
   const [intentBusy, setIntentBusy] = useState(false);
   /** 会话消息变动即落盘（内核保证流式瞬态不触发；无用户消息的空会话不落） */
   const syncSession = useCallback(
-    (ms: ChatMessage[]) => {
+    (ms: ChatMessage[], activeLeafId?: string | null) => {
       const clean = ms.filter((m) => !m.streaming);
       if (!clean.some((m) => m.role === 'user')) return;
       const now = Date.now();
@@ -196,7 +207,9 @@ export function WorkspacePage({
       const msgs = clean.map(({ streaming: _s, ...rest }) => rest);
       // 内容未变（如打开旧会话触发内核持久化）不 bump updatedAt、不重排：
       // 会话排序语义是「最后发言」，不是「最后打开」
-      const changed = JSON.stringify(msgs) !== JSON.stringify(prevCur?.messages ?? []);
+      const branch = activeLeafId ? { activeLeafId } : {};
+      const changed = JSON.stringify(msgs) !== JSON.stringify(prevCur?.messages ?? [])
+        || JSON.stringify(branch) !== JSON.stringify(prevCur?.branch ?? {});
       const title = deriveTitle(clean);
       if (changed) {
         const current: ChatSession = {
@@ -208,13 +221,14 @@ export function WorkspacePage({
           pinned: prevCur?.pinned,
           archived: prevCur?.archived,
           messageCount: msgs.length,
+          branch,
         };
         const next = [current, ...sessionsRef.current.filter((s) => s.id !== activeId)];
         sessionsRef.current = next;
         setSessions(next);
         saveSessions(project.id, next);
         setSessionSyncError('');
-        void api.chat.saveSession(activeId, project.id, { title, messages: msgs })
+        void api.chat.saveSession(activeId, project.id, { title, messages: msgs, branch })
           .then((detail) => {
             // 服务端返回的摘要/消息数为准；不覆盖本地消息，避免流式刚结束时把显示内容改掉
             setSessions((prev) => {
@@ -243,6 +257,7 @@ export function WorkspacePage({
       api.judgment.intent(text, project.name).then(setIntent).catch(() => undefined).finally(() => setIntentBusy(false));
     },
     doneTransform: (full) => parseFollowUps(full),
+    initialLeafId: (sessions.find((s) => s.id === activeId)?.branch?.activeLeafId) ?? null,
     onMessagesChange: syncSession,
   });
   const messages = chat.messages;
@@ -319,7 +334,7 @@ export function WorkspacePage({
         setActiveId(next[0].id);
         saveActiveSessionId(project.id, next[0].id);
         void loadSession(next[0].id).then((s) => {
-          if (s) chatResetRef.current(s.messages as ChatMessage[]);
+          if (s) chatResetRef.current(s.messages as ChatMessage[], s.branch?.activeLeafId ?? null);
         });
       }
     }
@@ -579,7 +594,7 @@ export function WorkspacePage({
     if (!target) return;
     setActiveId(id);
     saveActiveSessionId(project.id, id);
-    chat.reset(target.messages.length ? (target.messages as ChatMessage[]) : []);
+    chat.reset(target.messages.length ? (target.messages as ChatMessage[]) : [], target.branch?.activeLeafId ?? null);
     setInput(loadDraft(project.id, id));
     setIntent(null);
   };
@@ -597,7 +612,7 @@ export function WorkspacePage({
       saveActiveSessionId(project.id, fallbackId);
       if (fallback) {
         const loaded = await loadSession(fallback.id);
-        chat.reset(loaded?.messages.length ? (loaded.messages as ChatMessage[]) : []);
+        chat.reset(loaded?.messages.length ? (loaded.messages as ChatMessage[]) : [], loaded?.branch?.activeLeafId ?? null);
       } else {
         chat.reset([]);
       }
@@ -906,7 +921,9 @@ export function WorkspacePage({
             )}
             {filteredSessions.length === 0 && <div className="text-xs text-slate-400 py-2">暂无会话，发送第一条消息后自动创建</div>}
             <div className="space-y-1">
-              {filteredSessions.map((s) => (
+              {filteredSessions.map((s) => {
+                const branchLabel = sessionBranchLabel(s);
+                return (
                 <div
                   key={s.id}
                   role="button"
@@ -922,6 +939,11 @@ export function WorkspacePage({
                   {s.pinned ? <Pin size={12} className="text-teal-500 shrink-0" /> : <MessageSquare size={12} className="text-slate-400 shrink-0" />}
                   <span className="text-xs text-slate-700 dark:text-slate-200 truncate flex-1">{s.title}</span>
                   {s.archived && <span className="text-[10px] text-slate-400 shrink-0">已归档</span>}
+                  {branchLabel && (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] text-teal-600 dark:text-teal-300 shrink-0" title={`当前分支 ${branchLabel}`}>
+                      <GitBranch size={10} /> {branchLabel}
+                    </span>
+                  )}
                   <span className="text-[11px] text-slate-400 shrink-0">{new Date(s.updatedAt).toLocaleDateString('zh-CN')} · {s.messages.length || s.messageCount || 0} 条</span>
                   <span className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                     <button
@@ -948,7 +970,8 @@ export function WorkspacePage({
                     ><Trash2 size={11} /></button>
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </section>
           <section aria-label="会话摘要">
@@ -1031,6 +1054,8 @@ export function WorkspacePage({
             onStop={chat.stop}
             onDelete={(i) => chat.remove(i)}
             onEdit={(i, next) => chat.edit(i, next, chatOpts())}
+            branches={chat.branches}
+            onSwitchBranch={chat.switchBranch}
             onCite={(src) => openCite(src)}
             onSendToWriting={(i) => void sendWriting.run(i)}
             onFollowUp={(f, i) => chat.send(f, { ...chatOpts(), baseMessages: messages.slice(0, i + 1) })}

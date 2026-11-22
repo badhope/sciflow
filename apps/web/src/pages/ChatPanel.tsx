@@ -123,6 +123,8 @@ export function ChatPanel({
             onRetry={(i) => chat.retry(i, { projectId: project.id, docContext: docContext() })}
             onContinue={(i) => chat.cont(i, { projectId: project.id, docContext: docContext() })}
             onStop={chat.stop}
+            branches={chat.branches}
+            onSwitchBranch={chat.switchBranch}
           />
           {intent && (
             <div className="px-3 pb-1 shrink-0">

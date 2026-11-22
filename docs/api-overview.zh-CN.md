@@ -218,7 +218,7 @@ NotebookLM 式本地知识库：上传资料 → 分块 → BM25+向量混合检
 
 两个入口在传入 `projectId` 且 Agent 工具开启时都会注入工具集（同一套 `AgentToolBridge`、同样的步数上限与轨迹落库）；非流式入口返回完整答案，不返回工具增量。
 
-`chat_session` 是会话主记录：旧摘要行保留 `summary_only=1` 只参与跨会话记忆注入；新会话行保存 `title`、`messages_json`、`branch_json`、`pinned`、`archived`、`last_message_at`。前端仍以 localStorage 作离线缓存，启动时与服务端列表合并，刷新/换设备可恢复。
+`chat_session` 是会话主记录：旧摘要行保留 `summary_only=1` 只参与跨会话记忆注入；新会话行保存 `title`、`messages_json`、`branch_json`、`pinned`、`archived`、`last_message_at`。前端仍以 localStorage 作离线缓存，启动时与服务端列表合并，刷新/换设备可恢复。消息节点用 `id`/`parentId` 组成分支树，`branch_json.activeLeafId` 指向当前叶子；编辑提问和重新生成只追加 sibling，旧回答不删除。
 
 **SSE 协议**（`POST /api/chat/stream`）：
 - 响应头 `Content-Type: text/event-stream`。

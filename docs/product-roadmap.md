@@ -42,6 +42,7 @@ decision not to build it.
 | Topic | Topic validation and research plan | Shipped | Planner agent produces goals, sub-questions, search strategy, sections and risks |
 | Topic | Novelty pre-check | Shipped | Academic sources when reachable; when the library is unreachable or disabled it degrades to a deterministic local-evidence check (library overlap + topic specificity) and always labels the result as offline rather than guessing |
 | Conversation | Cloud sessions | Shipped | `chat_session` stores full messages and summaries; pin, archive, cross-session full-text search, and refresh recovery, with local storage as an offline cache only |
+| Conversation | Branches and answer versions | Shipped | Messages form a tree via `id`/`parentId`; editing a question or regenerating adds siblings while keeping old branches, with a version switcher below each bubble |
 | Literature | Online academic search | Shipped | OpenAlex, Crossref, arXiv in parallel, TTL cached, no API key required |
 | Literature | Web search fallback | Shipped | Keyless domestic provider with a reachability diagnostic |
 | Literature | Library management | Shipped | Import, fingerprint dedup, reading status machine, BibTeX and RIS exchange |

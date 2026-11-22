@@ -4,7 +4,8 @@ import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { AlertCircle, Brain, Check, Circle, Copy, FileText, Loader2, Paperclip, Pencil, PlayCircle, Quote, RotateCcw, Square, Trash2, Wrench, X } from 'lucide-react';
+import { AlertCircle, Brain, Check, ChevronLeft, ChevronRight, Circle, Copy, FileText, GitBranch, Loader2, Paperclip, Pencil, PlayCircle, Quote, RotateCcw, Square, Trash2, Wrench, X } from 'lucide-react';
+import type { BranchMeta } from '../lib/chat-branch';
 import type { ChatMessage } from '../lib/chat-session';
 import { IconButton } from './ui';
 
@@ -170,6 +171,30 @@ function Sources({ sources, onCite }: { sources: NonNullable<ChatMessage['source
   );
 }
 
+/** 消息版本切换器：不展开树页面，只在气泡下方显示“1/3”并左右切换。 */
+function BranchSwitcher({ meta, onSwitch }: { meta: BranchMeta; onSwitch: (direction: -1 | 1) => void }) {
+  return (
+    <span className="inline-flex items-center gap-0.5 rounded-full border border-slate-200 bg-[var(--card)] px-1 text-[10px] text-slate-500 dark:border-slate-700 dark:text-slate-400" data-testid="branch-switcher">
+      <GitBranch size={10} className="text-teal-600 dark:text-teal-300" aria-hidden="true" />
+      <button
+        type="button"
+        className="rounded p-0.5 disabled:opacity-30 hover:text-teal-600"
+        aria-label={`上一版本 ${meta.index + 1}/${meta.count}`}
+        disabled={meta.index <= 0}
+        onClick={() => onSwitch(-1)}
+      ><ChevronLeft size={10} /></button>
+      <span className="v2-numeric tabular-nums">{meta.index + 1}/{meta.count}</span>
+      <button
+        type="button"
+        className="rounded p-0.5 disabled:opacity-30 hover:text-teal-600"
+        aria-label={`下一版本 ${meta.index + 1}/${meta.count}`}
+        disabled={meta.index >= meta.count - 1}
+        onClick={() => onSwitch(1)}
+      ><ChevronRight size={10} /></button>
+    </span>
+  );
+}
+
 export interface MessageListProps {
   messages: ChatMessage[];
   streaming?: boolean;
@@ -182,6 +207,10 @@ export interface MessageListProps {
   onDelete?: (index: number) => void;
   /** 编辑用户消息并从该点分支重发 */
   onEdit?: (index: number, nextText: string) => void;
+  /** 当前消息的版本信息（A2 分支树；键为消息 id） */
+  branches?: Record<string, BranchMeta>;
+  /** 切换同一父节点下的回答/提问版本 */
+  onSwitchBranch?: (messageId: string, direction: -1 | 1) => void;
   onCite?: (s: Source) => void;
   onSendToWriting?: (index: number) => void;
   /** 后续追问建议点击（科研问答页；点击即以该问题续发） */
@@ -208,6 +237,8 @@ export function MessageList({
   onStop,
   onDelete,
   onEdit,
+  branches,
+  onSwitchBranch,
   onCite,
   onSendToWriting,
   onFollowUp,
@@ -284,6 +315,9 @@ export function MessageList({
                 {onEdit && editing !== i && (
                   <IconButton size={32} label="编辑并分支" icon={<Pencil size={14} />} onClick={() => { setEditing(i); setDraft(m.content); }} />
                 )}
+                {onSwitchBranch && m.id && branches?.[m.id] && (
+                  <BranchSwitcher meta={branches[m.id]} onSwitch={(d) => onSwitchBranch(m.id!, d)} />
+                )}
                 {onDelete && <IconButton size={32} tone="danger" label="删除提问" icon={<Trash2 size={14} />} onClick={() => onDelete(i)} />}
               </div>
             </div>
@@ -330,6 +364,9 @@ export function MessageList({
                     icon={copied === i ? <Check size={14} className="text-teal-600" /> : <Copy size={14} />}
                     onClick={() => handleCopy(i)}
                   />
+                )}
+                {onSwitchBranch && m.id && branches?.[m.id] && (
+                  <BranchSwitcher meta={branches[m.id]} onSwitch={(d) => onSwitchBranch(m.id!, d)} />
                 )}
                 {onSendToWriting && <IconButton size={32} label="发送到写作页" icon={<FileText size={14} />} onClick={() => onSendToWriting(i)} />}
                 {onDelete && <IconButton size={32} tone="danger" label="删除回答" icon={<Trash2 size={14} />} onClick={() => onDelete(i)} />}

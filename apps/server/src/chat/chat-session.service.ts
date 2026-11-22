@@ -18,7 +18,7 @@ import type { ChatMessage } from '../ai/ai.service';
 /** 会话消息的持久化形态：保留前端消息的展示/分支字段，不依赖 UI 类型。 */
 export interface StoredChatMessage {
   id?: string;
-  parentId?: string;
+  parentId?: string | null;
   role: 'user' | 'assistant' | 'system' | string;
   content: string;
   reasoning?: string;
