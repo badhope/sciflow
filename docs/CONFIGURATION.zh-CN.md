@@ -236,6 +236,64 @@ HOST=0.0.0.0
 
 ---
 
+## 手机远程控制（v1.19.14）
+
+桌面端顶栏的「远程」按钮会打开手机远控面板：点「开启远程控制」即生成二维码和一次性链接，手机扫码后打开**完整 SciFlow 工作台**。手机只是控制界面，后端、数据库、Agent 和文件仍在这台电脑上运行，不会复制代码或另建环境。
+
+工作方式：
+
+1. 桌面端后端继续只监听 `127.0.0.1`；远控网关是一个独立监听端口，负责鉴权与反向代理，不直接暴露业务 API。
+2. 扫码链接里的 token 是一次性配对凭据，默认 10 分钟有效；兑换成功后换成 HttpOnly 会话 Cookie，同一时间只允许一台手机。
+3. 「刷新二维码」会让旧链接和旧手机会话立即失效；「停止」会关闭网关。关闭弹窗本身不会停止远控。
+4. 手机端可以切换项目、发起科研对话、编辑文档、跑流水线、审批交互和查看进度；手机端不能自己开启/停止远控网关（服务端强制 403）。
+
+### 局域网使用
+
+手机和电脑连同一个 Wi-Fi，点开启后用系统相机扫码即可。默认网关监听 `0.0.0.0` 的随机端口，链接里自动带电脑的局域网 IP。若扫码打不开：
+
+- 检查电脑防火墙是否放行该端口（面板里会显示端口号，如 `http://192.168.1.8:46067`）。
+- 公司/校园 Wi-Fi 常开启 AP 隔离，设备之间无法互访；换手机热点或家用路由器再试。
+- 多网卡机器（VPN、Docker、虚拟网卡）可能选错网卡；面板会列出其他入口，也可以设置 `SCIFLOW_REMOTE_HOST` 后重启。
+
+### 公网 / 反向代理使用
+
+需要手机在任意网络都能访问时，设置公开根地址（必须是手机可访问的 HTTP/HTTPS 地址，不要带路径）：
+
+```ini
+SCIFLOW_REMOTE_PORT=43202
+SCIFLOW_REMOTE_PUBLIC_URL=https://sciflow.example.com
+```
+
+Nginx 最小配置（关键是关闭缓冲，保证对话/流水线的 SSE 实时输出）：
+
+```nginx
+location / {
+  proxy_pass http://127.0.0.1:43202;
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_buffering off;
+  proxy_read_timeout 3600s;
+}
+```
+
+公网场景请务必走 HTTPS。`SCIFLOW_REMOTE_PUBLIC_URL` 为 https 时，配对 Cookie 会自动加 `Secure`。不要直接把远控端口裸奔到公网：链接虽然是临时钥匙，但完整工作台包含模型 Key、数据库与执行面。
+
+容器部署时还要把 `SCIFLOW_REMOTE_PORT` 固定并映射到宿主机，或让宿主机 Nginx 直接指向容器内该端口；随机端口在容器外不可见。
+
+### 可调项
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `SCIFLOW_REMOTE_HOST` | `0.0.0.0` | 远控网关监听地址；用本机 Nginx 反代时建议改成 `127.0.0.1` |
+| `SCIFLOW_REMOTE_PORT` | 随机空闲端口 | 固定端口便于防火墙/反代；`0` 表示随机 |
+| `SCIFLOW_REMOTE_PUBLIC_URL` | 无 | 公网/反代根地址；设置后二维码优先用它，否则用局域网 IP |
+| `SCIFLOW_REMOTE_LINK_TTL_MS` | `600000` | 一次性二维码有效期（毫秒），最低 1 分钟 |
+| `SCIFLOW_REMOTE_SESSION_TTL_MS` | `28800000` | 手机配对后的会话有效期（毫秒），最低 5 分钟 |
+
+---
+
 ## Docker 一把梭
 
 ```bash
@@ -263,6 +321,11 @@ docker compose -f docker-compose.prod.yml up -d   # 生产配置
 | `WEBSEARCH_IN_CHAT` | off | chat 联网兜底开关 |
 | `AUTH_MODE` / `JWT_SECRET` | none / 无 | 认证模式（非回环监听强制 jwt） |
 | `HOST` | 127.0.0.1 | 监听地址（0.0.0.0 触发安全闸） |
+| `SCIFLOW_REMOTE_HOST` | 0.0.0.0 | 手机远控网关监听地址 |
+| `SCIFLOW_REMOTE_PORT` | 随机 | 手机远控网关端口；固定后便于防火墙/反代 |
+| `SCIFLOW_REMOTE_PUBLIC_URL` | 无 | 手机远控公网根地址；不配则自动选局域网 IP |
+| `SCIFLOW_REMOTE_LINK_TTL_MS` | 600000 | 一次性二维码有效期（毫秒） |
+| `SCIFLOW_REMOTE_SESSION_TTL_MS` | 28800000 | 手机配对会话有效期（毫秒） |
 | `SANDBOX_TIMEOUT_MS` | 10000 | Python 沙箱单次执行超时 |
 | `DATABASE_PATH` | `apps/server/data/sciflow.db` | SQLite 路径 |
 | `SCHOLAR_SEARCH` | on | 学术检索（OpenAlex/Crossref/arXiv）总开关；`off` 后流水线新颖性预检/文献补充与文献页「学术库检索」同时关闭（也可用设置页 `scholar_search`）。`AI_MOCK=1` 时强制关闭 |

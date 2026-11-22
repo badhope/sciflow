@@ -1066,3 +1066,28 @@ export interface RevisionQueueInput {
   suggestedAction?: string;
   reviewCommentId?: string;
 }
+
+/** 远程控制网关状态（桌面端设置页/顶部弹窗使用）。 */
+export interface RemoteAccessAddress {
+  kind: 'public' | 'lan' | 'localhost';
+  label: string;
+  url: string;
+  link?: string;
+}
+
+export interface RemoteAccessStatus {
+  active: boolean;
+  state: 'stopped' | 'waiting' | 'paired' | 'expired';
+  link?: string;
+  qrSvg?: string;
+  expiresAt?: string;
+  startedAt?: string;
+  pairedAt?: string;
+  lastSeenAt?: string;
+  deviceLabel?: string;
+  connected: boolean;
+  gatewayPort?: number;
+  addresses: RemoteAccessAddress[];
+  publicUrlConfigured: boolean;
+  hint?: string;
+}

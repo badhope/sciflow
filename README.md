@@ -16,6 +16,19 @@ SciFlow keeps the research chain on your own machine: one SQLite file, your mode
 - **Quality you can trust.** Seven dimensions are scored by rules with a stable fingerprint. The gate decides pass or fail; the model score is only a reference. A failed draft gets targeted revision, not a reroll.
 - **Citations that resolve.** Each `[n]` anchor points to a citation row and then to a reference. Ghost anchors, orphans, broken numbering and duplicate DOIs are reported. An empty library blocks citation markers.
 - **Submission ready.** Readiness checks, journal templates, cover letter, referenced figures and a deterministic package in one download.
+- **Remote control from your phone.** The desktop app issues a one-time QR link that opens the full workbench on mobile, while the backend stays loopback-only and the gateway only authenticates and proxies. Refresh or stop at any time.
+
+## Remote control
+
+The desktop app issues a one-time QR link. The phone opens the full workbench, not a stripped-down companion: projects, research chat, writing, pipelines, approvals and settings all work, while the data and Agent stay on the desktop machine.
+
+<p align="center">
+  <img src="docs/screenshots/remote-control-desktop.png" alt="Remote control dialog with QR code and one-time link" width="58%" />
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/remote-control-mobile.png" alt="Full SciFlow workbench running on a phone" width="25%" />
+</p>
+
+<sub>Screenshot uses <code>sciflow.example.com</code> as a placeholder public address. On the same Wi-Fi the QR code uses the LAN address; for access outside the LAN, set <code>SCIFLOW_REMOTE_PUBLIC_URL</code> and put an HTTPS reverse proxy in front.</sub>
 
 ## Start
 

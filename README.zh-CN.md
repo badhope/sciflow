@@ -16,6 +16,19 @@ SciFlow 把整条科研链路留在你自己的电脑上：一个 SQLite 文件�
 - **可信的质量门。** 七个维度由规则计分并带稳定指纹。过不过由门禁决定，模型分只作参考；不达标的稿子进入定向修改，而不是重抽一遍。
 - **引用能落地。** 正文每个 `[n]` 先指向 citation 行，再指向 reference。幽灵锚点、孤儿条目、断号、重复 DOI 都会被点名。文献库为空时直接禁止引用标记。
 - **投稿材料一次备齐。** 就绪检查、期刊模板、Cover Letter、相关图表，最后打成一个确定性投稿包下载。
+- **手机远程控制。** 桌面端生成一次性二维码/链接，手机扫码后打开完整工作台；后端仍只监听回环，网关只做鉴权与转发，可随时刷新或停止。
+
+## 手机远程控制
+
+桌面端点「远程」生成一次性二维码/链接。手机打开的是完整工作台，不是裁剪版：项目、科研对话、写作、流水线、审批和设置都能操作，数据与 Agent 仍留在电脑上。
+
+<p align="center">
+  <img src="docs/screenshots/remote-control-desktop.png" alt="桌面端远程控制弹窗：二维码与一次性链接" width="58%" />
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/remote-control-mobile.png" alt="手机上运行的完整 SciFlow 工作台" width="25%" />
+</p>
+
+<sub>截图中 <code>sciflow.example.com</code> 是占位公网地址。同一 Wi-Fi 下二维码会自动使用局域网地址；外网访问需设置 <code>SCIFLOW_REMOTE_PUBLIC_URL</code> 并加一层 HTTPS 反向代理。</sub>
 
 ## 开始
 

@@ -3748,6 +3748,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/remote/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取远程控制网关状态 */
+        get: operations["RemoteController_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/remote/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 启动远程控制网关（幂等） */
+        post: operations["RemoteController_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/remote/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 刷新一次性二维码，旧链接与旧手机会话立即失效 */
+        post: operations["RemoteController_refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/remote/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 停止远程控制网关并吊销当前手机会话 */
+        post: operations["RemoteController_stop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4902,6 +4970,49 @@ export interface components {
             knowledgeCount: number;
             /** @description 流水线任务数 */
             pipelineCount: number;
+        };
+        RemoteAccessAddressDto: {
+            /** @description 入口类型：public / lan / localhost */
+            kind: string;
+            /** @description 给用户看的名称，如「局域网 · 192.168.1.8」 */
+            label: string;
+            /** @description 入口根地址（不含 token） */
+            url: string;
+            /** @description 含一次性 token 的完整链接（仅在等待扫码时返回） */
+            link?: string;
+        };
+        RemoteAccessStatusDto: {
+            /** @description 远程控制网关是否已启动 */
+            active: boolean;
+            /**
+             * @description 当前状态
+             * @enum {string}
+             */
+            state: "stopped" | "waiting" | "paired" | "expired";
+            /** @description 手机扫码/打开链接用的完整地址（含一次性 token，仅在 waiting 时返回） */
+            link?: string;
+            /** @description 链接对应的二维码 SVG（仅在 waiting 时返回，可直接内嵌渲染） */
+            qrSvg?: string;
+            /** @description 配对 token 或手机访问会话的过期时间（ISO 8601） */
+            expiresAt?: string;
+            /** @description 网关启动时间（ISO 8601） */
+            startedAt?: string;
+            /** @description 手机完成配对的时间（ISO 8601） */
+            pairedAt?: string;
+            /** @description 手机最近一次请求时间（ISO 8601） */
+            lastSeenAt?: string;
+            /** @description 已连接设备描述，如「Android · Chrome」 */
+            deviceLabel?: string;
+            /** @description 手机在最近 90 秒内是否仍有请求（用于展示在线状态） */
+            connected: boolean;
+            /** @description 网关监听端口（用于排障） */
+            gatewayPort?: number;
+            /** @description 所有可用入口；二维码优先使用公网，其次局域网 */
+            addresses: components["schemas"]["RemoteAccessAddressDto"][];
+            /** @description 是否通过 SCIFLOW_REMOTE_PUBLIC_URL 配置了公网/反代入口 */
+            publicUrlConfigured: boolean;
+            /** @description 需要用户处理的提示，如未检测到局域网地址 */
+            hint?: string;
         };
     };
     responses: never;
@@ -10743,6 +10854,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DashboardOverviewDto"];
+                };
+            };
+        };
+    };
+    RemoteController_status: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-sciflow-remote-gateway": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteAccessStatusDto"];
+                };
+            };
+        };
+    };
+    RemoteController_start: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-sciflow-remote-gateway": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteAccessStatusDto"];
+                };
+            };
+        };
+    };
+    RemoteController_refresh: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-sciflow-remote-gateway": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteAccessStatusDto"];
+                };
+            };
+        };
+    };
+    RemoteController_stop: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-sciflow-remote-gateway": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteAccessStatusDto"];
                 };
             };
         };

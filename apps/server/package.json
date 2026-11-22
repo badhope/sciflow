@@ -1,6 +1,6 @@
 {
   "name": "@sciflow/server",
-  "version": "1.19.13",
+  "version": "1.19.14",
   "private": true,
   "scripts": {
     "dev": "node --watch dist/apps/server/src/main.js",
@@ -54,6 +54,7 @@
     "pixelmatch": "5.3.0",
     "playwright": "1.64.0",
     "pngjs": "6.0.0",
+    "qrcode-generator": "^2.0.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "sqlite-vec": "^0.1.7-alpha.2",

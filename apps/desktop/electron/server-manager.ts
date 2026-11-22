@@ -138,6 +138,11 @@ export async function startServer(): Promise<ServerHandle> {
     // 桌面端页面来自 file://，Origin 为 null；后端仅监听回环 + 单用户定位，回环内全放行
     CORS_ORIGIN: '*',
     SCIFLOW_DESKTOP: '1',
+    // 远程控制时手机通过局域网访问内嵌后端，必须能拿到与 app:// 相同的 Web 产物。
+    // 打包后：resources/web；开发态：仓库 apps/web/dist（相对本文件 dist-electron 上两级）。
+    WEB_DIST: isDev
+      ? path.join(__dirname, '..', '..', 'web', 'dist')
+      : path.join(process.resourcesPath, 'web'),
     // 桌面端是单用户本机应用，必须允许连接 127.0.0.1 上的 Ollama / llama.cpp；
     // 服务端只监听回环，云元数据地址仍由出站守卫无条件拒绝。
     ALLOW_PRIVATE_OUTBOUND: '1',

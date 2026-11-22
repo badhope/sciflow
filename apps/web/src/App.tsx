@@ -4,7 +4,7 @@ import { HashRouter, useLocation, useNavigate, useSearchParams } from 'react-rou
 import { Download, Upload, MessageSquare } from 'lucide-react';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import {
-  BookOpen, Brain, Beaker, LayoutDashboard, Plus, Pencil, RefreshCw, Search, Send, Settings, Trash2, ChevronRight, Command, Sun, Moon, Monitor, XCircle as XCircleIcon, Library, LayoutGrid, Menu as MenuIcon, Target,
+  BookOpen, Brain, Beaker, LayoutDashboard, Plus, Pencil, RefreshCw, Search, Send, Settings, Trash2, ChevronRight, Command, Sun, Moon, Monitor, XCircle as XCircleIcon, Library, LayoutGrid, Menu as MenuIcon, Target, Smartphone,
 } from 'lucide-react';
 import { api } from './api/client';
 import { isNetworkError } from './api/core';
@@ -14,6 +14,7 @@ import { applyTheme, readStoredStyle, readStoredTheme, resolveTheme, systemPrefe
 import { AuthGate } from './components/AuthGate';
 import { AppShell, ShellNavGroup, ShellNavItem, useAppShell } from './components/AppShell';
 import { BrandLockup } from './components/BrandMark';
+import { RemoteControlModal } from './components/RemoteControlModal';
 import { StageBar } from './components/StageBar';
 import { buildCommands, filterCommands } from './lib/commands';
 import { qk } from './lib/query-keys';
@@ -277,6 +278,11 @@ function AppInner() {
   }, []);
   const qc = useQueryClient();
   const [showNewProject, setShowNewProject] = useState(false);
+  const [showRemote, setShowRemote] = useState(false);
+  const isRemoteClient = useMemo(
+    () => (typeof document === 'undefined' ? false : /(?:^|;\s*)sciflow_remote_mode=1(?:;|$)/.test(document.cookie)),
+    [],
+  );
   const [newName, setNewName] = useState('');
   const [renaming, setRenaming] = useState<Project | null>(null);
   const [renameText, setRenameText] = useState('');
@@ -606,6 +612,18 @@ function AppInner() {
                   <span className="text-sm text-slate-400">未选择项目</span>
                 )}
                 <div className="ml-auto flex items-center gap-2">
+                  {!isRemoteClient && (
+                    <button
+                      type="button"
+                      className="inline-flex h-7 items-center justify-center gap-1 rounded-lg border border-slate-200/80 bg-white/80 px-2 text-[11px] text-slate-500 transition-colors hover:border-teal-400 hover:bg-teal-50 hover:text-teal-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400 dark:hover:border-teal-600 dark:hover:bg-teal-950/40 dark:hover:text-teal-300"
+                      title="手机远程控制"
+                      aria-label="手机远程控制"
+                      onClick={() => setShowRemote(true)}
+                    >
+                      <Smartphone size={15} aria-hidden="true" />
+                      <span className="hidden md:inline">远程</span>
+                    </button>
+                  )}
                   <span className={`shell-status ${aiReady ? 'is-online' : aiReady === false ? 'is-offline' : ''}`} title={aiReady ? 'AI 服务已连接' : aiReady === false ? 'AI 服务未配置或不可用' : '正在检测 AI 服务'}>
                     <span className="shell-status__dot" aria-hidden="true" />
                     <span className="hidden sm:inline">{aiReady ? 'AI 就绪' : aiReady === false ? 'AI 离线' : 'AI 检测中'}</span>
@@ -659,6 +677,9 @@ function AppInner() {
             </div>
           </AppShell>
         </div>
+
+        {/* ============ 手机远程控制（二维码 + 反代网关） ============ */}
+        <RemoteControlModal open={showRemote} onClose={() => setShowRemote(false)} />
 
         {/* ============ Cmd+K 命令面板（大厂标配：搜索式快速跳转） ============ */}
         {commandOpen && <CommandPalette projectId={currentProjectId} onClose={() => setCommandOpen(false)} onNavigate={(v) => setView(v)} onNewProject={() => { setCommandOpen(false); setShowNewProject(true); }} />}

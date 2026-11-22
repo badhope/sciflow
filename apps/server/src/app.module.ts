@@ -29,6 +29,7 @@ import { ExtensionsModule } from './extensions/extensions.module';
 import { ExperimentsModule } from './experiments/experiments.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { WebSearchModule } from './websearch/websearch.module';
+import { RemoteModule } from './remote/remote.module';
 import { HealthController } from './health.controller';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 
@@ -73,6 +74,7 @@ import { HttpExceptionFilter } from './common/http-exception.filter';
     ExtensionsModule,
     ExperimentsModule,
     DashboardModule,
+    RemoteModule,
   ],
   controllers: [HealthController],
   providers: [

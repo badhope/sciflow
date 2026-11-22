@@ -27,6 +27,7 @@ import type { WebSearchConfig,
   SubmissionReadiness,
   SubmissionPackage,
   SubmissionTrack,
+  RemoteAccessStatus,
 } from '../types';
 import { request, setToken } from './core';
 
@@ -45,6 +46,14 @@ export interface AuditEntry {
 
 export const platform = {
   health: () => request<{ status: string; time: number; uptime: number; authMode: string; db: boolean; desktop: boolean; ai: { configured: boolean; model: string } }>('/api/health'),
+
+  /** 手机远程控制：二维码 + 一次性配对；只有桌面端本机可 start/stop/refresh。 */
+  remote: {
+    status: () => request<RemoteAccessStatus>('/api/remote/status'),
+    start: () => request<RemoteAccessStatus>('/api/remote/start', { method: 'POST' }),
+    refresh: () => request<RemoteAccessStatus>('/api/remote/refresh', { method: 'POST' }),
+    stop: () => request<RemoteAccessStatus>('/api/remote/stop', { method: 'POST' }),
+  },
 
   auth: {
     register: (email: string, password: string, name?: string) =>
