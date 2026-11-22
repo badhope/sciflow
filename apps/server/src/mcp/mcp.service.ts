@@ -19,7 +19,7 @@ import { BrowserService } from '../browser/browser.service';
 import { MemoryService } from '../memory/memory.service';
 import { SubmissionService } from '../research/submission.service';
 import { NoveltyService } from '../research/novelty.service';
-import { auditResearchPlan } from '../research/plan-audit';
+import { auditResearchPlan, looksLikeResearchPlan } from '../research/plan-audit';
 import { SubmissionReadinessService } from '../research/submission-readiness.service';
 import { SubmissionPackageService } from '../research/submission-package.service';
 import { ResearchBriefService } from '../research-brief/research-brief.service';
@@ -973,7 +973,7 @@ export class McpService {
       },
       {
         name: 'document.update',
-        description: '更新文档标题/正文/大纲/状态；正文变化会自动存历史版本。只传要改的字段，不要整篇重写。',
+        description: '更新文档标题/正文/大纲/状态；正文变化会自动存历史版本。只传要改的字段，不要整篇重写。研究计划正文更新后，返回值附带 planAudit；ok=false 时必须先按 blocker 修复，不能宣称计划可执行。',
         inputSchema: {
           type: 'object',
           properties: {
@@ -991,7 +991,22 @@ export class McpService {
           for (const k of ['title', 'content', 'outline', 'status', 'commitMessage']) {
             if (args[k] !== undefined) patch[k] = String(args[k]);
           }
-          return this.documents.update(String(args.id), patch);
+          const updated = await this.documents.update(String(args.id), patch);
+          // 研究计划写入后自动跑确定性审计：不依赖模型是否记得调用 research.plan_audit，
+          // 把 blocker 直接放进本次工具结果，模型在下一轮就必须面对。
+          if (patch.content !== undefined && looksLikeResearchPlan(String(updated?.title || ''), String(updated?.content || ''))) {
+            const audit = auditResearchPlan(String(updated?.content || ''), String(updated?.title || ''));
+            return {
+              ...updated,
+              planAudit: {
+                ...audit,
+                message: audit.ok
+                  ? '确定性计划审计通过：无 blocker。'
+                  : `确定性计划审计未通过：${audit.blockers} 个 blocker。必须先按 findings 修复并重新写入，再宣称计划可执行。`,
+              },
+            };
+          }
+          return updated;
         },
       },
       {

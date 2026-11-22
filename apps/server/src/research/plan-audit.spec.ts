@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { auditResearchPlan } from './plan-audit';
+import { auditResearchPlan, looksLikeResearchPlan } from './plan-audit';
 
 const badPlan = `# 人力资源管理论文研究计划
 
@@ -122,5 +122,19 @@ describe('auditResearchPlan', () => {
     const r = auditResearchPlan('');
     expect(r.chars).toBe(0);
     expect(r.summary).toContain('未通过');
+  });
+});
+
+describe('looksLikeResearchPlan', () => {
+  it('标题带“研究计划”时识别为计划', () => {
+    expect(looksLikeResearchPlan('人力资源管理论文研究计划', '正文')).toBe(true);
+  });
+
+  it('正文同时出现计划标识与研究问题/样本/排期时识别为计划', () => {
+    expect(looksLikeResearchPlan('', '# 研究方案\n研究问题：RQ1\n样本：200 人\n时间表：W1-W12')).toBe(true);
+  });
+
+  it('普通论文的研究设计章节不误判', () => {
+    expect(looksLikeResearchPlan('实证论文草稿', '研究设计：采用问卷法，样本 300 人，时间表 12 周。')).toBe(false);
   });
 });

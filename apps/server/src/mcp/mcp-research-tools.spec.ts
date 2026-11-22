@@ -64,6 +64,30 @@ describe('MCP research role tools', () => {
     expect(byName.get('research.brief.update')!.inputSchema.required).toEqual(['projectId']);
   });
 
+
+  it('document.update 写入研究计划时自动附带确定性审计', async () => {
+    const documents = {
+      update: async (id: string, patch: { content?: string }) => ({
+        id,
+        title: id === 'doc-plan' ? '研究计划验收' : '普通论文草稿',
+        content: patch.content || '',
+      }),
+    };
+    const args: unknown[] = Array.from({ length: 18 }, () => ({}));
+    args[7] = documents;
+    const svcWithDocuments = new (McpService as any)(...args) as McpService;
+    const bad = '# 研究计划\n## 研究问题\nRQ1：组织 HR 实践是否影响员工投入？\n## 样本\nT1 目标 140 人，流失 25%；配对样本 ≥200。\n## 时间表\nW7–W8 收 T1；W9 收 T2（间隔 4 周）。\n## 理论缺口\n需系统检索核实。';
+    const r = await svcWithDocuments.call('document.update', { id: 'doc-plan', content: bad });
+    const parsed = JSON.parse(r.content[0].text);
+    expect(parsed.planAudit.ok).toBe(false);
+    expect(parsed.planAudit.blockers).toBeGreaterThan(0);
+    expect(parsed.planAudit.message).toContain('必须先按 findings 修复');
+
+    const normal = '研究设计：采用问卷法，样本 300 人，时间表 12 周；本文报告实验结果。';
+    const r2 = await svcWithDocuments.call('document.update', { id: 'doc-normal', content: normal });
+    expect(JSON.parse(r2.content[0].text).planAudit).toBeUndefined();
+  });
+
   it('resolves legacy tool names to canonical names', () => {
     expect(resolveMcpToolName('reference.search')).toBe('literature.search');
     expect(resolveMcpToolName('reference.discover')).toBe('literature.discover');

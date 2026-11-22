@@ -317,9 +317,9 @@ HTTPS_PROXY=http://127.0.0.1:7890
 
 ```bash
 # 检查已落库的文档
-node apps/server/dist/cli.js quality check --doc <documentId>
+node apps/server/dist/apps/server/src/cli.js quality check --doc <documentId>
 # 检查本地 Markdown 文件
-node apps/server/dist/cli.js quality check --file ./paper/draft.md
+node apps/server/dist/apps/server/src/cli.js quality check --file ./paper/draft.md
 # HTTP（前端「客观检查器」面板同源）
 curl http://127.0.0.1:3100/api/documents/<id>/objective-audit
 ```
@@ -336,6 +336,28 @@ curl http://127.0.0.1:3100/api/documents/<id>/objective-audit
 硬伤（占位符、空文、重复段落、长篇零引用、悬空锚点、名实不符）直接封顶 40；空文 0 分。**质量门以客观分为准**，LLM 7 维分只作为回炉改进建议——同一稿实测 LLM 分在 27–59 之间漂移，不能当合格判据。
 
 流水线里「质量门」步骤可用步骤开关整体停用（停用后不评分直接放行，仅用于调试）；客观检查器本身随时可通过 CLI/API/前端单独运行。
+
+## 研究计划审计 CLI（确定性，零 LLM）
+
+写作页的「计划审计」按钮与 Agent/MCP 工具共用同一套规则；CLI 让它在提交前、CI 和批处理里也能当硬门禁使用。
+
+```bash
+# 本地文件：完全离线，不需要后端
+node apps/server/dist/apps/server/src/cli.js research plan-audit --file ./docs/research-plan.md
+
+# 已落库文档：读取后端文档内容（SCIFLOW_BASE 默认 http://127.0.0.1:3000）
+SCIFLOW_BASE=http://127.0.0.1:3100 node apps/server/dist/apps/server/src/cli.js research plan-audit --doc <documentId>
+
+# 从 stdin 读取，适合 Git hook / CI
+cat ./plan.md | node apps/server/dist/apps/server/src/cli.js research plan-audit --file - --fail-on-blocker
+
+# 完整 JSON 存档
+node apps/server/dist/apps/server/src/cli.js research plan-audit --file ./plan.md --json
+```
+
+`--fail-on-blocker` 在存在 blocker 时返回退出码 1；即使跳过这个参数，结果里的 `ok` 也只由 blocker 决定。审计只检查样本流、周期间隔、构念同源、量表具体性、查新记录、选刊具体性、文献时效与设计术语，不改写正文、不判断选题价值。
+
+Agent/MCP 的 `document.update` 更新研究计划正文时，也会自动在工具结果里附带 `planAudit`（同一套纯函数）。模型不需要“记得”调用审计工具：`ok=false` 时返回消息会明确要求先修 blocker；普通论文不会触发，避免把研究设计章节误判成计划。
 
 ## 界面截图验收（真实浏览器）
 
@@ -358,7 +380,7 @@ CHROMIUM_EXECUTABLE_PATH=/usr/local/bin/chromium node scripts/capture-ui.mjs --o
 后端已启动时，CLI 可无人值守跑完整流水线：
 
 ```bash
-node apps/server/dist/cli.js run --topic "图神经网络在生物医药中的应用" --auto --depth 2 --out ./paper/
+node apps/server/dist/apps/server/src/cli.js run --topic "图神经网络在生物医药中的应用" --auto --depth 2 --out ./paper/
 #   --auto      自动确认大纲（不加则在大纲确认点停下，exit 2）
 #   --depth 1-3 研究深度：文献调研按轮递归检索（更全，token 消耗更高）
 #   --out 目录  完成后把论文 Markdown 写入 ./paper/<论文标题>.md

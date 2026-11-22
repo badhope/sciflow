@@ -3,8 +3,8 @@
  * CLI 入口（headless 批处理，对标 Cursor CLI / Cline headless / Codex CLI / GPT-Researcher CLI）
  *
  * 用法（编译后）：
- *   node apps/server/dist/cli.js <command> [options]
- *   sciflow health | project list | pipeline run|status | doc export | chat sessions | mcp serve
+ *   node apps/server/dist/apps/server/src/cli.js <command> [options]
+ *   sciflow health | project list | pipeline run|status | doc export | chat sessions | research plan-audit | mcp serve
  *   sciflow run --topic "研究主题" --auto --out ./paper/          # headless 全流程（C-7.2）
  *
  * `mcp serve` 以 stdio 启动真 MCP Server（官方 @modelcontextprotocol/sdk），
@@ -26,6 +26,7 @@ import { NestFactory } from '@nestjs/core';
 
 import { APP_VERSION } from './common/version';
 import { registerConfigCommands, registerExtensionCommands, registerQualityCommands } from './config/config-cli';
+import { registerResearchCommands } from './research/research-cli';
 
 const CLI_VERSION = APP_VERSION;
 
@@ -272,6 +273,7 @@ program
 registerConfigCommands(program, localApi);
 registerExtensionCommands(program, localApi);
 registerQualityCommands(program, localApi);
+registerResearchCommands(program, localApi);
 
 const mcp = program.command('mcp').description('MCP 协议');
 mcp

@@ -467,3 +467,21 @@ export function auditResearchPlan(content: string, title = ''): PlanAuditResult 
     summary,
   };
 }
+
+/**
+ * 判断文档是否属于「研究计划」类文本，用于写入后自动附带确定性审计。
+ * 只认标题/开头明确标识，避免把普通论文的「研究设计」章节误判成计划。
+ */
+export function looksLikeResearchPlan(title?: string, content?: string): boolean {
+  const t = String(title || '').trim();
+  const c = String(content || '').slice(0, 1500);
+  if (/研究计划|研究方案|开题报告|立项报告|research plan|research proposal|study protocol/i.test(t)) return true;
+  const hasPlanMarker = /研究计划|研究方案|开题报告|research proposal|study protocol/i.test(c);
+  if (!hasPlanMarker) return false;
+  const supporting = [
+    /研究问题|研究假设|RQ\s*\d|hypothes/i,
+    /样本|受试者|参与者|sample|participant/i,
+    /时间表|排期|周次|timeline|week/i,
+  ].filter((re) => re.test(c)).length;
+  return supporting >= 2;
+}
