@@ -134,6 +134,25 @@ describe('SubmissionReadinessPanel', () => {
     expect(readiness).toHaveBeenCalledWith('p1', 'doc-1');
   });
 
+  it('草稿档只影响写作流水线，不降低投稿就绪口径', async () => {
+    vi.mocked(api.projects.qualityStandard).mockResolvedValueOnce({
+      key: 'draft',
+      label: '草稿迭代',
+      passScore: 70,
+      minChars: 2000,
+      minSections: 4,
+      minUniqueCitations: 5,
+      source: 'global',
+    });
+    readiness.mockResolvedValue(result());
+    renderPanel();
+
+    fireEvent.change(screen.getByLabelText('投稿文档'), { target: { value: 'doc-1' } });
+
+    expect(await screen.findByText(/就绪检查按「SCI 通用期刊 · 80 分」执行/)).toBeTruthy();
+    expect(screen.getAllByText(/SCI 通用期刊/).length).toBeGreaterThan(0);
+  });
+
   it('一键下载投稿包：调用真实 API，触发 ZIP 下载并展示包内文件', async () => {
     readiness.mockResolvedValue(result());
     packageApi.mockResolvedValue(packageResult());

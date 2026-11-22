@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/database';
 import { citations, documents, references } from '../db/schema';
 import { readProjectQualityStandard } from '../common/project-quality-standard';
-import { assessSubmissionReadiness, type SubmissionReadinessResult } from './submission-readiness';
+import { assessSubmissionReadiness, resolveReadinessStandard, type SubmissionReadinessResult } from './submission-readiness';
 
 @Injectable()
 export class SubmissionReadinessService {
@@ -38,12 +38,13 @@ export class SubmissionReadinessService {
       .where(eq(citations.documentId, documentId))
       .all().length;
 
+    const configuredStandard = readProjectQualityStandard(projectId);
     const result = assessSubmissionReadiness({
       title: doc.title || '',
       content: doc.content || '',
       libraryReferences,
       citationLinks,
-      standard: readProjectQualityStandard(projectId),
+      standard: resolveReadinessStandard(configuredStandard),
     });
 
     return {

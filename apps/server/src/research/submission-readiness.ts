@@ -58,6 +58,15 @@ const WEIGHTS: Record<string, number> = {
   quality: 15,
 };
 
+/**
+ * 投稿就绪口径：草稿档只服务写作流水线，不能作为“能不能交”的放行标准。
+ * 项目仍是草稿档时自动抬到 SCI 通用期刊；会议/综述/顶刊保持用户选择。
+ */
+export function resolveReadinessStandard(value: unknown): QualityStandardKey {
+  const key = parseQualityStandard(value).key;
+  return key === 'draft' ? 'standard' : key;
+}
+
 /** 摘要 / 关键词块检测：只认行首或标题行，不把正文里顺带提到的“摘要”当成结构块 */
 const ABSTRACT_BLOCK = /(^|\n)\s*(?:#{1,6}\s*)?(摘要|abstract)\s*(?:[:：]|\n|$)/i;
 const KEYWORDS_BLOCK = /(^|\n)\s*(?:#{1,6}\s*)?(关键词|关键字|keywords?)\s*(?:[:：]|\n|$)/i;
@@ -70,7 +79,8 @@ function item(key: keyof typeof WEIGHTS, label: string, status: ReadinessStatus,
  * 投稿就绪检查（确定性，不调模型）。
  *
  * 与「质量评审」的分工：质量评审回答“稿子好不好”，这里回答“能不能交”。
- * 复用 `checkPaperQuality` 的同一套客观标准（SCI 通用/顶刊/草稿等），
+ * 复用 `checkPaperQuality` 的同一套客观标准（SCI 通用/顶刊/综述/会议），
+ * 但草稿迭代档不能作为投稿放行口径，会先抬到 SCI 通用期刊。
  * 额外核对项目文献库、citation 表、摘要/关键词块和标题，避免出现
  * “质量分够高、但文献库是空的、正文引用锚点全是断的”这种假就绪。
  */

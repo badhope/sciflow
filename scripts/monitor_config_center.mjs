@@ -125,8 +125,16 @@ const ext = await get('/api/extensions').catch(() => ({ status: 0, json: null })
 if (ext.status === 200 && ext.json) {
   const assets = ext.json.assets || [];
   record('扩展中心资产 ≥80', assets.length >= 80, `${assets.length}`);
-  const builtinDisabled = assets.filter((a) => String(a.source || '').startsWith('builtin') && a.enabled !== 1);
-  record('内置资产默认全启用', builtinDisabled.length === 0, builtinDisabled.length ? `${builtinDisabled.length} disabled` : 'ok');
+  const optionalOff = new Set([
+    'PubMed / Europe PMC（生物医学）',
+    'Deep Research（多 LLM 深研）',
+    'Agentset（RAG 平台）',
+    'DocsAgent（私有文档问答）',
+  ]);
+  const builtinWrong = assets.filter(
+    (a) => String(a.source || '').startsWith('builtin') && (a.enabled === 1) === optionalOff.has(a.name),
+  );
+  record('内置资产按目录默认启用策略', builtinWrong.length === 0, builtinWrong.length ? `${builtinWrong.length} mismatch` : 'ok');
   record('含私有优势工具', assets.some((a) => a.visibility === 'private'), 'private present');
   const exp = await get('/api/extensions/export').catch(() => ({ status: 0, json: null }));
   const leaked = (exp.json?.assets || []).filter((a) => a.visibility === 'private');

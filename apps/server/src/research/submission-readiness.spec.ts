@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assessSubmissionReadiness } from './submission-readiness';
+import { assessSubmissionReadiness, resolveReadinessStandard } from './submission-readiness';
 
 function paper(opts: { chars?: number; refs?: number; citations?: number; abstract?: boolean; keywords?: boolean } = {}) {
   const chars = opts.chars ?? 6200;
@@ -26,6 +26,14 @@ function paper(opts: { chars?: number; refs?: number; citations?: number; abstra
 }
 
 describe('assessSubmissionReadiness', () => {
+  it('草稿档不能作为投稿放行口径，草稿标准抬到 SCI 通用期刊；会议档保持', () => {
+    expect(resolveReadinessStandard('draft')).toBe('standard');
+    expect(resolveReadinessStandard('conference')).toBe('conference');
+    expect(resolveReadinessStandard('review')).toBe('review');
+    expect(resolveReadinessStandard('strict')).toBe('strict');
+    expect(resolveReadinessStandard('not-a-standard')).toBe('standard');
+  });
+
   it('逐项核对：完整稿可投稿，分数与标准来自同一套客观口径', () => {
     const res = assessSubmissionReadiness({
       title: '异质图节点分类的鲁棒残差聚合',

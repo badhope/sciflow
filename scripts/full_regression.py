@@ -287,7 +287,17 @@ check("扩展中心快照 GET /api/extensions", st == 200 and isinstance(ext.get
 if isinstance(ext, dict):
     kinds = {k.get("value"): k for k in (ext.get("kinds") or [])}
     check("六类资产齐全", all(k in kinds for k in ("skill", "mcp", "role", "constraint", "hook", "prompt")), f"{sorted(kinds.keys())}")
-    check("内置资产默认全启用", all(a.get("enabled") == 1 for a in (ext.get("assets") or []) if str(a.get("source","")).startswith("builtin")), "builtin enabled")
+    # 目录里 defaultEnabled:false 的 MCP 依赖本机 Docker / 医学场景，首次启动应保持关闭；
+    # 其余内置资产必须默认启用。
+    optional_off = {
+        "PubMed / Europe PMC（生物医学）",
+        "Deep Research（多 LLM 深研）",
+        "Agentset（RAG 平台）",
+        "DocsAgent（私有文档问答）",
+    }
+    builtin_assets = [a for a in (ext.get("assets") or []) if str(a.get("source", "")).startswith("builtin")]
+    wrong = [a.get("name") for a in builtin_assets if (a.get("enabled") == 1) == (a.get("name") in optional_off)]
+    check("内置资产按目录默认启用策略", not wrong, f"enabled mismatch: {wrong}")
     check("含私有优势工具", any(a.get("visibility") == "private" for a in (ext.get("assets") or [])), "private present")
     check("模板清单齐全", len(ext.get("templates") or []) >= 6, f"{len(ext.get('templates') or [])}")
 

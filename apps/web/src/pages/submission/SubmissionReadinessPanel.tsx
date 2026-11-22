@@ -168,7 +168,7 @@ export function SubmissionReadinessPanel({
             {data && <Badge tone={data.ready ? 'green' : 'red'}>{data.ready ? '可投稿' : '有阻塞项'}</Badge>}
           </div>
           <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-            用当前评审标准核对标题、篇幅、章节、引用闭环、文献库、摘要/关键词与客观质量门；检查本身只读，补齐摘要/关键词时会调用一次模型。
+            用投稿口径核对标题、篇幅、章节、引用闭环、文献库、摘要/关键词与客观质量门；草稿档只用于写作流水线，不作为投稿放行标准。检查本身只读，补齐摘要/关键词时会调用一次模型。
           </p>
         </div>
         {data && (
@@ -212,6 +212,11 @@ export function SubmissionReadinessPanel({
           <Badge tone={standardQuery.data.source === 'project' ? 'teal' : 'slate'}>
             {standardQuery.data.source === 'project' ? '项目级' : standardQuery.data.source === 'global' ? '继承全局' : '默认'}
           </Badge>
+        )}
+        {data && standardQuery.data?.key === 'draft' && (
+          <span className="text-[11px] text-amber-600 dark:text-amber-300">
+            就绪检查按「{data.standard.label} · {data.standard.passScore} 分」执行；草稿档只用于写作流水线
+          </span>
         )}
         {setStandard.isPending && <span>保存中…</span>}
         {setStandard.error && <span className="text-rose-600">{errMsg(setStandard.error)}</span>}
