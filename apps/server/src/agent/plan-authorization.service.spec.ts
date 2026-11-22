@@ -64,6 +64,39 @@ describe('PlanAuthorizationService', () => {
     expect(svc.get(plan.id).status).toBe('expired');
   });
 
+
+  it('等待中的计划批准后立即唤醒，不需要用户再发消息', async () => {
+    const plan = svc.create({ projectId: PROJECT, title: 'P', allowedTools: ['document.update'] });
+    const waiting = svc.waitForDecision(plan.id, 5_000);
+    setTimeout(() => svc.decide(plan.id, true), 20);
+    const result = await waiting;
+    expect(result.status).toBe('approved');
+    expect(result.approvedAt).toBeTruthy();
+  });
+
+
+  it('等待中的计划被拒绝后唤醒为 rejected，不会误执行', async () => {
+    const plan = svc.create({ projectId: PROJECT, title: 'P', allowedTools: ['document.update'] });
+    const waiting = svc.waitForDecision(plan.id, 5_000);
+    setTimeout(() => svc.decide(plan.id, false), 20);
+    const result = await waiting;
+    expect(result.status).toBe('rejected');
+    expect(svc.authorize('document.update', PROJECT)).toBeNull();
+  });
+
+  it('等待超时返回 pending，不把未批准计划当成批准', async () => {
+    const plan = svc.create({ projectId: PROJECT, title: 'P', allowedTools: ['document.update'] });
+    const result = await svc.waitForDecision(plan.id, 30);
+    expect(result.status).toBe('pending');
+  });
+
+  it('已批准计划再次等待会立即返回，不挂起', async () => {
+    const plan = svc.create({ projectId: PROJECT, title: 'P', allowedTools: ['document.update'] });
+    svc.decide(plan.id, true);
+    const result = await svc.waitForDecision(plan.id, 5_000);
+    expect(result.status).toBe('approved');
+  });
+
   it('非法工具名/通配符被过滤', () => {
     const plan = svc.create({
       projectId: PROJECT,

@@ -67,9 +67,12 @@ pnpm install && pnpm dev        # 或 node apps/server/dist/apps/server/src/cli.
 # 例：CLI 新增约束 → 下一次对话立刻注入
 sciflow config constraint add "输出必须带单位" --rule "所有数值必须带单位" --level must --scope all
 sciflow config preview --scope chat        # 看到实际注入文本，与模型收到的一致
+sciflow config preview --scope writing     # 聊天里起草/润色长文时的写作档（继承 pipeline，不含“聊天简洁”）
 sciflow config export --out my-config.json # 备份/分享（不含审计与密钥）
 sciflow config import my-config.json       # 幂等导入，重复导入不会叠加
 ```
+
+**约束作用域**：`all` / `chat` / `pipeline` / `writing`。`writing` 不是手动选的渠道，而是聊天入口检测到“起草、扩写、润色、保存到文档”等长文写作意图时自动切换：它继承 `all` 与 `pipeline` 的论文约束，但**不继承** `chat` 的“回复不超过 500 字”这类简短约束，避免长文被聊天档压短。设置页与对话工具也允许直接给某条约束选 `writing`。
 
 **权限档**：`strict`（只读）/ `balanced` / `open` / `unrestricted`（默认全面放开）。核心保护项（鉴权、密钥与加密、SSRF、审计日志、数据库路径、监听地址与端口、不可逆数据操作）任何档位都不可改；放宽权限每次最多一级，防止误触一键放开。
 
@@ -86,7 +89,7 @@ sciflow config import my-config.json       # 幂等导入，重复导入不会�
 | MCP 服务器 | 24 | Context7、DeepWiki、Hugging Face、Microsoft Learn、OpenAlex、arXiv、Crossref、Paper Search、Zotero、BioMCP、Semantic Scholar、CNKI、Obsidian、NotebookLM、Basic Memory、Deep Research 等（附仓库/许可证/安装方式）。7 个公开 HTTP 端点开箱可连；PubMed/Europe PMC 默认关闭，医学用户按需启用；需本机安装的 stdio MCP 默认关闭 |
 | 技能 Skills | 31 | Anthropic 官方 Skills、Academic Research Skills（53.9k★）、Codex/Claude 学术三件套、系统综述、Humanizer、Prism、LatteReview、文献发现与引用追踪、研究趋势计量、论文校对/写作模板，以及 13 项 SciFlow 私有优势工具（引用体检 / 统计口径审计 / 可复现方案 / 伦理扫描 / 图表规范 / 新颖性扫描 / 基金契合 / 投稿风险 / 审稿答辩 / 精读矩阵 / 实验计划 / 数据可用性 / 提示词加固） |
 | 角色 | 10 | 方法学家、统计顾问、期刊编辑、基金评审、数据管理员、伦理审查员、科研馆员、可复现性专员、图表设计师、审稿回复专家 |
-| 约束 | 10 | 引用可溯源、禁止编造、数值带单位、结构化输出、PRISMA、隐私不外泄、先声明假设、必写局限、AI 使用披露、聊天简洁 |
+| 约束 | 13 | 引用可溯源、禁止编造、数值带单位、结构化输出、PRISMA、隐私不外泄、先声明假设、必写局限、AI 使用披露、聊天简洁、研究计划四道门（查新门 / 构念门 / 算术门 / 复核门） |
 | 钩子 | 4 | 结尾自检、风险提示、流水线先提纲、隐私拦截（关键词命中即拦） |
 | 提示词模板 | 20 | 润色（Nature 风格/降重）、翻译、IMRaD 大纲、论点先行起草、七维评审、缺口分析、结构化提取、证据综合、Cover Letter、审稿回复、选刊，另补主题矩阵综述、单篇三遍法精读、四句法摘要、研究设计七问、可执行实验、同口径文献对比、期刊图表规范、投稿邮件状态解析 |
 
@@ -116,8 +119,9 @@ Agent 不是「一个模型硬干所有事」，工具面、审批和预算都�
 | `AGENT_TOOL_MODE` | `full` 直接暴露全部白名单；`dynamic` 只直出核心工具，其余先 `tool_search` 再 `tool_invoke` | `full` |
 | `AGENT_MAX_TOOL_CALLS` | 单轮最多工具调用次数 | 24 |
 | `AGENT_TOOL_TIMEOUT_MS` | 单次工具超时（毫秒） | 20000 |
+| `AGENT_PLAN_APPROVAL_WAIT_MS` | `request_research_plan` 等待用户批准的最长时间；批准后同一轮自动续跑 | 300000 |
 
-**计划级授权**：模型可先提交研究计划（问题/假设/协议/风险/成本），用户在驾驶舱批准后，计划内工具按预算自动放行；预算按项目累计 token，耗尽自动回落逐次审批。计划与审批记录在 `agent_plan` / `tool_approval`，删项目时级联清理。
+**计划级授权**：模型可先提交研究计划（问题/假设/协议/风险/成本），工具会挂起等待用户在对话卡片或驾驶舱批准（默认最多 5 分钟）；批准后同一轮 Agent 自动续跑，计划内工具按预算自动放行。预算按项目累计 token，耗尽自动回落逐次审批。计划与审批记录在 `agent_plan` / `tool_approval`，删项目时级联清理。
 
 **外部 MCP**：设置 → 扩展中心可添加任意 MCP Streamable HTTP 端点。Agent 通过三个工具接入：
 

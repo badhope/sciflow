@@ -917,7 +917,7 @@ export interface ConfigRole {
   id: string; name: string; systemPrompt: string; isDefault: number; enabled: number; createdAt: number; updatedAt: number;
 }
 export interface ConfigConstraint {
-  id: string; title: string; rule: string; level: 'must' | 'must_not' | 'should'; scope: 'all' | 'chat' | 'pipeline';
+  id: string; title: string; rule: string; level: 'must' | 'must_not' | 'should'; scope: 'all' | 'chat' | 'pipeline' | 'writing';
   enabled: number; sortOrder: number; source: string; createdAt: number; updatedAt: number;
 }
 export interface ConfigHook {
@@ -937,7 +937,7 @@ export interface ConfigSnapshot {
   audit: ConfigAuditEntry[];
   defaults: number;
 }
-export interface ConfigPreview { scope: 'chat' | 'pipeline'; text: string; role: ConfigRole | null }
+export interface ConfigPreview { scope: 'chat' | 'pipeline' | 'writing'; text: string; role: ConfigRole | null }
 
 /** 扩展中心（v1.4） */
 export type ExtensionKind = 'skill' | 'mcp' | 'role' | 'constraint' | 'hook' | 'prompt';

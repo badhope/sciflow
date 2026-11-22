@@ -10,6 +10,7 @@ import { AgentChatThread } from '../components/AgentChat';
 import { DocumentSelect } from '../components/DocumentSelect';
 import { TaskListPanel } from '../components/TaskListPanel';
 import { ApprovalDialog } from '../components/ApprovalDialog';
+import { PlanApprovalCard } from '../components/PlanApprovalCard';
 import {
   MentionPicker,
   applyMention,
@@ -263,7 +264,8 @@ export function WorkspacePage({
     if (handledDocCreate.current === idx) return;
     handledDocCreate.current = idx;
     void qc.invalidateQueries({ queryKey: qk.docs(project.id) });
-    if (last.toolCalls?.some((c) => c.name === 'document_create')) setDocId(null);
+    // 文档创建完成后再清空选中，避免在 effect 内同步 setState 触发级联渲染。
+    if (last.toolCalls?.some((c) => c.name === 'document_create')) queueMicrotask(() => setDocId(null));
   }, [streaming, messages, project.id, qc]);
 
   useEffect(() => {
@@ -643,6 +645,20 @@ export function WorkspacePage({
         knowledgeCount={kbDocsQuery.data?.length}
         pipelineCount={activePipelineQuery.data?.length}
         className="shrink-0"
+      />
+
+      {/* 计划级授权放在对话入口：批准后同一轮 Agent 自动续跑，用户不用跳去驾驶舱再回来发“继续”。 */}
+      <PlanApprovalCard
+        projectId={project.id}
+        streaming={streaming}
+        onApproved={(_plan, wasStreaming) => {
+          if (!wasStreaming) {
+            chat.send('计划已批准，请继续执行计划内步骤。', {
+              ...chatOpts(),
+              displayText: '（计划已批准，自动继续）',
+            });
+          }
+        }}
       />
 
       {/* 会话面板：本地多会话（管理）+ 服务端沉淀摘要（注入对话背景） */}

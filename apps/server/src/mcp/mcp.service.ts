@@ -700,7 +700,7 @@ export class McpService {
       },
       {
         name: 'config.upsert_constraint',
-        description: '新增或更新一条约束（注入所有 chat/流水线 LLM 调用的 system 层）。level=must|must_not|should，scope=all|chat|pipeline',
+        description: '新增或更新一条约束（注入 chat/写作/流水线 LLM 调用的 system 层）。level=must|must_not|should，scope=all|chat|pipeline|writing',
         inputSchema: {
           type: 'object',
           properties: {
@@ -708,7 +708,7 @@ export class McpService {
             title: { type: 'string' },
             rule: { type: 'string' },
             level: { type: 'string', enum: ['must', 'must_not', 'should'] },
-            scope: { type: 'string', enum: ['all', 'chat', 'pipeline'] },
+            scope: { type: 'string', enum: ['all', 'chat', 'pipeline', 'writing'] },
             enabled: { type: 'boolean' },
           },
           required: ['title', 'rule'],

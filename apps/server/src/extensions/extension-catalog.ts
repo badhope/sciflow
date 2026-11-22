@@ -361,7 +361,7 @@ const ROLE_ASSETS: BuiltinAsset[] = [
 ];
 
 /** 本项目撰写的约束（无第三方版权） */
-function constraintAsset(key: string, title: string, rule: string, level: 'must' | 'must_not' | 'should', scope: 'all' | 'chat' | 'pipeline', tags: string[] = []): BuiltinAsset {
+function constraintAsset(key: string, title: string, rule: string, level: 'must' | 'must_not' | 'should', scope: 'all' | 'chat' | 'pipeline' | 'writing', tags: string[] = []): BuiltinAsset {
   return {
     key: `constraint-${key}`, kind: 'constraint', source: 'builtin-public', name: title, description: rule.slice(0, 80),
     tags: ['constraint', ...tags], manifest: { title, rule, level, scope },
@@ -381,7 +381,9 @@ const CONSTRAINT_ASSETS: BuiltinAsset[] = [
     '研究计划四道门',
     '涉及研究选题、研究计划、论文方案或投稿策略时，必须依次执行四道门：①查新门——先调用 research.novelty 或 literature.discover，记录检索式/来源/命中；工具不可用时标为「初稿未核验」并给出检索方案，不得把未核验缺口写成既定事实；②构念门——自变量、中介、因变量不得共用同一员工自评「感知」构念，必须写清来源、区分效度与共同方法偏差补救；③算术门——样本量、流失率、配对样本、周期间隔、招募与 IRB 时长必须能相互推导，冲突先改表再写正文；④复核门——文档写完后必须调用 research.plan_audit 与 quality.audit，存在 blocker 时不得标为可执行或可投稿。',
     'must',
-    'chat',
+    // 四道门必须覆盖写作档：聊天里起草研究计划会被识别为 longform writing，
+    // 若只挂 chat，恰好绕过本约束。all 会在 chat/pipeline/writing 三档都生效。
+    'all',
     ['research', 'workflow', 'rigor'],
   ),
   constraintAsset('limitations', '必须写局限', '研究类输出必须包含局限性段落，说明外部效度、数据偏差与方法限制。', 'must', 'pipeline', ['rigor']),

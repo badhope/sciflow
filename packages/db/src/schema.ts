@@ -264,7 +264,7 @@ export const configConstraints = sqliteTable('config_constraint', {
   title: text('title').notNull(),
   rule: text('rule').notNull(),
   level: text('level').default('must'), // must | must_not | should
-  scope: text('scope').default('all'), // all | chat | pipeline
+  scope: text('scope').default('all'), // all | chat | pipeline | writing
   enabled: integer('enabled').default(1),
   sortOrder: integer('sort_order').default(0),
   source: text('source').default('user'), // user | preset | seed

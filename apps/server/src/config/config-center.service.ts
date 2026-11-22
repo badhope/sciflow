@@ -28,7 +28,7 @@ export interface HookRow {
 const HOOK_EVENTS = ['chat:before', 'chat:after', 'pipeline:before', 'pipeline:after'];
 const HOOK_TYPES = ['prompt_inject', 'block', 'webhook'];
 const CONSTRAINT_LEVELS = ['must', 'must_not', 'should'];
-const CONSTRAINT_SCOPES = ['all', 'chat', 'pipeline'];
+const CONSTRAINT_SCOPES = ['all', 'chat', 'pipeline', 'writing'];
 
 function nowMs() { return Date.now(); }
 
@@ -476,7 +476,7 @@ export class ConfigCenterService {
   }
 
   /** 预览：聊天/流水线实际会注入的约束文本（与 AI 层同一实现，设置页「生效预览」） */
-  preview(scope: 'chat' | 'pipeline') {
+  preview(scope: 'chat' | 'pipeline' | 'writing') {
     return {
       scope,
       text: loadPromptAugmentation(scope),
@@ -485,7 +485,7 @@ export class ConfigCenterService {
   }
 
   /** 读取注入文本（CLI/对话工具预览用；AI 层每次调用走同一函数） */
-  augmentation(scope: 'chat' | 'pipeline') {
+  augmentation(scope: 'chat' | 'pipeline' | 'writing') {
     return loadPromptAugmentation(scope);
   }
 

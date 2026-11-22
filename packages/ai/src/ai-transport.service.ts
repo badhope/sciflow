@@ -90,6 +90,8 @@ export interface ChatStreamOptions {
   maxSteps?: number;
   /** 本轮真实 token 用量回调（流式收尾块 / 非流式回退都会触发） */
   onUsage?: (usage: TokenUsage) => void;
+  /** 长文写作档：继承 pipeline 论文约束，不注入 500 字聊天简洁约束 */
+  writing?: boolean;
 }
 
 export interface CompleteOptions {
@@ -289,11 +291,11 @@ export class AiTransportService {
 
   /**
    * 把配置中心的约束/钩子注入到 system 层（单一注入点，chat 与流水线都经过这里）。
-   * - scope 按 caller 归类：chat / chatSessionSummary / judgmentIntent → chat，其余 → pipeline
+   * - scope 按 caller 归类：chat / chatSessionSummary / judgmentIntent → chat，chatWriting → writing，其余 → pipeline
    * - 无配置时零开销（返回原数组）
    */
   protected withConfigAugmentation(messages: ChatMessage[], caller: string): ChatMessage[] {
-    const scope = ['chat', 'chatSessionSummary', 'judgmentIntent'].includes(caller) ? 'chat' : 'pipeline';
+    const scope = caller === 'chatWriting' ? 'writing' : ['chat', 'chatSessionSummary', 'judgmentIntent'].includes(caller) ? 'chat' : 'pipeline';
     const augmentation = loadPromptAugmentation(scope);
     if (!augmentation) return messages;
     const firstSystem = messages.findIndex((m) => m.role === 'system');

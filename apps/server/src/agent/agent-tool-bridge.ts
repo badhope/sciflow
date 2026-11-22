@@ -37,8 +37,10 @@ export interface AgentToolCallRecord {
 
 const MAX_TOOL_CALLS = envInt('AGENT_MAX_TOOL_CALLS', 24, { min: 1, max: 100 });
 const TOOL_TIMEOUT_MS = envInt('AGENT_TOOL_TIMEOUT_MS', 20_000, { min: 1_000, max: 300_000 });
+const PLAN_APPROVAL_WAIT_MS = envInt('AGENT_PLAN_APPROVAL_WAIT_MS', 300_000, { min: 10_000, max: 600_000 });
 /** 长任务工具单独放宽：质量评审/实验/浏览器打开/页面断言天然超过 20s。 */
 const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
+  'request_research_plan': PLAN_APPROVAL_WAIT_MS + 15_000,
   'literature.discover': envInt('AGENT_TOOL_TIMEOUT_RESEARCH_MS', 120_000, { min: 10_000, max: 600_000 }),
   'research.novelty': envInt('AGENT_TOOL_TIMEOUT_RESEARCH_MS', 120_000, { min: 10_000, max: 600_000 }),
   'research.plan': envInt('AGENT_TOOL_TIMEOUT_RESEARCH_MS', 120_000, { min: 10_000, max: 600_000 }),
@@ -291,7 +293,7 @@ export class AgentToolBridge {
     if (this.plans) {
       set.request_research_plan = aiTool({
         description:
-          '提交一份研究计划请求用户批准。计划内工具（allowedTools，canonical 名如 document.update）在步数/预算内自动放行；计划外仍逐次审批。批准后继续任务。',
+          '提交一份研究计划请求用户批准。计划内工具（allowedTools，canonical 名如 document.update）在步数/预算内自动放行；计划外仍逐次审批。提交后本工具会挂起等待批准（默认最多 5 分钟），批准即在同一轮继续，拒绝/超时则停止。',
         inputSchema: jsonSchema({
           type: 'object',
           properties: {
@@ -339,12 +341,34 @@ export class AgentToolBridge {
             maxSteps: Number(args.maxSteps) || 12,
             budgetTokens: Number(args.budgetTokens) || 0,
           });
+          // 关键：把「等待用户批准」做成同一条 Agent 流里的暂停点。
+          // 用户在计划卡片/驾驶舱批准后，这里返回 approved，模型继续执行；
+          // 不再要求用户回到对话里再发一句“已批准，请执行”。
+          const decided = await this.plans!.waitForDecision(plan.id, PLAN_APPROVAL_WAIT_MS);
+          if (decided.status === 'approved') {
+            return {
+              planId: plan.id,
+              status: 'approved',
+              allowedTools: decided.allowedTools,
+              maxSteps: decided.maxSteps,
+              remainingSteps: Math.max(0, decided.maxSteps - decided.usedSteps),
+              message: '计划已获批准。请立即继续执行计划内步骤；不要再次请求批准，也不要让用户重复确认。',
+            };
+          }
+          if (decided.status === 'rejected') {
+            return {
+              planId: plan.id,
+              status: 'rejected',
+              message: '用户拒绝了这份计划。不要执行计划内写操作；请说明拒绝并询问用户要改哪一部分。',
+            };
+          }
           return {
             planId: plan.id,
-            status: plan.status,
-            allowedTools: plan.allowedTools,
-            maxSteps: plan.maxSteps,
-            message: '计划已提交。用户在界面批准后，计划内工具会自动放行；批准前这些工具仍会被拒绝。',
+            status: 'pending',
+            timedOut: true,
+            allowedTools: decided.allowedTools,
+            maxSteps: decided.maxSteps,
+            message: `已等待 ${Math.round(PLAN_APPROVAL_WAIT_MS / 1000)} 秒仍未收到批准。请告诉用户计划仍在计划面板等待批准；批准后再继续，不要执行计划内写操作。`,
           };
         },
       });

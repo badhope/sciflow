@@ -126,7 +126,7 @@ export const platform = {
     updateHook: (id: string, p: { name?: string; event?: string; type?: string; config?: unknown; enabled?: number; priority?: number }) => request<ConfigHook[]>(`/api/config/hooks/${id}`, { method: 'POST', body: JSON.stringify(p) }),
     deleteHook: (id: string) => request<ConfigHook[]>(`/api/config/hooks/${id}`, { method: 'DELETE' }),
     applyPreset: (id: string) => request<ConfigSnapshot>(`/api/config/presets/${id}/apply`, { method: 'POST' }),
-    preview: (scope: 'chat' | 'pipeline') => request<ConfigPreview>(`/api/config/preview?scope=${scope}`),
+    preview: (scope: 'chat' | 'pipeline' | 'writing') => request<ConfigPreview>(`/api/config/preview?scope=${scope}`),
     exportBundle: () => request<Record<string, unknown>>('/api/config/export'),
     importBundle: (bundle: unknown, merge = true) => request<{ ok: boolean; rolesAdded: number; constraintsAdded: number; hooksAdded: number; errors: string[] }>('/api/config/import', { method: 'POST', body: JSON.stringify({ bundle, merge }) }),
   },

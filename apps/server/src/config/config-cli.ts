@@ -93,7 +93,7 @@ export function registerConfigCommands(program: Command, localApi: Api): void {
     .argument('[arg1]', 'add: 标题；enable|disable|delete: 约束 ID 或标题')
     .option('--rule <text>', 'add: 规则内容')
     .option('--level <level>', 'add: must|must_not|should', 'must')
-    .option('--scope <scope>', 'add: all|chat|pipeline', 'all')
+    .option('--scope <scope>', 'add: all|chat|pipeline|writing', 'all')
     .action(async (action: string, arg1: string | undefined, opts: { rule?: string; level: string; scope: string }) => {
       if (action === 'list') {
         const list = await localApi('/api/config/constraints');
@@ -170,7 +170,7 @@ export function registerConfigCommands(program: Command, localApi: Api): void {
   config
     .command('preview')
     .description('预览当前约束与钩子实际注入的文本')
-    .option('--scope <scope>', 'chat | pipeline', 'chat')
+    .option('--scope <scope>', 'chat | pipeline | writing', 'chat')
     .action(async (opts: { scope: string }) => {
       const r = await localApi(`/api/config/preview?scope=${opts.scope}`);
       console.log(`# 默认角色：${r.role?.name ?? '（内置默认）'}`);

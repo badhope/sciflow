@@ -22,7 +22,7 @@ export function ConfigCenterSettings() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [open, setOpen] = useState<Record<string, boolean>>({ permission: true, roles: true, constraints: true, hooks: false, audit: false });
-  const [preview, setPreview] = useState<{ scope: 'chat' | 'pipeline'; text: string } | null>(null);
+  const [preview, setPreview] = useState<{ scope: 'chat' | 'pipeline' | 'writing'; text: string } | null>(null);
   const [importText, setImportText] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const loadedOnce = useRef(false);
@@ -195,6 +195,9 @@ export function ConfigCenterSettings() {
           <Button variant="outline" size="sm" onClick={() => void run('preview-chat', async () => setPreview(await api.config.preview('chat')), '已生成 chat 生效预览')}>
             <FlaskConical size={12} /> 预览 chat 注入
           </Button>
+          <Button variant="outline" size="sm" onClick={() => void run('preview-writing', async () => setPreview(await api.config.preview('writing')), '已生成 writing 生效预览')}>
+            预览写作档
+          </Button>
           <Button variant="outline" size="sm" onClick={() => void run('preview-pipeline', async () => setPreview(await api.config.preview('pipeline')), '已生成 pipeline 生效预览')}>
             <FlaskConical size={12} /> 预览 pipeline 注入
           </Button>
@@ -308,7 +311,7 @@ function ConstraintEditor({ constraints, busy, run }: {
       {constraints.map((c) => (
         <div key={c.id} className="flex flex-wrap items-start gap-2 rounded-lg border border-slate-100 dark:border-slate-800 px-3 py-2">
           <Badge tone={c.level === 'must_not' ? 'red' : c.level === 'must' ? 'teal' : 'slate'}>{LEVEL[c.level] || c.level}</Badge>
-          <span className="text-[12px] text-slate-400 shrink-0">{c.scope === 'all' ? '全部' : c.scope === 'chat' ? '聊天' : '流水线'}</span>
+          <span className="text-[12px] text-slate-400 shrink-0">{c.scope === 'all' ? '全部' : c.scope === 'chat' ? '聊天' : c.scope === 'writing' ? '写作' : '流水线'}</span>
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-medium text-slate-700 dark:text-slate-200">{c.title}</div>
             <div className="text-[11px] text-slate-500 dark:text-slate-400">{c.rule}</div>
@@ -328,7 +331,7 @@ function ConstraintEditor({ constraints, busy, run }: {
         <div className="grid sm:grid-cols-[2fr_1fr_1fr] gap-2">
           <Input placeholder="约束标题，如：引用可溯源" value={title} onChange={(e) => setTitle(e.target.value)} />
           <Select value={level} onChange={setLevel} options={[{ value: 'must', label: '必须' }, { value: 'must_not', label: '禁止' }, { value: 'should', label: '建议' }]} />
-          <Select value={scope} onChange={setScope} options={[{ value: 'all', label: '全部调用' }, { value: 'chat', label: '仅聊天' }, { value: 'pipeline', label: '仅流水线' }]} />
+          <Select value={scope} onChange={setScope} options={[{ value: 'all', label: '全部调用' }, { value: 'chat', label: '仅聊天' }, { value: 'pipeline', label: '仅流水线' }, { value: 'writing', label: '聊天写作' }]} />
         </div>
         <Textarea rows={2} placeholder="规则内容（会原样注入 system 提示）" value={rule} onChange={(e) => setRule(e.target.value)} />
         <Button variant="outline" size="sm" disabled={!title.trim() || !rule.trim() || busy === 'c-add'}

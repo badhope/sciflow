@@ -15,6 +15,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { desc, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { db } from '../db/database';
 import { agentPlans } from '../db/schema';
 import { envInt } from '../common/env';
@@ -74,6 +75,9 @@ function normalizeTools(value: unknown): string[] {
 
 @Injectable()
 export class PlanAuthorizationService {
+  /** decide() 后唤醒等待中的工具调用；只在进程内，不跨实例。 */
+  private readonly decisions = new EventEmitter();
+
   private toView(row: typeof agentPlans.$inferSelect): AgentPlanView {
     return {
       id: row.id,
@@ -146,7 +150,37 @@ export class PlanAuthorizationService {
       )
       .where(eq(agentPlans.id, id))
       .run();
-    return this.get(id);
+    const view = this.get(id);
+    this.decisions.emit('decided', view);
+    return view;
+  }
+
+  /**
+   * 等待用户批准/拒绝某份计划；用于 request_research_plan 把「批准」变成同一条流程里的暂停点。
+   * 超时返回当前状态（仍为 pending），调用方应结束本轮并提示用户稍后继续。
+   */
+  waitForDecision(id: string, timeoutMs: number): Promise<AgentPlanView> {
+    const current = this.get(id);
+    if (current.status !== 'pending') return Promise.resolve(current);
+    return new Promise((resolve) => {
+      let settled = false;
+      const timerRef: { id?: ReturnType<typeof setTimeout> } = {};
+      const finish = (view: AgentPlanView) => {
+        if (settled) return;
+        settled = true;
+        if (timerRef.id) clearTimeout(timerRef.id);
+        this.decisions.off('decided', onChange);
+        resolve(view);
+      };
+      const onChange = (view: AgentPlanView) => {
+        if (view.id === id) finish(view);
+      };
+      timerRef.id = setTimeout(() => finish(this.get(id)), Math.max(1, timeoutMs));
+      this.decisions.on('decided', onChange);
+      // 注册监听后再读一次，覆盖“刚好在 get 与 on 之间被批准”的竞态。
+      const latest = this.get(id);
+      if (latest.status !== 'pending') finish(latest);
+    });
   }
 
   /**

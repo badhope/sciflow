@@ -11,6 +11,7 @@ import { AgentToolBridge } from '../agent/agent-tool-bridge';
 import { resolveAgentToolProfile } from '../agent/agent-tool-profiles';
 import { ConfigCenterService } from '../config/config-center.service';
 import { loadDefaultRole } from '../common/prompt-augmentation';
+import { isLongformWritingRequest } from './writing-intent';
 import { AgentTraceService } from '../agent/agent-trace.service';
 import { ResearchBriefService } from '../research-brief/research-brief.service';
 import { db } from '../db/database';
@@ -269,6 +270,8 @@ export class ChatService {
 
     const chatOpts: ChatStreamOptions = {
       modelName: opts.model,
+      // 聊天入口写论文时切到 writing 档：继承 pipeline 论文约束，不继承 500 字简短约束。
+      writing: isLongformWritingRequest(message, docContext),
       ...(toolSet && toolNames.length ? { tools: toolSet, maxSteps: 12 } : {}),
     };
     const persona = this.personaConfig();
@@ -324,6 +327,7 @@ export class ChatService {
       this.logger.log(`[agent] useTools=${useTools} tools=${toolNames.length} profile=${this.toolProfile().id}${runId ? ` run=${runId.slice(0, 8)}` : ''}`);
       const streamOpts: ChatStreamOptions = {
         modelName: opts.model,
+        writing: isLongformWritingRequest(message, docContext),
         enableThinking: opts.enableThinking,
         signal: opts.signal,
         // 计划预算记账：流式收尾的真实 usage 回写到当前项目生效的研究计划；

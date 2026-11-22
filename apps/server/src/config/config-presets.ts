@@ -14,7 +14,7 @@ export interface PresetConstraint {
   title: string;
   rule: string;
   level: 'must' | 'must_not' | 'should';
-  scope: 'all' | 'chat' | 'pipeline';
+  scope: 'all' | 'chat' | 'pipeline' | 'writing';
 }
 
 export interface PresetHook {

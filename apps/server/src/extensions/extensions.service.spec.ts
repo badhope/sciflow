@@ -102,6 +102,8 @@ describe('扩展中心服务', () => {
     expect(publicSkills.filter((s) => String(s.instructions || '').trim().length >= 80).length).toBeGreaterThanOrEqual(12);
     expect((sqlite.prepare("SELECT COUNT(*) c FROM config_role WHERE name='方法学家'").get() as { c: number }).c).toBe(1);
     expect((sqlite.prepare("SELECT COUNT(*) c FROM config_constraint WHERE source='extension'").get() as { c: number }).c).toBeGreaterThanOrEqual(8);
+    // 四道门必须覆盖写作档，否则“起草研究计划”切到 writing 后恰好绕过
+    expect((sqlite.prepare("SELECT scope FROM config_constraint WHERE title='研究计划四道门'").get() as { scope: string }).scope).toBe('all');
     expect((sqlite.prepare("SELECT COUNT(*) c FROM config_hook").get() as { c: number }).c).toBeGreaterThanOrEqual(4);
     // 远程免安装 MCP 至少 4 个：Context7 / DeepWiki / Hugging Face / Microsoft Learn
     expect((sqlite.prepare("SELECT COUNT(*) c FROM mcp_server").get() as { c: number }).c).toBeGreaterThanOrEqual(4);
@@ -133,6 +135,15 @@ describe('扩展中心服务', () => {
     svc.remove(builtin.id);
     expect(svc.get(builtin.id).enabled).toBe(0); // 停用而非删除
     expect(svc.list().some((r) => r.id === builtin.id)).toBe(true);
+  });
+
+  it('旧库迁移：四道门从 chat 提升到 all，且不碰用户手写约束', () => {
+    sqlite.prepare("UPDATE config_constraint SET scope='chat' WHERE title='研究计划四道门' AND source='extension'").run();
+    const next = new ExtensionsService(fakeAi(), new ConfigCenterService());
+    next.ensureSeed();
+    expect((sqlite.prepare("SELECT scope FROM config_constraint WHERE title='研究计划四道门'").get() as { scope: string }).scope).toBe('all');
+    const custom = sqlite.prepare("SELECT id FROM config_constraint WHERE title='用户手写四道门'").get() as { id?: string } | undefined;
+    expect(custom).toBeUndefined();
   });
 
   it('恢复内置：全部 builtin 重新启用', () => {

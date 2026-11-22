@@ -7,7 +7,7 @@
 
 import { sqlite } from '../../db/src/database';
 
-export type PromptScope = 'chat' | 'pipeline';
+export type PromptScope = 'chat' | 'pipeline' | 'writing';
 
 export interface ConstraintLike {
   title: string;
@@ -45,17 +45,16 @@ function hookText(configRaw: string | undefined): string {
 
 /**
  * 生成注入 system 层的约束块。
- * - 约束按 scope（all/chat/pipeline）过滤，按 sortOrder 升序
+ * - 约束按 scope（all/chat/pipeline/writing）过滤，按 sortOrder 升序
  * - 钩子只取 prompt_inject 且事件匹配当前 scope
  * - 空结果返回空串（调用方据此跳过注入，零开销）
  */
 export function buildPromptAugmentation(constraints: ConstraintLike[], hooks: HookLike[], scope: PromptScope): string {
+  // writing 是“聊天入口里的长文写作”档：继承 pipeline 的论文约束，但不继承 chat 的 500 字简短约束。
+  const acceptedScopes = scope === 'writing' ? ['all', 'pipeline', 'writing'] : ['all', scope];
   const cs = constraints
     .filter((c) => (c.enabled ?? 1) !== 0)
-    .filter((c) => {
-      const s = c.scope || 'all';
-      return s === 'all' || s === scope;
-    })
+    .filter((c) => acceptedScopes.includes(c.scope || 'all'))
     .slice()
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 

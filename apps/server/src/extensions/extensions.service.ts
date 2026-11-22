@@ -383,7 +383,7 @@ export class ExtensionsService {
           { key: 'title', label: '约束标题', required: true, example: '数值必须带单位' },
           { key: 'rule', label: '规则内容', required: true, example: '所有数值必须带单位' },
           { key: 'level', label: '等级', required: false, example: 'must | must_not | should' },
-          { key: 'scope', label: '作用域', required: false, example: 'all | chat | pipeline' },
+          { key: 'scope', label: '作用域', required: false, example: 'all | chat | pipeline | writing' },
         ],
         jsonExample: { kind: 'constraint', name: '数值必须带单位', description: '', manifest: { title: '数值必须带单位', rule: '所有数值必须带单位', level: 'must', scope: 'all' } },
       },
@@ -525,7 +525,7 @@ export class ExtensionsService {
     const rule = String(manifest.rule || '').trim();
     if (!title || !rule) return;
     const level = ['must', 'must_not', 'should'].includes(String(manifest.level)) ? String(manifest.level) : 'must';
-    const scope = ['all', 'chat', 'pipeline'].includes(String(manifest.scope)) ? String(manifest.scope) : 'all';
+    const scope = ['all', 'chat', 'pipeline', 'writing'].includes(String(manifest.scope)) ? String(manifest.scope) : 'all';
     const existing = sqlite.prepare('SELECT id, source FROM config_constraint WHERE title = ?').get(title) as { id?: string; source?: string } | undefined;
     if (existing?.id) {
       // 只覆盖由扩展投影产生的行（source=extension），避免覆盖用户手写同名约束
@@ -652,14 +652,38 @@ export class ExtensionsService {
         this.refreshBuiltinRemoteMcp();
         this.pruneObsoleteBuiltinMcp();
         this.migrateLocalMcpDefaults();
+        this.migratePlanGateScope();
         return;
       }
       for (const asset of BUILTIN_EXTENSION_ASSETS) this.insertBuiltin(asset);
       // 播种后统一投影一次（含默认角色保持）
       for (const row of this.list()) this.project(row);
+      this.migratePlanGateScope();
       this.logger.log(`[extensions] 已播种 ${BUILTIN_EXTENSION_ASSETS.length} 条内置资产（public ${BUILTIN_EXTENSION_ASSETS.filter((a) => a.source === 'builtin-public').length} / private ${BUILTIN_EXTENSION_ASSETS.filter((a) => a.source === 'builtin-private').length}）`);
     } catch (e: unknown) {
       this.logger.warn(`[extensions] 播种失败（表未建？）：${String((e as Error)?.message || e)}`);
+    }
+  }
+
+  /**
+   * 迁移「研究计划四道门」的作用域：早期版本挂在 chat 上，但聊天里起草研究计划
+   * 会切到 writing 档，恰好绕过四道门。这里只改内置投影行，不动用户手写约束。
+   */
+  private migratePlanGateScope(): void {
+    const title = '研究计划四道门';
+    const row = sqlite.prepare("SELECT id, source FROM config_constraint WHERE title = ?").get(title) as { id?: string; source?: string } | undefined;
+    if (row?.id && (row.source === 'extension' || row.source === 'seed')) {
+      sqlite.prepare("UPDATE config_constraint SET scope = 'all', updated_at = ? WHERE id = ? AND scope = 'chat'").run(now(), row.id);
+    }
+    const asset = sqlite.prepare("SELECT id, manifest FROM extension_asset WHERE key = 'constraint-plan-gates'").get() as { id?: string; manifest?: string } | undefined;
+    if (!asset?.id) return;
+    try {
+      const manifest = JSON.parse(asset.manifest || '{}') as Record<string, unknown>;
+      if (manifest.scope !== 'chat') return;
+      manifest.scope = 'all';
+      sqlite.prepare('UPDATE extension_asset SET manifest = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(manifest), now(), asset.id);
+    } catch {
+      /* manifest 损坏时让投影逻辑按默认 all 处理 */
     }
   }
 

@@ -108,7 +108,7 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
     setBusy(id);
     try {
       await planMutation.mutateAsync({ id, approved });
-      toast('success', approved ? '计划已批准：计划内工具将自动放行' : '计划已拒绝');
+      toast('success', approved ? '计划已批准：Agent 将自动继续，计划内工具自动放行' : '计划已拒绝');
       refresh();
     } catch (e: unknown) {
       toast('error', errMsg(e) || '计划操作失败');

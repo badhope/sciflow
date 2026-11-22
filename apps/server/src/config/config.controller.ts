@@ -119,7 +119,7 @@ export class ConfigController {
 
   @Get('preview')
   preview(@Query('scope') scope: string) {
-    return this.config.preview(scope === 'pipeline' ? 'pipeline' : 'chat');
+    return this.config.preview(scope === 'pipeline' ? 'pipeline' : scope === 'writing' ? 'writing' : 'chat');
   }
 
   @Get('audit')

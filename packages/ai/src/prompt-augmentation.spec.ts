@@ -8,6 +8,8 @@ describe('buildPromptAugmentation', () => {
     { title: '不编造数据', rule: '无法确认的数据必须写「不确定」', level: 'must_not', scope: 'all', sortOrder: 1 },
     { title: '聊天简洁', rule: '聊天回答不超过 300 字', level: 'should', scope: 'chat', sortOrder: 3 },
     { title: '流水线结构化', rule: '章节输出必须为 Markdown', level: 'must', scope: 'pipeline', sortOrder: 1 },
+    { title: '研究计划四道门', rule: '查新、构念、算术、复核', level: 'must', scope: 'all', sortOrder: 4 },
+    { title: '写作档专用', rule: '长文必须保留引用锚点', level: 'must', scope: 'writing', sortOrder: 5 },
     { title: '已停用', rule: '不应出现', level: 'must', scope: 'all', enabled: 0, sortOrder: 0 },
   ];
 
@@ -23,6 +25,18 @@ describe('buildPromptAugmentation', () => {
     const pipeline = buildPromptAugmentation(constraints, [], 'pipeline');
     expect(pipeline).toContain('流水线结构化');
     expect(pipeline).not.toContain('聊天简洁');
+
+    // 聊天入口写论文：继承 pipeline 约束，但不能把“500 字聊天简洁”带进长文。
+    const writing = buildPromptAugmentation(constraints, [], 'writing');
+    expect(writing).toContain('流水线结构化');
+    expect(writing).toContain('引用可溯源');
+    expect(writing).toContain('研究计划四道门');
+    expect(writing).toContain('写作档专用');
+    expect(writing).not.toContain('聊天简洁');
+    // writing 档不能反向污染 chat/pipeline
+    expect(chat).not.toContain('写作档专用');
+    expect(pipeline).not.toContain('写作档专用');
+    expect(writing).not.toContain('已停用');
   });
 
   it('prompt_inject 钩子按事件匹配注入，非注入型钩子忽略', () => {
@@ -39,6 +53,10 @@ describe('buildPromptAugmentation', () => {
     expect(chat).not.toContain('不该出现');
     expect(chat).not.toContain('坏 JSON');
     expect(buildPromptAugmentation([], hooks, 'pipeline')).toContain('先列提纲再写');
+    // writing 继承 pipeline:before 钩子，不继承 chat:before 的闲聊要求
+    const writing = buildPromptAugmentation([], hooks, 'writing');
+    expect(writing).toContain('先列提纲再写');
+    expect(writing).not.toContain('回答结尾加【已遵守约束】');
   });
 
   it('空输入返回空串（不注入空标题）', () => {
