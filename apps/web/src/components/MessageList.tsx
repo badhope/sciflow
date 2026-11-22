@@ -4,32 +4,91 @@ import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { Brain, Check, Copy, FileText, Loader2, PlayCircle, Quote, RotateCcw, Square, Trash2, Wrench } from 'lucide-react';
+import { AlertCircle, Brain, Check, Circle, Copy, FileText, Loader2, PlayCircle, Quote, RotateCcw, Square, Trash2, Wrench, X } from 'lucide-react';
 import type { ChatMessage } from '../lib/chat-session';
 import { IconButton } from './ui';
+
+type ToolCall = NonNullable<ChatMessage['toolCalls']>[number];
+
+function toolStatus(t: ToolCall): { label: string; tone: string; icon: ReactNode } {
+  if (t.status === 'error' || t.status === 'denied') {
+    return { label: t.status === 'denied' ? '已拒绝' : '失败', tone: 'text-rose-600 dark:text-rose-300', icon: <X size={11} className="text-rose-600 dark:text-rose-300" aria-hidden="true" /> };
+  }
+  if (t.status === 'running') {
+    return { label: '运行中', tone: 'text-amber-600 dark:text-amber-300', icon: <Loader2 size={11} className="animate-spin text-amber-600 dark:text-amber-300" aria-hidden="true" /> };
+  }
+  if (t.status === 'done') {
+    return { label: '完成', tone: 'text-teal-600 dark:text-teal-300', icon: <Check size={11} className="text-teal-600 dark:text-teal-300" aria-hidden="true" /> };
+  }
+  // 旧会话只存了 name/arguments，没有结果事件；不再默认画成功勾
+  return { label: '状态未记录', tone: 'text-slate-400', icon: <Circle size={11} className="text-slate-400" aria-hidden="true" /> };
+}
+
+function ToolCallList({ calls, streaming }: { calls: ToolCall[]; streaming?: boolean }) {
+  const failed = calls.filter((c) => c.status === 'error' || c.status === 'denied').length;
+  return (
+    <details className="mb-2" open={streaming}>
+      <summary className="cursor-pointer select-none list-none text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+        <Wrench size={12} aria-hidden="true" /> 工具调用 · {calls.length} 次
+        {failed > 0 ? <span className="text-rose-500">· {failed} 失败</span> : null}
+        {streaming ? '（进行中）' : ''}
+      </summary>
+      <ul className="mt-1.5 space-y-1">
+        {calls.map((t, i) => {
+          const status = toolStatus(t);
+          return (
+            <li key={t.id ?? i} className="text-[11px] text-slate-500 dark:text-slate-400">
+              <details className="rounded border border-slate-200/70 bg-white/40 px-2 py-1 dark:border-slate-700 dark:bg-slate-900/30">
+                <summary className="flex cursor-pointer select-none items-start gap-1.5">
+                  <span className="mt-0.5 shrink-0">{status.icon}</span>
+                  <span className="shrink-0 font-mono text-slate-600 dark:text-slate-300">{t.name}</span>
+                  <span className={`shrink-0 ${status.tone}`}>{status.label}</span>
+                  {typeof t.durationMs === 'number' && t.durationMs > 0 ? (
+                    <span className="v2-numeric shrink-0 text-slate-400">{t.durationMs}ms</span>
+                  ) : null}
+                  {t.arguments && t.arguments !== '{}' ? (
+                    <span className="min-w-0 flex-1 truncate text-slate-400 dark:text-slate-500">{t.arguments.slice(0, 160)}</span>
+                  ) : <span className="flex-1" />}
+                </summary>
+                <div className="mt-1.5 space-y-1.5 border-t border-slate-200/60 pt-1.5 dark:border-slate-700/60">
+                  {t.arguments && t.arguments !== '{}' ? (
+                    <div>
+                      <div className="text-[9px] uppercase tracking-wider text-slate-400">参数</div>
+                      <pre className="mt-0.5 max-h-32 overflow-auto whitespace-pre-wrap text-[10.5px] leading-relaxed text-slate-500 dark:text-slate-400">{t.arguments}</pre>
+                    </div>
+                  ) : null}
+                  {t.error ? (
+                    <div className="flex items-start gap-1 rounded bg-rose-50 px-1.5 py-1 text-rose-600 dark:bg-rose-950/30 dark:text-rose-300">
+                      <AlertCircle size={11} className="mt-0.5 shrink-0" aria-hidden="true" />
+                      <span className="whitespace-pre-wrap break-words">{t.error}</span>
+                    </div>
+                  ) : null}
+                  {t.result ? (
+                    <div>
+                      <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-slate-400">
+                        返回
+                        {t.resultChars && t.resultChars > t.result.length ? <span className="normal-case tracking-normal text-amber-500">已截断 · 共 {t.resultChars} 字符</span> : null}
+                      </div>
+                      <pre className="mt-0.5 max-h-48 overflow-auto whitespace-pre-wrap text-[10.5px] leading-relaxed text-slate-500 dark:text-slate-400">{t.result}</pre>
+                    </div>
+                  ) : t.status === 'done' ? (
+                    <div className="text-[10.5px] text-slate-400">未记录返回内容</div>
+                  ) : null}
+                </div>
+              </details>
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
+}
 
 /** 助手消息正文（Markdown + 公式 + 流式光标）：三个聊天入口共用同一渲染契约 */
 function AssistantBody({ m }: { m: ChatMessage }) {
   return (
     <div className="markdown-body text-[14px] leading-relaxed text-slate-700 dark:text-slate-200">
-      {m.toolCalls && m.toolCalls.length > 0 ? (
-        <details className="mb-2" open={m.streaming}>
-          <summary className="cursor-pointer select-none list-none text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-            <Wrench size={12} aria-hidden="true" /> 工具调用 · {m.toolCalls.length} 次{m.streaming ? '（进行中）' : ''}
-          </summary>
-          <ul className="mt-1.5 space-y-1">
-            {m.toolCalls.map((t, i) => (
-              <li key={i} className="flex items-start gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                <Check size={11} className="mt-0.5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-                <span className="font-mono">{t.name}</span>
-                {t.arguments && t.arguments !== '{}' ? (
-                  <span className="truncate text-slate-400 dark:text-slate-500">{t.arguments.slice(0, 120)}</span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
+      {m.toolCalls && m.toolCalls.length > 0 ? <ToolCallList calls={m.toolCalls} streaming={m.streaming} /> : null}
       {m.reasoning ? (
         <details open={m.streaming} className="mb-2">
           <summary className="cursor-pointer select-none list-none text-[11px] font-medium text-teal-700 dark:text-teal-300 flex items-center gap-1">

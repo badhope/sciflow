@@ -123,6 +123,34 @@ export interface CompleteOptions {
 }
 
 /**
+ * 工具结果太长时截断后再通过 SSE 下发。
+ *
+ * 对话里的工具返回可能是整篇文档、检索结果数组或实验日志；原样塞进 SSE 会把
+ * 上下文和前端存储一起撑爆。保留前 1600 字符供用户核对，同时回传真实长度，
+ * 前端可以明确显示“已截断”。
+ */
+export function describeToolPayload(value: unknown, maxChars = 1600): { text: string; chars: number } {
+  let text = '';
+  if (typeof value === 'string') {
+    text = value;
+  } else if (value instanceof Error) {
+    text = value.message;
+  } else {
+    try {
+      text = JSON.stringify(value, null, 2);
+    } catch {
+      text = String(value);
+    }
+  }
+  if (text === undefined || text === null) text = '';
+  const chars = text.length;
+  if (chars > maxChars) {
+    text = `${text.slice(0, maxChars)}\n…（已截断，共 ${chars} 字符）`;
+  }
+  return { text, chars };
+}
+
+/**
  * 底层 LLM 传输层 — 经 Vercel AI SDK（@ai-sdk/openai-compatible）访问 OpenAI 兼容端点，
  * 保留 fast/strong 路由、p-limit 限流、p-retry 退避、token 成本落库、多厂商切换。
  *
@@ -865,6 +893,21 @@ ${augmentation}` };
           for (const tc of r.toolCalls ?? []) {
             enqueue({ choices: [{ delta: { tool_calls: [{ id: tc.toolCallId, function: { name: tc.toolName, arguments: JSON.stringify(tc.input ?? {}) } }] }, index: 0 }] });
           }
+          // 工具结果回放：非流式 fallback 已跑完整个工具循环，结果已确定；
+          // 这里没有逐工具的起止时间，duration_ms 传 0 表示"未知"，不要编一个总耗时。
+          for (const tr of r.toolResults ?? []) {
+            const payload = describeToolPayload(tr.output);
+            enqueue({
+              tool_result: {
+                id: tr.toolCallId,
+                name: tr.toolName,
+                status: 'ok',
+                duration_ms: 0,
+                output: payload.text,
+                output_chars: payload.chars,
+              },
+            });
+          }
           // 最终文本
           const text = r.text ?? '';
           if (text) enqueue({ choices: [{ delta: { content: text }, index: 0 }] });
@@ -924,6 +967,8 @@ ${augmentation}` };
       const sse = new ReadableStream<Uint8Array>({
         async start(controller) {
           const enqueue = (obj: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+          /** 记录每个 toolCall 的起始时间，tool-result 到达时算出真实耗时 */
+          const toolStartedAt = new Map<string, number>();
           try {
             for await (const part of result.stream) {
               armIdle();
@@ -939,6 +984,7 @@ ${augmentation}` };
                   break;
                 }
                 case 'tool-call': {
+                  toolStartedAt.set(part.toolCallId, Date.now());
                   enqueue({
                     choices: [
                       {
@@ -948,6 +994,49 @@ ${augmentation}` };
                         index: 0,
                       },
                     ],
+                  });
+                  break;
+                }
+                case 'tool-result': {
+                  const payload = describeToolPayload(part.output);
+                  const started = toolStartedAt.get(part.toolCallId);
+                  enqueue({
+                    tool_result: {
+                      id: part.toolCallId,
+                      name: part.toolName,
+                      status: 'ok',
+                      duration_ms: started ? Date.now() - started : 0,
+                      output: payload.text,
+                      output_chars: payload.chars,
+                    },
+                  });
+                  break;
+                }
+                case 'tool-error': {
+                  const payload = describeToolPayload(part.error);
+                  const started = toolStartedAt.get(part.toolCallId);
+                  enqueue({
+                    tool_result: {
+                      id: part.toolCallId,
+                      name: part.toolName,
+                      status: 'error',
+                      duration_ms: started ? Date.now() - started : 0,
+                      error: payload.text,
+                      output_chars: payload.chars,
+                    },
+                  });
+                  break;
+                }
+                case 'tool-output-denied': {
+                  const started = toolStartedAt.get(part.toolCallId);
+                  enqueue({
+                    tool_result: {
+                      id: part.toolCallId,
+                      name: part.toolName,
+                      status: 'denied',
+                      duration_ms: started ? Date.now() - started : 0,
+                      error: '工具输出被拒绝',
+                    },
                   });
                   break;
                 }

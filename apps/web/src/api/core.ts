@@ -287,6 +287,16 @@ export function streamChat(opts: {
   onUsage?: (usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }) => void;
   /** Agent 工具调用（模型决定调用某个工具时触发；用于在对话里展示"正在检索…"） */
   onToolCall?: (call: { id?: string; name: string; arguments: string }) => void;
+  /** Agent 工具结果（服务端在工具执行完成后下发；用于展示成功/失败、耗时与返回摘要） */
+  onToolResult?: (result: {
+    id?: string;
+    name: string;
+    status: 'ok' | 'error' | 'denied';
+    durationMs?: number;
+    output?: string;
+    outputChars?: number;
+    error?: string;
+  }) => void;
   onDone?: (full: string) => void;
   onError?: (msg: string) => void;
 }): () => void {
@@ -377,6 +387,31 @@ export function streamChat(opts: {
             for (const raw of json.tool_calls as Array<{ id?: string; function?: { name?: string; arguments?: string } }>) {
               const name = raw?.function?.name;
               if (name) opts.onToolCall?.({ id: raw.id, name, arguments: raw.function?.arguments ?? '{}' });
+            }
+            return;
+          }
+          // Agent 工具结果：工具执行完成后下发，和 tool_calls 用同一个 id 对齐
+          if (json.tool_result && typeof json.tool_result === 'object') {
+            const raw = json.tool_result as {
+              id?: string;
+              name?: string;
+              status?: string;
+              duration_ms?: number;
+              output?: string;
+              output_chars?: number;
+              error?: string;
+            };
+            const status = raw.status === 'error' || raw.status === 'denied' ? raw.status : 'ok';
+            if (raw.name) {
+              opts.onToolResult?.({
+                id: raw.id,
+                name: raw.name,
+                status,
+                durationMs: typeof raw.duration_ms === 'number' ? raw.duration_ms : undefined,
+                output: raw.output,
+                outputChars: raw.output_chars,
+                error: raw.error,
+              });
             }
             return;
           }

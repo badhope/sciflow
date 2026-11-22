@@ -412,6 +412,8 @@ export function SubmissionPage({ project }: { project: Project }) {
   const pickJournalToSubmit = (j: JournalMatchResult['journals'][number]) => {
     // journalsMatch 结果不带 id；若已在期刊库，按名称反查 journalId 以关联一审周期
     const libHit = j.isInLibrary ? lib.find((x) => x.name === j.name) : undefined;
+    // 同一条期刊名贯穿「期刊匹配 → Cover Letter → 投稿包」，避免三个 Tab 各填一次
+    setJournal(j.name);
     setRegForm({
       docId: selDoc, // 当前写作文档上下文（期刊推荐 Tab 所选文档）；无则留空由用户选
       journalId: libHit?.id || '',
@@ -423,7 +425,7 @@ export function SubmissionPage({ project }: { project: Project }) {
       revDeadline: '',
     });
     setTab('track');
-    toast('success', `已把「${j.name}」带入登记表单，核对后点「登记投稿」`);
+    toast('success', `已把「${j.name}」带入登记表单、Cover Letter 与投稿包`);
   };
 
   /** 任务2：从审稿意见直连投稿事件——读关联文档 open 意见，推断状态并追加一条事件 */
@@ -535,7 +537,12 @@ export function SubmissionPage({ project }: { project: Project }) {
 
       <Card className="p-4 mb-4">
         {tab === 'readiness' && (
-          <SubmissionReadinessPanel projectId={project.id} docs={docs} />
+          <SubmissionReadinessPanel
+            projectId={project.id}
+            docs={docs}
+            journal={journal}
+            onJournalChange={setJournal}
+          />
         )}
 
         {tab === 'journals' && (

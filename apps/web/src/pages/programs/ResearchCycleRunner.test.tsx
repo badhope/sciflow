@@ -52,7 +52,18 @@ const cycleStatus = {
   program: { id: 'prog-1', title: 'RobustnessStudy', autonomyLevel: 'L2' },
   claims: [],
   runs: [],
-  protocols: [{ id: 'proto-1', status: 'draft', version: 1 }],
+  protocols: [{
+    id: 'proto-1',
+    status: 'draft',
+    version: 1,
+    design: {
+      question: 'X 是否显著提升 Y？',
+      variables: ['X（方法）', 'Y（准确率）'],
+      sampleSize: 1200,
+      analysis: '配对 t 检验 + bootstrap 置信区间',
+      risks: ['样本选择偏差'],
+    },
+  }],
   tokensSpent: 1234,
 };
 
@@ -123,6 +134,15 @@ describe('ResearchCycleRunner', () => {
       fireEvent.click(screen.getByText('驳回并终止'));
     });
     await waitFor(() => expect(resume).toHaveBeenCalledWith('cycle-1', { approved: false }));
+  });
+
+  it('门禁态显示待批协议正文与变量，避免盲批', async () => {
+    await renderPanel();
+    expect(await screen.findByText('待批研究方案')).toBeTruthy();
+    expect(screen.getByText('X 是否显著提升 Y？')).toBeTruthy();
+    expect(screen.getByText('X（方法）')).toBeTruthy();
+    expect(screen.getByText(/配对 t 检验/)).toBeTruthy();
+    expect(screen.getByText('样本选择偏差')).toBeTruthy();
   });
 
   it('状态区展示轮次与 token 用量', async () => {

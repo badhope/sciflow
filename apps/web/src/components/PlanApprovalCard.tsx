@@ -4,6 +4,7 @@ import { Check, Loader2, ShieldCheck, X } from 'lucide-react';
 import { api } from '../api/client';
 import type { AgentPlanItem } from '../api/agent';
 import { Button, errMsg } from './ui';
+import { StructuredDetails } from './StructuredDetails';
 import { qk } from '../lib/query-keys';
 
 /**
@@ -75,6 +76,9 @@ export function PlanApprovalCard({
                 <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">{plan.title}</div>
                 {plan.summary && (
                   <div className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{plan.summary}</div>
+                )}
+                {plan.plan && Object.keys(plan.plan).length > 0 && (
+                  <StructuredDetails value={plan.plan} className="mt-1.5" />
                 )}
                 <div className="mt-1 flex flex-wrap gap-1">
                   {plan.allowedTools.slice(0, 5).map((t) => (

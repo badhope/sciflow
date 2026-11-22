@@ -5,6 +5,7 @@ import { api } from '../../api/client';
 import type { ResearchCycleStatus } from '../../api/research-cycles';
 import { ToastContext } from '../../App';
 import { Badge, Button, Card, ErrorBox, Input, Spinner, errMsg } from '../../components/ui';
+import { StructuredDetails } from '../../components/StructuredDetails';
 import { useTabActive } from '../../lib/tab-visibility';
 import { CYCLE_STATE, CLAIM_STATUS, RUN_STATUS, labelOf, statusTone } from './labels';
 
@@ -172,8 +173,28 @@ export function ResearchCycleRunner({
             {status.state === 'awaiting_approval' ? (
               <div className="space-y-2 rounded border border-amber-300 bg-amber-50 p-2 dark:border-amber-800 dark:bg-amber-950/30">
                 <p className="text-[11px] text-amber-800 dark:text-amber-300">
-                  循环停在方案审批门禁：方案批准后才会执行实验。
+                  循环停在方案审批门禁：方案批准后才会执行实验。请先核对下面的变量、样本、分析方案与风险。
                 </p>
+                {pendingProtocol ? (
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-amber-700/80 dark:text-amber-300/80">
+                      <span>协议 v{pendingProtocol.version}</span>
+                      <span className="font-mono">{pendingProtocol.id.slice(0, 8)}</span>
+                      <Badge tone="amber">待批</Badge>
+                    </div>
+                    {pendingProtocol.design && Object.keys(pendingProtocol.design).length > 0 ? (
+                      <StructuredDetails value={pendingProtocol.design} title="待批研究方案" defaultOpen />
+                    ) : (
+                      <div className="rounded border border-amber-200 bg-white/60 px-2.5 py-2 text-[11px] text-amber-700 dark:border-amber-800 dark:bg-slate-900/40 dark:text-amber-300">
+                        服务端没有返回方案正文，建议先刷新；仍然为空时不要盲目批准。
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded border border-amber-200 bg-white/60 px-2.5 py-2 text-[11px] text-amber-700 dark:border-amber-800 dark:bg-slate-900/40 dark:text-amber-300">
+                    当前没有待批协议对象；继续会按服务端已存方案恢复。
+                  </div>
+                )}
                 <div className="flex gap-1">
                   <Button
                     size="xs"

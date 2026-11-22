@@ -19,7 +19,20 @@ export interface ChatMessage {
   /** 后续追问建议（科研问答页：模型按 FOLLOWUP_HINT 约定输出） */
   followUps?: string[];
   /** Agent 工具调用记录（本轮模型检索文献/查知识库的步骤，供气泡内展示） */
-  toolCalls?: { name: string; arguments?: string }[];
+  toolCalls?: {
+    /** 服务端 tool_call id，用于把 tool_call 与 tool_result 对齐 */
+    id?: string;
+    name: string;
+    arguments?: string;
+    /** 执行状态：running=已发起；done/error/denied=已有结果 */
+    status?: 'running' | 'done' | 'error' | 'denied';
+    /** 工具返回正文（服务端截断后的预览） */
+    result?: string;
+    /** 返回正文的原始字符数（用于提示“已截断”） */
+    resultChars?: number;
+    durationMs?: number;
+    error?: string;
+  }[];
 }
 
 /** 追加到请求 message 末尾的固定指令：诱导模型给出后续追问建议（不进入气泡显示） */
@@ -150,7 +163,44 @@ export function useChatSession(opts: {
         onReasoning: (full) => patchLast((m) => ({ reasoning: applyStreamDelta({ content: m.content, reasoning: m.reasoning ?? '' }, { reasoning: full }).reasoning })),
         onSources: (src) => patchLast({ sources: src }),
         onUsage: (u) => patchLast({ usage: u }),
-        onToolCall: (call) => patchLast((m) => ({ toolCalls: [...(m.toolCalls || []), { name: call.name, arguments: call.arguments }] })),
+        onToolCall: (call) => patchLast((m) => ({
+          toolCalls: [
+            ...(m.toolCalls || []),
+            { id: call.id, name: call.name, arguments: call.arguments, status: 'running' },
+          ],
+        })),
+        onToolResult: (result) => patchLast((m) => {
+          const calls = [...(m.toolCalls || [])];
+          let index = -1;
+          if (result.id) {
+            index = calls.findIndex((c) => c.id === result.id && c.status === 'running');
+          }
+          if (index < 0) {
+            // 兼容服务端个别事件不带 id 的情况：按工具名回填最近一条仍在运行的记录
+            for (let i = calls.length - 1; i >= 0; i -= 1) {
+              if (calls[i].name === result.name && calls[i].status === 'running') {
+                index = i;
+                break;
+              }
+            }
+          }
+          const patch: NonNullable<ChatMessage['toolCalls']>[number] = {
+            id: result.id,
+            name: result.name,
+            status: result.status === 'ok' ? 'done' : result.status,
+            result: result.output,
+            resultChars: result.outputChars,
+            durationMs: result.durationMs,
+            error: result.error,
+          };
+          if (index >= 0) {
+            calls[index] = { ...calls[index], ...patch, arguments: calls[index].arguments };
+          } else {
+            // 没收到 tool_call 事件时也把结果留下，不能因为事件乱序把结果丢掉
+            calls.push(patch);
+          }
+          return { toolCalls: calls };
+        }),
         onDone: (full) => {
           if (!mountedRef.current) return;
           setStreaming(false);

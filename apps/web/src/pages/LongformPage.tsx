@@ -1,11 +1,11 @@
 import { useContext, useMemo, useState, type ChangeEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Download, Loader2, PenLine, Plus } from 'lucide-react';
+import { BookOpen, ChevronRight, Copy, Download, Loader2, PenLine, Plus } from 'lucide-react';
 import { api } from '../api/client';
 import type { LongformBookDetail } from '../api/longform';
 import type { Project } from '../types';
 import { ToastContext } from '../App';
-import { Badge, Button, Card, EmptyState, ErrorBox, Input, SectionTitle, Select, Spinner, Textarea, errMsg } from '../components/ui';
+import { Badge, Button, Card, EmptyState, ErrorBox, Input, Modal, SectionTitle, Select, Spinner, Textarea, errMsg } from '../components/ui';
 
 /**
  * 长篇写作（百万字级）：分卷 → 分章 → 逐章生成 → 断点续写。
@@ -27,6 +27,8 @@ export function LongformPage({ project }: { project: Project }) {
   const [busy, setBusy] = useState('');
   const [consistency, setConsistency] = useState<{ score: number; issues: { severity: string; message: string }[] } | null>(null);
   const [error, setError] = useState('');
+  const [viewingChapterId, setViewingChapterId] = useState('');
+  const [batchCount, setBatchCount] = useState('3');
 
   // 新建书籍表单
   const [title, setTitle] = useState('');
@@ -54,6 +56,8 @@ export function LongformPage({ project }: { project: Project }) {
   const book: LongformBookDetail | undefined = detailQuery.data;
   // 加载失败直接派生，不进 state：否则 effect 里 setState 会多一轮渲染，且关闭错误后无法自然恢复
   const loadError = detailQuery.error ? errMsg(detailQuery.error) : '';
+  const viewingChapter = book?.chapters.find((c) => c.id === viewingChapterId) ?? null;
+  const batchCountNum = Math.max(1, Math.min(50, Number(batchCount) || 1));
 
   const refresh = async (id = bookId) => {
     await qc.invalidateQueries({ queryKey: ['longform-books', project.id] });
@@ -130,9 +134,20 @@ export function LongformPage({ project }: { project: Project }) {
     setBusy('batch');
     setError('');
     try {
-      const r = await api.longform.write(bookId, 3);
-      if (r.error) setError(`第 ${r.stopped ? '后续' : ''}章节失败：${r.error}`);
-      else toast('success', `本轮写完 ${r.written.length} 章（累计 ${r.stats.chars} 字）`);
+      const r = await api.longform.write(bookId, batchCountNum);
+      const failures = r.failures ?? [];
+      if (failures.length > 0) {
+        setError(
+          `本轮写完 ${r.written.length} 章，${failures.length} 章失败：${failures
+            .slice(0, 2)
+            .map((f) => `第 ${f.seq} 章 ${f.error}`)
+            .join('；')}${failures.length > 2 ? '…' : ''}`,
+        );
+      } else if (r.error) {
+        setError(`批量写作失败：${r.error}`);
+      } else {
+        toast('success', `本轮写完 ${r.written.length} 章（累计 ${r.stats.chars} 字）`);
+      }
       await refresh();
     } catch (e: unknown) {
       setError(errMsg(e));
@@ -159,6 +174,30 @@ export function LongformPage({ project }: { project: Project }) {
     } finally {
       setBusy('');
     }
+  };
+
+  const copyChapter = async () => {
+    if (!viewingChapter?.content) return;
+    try {
+      await navigator.clipboard.writeText(viewingChapter.content);
+      toast('success', '已复制本章正文');
+    } catch {
+      toast('error', '复制失败，请手动选中正文');
+    }
+  };
+
+  const downloadChapter = () => {
+    if (!viewingChapter || !viewingChapter.content) return;
+    const blob = new Blob([`# 第 ${viewingChapter.seq} 章 ${viewingChapter.title}\n\n${viewingChapter.content}`], {
+      type: 'text/markdown;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${book?.title || '长篇'}-第${viewingChapter.seq}章.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('success', '已导出本章 Markdown');
   };
 
   const runConsistency = async () => {
@@ -256,16 +295,26 @@ export function LongformPage({ project }: { project: Project }) {
                 </Button>
               </div>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <Button variant="success" onClick={() => void writeNext()} loading={busy === 'next'} disabled={book.stats.pending === 0 && book.stats.failed === 0}>
                 <PenLine size={14} /> 写下一章
               </Button>
               <Button variant="outline" onClick={() => void writeNext(true)} loading={busy === 'next'} disabled={book.stats.failed === 0}>
                 重试失败章节
               </Button>
-              <Button variant="outline" onClick={() => void writeBatch()} loading={busy === 'batch'} disabled={book.stats.pending === 0}>
-                <Loader2 size={14} className={busy === 'batch' ? 'animate-spin' : ''} /> 连写 3 章
-              </Button>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  className="w-16 !py-1.5 text-center"
+                  inputMode="numeric"
+                  value={batchCount}
+                  onChange={(e) => setBatchCount(e.target.value.replace(/[^0-9]/g, ''))}
+                  aria-label="连写章数"
+                  title="连写章数（1–50）"
+                />
+                <Button variant="outline" onClick={() => void writeBatch()} loading={busy === 'batch'} disabled={book.stats.pending === 0 && book.stats.failed === 0}>
+                  <Loader2 size={14} className={busy === 'batch' ? 'animate-spin' : ''} /> 连写 {batchCountNum} 章
+                </Button>
+              </div>
               <Button variant="outline" onClick={() => void runConsistency()} loading={busy === 'consistency'} disabled={book.stats.done === 0}>
                 一致性检查
               </Button>
@@ -313,7 +362,20 @@ export function LongformPage({ project }: { project: Project }) {
                   </div>
                   <div className="space-y-1.5">
                     {chapters.map((c) => (
-                      <div key={c.id} className="rounded border border-slate-200 p-2 dark:border-slate-700">
+                      <div
+                        key={c.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setViewingChapterId(c.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setViewingChapterId(c.id);
+                          }
+                        }}
+                        className="w-full cursor-pointer rounded border border-slate-200 p-2 text-left transition-colors hover:border-teal-300 hover:bg-teal-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 dark:border-slate-700 dark:hover:border-teal-700 dark:hover:bg-teal-950/20"
+                        aria-label={`查看第 ${c.seq} 章正文`}
+                      >
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <Badge tone={c.status === 'done' ? 'green' : c.status === 'failed' ? 'red' : c.status === 'writing' ? 'amber' : 'slate'}>
                             {c.status === 'done' ? '已写' : c.status === 'failed' ? '失败' : c.status === 'writing' ? '写作中' : '待写'}
@@ -322,6 +384,9 @@ export function LongformPage({ project }: { project: Project }) {
                             第 {c.seq} 章 · {c.title}
                           </span>
                           {c.chars > 0 && <span className="text-slate-400">{c.chars} 字</span>}
+                          <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] text-teal-600 dark:text-teal-300">
+                            查看正文 <ChevronRight size={11} aria-hidden="true" />
+                          </span>
                         </div>
                         {c.goal && <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">目标：{c.goal}</div>}
                         {c.error && <div className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">{c.error}</div>}
@@ -335,6 +400,56 @@ export function LongformPage({ project }: { project: Project }) {
           )}
         </>
       )}
+
+      <Modal
+        open={Boolean(viewingChapter)}
+        title={viewingChapter ? `第 ${viewingChapter.seq} 章 · ${viewingChapter.title}` : '章节正文'}
+        onClose={() => setViewingChapterId('')}
+        width="max-w-3xl"
+      >
+        {viewingChapter ? (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+              <Badge tone={viewingChapter.status === 'done' ? 'green' : viewingChapter.status === 'failed' ? 'red' : 'slate'}>
+                {viewingChapter.status === 'done' ? '已写' : viewingChapter.status === 'failed' ? '失败' : '待写'}
+              </Badge>
+              {viewingChapter.chars > 0 ? <span>{viewingChapter.chars} 字</span> : null}
+              {viewingChapter.goal ? <span>目标：{viewingChapter.goal}</span> : null}
+            </div>
+            {viewingChapter.error ? (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
+                {viewingChapter.error}
+              </div>
+            ) : null}
+            {viewingChapter.content ? (
+              <div className="max-h-[55vh] overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm leading-8 text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200">
+                {viewingChapter.content}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400 dark:border-slate-700">
+                本章还没有正文。先点「写下一章」或「重试失败章节」。
+              </div>
+            )}
+            {viewingChapter.summary ? (
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500 dark:bg-slate-900/40 dark:text-slate-400">
+                <span className="font-medium text-slate-400">本章摘要：</span>
+                {viewingChapter.summary}
+              </div>
+            ) : null}
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-3 dark:border-slate-700">
+              <Button variant="outline" size="sm" onClick={() => void copyChapter()} disabled={!viewingChapter.content}>
+                <Copy size={13} /> 复制正文
+              </Button>
+              <Button variant="outline" size="sm" onClick={downloadChapter} disabled={!viewingChapter.content}>
+                <Download size={13} /> 下载本章
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setViewingChapterId('')}>
+                关闭
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

@@ -1,10 +1,46 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, ClipboardCheck, Download, RefreshCw, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardCheck, Download, RefreshCw, Sparkles, XCircle } from 'lucide-react';
 import { api } from '../../api/client';
 import { Badge, Button, Empty, ErrorBox, Input, Select, Spinner, downloadBase64, errMsg } from '../../components/ui';
 import { DocumentSelect } from '../../components/DocumentSelect';
+import { qk } from '../../lib/query-keys';
 import type { Doc, SubmissionReadiness } from '../../types';
+
+/**
+ * 把模型生成的摘要/关键词插进正文缺失的结构块。
+ *
+ * 只补缺失项，不覆盖已有摘要/关键词：用户点的是“补齐”，不是“重写”。
+ * 已有标题时插在标题之后，保持“标题 → 摘要 → 关键词 → 正文”的常见顺序。
+ */
+export function insertMissingSubmissionBlocks(
+  content: string,
+  abstract: string,
+  keywords: string[],
+  needAbstract: boolean,
+  needKeywords: boolean,
+): string {
+  const cleanAbstract = abstract.replace(/^\s*(摘\s*要|abstract)\s*[:：]\s*/i, '').trim();
+  const cleanKeywords = keywords
+    .map((k) => k.replace(/^\s*(关\s*键\s*词|keywords?)\s*[:：]\s*/i, '').trim())
+    .filter(Boolean);
+  const blocks: string[] = [];
+  if (needAbstract && cleanAbstract) blocks.push(`## 摘要\n\n${cleanAbstract}`);
+  if (needKeywords && cleanKeywords.length > 0) blocks.push(`## 关键词\n\n${cleanKeywords.join('；')}`);
+  if (blocks.length === 0) return content;
+
+  const body = content || '';
+  const lines = body.split(/\r?\n/);
+  let insertAt = 0;
+  while (insertAt < lines.length && !lines[insertAt].trim()) insertAt += 1;
+  if (/^#\s+/.test(lines[insertAt] || '')) {
+    insertAt += 1;
+    while (insertAt < lines.length && !lines[insertAt].trim()) insertAt += 1;
+  }
+  const head = lines.slice(0, insertAt).join('\n').trimEnd();
+  const tail = lines.slice(insertAt).join('\n').trimStart();
+  return [head, blocks.join('\n\n'), tail].filter(Boolean).join('\n\n') + (body.endsWith('\n') ? '\n' : '');
+}
 
 const STATUS_META: Record<SubmissionReadiness['items'][number]['status'], {
   label: string;
@@ -20,14 +56,27 @@ const STATUS_META: Record<SubmissionReadiness['items'][number]['status'], {
  * 投稿就绪检查（投稿辅助页）。
  *
  * 回答的是“能不能交”，不是“稿子好不好”：复用客观质量门，并额外核对
- * 项目文献库、citation 表、摘要/关键词块。确定性、可复现，不调模型。
+ * 项目文献库、citation 表、摘要/关键词块。检查本身确定性、可复现；只有用户
+ * 点“生成并插入”时才调用一次模型，用来补齐缺失的摘要/关键词块。
  */
-export function SubmissionReadinessPanel({ projectId, docs }: { projectId: string; docs: Pick<Doc, 'id' | 'title'>[] }) {
+export function SubmissionReadinessPanel({
+  projectId,
+  docs,
+  journal,
+  onJournalChange,
+}: {
+  projectId: string;
+  docs: Pick<Doc, 'id' | 'title'>[];
+  journal: string;
+  onJournalChange: (value: string) => void;
+}) {
   const [docId, setDocId] = useState('');
   const [pkgBusy, setPkgBusy] = useState(false);
   const [pkgMessage, setPkgMessage] = useState('');
   const [pkgError, setPkgError] = useState('');
-  const [journal, setJournal] = useState('');
+  const [fixBusy, setFixBusy] = useState(false);
+  const [fixMessage, setFixMessage] = useState('');
+  const [fixError, setFixError] = useState('');
   const [template, setTemplate] = useState('generic');
   const query = useQuery({
     queryKey: ['submission-readiness', projectId, docId],
@@ -72,6 +121,43 @@ export function SubmissionReadinessPanel({ projectId, docs }: { projectId: strin
     }
   };
 
+  const missingAbstract = data?.items.some((it) => it.key === 'abstract' && it.status !== 'pass') ?? false;
+  const missingKeywords = data?.items.some((it) => it.key === 'keywords' && it.status !== 'pass') ?? false;
+  const canFixFrontMatter = Boolean(docId && (missingAbstract || missingKeywords));
+
+  const fixFrontMatter = async () => {
+    if (!docId) return;
+    setFixBusy(true);
+    setFixError('');
+    setFixMessage('');
+    try {
+      const doc = await api.documents.get(docId);
+      const generated = await api.documents.abstract(docId);
+      const next = insertMissingSubmissionBlocks(
+        doc.content || '',
+        generated.abstract || '',
+        generated.keywords || [],
+        missingAbstract,
+        missingKeywords,
+      );
+      if (next === (doc.content || '')) {
+        throw new Error('模型没有返回可插入的摘要或关键词，请稍后重试');
+      }
+      await api.documents.update(docId, { content: next });
+      await Promise.all([
+        query.refetch(),
+        qc.invalidateQueries({ queryKey: qk.docs(projectId) }),
+        qc.invalidateQueries({ queryKey: qk.doc(docId) }),
+      ]);
+      const added = [missingAbstract && generated.abstract ? '摘要' : '', missingKeywords && generated.keywords.length ? '关键词' : ''].filter(Boolean);
+      setFixMessage(`已插入${added.join('、') || '内容'}，可继续在写作页修改。`);
+    } catch (e) {
+      setFixError(errMsg(e));
+    } finally {
+      setFixBusy(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -82,7 +168,7 @@ export function SubmissionReadinessPanel({ projectId, docs }: { projectId: strin
             {data && <Badge tone={data.ready ? 'green' : 'red'}>{data.ready ? '可投稿' : '有阻塞项'}</Badge>}
           </div>
           <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-            用当前评审标准核对标题、篇幅、章节、引用闭环、文献库、摘要/关键词与客观质量门；只读、不调模型，可反复刷新。
+            用当前评审标准核对标题、篇幅、章节、引用闭环、文献库、摘要/关键词与客观质量门；检查本身只读，补齐摘要/关键词时会调用一次模型。
           </p>
         </div>
         {data && (
@@ -134,10 +220,10 @@ export function SubmissionReadinessPanel({ projectId, docs }: { projectId: strin
       {docId && (
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <label className="text-xs text-slate-500 dark:text-slate-400">
-            目标期刊（写进 Cover Letter，可留空）
+            目标期刊（与 Cover Letter、投稿包共用，可留空）
             <Input
               value={journal}
-              onChange={(e) => setJournal(e.target.value)}
+              onChange={(e) => onJournalChange(e.target.value)}
               placeholder="例如 Journal of Graph Research"
               className="mt-1 !py-1.5"
               aria-label="目标期刊"
@@ -197,6 +283,29 @@ export function SubmissionReadinessPanel({ projectId, docs }: { projectId: strin
               {data.stats.libraryReferences} 条
             </div>
           </div>
+
+          {canFixFrontMatter && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-800 dark:bg-amber-950/20">
+              <div className="flex flex-wrap items-center gap-2">
+                <Sparkles size={14} className="text-amber-600 dark:text-amber-300" aria-hidden="true" />
+                <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                  可补齐：{missingAbstract ? '摘要块' : ''}{missingAbstract && missingKeywords ? '、' : ''}{missingKeywords ? '关键词块' : ''}
+                </span>
+                <span className="text-[11px] text-amber-700/80 dark:text-amber-300/80">只补缺失块，不覆盖已有内容</span>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="ml-auto"
+                  loading={fixBusy}
+                  onClick={() => void fixFrontMatter()}
+                >
+                  <Sparkles size={11} /> 生成并插入
+                </Button>
+              </div>
+              {fixError && <div className="mt-1.5 text-[11px] text-rose-600 dark:text-rose-300">{fixError}</div>}
+              {fixMessage && <div className="mt-1.5 text-[11px] text-emerald-700 dark:text-emerald-300">{fixMessage}</div>}
+            </div>
+          )}
 
           <div className="grid gap-2 md:grid-cols-2">
             {data.items.map((it) => {

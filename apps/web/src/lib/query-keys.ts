@@ -25,6 +25,8 @@ export const qk = {
   dashboardSubmissions: (projectId: string) => ['dashboard-submissions', projectId] as const,
 
   agentMetrics: (projectId: string) => ['agent-metrics', projectId] as const,
+  agentExecutions: (projectId: string) => ['agent-executions', projectId] as const,
+  agentRun: (runId: string) => ['agent-run', runId] as const,
   agentPlans: (projectId: string) => ['agent-plans', projectId] as const,
   agentApprovals: (projectId: string) => ['agent-approvals', projectId] as const,
   agentTasks: (projectId: string) => ['agent-tasks', projectId] as const,

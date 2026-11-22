@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api/client';
 import { downloadBase64 } from '../../components/ui';
 import type { SubmissionPackage, SubmissionReadiness } from '../../types';
-import { SubmissionReadinessPanel } from './SubmissionReadinessPanel';
+import { insertMissingSubmissionBlocks, SubmissionReadinessPanel } from './SubmissionReadinessPanel';
 
 vi.mock('../../api/client', () => ({
   api: {
@@ -17,6 +18,11 @@ vi.mock('../../api/client', () => ({
       qualityStandard: vi.fn(async () => ({ key: 'standard', label: 'SCI 通用期刊', passScore: 80, minChars: 4500, minSections: 5, minUniqueCitations: 15, source: 'global' })),
       setQualityStandard: vi.fn(),
     },
+    documents: {
+      get: vi.fn(),
+      abstract: vi.fn(),
+      update: vi.fn(),
+    },
   },
 }));
 
@@ -28,9 +34,7 @@ vi.mock('../../components/ui', async (importOriginal) => {
 const readiness = vi.mocked(api.submission.readiness);
 const packageApi = vi.mocked(api.submission.package);
 const saveBase64 = vi.mocked(downloadBase64);
-const docs = [{ id: 'doc-1', title: '异质图鲁棒性论文' }];
-
-function result(over: Partial<SubmissionReadiness> = {}): SubmissionReadiness {
+const docs = [{ id: 'doc-1', title: '异质图鲁棒性论文' }];function result(over: Partial<SubmissionReadiness> = {}): SubmissionReadiness {
   return {
     projectId: 'p1',
     documentId: 'doc-1',
@@ -96,11 +100,16 @@ function packageResult(over: Partial<SubmissionPackage> = {}): SubmissionPackage
   };
 }
 
+function Harness() {
+  const [journal, setJournal] = useState('');
+  return <SubmissionReadinessPanel projectId="p1" docs={docs} journal={journal} onJournalChange={setJournal} />;
+}
+
 function renderPanel() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <SubmissionReadinessPanel projectId="p1" docs={docs} />
+      <Harness />
     </QueryClientProvider>,
   );
 }
@@ -166,5 +175,46 @@ describe('SubmissionReadinessPanel', () => {
     expect(screen.getByText('2 阻塞 · 1 提醒')).toBeTruthy();
     expect(screen.getByText('正文 120 字，低于 500 字硬伤线。')).toBeTruthy();
     expect(screen.getAllByText('阻塞').length).toBeGreaterThan(0);
+  });
+
+  it('摘要/关键词缺失时可一键生成并只补缺失块', async () => {
+    readiness.mockResolvedValue(
+      result({
+        items: [
+          { key: 'abstract', label: '摘要块', status: 'warn', detail: '未检测到摘要块。' },
+          { key: 'keywords', label: '关键词块', status: 'warn', detail: '未检测到关键词块。' },
+        ],
+      }),
+    );
+    vi.mocked(api.documents.get).mockResolvedValue({ id: 'doc-1', title: '异质图鲁棒性论文', content: '# 异质图鲁棒性论文\n\n正文第一段。' } as never);
+    vi.mocked(api.documents.abstract).mockResolvedValue({ abstract: '这是摘要。', keywords: ['图神经网络', '鲁棒性'] });
+    vi.mocked(api.documents.update).mockResolvedValue({} as never);
+
+    renderPanel();
+    fireEvent.change(screen.getByLabelText('投稿文档'), { target: { value: 'doc-1' } });
+    expect(await screen.findByText('可补齐：摘要块、关键词块')).toBeTruthy();
+    fireEvent.click(screen.getByText('生成并插入'));
+
+    await waitFor(() => expect(api.documents.update).toHaveBeenCalled());
+    const next = vi.mocked(api.documents.update).mock.calls[0][1].content as string;
+    expect(next).toContain('# 异质图鲁棒性论文');
+    expect(next).toContain('## 摘要');
+    expect(next).toContain('这是摘要。');
+    expect(next).toContain('## 关键词');
+    expect(next).toContain('图神经网络；鲁棒性');
+    expect(await screen.findByText('已插入摘要、关键词，可继续在写作页修改。')).toBeTruthy();
+  });
+});
+
+describe('insertMissingSubmissionBlocks', () => {
+  it('插在首个一级标题之后，并保留原有正文', () => {
+    const next = insertMissingSubmissionBlocks('# 标题\n\n原正文', '摘要内容', ['关键词一', '关键词二'], true, true);
+    expect(next).toBe('# 标题\n\n## 摘要\n\n摘要内容\n\n## 关键词\n\n关键词一；关键词二\n\n原正文');
+  });
+
+  it('只补缺失项，不覆盖已有摘要', () => {
+    const next = insertMissingSubmissionBlocks('# 标题\n\n## 摘要\n\n旧摘要\n\n正文', '新摘要', ['词'], false, true);
+    expect(next).not.toContain('新摘要');
+    expect(next).toContain('## 关键词\n\n词');
   });
 });

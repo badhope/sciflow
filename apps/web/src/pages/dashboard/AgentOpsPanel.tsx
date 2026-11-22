@@ -1,10 +1,11 @@
 import { useContext, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, Check, CheckCircle2, Clock3, ListChecks, ShieldCheck, X } from 'lucide-react';
+import { Activity, Check, CheckCircle2, ChevronRight, Clock3, ListChecks, ShieldCheck, X } from 'lucide-react';
 import { api } from '../../api/client';
 import { openSse } from '../../api/core';
 import { ToastContext } from '../../App';
-import { Badge, Button, errMsg } from '../../components/ui';
+import { Badge, Button, Modal, Spinner, errMsg } from '../../components/ui';
+import { StructuredDetails } from '../../components/StructuredDetails';
 import { HBar } from '../../components/charts';
 import { useAgentInbox } from '../../lib/agent-inbox';
 import { qk } from '../../lib/query-keys';
@@ -45,12 +46,25 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const toast = useContext(ToastContext);
   const [busy, setBusy] = useState<string | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
 
   const metricsQuery = useQuery({
     queryKey: qk.agentMetrics(projectId),
     queryFn: () => api.agent.metrics(projectId, 7),
     retry: 0,
     refetchInterval: 30_000,
+  });
+  const executionsQuery = useQuery({
+    queryKey: qk.agentExecutions(projectId),
+    queryFn: () => api.agent.executions(projectId, 10),
+    retry: 0,
+    refetchInterval: 30_000,
+  });
+  const runQuery = useQuery({
+    queryKey: qk.agentRun(runId ?? ''),
+    queryFn: () => api.agent.getRun(runId as string),
+    enabled: Boolean(runId),
+    retry: 0,
   });
   const plansQuery = useQuery({
     queryKey: qk.agentPlans(projectId),
@@ -87,8 +101,24 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
   }, [projectId, qc]);
 
   const metrics = metricsQuery.data;
-  const recentRuns = metrics?.recentRuns ?? [];
+  const executions = executionsQuery.data?.executions;
+  const recentRuns = executions
+    ? executions.map((e) => ({
+        id: e.id,
+        source: e.source,
+        status: e.status,
+        durationMs: e.durationMs,
+        tokens: e.totalTokens,
+        createdAt: e.createdAt,
+      }))
+    : metrics?.recentRuns ?? [];
   const tokenTrend = metrics?.byDay ?? [];
+  const runDetail = runQuery.data && Array.isArray(runQuery.data.steps) ? runQuery.data : undefined;
+  const runLoadError = runQuery.error
+    ? errMsg(runQuery.error)
+    : runQuery.data && !Array.isArray(runQuery.data.steps)
+      ? '服务端未返回这次执行的详情'
+      : '';
   const pendingPlans = (plansQuery.data?.plans ?? []).filter((p) => p.status === 'pending');
   // 只展示已批准计划；过期/耗尽由后端状态机标记，不在前端用 Date.now 二次推断（避免 render 不纯）。
   const activePlans = (plansQuery.data?.plans ?? []).filter((p) => p.status === 'approved');
@@ -97,6 +127,15 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
   const fmtInt = (n: number) => n.toLocaleString('zh-CN');
   const budgetText = (p: { budgetTokens: number; usedTokens: number }) =>
     p.budgetTokens > 0 ? `${fmtInt(p.usedTokens)} / ${fmtInt(p.budgetTokens)} tokens` : '不限';
+  const fmtTime = (ts: number) => new Date(ts).toLocaleString('zh-CN', { hour12: false });
+  const runStatus = (status: string) => {
+    if (status === 'done') return { label: '完成', tone: 'green' as const };
+    if (status === 'error') return { label: '异常', tone: 'red' as const };
+    if (status === 'running') return { label: '运行中', tone: 'amber' as const };
+    return { label: status || '未知', tone: 'slate' as const };
+  };
+  const stepKind = (kind: string) =>
+    ({ llm: '模型', tool: '工具', search: '检索', retrieve: '召回', thinking: '思考' })[kind] ?? kind;
 
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: qk.agentPlans(projectId) });
@@ -178,11 +217,19 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
             <div>
               <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-slate-400">最近执行</div>
               <ul className="space-y-1">
-                {recentRuns.slice(0, 4).map((r) => (
-                  <li key={r.id} className="flex items-center gap-2 rounded border border-slate-100 bg-white/60 px-2 py-1 text-[11px] dark:border-slate-800 dark:bg-slate-900/40">
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${r.status === 'done' ? 'bg-emerald-500' : r.status === 'error' ? 'bg-rose-500' : r.status === 'running' ? 'bg-amber-500' : 'bg-slate-400'}`} aria-hidden="true" />
-                    <span className="min-w-0 flex-1 truncate text-slate-600 dark:text-slate-300">{r.source}</span>
-                    <span className="v2-numeric shrink-0 text-slate-400">{r.tokens ? `${(r.tokens / 1000).toFixed(1)}k` : `${Math.round(r.durationMs / 1000)}s`}</span>
+                {recentRuns.slice(0, 8).map((r) => (
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      onClick={() => setRunId(r.id)}
+                      className="flex w-full items-center gap-2 rounded border border-slate-100 bg-white/60 px-2 py-1 text-left text-[11px] transition-colors hover:border-teal-300 hover:bg-teal-50/40 dark:border-slate-800 dark:bg-slate-900/40 dark:hover:border-teal-700 dark:hover:bg-teal-950/20"
+                      title={`查看 ${r.source} 的步骤链`}
+                    >
+                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${r.status === 'done' ? 'bg-emerald-500' : r.status === 'error' ? 'bg-rose-500' : r.status === 'running' ? 'bg-amber-500' : 'bg-slate-400'}`} aria-hidden="true" />
+                      <span className="min-w-0 flex-1 truncate text-slate-600 dark:text-slate-300">{r.source}</span>
+                      <span className="v2-numeric shrink-0 text-slate-400">{r.tokens ? `${(r.tokens / 1000).toFixed(1)}k` : `${Math.round(r.durationMs / 1000)}s`}</span>
+                      <ChevronRight size={11} className="shrink-0 text-slate-400" aria-hidden="true" />
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -254,6 +301,7 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
                 <span className="text-[10px] text-slate-400">预算 {budgetText(p)}</span>
               </div>
               {p.summary && <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{p.summary}</p>}
+              {p.plan && Object.keys(p.plan).length > 0 && <StructuredDetails value={p.plan} className="mt-1.5" />}
               <ToolChips tools={p.allowedTools} />
               <div className="mt-2 flex gap-1.5">
                 <Button className="h-7 px-2 text-[11px]" onClick={() => void decidePlan(p.id, true)} disabled={busy === p.id}>
@@ -296,6 +344,94 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
           无待批计划或审批。Agent 在执行写操作前会先申请计划级/单次授权。
         </div>
       )}
+
+      <Modal open={Boolean(runId)} title="执行详情" onClose={() => setRunId(null)} width="max-w-3xl">
+        {runQuery.isLoading ? (
+          <Spinner label="读取执行步骤…" />
+        ) : runLoadError ? (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
+            {runLoadError}
+          </div>
+        ) : runDetail ? (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <Badge tone={runStatus(runDetail.status).tone}>{runStatus(runDetail.status).label}</Badge>
+              <span className="font-medium text-slate-700 dark:text-slate-200">{runDetail.source}</span>
+              <span>{runDetail.model || '未知模型'}</span>
+              <span>{fmtTime(runDetail.createdAt)}</span>
+              <span>{runDetail.durationMs ? `${(runDetail.durationMs / 1000).toFixed(1)}s` : '耗时未记录'}</span>
+              <span>{fmtInt(runDetail.totalTokens)} tokens</span>
+            </div>
+
+            {runDetail.error && (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
+                失败原因：{runDetail.error}
+              </div>
+            )}
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 p-2.5 dark:border-slate-700">
+                <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">输入</div>
+                <div className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                  {runDetail.input || '—'}
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-2.5 dark:border-slate-700">
+                <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">输出摘要</div>
+                <div className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                  {runDetail.outputSummary || '—'}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                步骤链 · {runDetail.steps.length} 步
+              </div>
+              {runDetail.steps.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-[11px] text-slate-400 dark:border-slate-700">
+                  这次执行还没有落步骤记录。
+                </div>
+              ) : (
+                <ol className="space-y-1.5">
+                  {[...runDetail.steps].sort((a, b) => a.seq - b.seq).map((step) => (
+                    <li key={step.id} className="rounded-lg border border-slate-200 bg-white/60 px-2.5 py-2 dark:border-slate-700 dark:bg-slate-900/40">
+                      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                        <span className={`grid h-4 w-4 place-items-center rounded-full text-[9px] ${step.status === 'error' || step.error ? 'bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-300' : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300'}`} aria-hidden="true">
+                          {step.status === 'error' || step.error ? '!' : '✓'}
+                        </span>
+                        <span className="v2-numeric text-slate-400">#{step.seq}</span>
+                        <Badge tone="slate">{stepKind(step.kind)}</Badge>
+                        <span className="min-w-0 flex-1 truncate font-medium text-slate-700 dark:text-slate-200">{step.title || step.toolName || '步骤'}</span>
+                        {step.durationMs ? <span className="v2-numeric text-slate-400">{step.durationMs}ms</span> : null}
+                        {step.tokens ? <span className="v2-numeric text-slate-400">{fmtInt(step.tokens)} tok</span> : null}
+                      </div>
+                      {step.error && <div className="mt-1 text-[11px] text-rose-600 dark:text-rose-300">{step.error}</div>}
+                      {(step.input || step.output) && (
+                        <details className="mt-1.5 rounded bg-slate-50/80 px-2 py-1 dark:bg-slate-950/30">
+                          <summary className="cursor-pointer select-none text-[10px] font-medium text-slate-400">输入 / 输出</summary>
+                          {step.input && (
+                            <div className="mt-1">
+                              <div className="text-[9px] uppercase tracking-wider text-slate-400">输入</div>
+                              <pre className="mt-0.5 max-h-32 overflow-auto whitespace-pre-wrap text-[10.5px] leading-relaxed text-slate-500 dark:text-slate-400">{step.input}</pre>
+                            </div>
+                          )}
+                          {step.output && (
+                            <div className="mt-1">
+                              <div className="text-[9px] uppercase tracking-wider text-slate-400">输出</div>
+                              <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap text-[10.5px] leading-relaxed text-slate-500 dark:text-slate-400">{step.output}</pre>
+                            </div>
+                          )}
+                        </details>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

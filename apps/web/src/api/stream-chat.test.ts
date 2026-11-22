@@ -27,8 +27,10 @@ function run() {
   const onUsage = vi.fn();
   const onDone = vi.fn<(t: string) => void>();
   const onError = vi.fn<(m: string) => void>();
-  streamChat({ message: 'hi', onDelta, onReasoning, onSources, onUsage, onDone, onError });
-  return { onDelta, onReasoning, onSources, onUsage, onDone, onError };
+  const onToolCall = vi.fn();
+  const onToolResult = vi.fn();
+  streamChat({ message: 'hi', onDelta, onReasoning, onSources, onUsage, onToolCall, onToolResult, onDone, onError });
+  return { onDelta, onReasoning, onSources, onUsage, onToolCall, onToolResult, onDone, onError };
 }
 
 describe('streamChat SSE 解析', () => {
@@ -93,6 +95,35 @@ describe('streamChat SSE 解析', () => {
     expect(spies.onSources).toHaveBeenCalledWith([{ docName: '笔记', score: 0.9 }]);
     expect(spies.onReasoning).toHaveBeenCalledWith('想');
     expect(spies.onUsage).toHaveBeenCalledWith({ prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 });
+  });
+
+  it('工具调用与工具结果分开下发，并保留 id、耗时和截断字符数', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => sseResponse([
+      'data: {"tool_calls":[{"id":"call-1","function":{"name":"project.list","arguments":"{\\"projectId\\":\\"p1\\"}"}}]}\n\n',
+      'data: {"tool_result":{"id":"call-1","name":"project.list","status":"ok","duration_ms":42,"output":"2 个项目","output_chars":6}}\n\n',
+      'data: [DONE]\n\n',
+    ])));
+    const spies = run();
+    await vi.waitFor(() => expect(spies.onDone).toHaveBeenCalled());
+    expect(spies.onToolCall).toHaveBeenCalledWith({ id: 'call-1', name: 'project.list', arguments: '{"projectId":"p1"}' });
+    expect(spies.onToolResult).toHaveBeenCalledWith({
+      id: 'call-1',
+      name: 'project.list',
+      status: 'ok',
+      durationMs: 42,
+      output: '2 个项目',
+      outputChars: 6,
+    });
+  });
+
+  it('工具失败结果按 error 状态下发，供 UI 画红色状态', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => sseResponse([
+      'data: {"tool_result":{"id":"call-2","name":"document.update","status":"error","duration_ms":18,"error":"文档不存在"}}\n\n',
+      'data: [DONE]\n\n',
+    ])));
+    const spies = run();
+    await vi.waitFor(() => expect(spies.onDone).toHaveBeenCalled());
+    expect(spies.onToolResult).toHaveBeenCalledWith(expect.objectContaining({ status: 'error', error: '文档不存在' }));
   });
 
   it('HTTP 错误：把后端业务文案翻译后交给 onError', async () => {

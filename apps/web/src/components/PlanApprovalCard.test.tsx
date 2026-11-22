@@ -70,4 +70,25 @@ describe('PlanApprovalCard', () => {
     await waitFor(() => expect(plansMock).toHaveBeenCalled());
     expect(screen.queryByText(/研究计划待批准/)).not.toBeInTheDocument();
   });
+
+  it('渲染结构化计划（问题/假设/风险），而不是只给摘要', async () => {
+    plansMock.mockResolvedValue({
+      plans: [{
+        ...pendingPlan,
+        plan: {
+          question: '图神经网络在分布偏移下是否仍稳健？',
+          hypothesis: '加入邻域一致性约束可提升 OOD 准确率。',
+          risks: ['测试集泄漏', '样本量不足'],
+        },
+      }],
+    });
+    renderCard(false);
+
+    expect(await screen.findByText('研究计划待批准 · 1 项')).toBeInTheDocument();
+    await userEvent.click(screen.getByText(/查看计划详情/));
+    expect(screen.getByText('研究问题')).toBeInTheDocument();
+    expect(screen.getByText('图神经网络在分布偏移下是否仍稳健？')).toBeInTheDocument();
+    expect(screen.getByText('测试集泄漏')).toBeInTheDocument();
+    expect(screen.getByText('样本量不足')).toBeInTheDocument();
+  });
 });

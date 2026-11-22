@@ -69,6 +69,8 @@ export async function forwardOpenAiSse(res: Response, opts: SseStreamOptions): P
           if (typeof reasoning === 'string') chunk.reasoning = reasoning;
           // 工具调用透传（Agent 循环消费；前端可选展示）
           if (Array.isArray(choice.tool_calls)) chunk.tool_calls = choice.tool_calls;
+          // 工具结果透传（上游 transport 在工具完成后发 tool_result，同样带 id/状态/耗时）
+          if (json?.tool_result && typeof json.tool_result === 'object') chunk.tool_result = json.tool_result;
           if (Object.keys(chunk).length) res.write(`data: ${JSON.stringify(chunk)}\n\n`);
           // 收尾 usage 块
           const usage = json?.usage as Record<string, number> | undefined;

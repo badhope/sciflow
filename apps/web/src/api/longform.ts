@@ -65,7 +65,14 @@ export const longform = {
   writeNext: (id: string, body: { retryFailed?: boolean } = {}) =>
     request<LongformWriteResult>(`/api/longform/books/${id}/write-next`, { method: 'POST', body: JSON.stringify(body) }),
   write: (id: string, count: number) =>
-    request<{ stopped: boolean; written: { seq: number; title: string; chars: number }[]; stats: LongformBookDetail['stats']; allDone: boolean; error?: string }>(
+    request<{
+      stopped: boolean;
+      written: { seq: number; title: string; chars: number }[];
+      failures?: { seq: number; error: string }[];
+      stats: LongformBookDetail['stats'];
+      allDone: boolean;
+      error?: string;
+    }>(
       `/api/longform/books/${id}/write`,
       { method: 'POST', body: JSON.stringify({ count }) },
     ),
