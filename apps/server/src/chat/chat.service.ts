@@ -225,7 +225,7 @@ export class ChatService {
     }
   }
   /**
-   * 本地小模型（Ollama 1B/2B 等）自动收窄工具面：55 个工具 schema 约 9k tokens，
+   * 本地小模型（Ollama 1B/2B 等）自动收窄工具面：57 个工具 schema 约 9k tokens，
    * CPU 预填充就要数分钟。只对「本地地址 + 小模型名」生效；云端模型仍走 full。
    * 可用 AGENT_TOOLS_PROFILE 显式覆盖，保持既有“默认 full、不静默削减”的纪律。
    */

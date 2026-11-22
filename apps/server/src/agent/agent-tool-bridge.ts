@@ -39,6 +39,7 @@ const MAX_TOOL_CALLS = envInt('AGENT_MAX_TOOL_CALLS', 24, { min: 1, max: 100 });
 const TOOL_TIMEOUT_MS = envInt('AGENT_TOOL_TIMEOUT_MS', 20_000, { min: 1_000, max: 300_000 });
 /** 长任务工具单独放宽：质量评审/实验/浏览器打开/页面断言天然超过 20s。 */
 const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
+  'literature.discover': envInt('AGENT_TOOL_TIMEOUT_RESEARCH_MS', 120_000, { min: 10_000, max: 600_000 }),
   'research.novelty': envInt('AGENT_TOOL_TIMEOUT_RESEARCH_MS', 120_000, { min: 10_000, max: 600_000 }),
   'research.plan': envInt('AGENT_TOOL_TIMEOUT_RESEARCH_MS', 120_000, { min: 10_000, max: 600_000 }),
   'research.experiment': envInt('AGENT_TOOL_TIMEOUT_RESEARCH_MS', 120_000, { min: 10_000, max: 600_000 }),
@@ -63,6 +64,7 @@ const TOOL_MODE: 'full' | 'dynamic' = process.env.AGENT_TOOL_MODE === 'dynamic' 
 /** dynamic 模式下直接暴露的“高频只读/导航”工具；写操作一律走 tool_invoke，按需发现 schema。 */
 const DYNAMIC_CORE = new Set([
   'literature.search',
+  'literature.discover',
   'literature.summarize',
   'knowledge.query',
   'project.list',
@@ -74,6 +76,7 @@ const DYNAMIC_CORE = new Set([
   'experiment.get',
   'memory.search',
   'chat.answer',
+  'research.plan_audit',
 ]);
 
 type BridgeTool = ReturnType<McpService['list']>[number];
@@ -169,7 +172,7 @@ export class AgentToolBridge {
    */
   buildToolSet(projectId?: string, runId?: string, opts?: { profile?: string; user?: AuthPayload }): ToolSet {
     const allow = new Set(
-      (process.env.AGENT_TOOLS_ALLOW || 'literature.search,literature.summarize,knowledge.query,outline.generate,writing.polish,writing.translate,writing.review,research.novelty,research.plan,research.experiment,research.critic,research.expert,submission.match,submission.cover,submission.reply,submission.track,submission.readiness,submission.email,submission.track.create,references.extract,references.evidence,project.list,project.get,research.brief.get,research.brief.update,project.create,project.update,document.list,document.get,document.create,document.update,document.snapshot,document.revise_section,quality.audit,quality.overview,quality.history,experiment.run,experiment.list,experiment.get,browser.open,browser.text,browser.verify,browser.close,memory.search,memory.add,writing.draft,chat.answer,config.snapshot,config.set_permission,config.upsert_role,config.upsert_constraint,config.delete_constraint,config.upsert_hook,config.apply_preset,config.preview,extension.list,extension.create,extension.toggle,extension.generate,mcp.external.list,mcp.external.discover,mcp.external.call')
+      (process.env.AGENT_TOOLS_ALLOW || 'literature.search,literature.discover,literature.summarize,knowledge.query,outline.generate,writing.polish,writing.translate,writing.review,research.novelty,research.plan,research.plan_audit,research.experiment,research.critic,research.expert,submission.match,submission.cover,submission.reply,submission.track,submission.readiness,submission.email,submission.track.create,references.extract,references.evidence,project.list,project.get,research.brief.get,research.brief.update,project.create,project.update,document.list,document.get,document.create,document.update,document.snapshot,document.revise_section,quality.audit,quality.overview,quality.history,experiment.run,experiment.list,experiment.get,browser.open,browser.text,browser.verify,browser.close,memory.search,memory.add,writing.draft,chat.answer,config.snapshot,config.set_permission,config.upsert_role,config.upsert_constraint,config.delete_constraint,config.upsert_hook,config.apply_preset,config.preview,extension.list,extension.create,extension.toggle,extension.generate,mcp.external.list,mcp.external.discover,mcp.external.call')
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean),

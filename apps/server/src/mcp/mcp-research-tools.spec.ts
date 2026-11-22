@@ -19,6 +19,12 @@ describe('MCP research role tools', () => {
     expect(byName.get('research.novelty')!.inputSchema.required).toEqual(['projectId', 'topic']);
   });
 
+  it('exposes deterministic research plan audit', () => {
+    expect(byName.has('research.plan_audit')).toBe(true);
+    expect(byName.get('research.plan_audit')!.inputSchema.required).toEqual(['content']);
+    expect(byName.get('research.plan_audit')!.description).toContain('确定性');
+  });
+
   it('exposes key-free public literature discovery without writing the local library', () => {
     expect(byName.has('literature.discover')).toBe(true);
     expect(byName.get('literature.discover')!.inputSchema.required).toEqual(['query']);

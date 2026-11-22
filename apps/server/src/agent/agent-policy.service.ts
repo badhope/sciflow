@@ -24,6 +24,7 @@ export const AGENT_ACCESS_MODES: { value: AgentAccessMode; label: string; descri
 
 const READ_ONLY_TOOLS = new Set([
   'literature.search',
+  'literature.discover',
   'literature.summarize',
   'knowledge.query',
   'chat.answer',
@@ -34,6 +35,7 @@ const READ_ONLY_TOOLS = new Set([
   'writing.translate',
   'writing.review',
   'research.plan',
+  'research.plan_audit',
   'research.experiment',
   'research.critic',
   'research.expert',

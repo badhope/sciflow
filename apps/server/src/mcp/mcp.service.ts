@@ -19,6 +19,7 @@ import { BrowserService } from '../browser/browser.service';
 import { MemoryService } from '../memory/memory.service';
 import { SubmissionService } from '../research/submission.service';
 import { NoveltyService } from '../research/novelty.service';
+import { auditResearchPlan } from '../research/plan-audit';
 import { SubmissionReadinessService } from '../research/submission-readiness.service';
 import { SubmissionPackageService } from '../research/submission-package.service';
 import { ResearchBriefService } from '../research-brief/research-brief.service';
@@ -616,6 +617,23 @@ export class McpService {
             design,
             context: 'mcp:research.expert',
           });
+        },
+      },
+      {
+        name: 'research.plan_audit',
+        description: '研究计划一致性审计（确定性规则，不调用 LLM）：检查样本流、T1/T2 周期间隔、构念同源、量表具体性、查新证据、选刊具体性、文献时效。研究计划写完后必须调用；blockers>0 时不得标为可执行/可投稿。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            content: { type: 'string', description: '研究计划全文（Markdown）' },
+            title: { type: 'string', description: '计划标题（可选）' },
+          },
+          required: ['content'],
+        },
+        handler: async (args) => {
+          const missing = noProjectHint(args, ['content']);
+          if (missing) return { error: missing };
+          return auditResearchPlan(String(args.content), args.title ? String(args.title) : '');
         },
       },
       {
