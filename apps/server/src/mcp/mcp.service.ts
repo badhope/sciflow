@@ -24,6 +24,7 @@ import { SubmissionReadinessService } from '../research/submission-readiness.ser
 import { SubmissionPackageService } from '../research/submission-package.service';
 import { ResearchBriefService } from '../research-brief/research-brief.service';
 import { ScholarSearchService, summarizeScholarSources } from '../research/scholar-search.service';
+import { isOpenWorldTool, isReadOnlyTool } from '../agent/tool-safety';
 import type { AuthPayload } from '../auth/auth.service';
 
 /** MCP 工具定义（符合 Model Context Protocol 2026 的 Tool 结构：name/description/inputSchema） */
@@ -1292,9 +1293,9 @@ export class McpService {
     ];
   }
 
-  /** 工具清单（MCP tools/list 语义） */
+  /** 工具清单（MCP tools/list 语义）；readOnly 供 Agent harness 判定自动重试与外部客户端注解。 */
   list() {
-    return this.tools.map(({ handler: _h, ...t }) => t);
+    return this.tools.map(({ handler: _h, ...t }) => ({ ...t, readOnly: isReadOnlyTool(t.name) }));
   }
 
   // ---------- Guardrails：工具调用参数 schema 校验（OWASP MCP 安全基线——工具执行层授权，防畸形参数反复补工） ----------
@@ -1434,6 +1435,12 @@ export class McpService {
         name: t.name,
         description: t.description,
         inputSchema: t.inputSchema as { type: 'object'; properties?: Record<string, object> },
+        annotations: {
+          readOnlyHint: isReadOnlyTool(t.name),
+          destructiveHint: !isReadOnlyTool(t.name),
+          idempotentHint: isReadOnlyTool(t.name),
+          openWorldHint: isOpenWorldTool(t.name),
+        },
       })),
     }));
     server.setRequestHandler(CallToolRequestSchema, async (req) => {

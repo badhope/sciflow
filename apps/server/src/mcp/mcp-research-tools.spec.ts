@@ -7,6 +7,13 @@ describe('MCP research role tools', () => {
   const tools = svc.list();
   const byName = new Map(tools.map((t) => [t.name, t]));
 
+  it('marks read-only tools for safe retry and MCP annotations', () => {
+    expect(byName.get('project.list')!.readOnly).toBe(true);
+    expect(byName.get('document.get')!.readOnly).toBe(true);
+    expect(byName.get('document.update')!.readOnly).toBe(false);
+    expect(byName.get('experiment.run')!.readOnly).toBe(false);
+  });
+
   it('exposes research.critic / research.expert', () => {
     expect(byName.has('research.plan')).toBe(true);
     expect(byName.has('research.experiment')).toBe(true);

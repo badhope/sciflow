@@ -37,7 +37,7 @@ describe('技能开关 → 工具暴露面', () => {
   it('未配置技能时全部工具可用（含配置工具）', () => {
     const bridge = new AgentToolBridge(fakeMcp());
     const set = bridge.buildToolSet('p1');
-    expect(Object.keys(set).sort()).toEqual([...tools.map((t) => t.name.replace(/\./g, '_')), 'tool_search', 'tool_invoke'].sort());
+    expect(Object.keys(set).sort()).toEqual([...tools.map((t) => t.name.replace(/\./g, '_')), 'read_tool_output', 'tool_search', 'tool_invoke'].sort());
   });
 
   it('停用文献检索 → literature/references 工具消失，其余保留', () => {
@@ -63,12 +63,12 @@ describe('技能开关 → 工具暴露面', () => {
       { key: 'web_research', enabled: 0 },
     ]));
     const bridge = new AgentToolBridge(fakeMcp());
-    expect(Object.keys(bridge.buildToolSet('p1'))).toEqual(['config_snapshot', 'tool_search', 'tool_invoke']);
+    expect(Object.keys(bridge.buildToolSet('p1'))).toEqual(['config_snapshot', 'read_tool_output', 'tool_search', 'tool_invoke']);
   });
 
   it('畸形 skills JSON 回落全放行（不因脏数据误伤功能）', () => {
     setSkills('{oops');
     const bridge = new AgentToolBridge(fakeMcp());
-    expect(Object.keys(bridge.buildToolSet('p1')).length).toBe(tools.length + 2);
+    expect(Object.keys(bridge.buildToolSet('p1')).length).toBe(tools.length + 3);
   });
 });

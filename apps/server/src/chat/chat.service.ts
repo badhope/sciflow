@@ -325,16 +325,18 @@ export class ChatService {
       const toolSet = useTools ? this.tools.buildToolSet(projectId, runId, { user: opts.user, profile: this.toolProfile().id }) : undefined;
       const toolNames = toolSet ? Object.keys(toolSet) : [];
       this.logger.log(`[agent] useTools=${useTools} tools=${toolNames.length} profile=${this.toolProfile().id}${runId ? ` run=${runId.slice(0, 8)}` : ''}`);
+      let streamTokens = 0;
       const streamOpts: ChatStreamOptions = {
         modelName: opts.model,
         writing: isLongformWritingRequest(message, docContext),
         enableThinking: opts.enableThinking,
         signal: opts.signal,
-        // 计划预算记账：流式收尾的真实 usage 回写到当前项目生效的研究计划；
-        // 没有计划时 recordPlanTokens 静默跳过，不影响普通对话。
-        ...(projectId && useTools
-          ? { onUsage: (usage) => this.tools.recordPlanTokens(projectId, usage.totalTokens) }
-          : {}),
+        // usage 同时用于计划记账和 agent_execution 实际 token；此前 chat run 的
+        // total_tokens 永远是 0，驾驶舱只能看到耗时看不到成本。
+        onUsage: (usage) => {
+          streamTokens = Number(usage.totalTokens) || 0;
+          if (projectId && useTools) this.tools.recordPlanTokens(projectId, usage.totalTokens);
+        },
         // 配置中心工具可多次调用（一次对话里完成角色+约束+钩子等），步数上限提高到 12
         ...(toolSet && toolNames.length ? { tools: toolSet, maxSteps: 12 } : {}),
       };
@@ -343,14 +345,60 @@ export class ChatService {
       const stream = fullContext
         ? await this.ai.streamChatWithContext(message, effectiveHistory, fullContext, streamOpts, persona.systemPrompt)
         : await this.ai.streamChat(message, effectiveHistory, streamOpts, persona.systemPrompt);
-      if (runId) {
-        // 流已返回（SSE 转发在 controller 层完成）：这里只负责收尾执行记录，
-        // 失败/中断也标记 done，避免执行历史长期停在 running。
-        try {
-          this.trace.finishRun(runId, { status: 'done', outputSummary: `chat 工具会话（${toolNames.length} 个工具可用）` });
-        } catch { /* 轨迹收尾失败不影响对话 */ }
+      return { stream: this.trackRunStream(stream, runId, toolNames.length, () => streamTokens), sources };
+    });
+  }
+
+  /**
+   * 流式执行的收尾必须等流真正读完：此前在流刚返回时就 finishRun(done)，
+   * 用户会看到“已完成”但工具还在跑；异常/用户中止也会被写成成功。
+   */
+  private trackRunStream(
+    stream: ReadableStream<Uint8Array>,
+    runId: string | undefined,
+    toolCount: number,
+    tokens?: () => number,
+  ): ReadableStream<Uint8Array> {
+    if (!runId) return stream;
+    let finished = false;
+    const finish = (status: 'done' | 'error' | 'cancelled', error?: string) => {
+      if (finished) return;
+      finished = true;
+      try {
+        this.trace.finishRun(runId, {
+          status,
+          error,
+          totalTokens: tokens?.(),
+          outputSummary: `chat 工具会话（${toolCount} 个工具可用）`,
+        });
+      } catch {
+        /* 轨迹收尾失败不影响对话 */
       }
-      return { stream, sources };
+    };
+    const reader = stream.getReader();
+    return new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        try {
+          const { done, value } = await reader.read();
+          if (done) {
+            finish('done');
+            controller.close();
+            return;
+          }
+          controller.enqueue(value);
+        } catch (e: any) {
+          finish('error', e?.message || String(e));
+          controller.error(e);
+        }
+      },
+      async cancel(reason) {
+        finish('cancelled', '用户中止');
+        try {
+          await reader.cancel(reason);
+        } catch {
+          /* 上游可能已断开 */
+        }
+      },
     });
   }
 }

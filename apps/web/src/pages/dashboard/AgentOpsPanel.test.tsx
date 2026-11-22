@@ -113,6 +113,34 @@ describe('AgentOpsPanel', () => {
     expect(screen.getByText(/有效至/)).toBeInTheDocument();
   });
 
+  it('用户中止的执行显示“已中止”，不再伪装成完成', { timeout: 20000 }, async () => {
+    metricsMock.mockResolvedValue({
+      rangeDays: 7,
+      toolCalls: { total: 0, ok: 0, fail: 0, successRate: 0, avgMs: 0, p95Ms: 0 },
+      byTool: [],
+      byDay: [],
+      runs: { total: 0, done: 0, error: 0, running: 0, avgDurationMs: 0, totalTokens: 0 },
+    });
+    plansMock.mockResolvedValue({ plans: [] });
+    approvalsMock.mockResolvedValue({ approvals: [] });
+    tasksMock.mockResolvedValue({ tasks: [], summary: { total: 0, completed: 0, inProgress: 0, pending: 0, percent: 0 } });
+    executionsMock.mockResolvedValue({
+      executions: [{
+        id: 'run-cancelled', projectId: 'p-1', source: 'chat', input: '读长文档', outputSummary: 'chat 工具会话（58 个工具可用）',
+        durationMs: 70682, totalTokens: 0, status: 'cancelled', error: '用户中止', model: 'test-model', createdAt: 1,
+      }],
+    });
+    getRunMock.mockResolvedValue({
+      id: 'run-cancelled', projectId: 'p-1', source: 'chat', input: '读长文档', outputSummary: 'chat 工具会话（58 个工具可用）',
+      durationMs: 70682, totalTokens: 0, status: 'cancelled', error: '用户中止', model: 'test-model', createdAt: 1,
+      steps: [],
+    });
+
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: /chat/ }));
+    expect(await screen.findByText('已中止')).toBeInTheDocument();
+  });
+
   it('点开最近执行可查看步骤链、工具返回和失败原因', { timeout: 20000 }, async () => {
     metricsMock.mockResolvedValue({
       rangeDays: 7,

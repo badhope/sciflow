@@ -132,6 +132,7 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
     if (status === 'done') return { label: '完成', tone: 'green' as const };
     if (status === 'error') return { label: '异常', tone: 'red' as const };
     if (status === 'running') return { label: '运行中', tone: 'amber' as const };
+    if (status === 'cancelled') return { label: '已中止', tone: 'slate' as const };
     return { label: status || '未知', tone: 'slate' as const };
   };
   const stepKind = (kind: string) =>

@@ -120,6 +120,11 @@ Agent 不是「一个模型硬干所有事」，工具面、审批和预算都�
 | `AGENT_MAX_TOOL_CALLS` | 单轮最多工具调用次数 | 24 |
 | `AGENT_TOOL_TIMEOUT_MS` | 单次工具超时（毫秒） | 20000 |
 | `AGENT_PLAN_APPROVAL_WAIT_MS` | `request_research_plan` 等待用户批准的最长时间；批准后同一轮自动续跑 | 300000 |
+| `AGENT_TOOL_OUTPUT_MAX_CHARS` | 单个工具结果回传给模型的最大字符数，超出部分用 `read_tool_output` 回读 | 20000 |
+| `AGENT_TOOL_OUTPUT_TOTAL_CHARS` | 单轮所有工具结果的总字符预算 | 160000 |
+| `AGENT_TOOL_RETRIES` | 只读工具瞬时失败的重试次数；写工具永不自动重试 | 2 |
+| `AGENT_TOOL_CONCURRENCY` | 同一轮并行执行的工具上限 | 3 |
+| `SCIFLOW_TOOL_OUTPUT_DIR` | 截断工具输出的临时目录 | 系统临时目录 `/sciflow-tool-output` |
 
 **计划级授权**：模型可先提交研究计划（问题/假设/协议/风险/成本），工具会挂起等待用户在对话卡片或驾驶舱批准（默认最多 5 分钟）；批准后同一轮 Agent 自动续跑，计划内工具按预算自动放行。预算按项目累计 token，耗尽自动回落逐次审批。计划与审批记录在 `agent_plan` / `tool_approval`，删项目时级联清理。
 

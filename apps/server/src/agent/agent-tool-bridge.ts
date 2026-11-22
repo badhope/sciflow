@@ -15,6 +15,10 @@ import { envInt } from '../common/env';
 import { profileAllowsTool, resolveAgentToolProfile, type AgentToolProfile } from './agent-tool-profiles';
 import { AgentPolicyService } from './agent-policy.service';
 import { redactSensitive, shouldRedactForMode } from '../common/redaction';
+import { isReadOnlyTool, isRetryableToolError } from './tool-safety';
+import { readSpilledToolOutput, spillToolText, toolResultText } from './tool-output-store';
+import pLimit from 'p-limit';
+import pRetry, { AbortError } from 'p-retry';
 import type { AuthPayload } from '../auth/auth.service';
 
 /**
@@ -32,6 +36,7 @@ export interface AgentToolCallRecord {
   args: Record<string, unknown>;
   ok: boolean;
   durationMs: number;
+  output?: string;
   error?: string;
 }
 
@@ -60,6 +65,14 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
  *  这是 2026 生产事故榜第一名「失控循环」的重复检测护栏：次数上限拦不住
  *  「24 次以内反复调同一个工具刷同一批结果」的空转。 */
 const TOOL_REPEAT_LIMIT = envInt('AGENT_TOOL_REPEAT_LIMIT', 3, { min: 2, max: 20 });
+/** 单个工具结果进入模型上下文的硬上限；超出部分落到临时文件，由 read_tool_output 回读。 */
+const TOOL_OUTPUT_MAX_CHARS = envInt('AGENT_TOOL_OUTPUT_MAX_CHARS', 20_000, { min: 100, max: 100_000 });
+/** 一次请求所有工具结果的总预算，防止 20 多次工具把上下文堆爆。 */
+const TOOL_OUTPUT_TOTAL_CHARS = envInt('AGENT_TOOL_OUTPUT_TOTAL_CHARS', 160_000, { min: 10_000, max: 1_000_000 });
+/** 只读工具的瞬时失败重试次数；写工具恒为 0，避免重复副作用。 */
+const TOOL_RETRIES = envInt('AGENT_TOOL_RETRIES', 2, { min: 0, max: 4 });
+/** 同一轮内并行执行的工具上限；模型一步返回多个 tool_call 时防止打爆本地模型/外部 API。 */
+const TOOL_CONCURRENCY = envInt('AGENT_TOOL_CONCURRENCY', 3, { min: 1, max: 16 });
 
 /** 工具暴露模式：full=直接暴露全部允许工具；dynamic=只暴露核心工具 + tool_search/tool_invoke。 */
 const TOOL_MODE: 'full' | 'dynamic' = process.env.AGENT_TOOL_MODE === 'dynamic' ? 'dynamic' : 'full';
@@ -92,6 +105,8 @@ interface GuardCtx {
   skills: Set<string> | null;
   calls: { n: number };
   repeat: Map<string, number>;
+  limit: ReturnType<typeof pLimit>;
+  outputChars: number;
 }
 
 /** 参数稳定序列化：键排序后再哈希，避免模型改写参数键序导致重复检测失效 */
@@ -181,6 +196,19 @@ export class AgentToolBridge {
     );
     const profile = resolveAgentToolProfile(opts?.profile);
     const set: ToolSet = {};
+    // 原生 harness 工具不经过 runGuarded，单独留痕；否则驾驶舱只看到 MCP 工具，
+    // 模型读了 3 页 read_tool_output 也显示成只有 1 步 document.get。
+    const traceNative = (name: string, args: Record<string, unknown>, t0: number, result: unknown, ok = true, error?: string) => {
+      this.recordStep(runId, projectId, {
+        name,
+        args,
+        ok,
+        durationMs: Date.now() - t0,
+        output: ok ? toolResultText(result).slice(0, 2_000) : undefined,
+        error,
+      });
+      return result;
+    };
     const ctx: GuardCtx = {
       projectId,
       runId,
@@ -189,6 +217,8 @@ export class AgentToolBridge {
       skills: this.enabledSkillKeys(),
       calls: { n: 0 },
       repeat: new Map<string, number>(),
+      limit: pLimit(TOOL_CONCURRENCY),
+      outputChars: 0,
     };
     for (const t of this.mcp.list()) {
       if (!allow.has(t.name)) continue;
@@ -204,7 +234,8 @@ export class AgentToolBridge {
       set[safeName] = aiTool({
         description: t.description,
         inputSchema: jsonSchema(t.inputSchema as Parameters<typeof jsonSchema>[0]),
-        execute: async (args: Record<string, unknown>) => this.runGuarded(t, args, ctx),
+        execute: async (args: Record<string, unknown>, options?: { abortSignal?: AbortSignal }) =>
+          this.runGuarded(t, args, ctx, options?.abortSignal),
       });
     }
     // ── 原生 harness 工具：不依赖 MCP 注册表，直接由模型驱动 ──
@@ -249,6 +280,42 @@ export class AgentToolBridge {
         }),
       });
     }
+    // 大输出回读：模型拿到的是有界预览，完整内容按 outputId 分页读取。
+    set.read_tool_output = aiTool({
+      description:
+        '读取被截断的工具输出。工具结果出现 truncated/outputId/preview 时，用本工具按 offset 继续读；一次最多 20000 字，读完看 eof。不要猜测省略内容。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          outputId: { type: 'string', description: '工具结果中的 outputId' },
+          offset: { type: 'number', description: '起始字符偏移，默认 0' },
+          limit: { type: 'number', description: '本次读取字符数，默认 8000，最大 20000' },
+        },
+        required: ['outputId'],
+      }),
+      execute: async (args: { outputId?: string; offset?: number; limit?: number }) => {
+        const t0 = Date.now();
+        ctx.calls.n += 1;
+        if (ctx.calls.n > MAX_TOOL_CALLS) {
+          return traceNative('read_tool_output', args, t0, { error: `工具调用次数已达上限（${MAX_TOOL_CALLS} 次）` }, false, 'tool call limit');
+        }
+        if (!args?.outputId) return traceNative('read_tool_output', args, t0, { error: '缺少 outputId。' }, false, 'missing outputId');
+        // 回读也是工具输出，必须计入单轮总预算；否则模型可以绕开 160k 上限，
+        // 用 10 次 read_tool_output 把 200k 原文重新塞回上下文。
+        const remaining = TOOL_OUTPUT_TOTAL_CHARS - ctx.outputChars;
+        if (remaining < 500) {
+          const payload = {
+            error: `本轮工具输出预算只剩 ${Math.max(0, remaining)} 字，无法继续回读。请基于已读内容回答，或把任务拆小后再开一轮。`,
+            budgetRemaining: Math.max(0, remaining),
+          };
+          return traceNative('read_tool_output', args, t0, payload, false, 'output budget exhausted');
+        }
+        const limit = Math.min(Number(args.limit) || 8_000, 20_000, remaining);
+        const page = readSpilledToolOutput(String(args.outputId), Number(args.offset) || 0, limit);
+        ctx.outputChars += toolResultText(page).length;
+        return traceNative('read_tool_output', args, t0, page);
+      },
+    });
     // 审批：有副作用的工具先问用户，拒绝时给出可读原因让模型换路径。
     if (this.approvals) {
       set.request_approval = aiTool({
@@ -397,6 +464,7 @@ export class AgentToolBridge {
         },
       }),
       execute: async (args: { query?: string; limit?: number }) => {
+        const toolSearchStarted = Date.now();
         const q = String(args.query ?? '').trim().toLowerCase();
         const limit = Math.min(Math.max(Number(args.limit) || 8, 1), 20);
         const candidates = this.mcp.list().filter((t) => {
@@ -423,8 +491,10 @@ export class AgentToolBridge {
             description: t.description,
             inputSchema: t.inputSchema,
             requiresApproval: this.approvals?.needsApproval(t.name) ?? false,
+            readOnly: isReadOnlyTool(t.name),
+            retryable: isReadOnlyTool(t.name),
           }));
-        return {
+        return traceNative('tool_search', { query: q, limit }, toolSearchStarted, {
           mode: TOOL_MODE,
           query: q,
           count: tools.length,
@@ -433,7 +503,7 @@ export class AgentToolBridge {
             TOOL_MODE === 'dynamic'
               ? '用 tool_invoke({name, arguments}) 执行；写操作会走计划级/单次审批。'
               : '这些工具已直接暴露，可直接调用；tool_invoke 仅作兜底。',
-        };
+        });
       },
     });
     set.tool_invoke = aiTool({
@@ -465,10 +535,15 @@ export class AgentToolBridge {
    * 统一执行闸：直接暴露的工具与 tool_invoke 共用同一套护栏。
    * 顺序：调用上限 → 权限档 → profile → 技能开关 → 项目作用域 → 重复检测 → 计划/单次审批 → 执行。
    */
-  private async runGuarded(t: BridgeTool, args: Record<string, unknown>, ctx: GuardCtx): Promise<unknown> {
+  private async runGuarded(t: BridgeTool, args: Record<string, unknown>, ctx: GuardCtx, signal?: AbortSignal): Promise<unknown> {
     ctx.calls.n += 1;
     if (ctx.calls.n > MAX_TOOL_CALLS) {
       return { error: `工具调用次数已达上限（${MAX_TOOL_CALLS} 次），请直接基于已有信息回答` };
+    }
+    if (ctx.outputChars >= TOOL_OUTPUT_TOTAL_CHARS) {
+      return {
+        error: `本轮工具输出已超过 ${TOOL_OUTPUT_TOTAL_CHARS} 字预算，继续调用只会挤占上下文。请基于已有信息回答，或把任务拆小后再开一轮。`,
+      };
     }
     if (this.policy && !this.policy.canUse(t.name)) {
       return { error: this.policy.denyReason(t.name) };
@@ -510,7 +585,9 @@ export class AgentToolBridge {
         this.approvals.consume(approved.id);
       }
     }
-    return this.invoke(t.name, scoped, ctx.runId, ctx.user, ctx.projectId);
+    const result = await ctx.limit(() => this.invoke(t.name, scoped, ctx.runId, ctx.user, ctx.projectId, signal));
+    ctx.outputChars += toolResultText(result).length;
+    return result;
   }
 
   /** 模型可能传 "config.snapshot" 或安全名 "config_snapshot"；统一回规范名 */
@@ -529,40 +606,107 @@ export class AgentToolBridge {
     return projectId && 'projectId' in props ? { ...args, projectId } : args;
   }
 
-  /** 执行一次工具调用（带超时、轨迹落库） */
-  private async invoke(name: string, args: Record<string, unknown>, runId?: string, user?: AuthPayload, projectId?: string): Promise<unknown> {
+  /** 执行一次工具调用（超时/取消、只读瞬时重试、大输出截断、轨迹落库） */
+  private async invoke(
+    name: string,
+    args: Record<string, unknown>,
+    runId?: string,
+    user?: AuthPayload,
+    projectId?: string,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
     const t0 = Date.now();
     let ok = true;
     let error: string | undefined;
     let result: unknown;
+    let attempts = 0;
     try {
-      // AbortSignal.timeout 自带清理，不会像 setTimeout 那样留下悬挂定时器
       const timeoutMs = TOOL_TIMEOUT_OVERRIDES[name] ?? TOOL_TIMEOUT_MS;
-      result = await Promise.race([
-        this.mcp.call(name, args, user),
-        new Promise((_, reject) => {
-          const timer = setTimeout(() => reject(new Error(`工具超时（${timeoutMs}ms）`)), timeoutMs);
-          timer.unref?.();
-        }),
-      ]);
+      const callOnce = async (): Promise<unknown> => {
+        attempts += 1;
+        if (signal?.aborted) throw new AbortError('工具调用已取消');
+        // 每次尝试独立计时；AbortSignal.timeout 自带清理，不留悬挂定时器。
+        const timeoutSignal = AbortSignal.timeout(timeoutMs);
+        const combined = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+        const aborted = new Promise<never>((_, reject) => {
+          combined.addEventListener(
+            'abort',
+            () => {
+              const reason = combined.reason;
+              reject(reason instanceof Error ? reason : new Error(`工具超时（${timeoutMs}ms）`));
+            },
+            { once: true },
+          );
+        });
+        const value = await Promise.race([this.mcp.call(name, args, user), aborted]);
+        const r = value as { isError?: boolean; content?: { text?: string }[] };
+        if (r?.isError) {
+          const msg = r.content?.[0]?.text || '工具返回错误';
+          // 只有只读工具才把瞬时错误转成可重试异常；写工具保留原始错误结果，绝不重放副作用。
+          if (isReadOnlyTool(name) && TOOL_RETRIES > 0 && isRetryableToolError(msg)) {
+            const retryable = new Error(msg) as Error & { toolResult?: unknown };
+            retryable.toolResult = value;
+            throw retryable;
+          }
+        }
+        return value;
+      };
+
+      const retries = isReadOnlyTool(name) ? TOOL_RETRIES : 0;
+      if (retries > 0) {
+        try {
+          result = await pRetry(callOnce, {
+            retries,
+            factor: 2,
+            minTimeout: 300,
+            maxTimeout: 2_000,
+            randomize: true,
+            signal,
+            // 只重试明确的瞬时错误；404/权限/参数错误立即返回，不浪费用户等待时间。
+            shouldRetry: ({ error }) => error.name !== 'AbortError' && isRetryableToolError(error.message),
+            onFailedAttempt: (e) =>
+              this.logger.warn(`[tool] ${name} 第 ${e.attemptNumber} 次失败，准备重试：${e.error.message}`),
+          });
+        } catch (e: any) {
+          // 重试耗尽时保留最后一次 MCP 错误结果，让模型看到真实错误而不是“retry failed”。
+          if (e && typeof e === 'object' && 'toolResult' in e) result = (e as { toolResult: unknown }).toolResult;
+          else throw e;
+        }
+      } else {
+        result = await callOnce();
+      }
+
       // strict 档：返回值整体脱敏（含密钥/路径字段连回答都不给）
       if (this.policy && shouldRedactForMode(this.policy.mode())) {
         if (result && typeof result === 'object') result = redactSensitive(result);
         else if (typeof result === 'string') result = redactSensitive(result);
       }
-      const r = result as { isError?: boolean; content?: { text?: string }[] };
+      const r = result as { isError?: boolean; name?: string; content?: { text?: string }[] };
       if (r?.isError) {
         ok = false;
         error = r.content?.[0]?.text?.slice(0, 200) || '工具返回错误';
       }
+      // 截断放在脱敏之后，避免把密钥原文写进临时文件。
+      const fullText = toolResultText(result);
+      if (fullText.length > TOOL_OUTPUT_MAX_CHARS) {
+        const spilled = spillToolText(fullText, TOOL_OUTPUT_MAX_CHARS);
+        if (spilled) result = { name: r?.name || name, ...spilled };
+      }
     } catch (e: any) {
       ok = false;
-      error = e?.message || String(e);
+      error = signal?.aborted ? '工具调用已取消' : e?.message || String(e);
       result = { error };
     }
     const durationMs = Date.now() - t0;
-    this.recordStep(runId, projectId, { name, args, ok, durationMs, error });
-    this.logger.log(`[tool] ${name} ${ok ? 'ok' : 'fail'} ${durationMs}ms`);
+    this.recordStep(runId, projectId, {
+      name,
+      args,
+      ok,
+      durationMs,
+      output: ok ? toolResultText(result).slice(0, 2_000) : undefined,
+      error,
+    });
+    this.logger.log(`[tool] ${name} ${ok ? 'ok' : 'fail'} ${durationMs}ms attempts=${attempts}`);
     return result;
   }
 
@@ -580,7 +724,7 @@ export class AgentToolBridge {
           kind: 'tool',
           title: `tool:${rec.name}`,
           input: JSON.stringify(rec.args).slice(0, 4000),
-          output: typeof rec.error === 'string' ? rec.error : '',
+          output: rec.output || (typeof rec.error === 'string' ? rec.error : ''),
           durationMs: rec.durationMs,
           toolName: rec.name,
           status: rec.ok ? 'ok' : 'error',

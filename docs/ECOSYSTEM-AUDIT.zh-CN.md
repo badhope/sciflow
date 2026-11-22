@@ -142,3 +142,42 @@ Onyx、Khoj、SurfSense、AutoGen。吸收原则：**只吸收与本仓定位（
 - `packages/ai/src/ai-transport.service.ts`：`AI_MODEL_FALLBACK` 降级链（非流式）
 - `.github/workflows/desktop-installer.yml`：Windows 安装包 CI
 - 本文档
+## 2026-11-22 Agent harness 二轮补课
+
+本轮把工具循环按 OpenCode 当前的 harness 行为重新过了一遍，重点看大输出、
+重试、取消、并发、轨迹和 MCP 注解；同时复查“能复用却手写”的位置。范围只收
+工具层，不新开产品页面。
+
+本轮闭环：
+
+| 缺口 | 改动 |
+|---|---|
+| 超大工具结果原样进入模型上下文 | 单结果默认 20,000 字上限，保留头 70% + 尾 30%；完整内容写入权限 0600 的临时文件，模型用 `read_tool_output` 分页回读 |
+| 单轮没有总输出预算 | 新增 `AGENT_TOOL_OUTPUT_TOTAL_CHARS`（默认 160,000）；耗尽后返回可读停止原因 |
+| 瞬时失败直接失败 | 只读工具用 `p-retry` 指数退避重试；写工具永不自动重试，避免重复副作用 |
+| 工具执行忽略模型取消信号 | AI SDK 的 `ToolExecutionOptions.abortSignal` 透传到桥层；超时改用 `AbortSignal.timeout` + `AbortSignal.any` |
+| 并行工具无上限 | `p-limit` + `AGENT_TOOL_CONCURRENCY`（默认 3） |
+| 成功的工具输出不进轨迹 | `agent_step.output` 现在保存 2,000 字成功预览；MCP 工具与 `read_tool_output`、`tool_search` 都落轨迹 |
+| MCP 客户端无法区分只读/破坏性工具 | `tools/list` 补 `readOnlyHint`、`destructiveHint`、`idempotentHint`、`openWorldHint` |
+| SSE 已发 `[DONE]` 但 forwarder 提前 cancel | 继续读到上游 EOF 才收尾；异常标 error，用户中止标 cancelled，驾驶舱显示“已中止” |
+
+复用判断：
+
+- 并发与重试直接用 `p-limit` / `p-retry`，没有自己写信号量或退避器。
+- 参数校验仍走 `zod.fromJSONSchema`，没有第二套 schema 转换器。
+- 超时和取消用平台 `AbortSignal`，没有自建定时器注册表。
+- 容错 JSON 仍只保留 `jsonrepair` 一个入口。
+- chat run 的真实 usage 回写 `agent_execution.total_tokens`，不再固定为 0。
+
+仍然欠着，按优先级：
+
+1. `packages/db/src/database.ts` 还是命令式 `ensureColumn` 迁移。带校验和、可回滚的迁移账本是当前最大的运维债。
+2. 启用技能的正文仍一次性注入（上限 8,000 字）。改成 `skill` 工具按需加载，才和 OpenCode 的渐进披露对齐，也能缩短基础提示词。
+3. 没有 `task` 子智能体、会话级 undo/checkpoint、后台会话执行器。这三项是与 OpenCode 的真实差距，但没有产品口径前硬加，会让 UI 解释成本大于收益。
+4. MCP prompts 尚未暴露；tools 和 resources 已暴露。
+5. Vite 仍有大 chunk 警告（`WritingEditor`、`elk`）。
+
+不算债的部分：
+
+- 二维 PCA 投影只有约 60 行，引入 UMAP/t-SNE 会让桌面包体明显变大。
+- Passage 合并是科研检索的领域逻辑，不是通用库能直接替的轮子。

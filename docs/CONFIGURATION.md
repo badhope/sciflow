@@ -51,6 +51,11 @@ benefit from a stronger model, while translation and formatting do not.
 | `AGENT_MAX_TOOL_CALLS` | Tool calls per turn | 24 |
 | `AGENT_TOOL_TIMEOUT_MS` | Per-tool timeout | 20000 |
 | `AGENT_PLAN_APPROVAL_WAIT_MS` | How long `request_research_plan` waits for approval before ending the turn | 300000 |
+| `AGENT_TOOL_OUTPUT_MAX_CHARS` | Maximum characters from one tool result sent back to the model; the rest is retrievable with `read_tool_output` | 20000 |
+| `AGENT_TOOL_OUTPUT_TOTAL_CHARS` | Total tool-output budget per turn | 160000 |
+| `AGENT_TOOL_RETRIES` | Retry budget for transient failures of read-only tools; write tools never retry | 2 |
+| `AGENT_TOOL_CONCURRENCY` | Maximum tool executions running at once | 3 |
+| `SCIFLOW_TOOL_OUTPUT_DIR` | Temporary directory for truncated tool output | OS temp `/sciflow-tool-output` |
 | `AI_TOOLS_NONSTREAM_HOSTS` | Hosts that need non-streaming tool calls | `hcnsec.cn` |
 
 External MCP tools are visible only in the `full` profile. If you replace

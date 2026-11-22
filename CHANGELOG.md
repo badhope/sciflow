@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Agent 工具大输出可回读**：单结果超过 `AGENT_TOOL_OUTPUT_MAX_CHARS`（默认 20,000 字）时只把有界预览交给模型，完整内容落到权限 0600 的临时文件；新增 `read_tool_output` 分页读取，不再靠模型猜省略内容。
+- **工具层可靠性护栏**：只读工具的瞬时失败自动重试，写工具永不重试；支持 AI SDK 取消信号、并发上限和单轮总输出预算。
+- **MCP 工具安全注解**：`tools/list` 返回 `readOnlyHint`、`destructiveHint`、`idempotentHint`、`openWorldHint`，外部 MCP 客户端能区分只读与破坏性操作。
+
+### Changed
+
+- **Agent 轨迹保留成功输出**：`agent_step.output` 记录工具成功结果预览，排查时不再只能看到错误；`read_tool_output`、`tool_search` 等原生工具也写入轨迹。
+- **流式执行收尾对齐真实状态**：等 SSE 流真正 EOF、异常或用户中止才结束 Agent 执行，并把真实 usage 写进本轮 `total_tokens`；驾驶舱新增“已中止”，不再提前标“完成”。
+
 ## [1.19.15] - 2026-11-22
 
 ### Added

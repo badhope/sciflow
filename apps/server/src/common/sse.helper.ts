@@ -92,6 +92,13 @@ export async function forwardOpenAiSse(res: Response, opts: SseStreamOptions): P
       }
       if (naturalEnd) break;
     }
+    // [DONE] 只是协议标记，不代表上游 ReadableStream 已经关闭。
+    // 继续读到 EOF，trackRunStream 才能把 run 标成 done；否则 finally 里的
+    // reader.cancel() 会把一次正常完成误判成 cancelled。
+    while (true) {
+      const { done } = await reader.read();
+      if (done) break;
+    }
     res.write('data: [DONE]\n\n');
     onComplete?.(fullText, totalTokens);
     return { fullText };

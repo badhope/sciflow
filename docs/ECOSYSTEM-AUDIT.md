@@ -47,3 +47,54 @@ were closed. It is not a current feature list; use
 
 The full Chinese audit, with the source list and per-project notes, is in
 [ECOSYSTEM-AUDIT.zh-CN.md](ECOSYSTEM-AUDIT.zh-CN.md).
+
+## 2026-11-22 harness follow-up
+
+A second pass compared the tool loop with OpenCode's current harness behavior
+(tool-output truncation, permissions, subagents, undo, LSP and multi-session)
+and audited the repo for places where a mature dependency could replace local
+code. The pass deliberately kept the scope on the tool loop, not on adding new
+product surfaces.
+
+Closed in this pass:
+
+| Gap | Change |
+|---|---|
+| Oversized tool results entered the model context intact | Per-result cap (default 20,000 chars), head+tail preview, spill to a mode-0600 temp file, and a `read_tool_output` tool for paged read-back |
+| No turn-level output budget | `AGENT_TOOL_OUTPUT_TOTAL_CHARS` (default 160,000); once exhausted, further calls return a readable stop reason |
+| Transient tool failures were final | `p-retry` with exponential backoff for read-only tools only; write tools never retry |
+| Tool calls ignored the model's abort signal | `ToolExecutionOptions.abortSignal` now flows through the bridge; timeouts use `AbortSignal.timeout` and `AbortSignal.any` |
+| Unbounded parallel tool calls | `p-limit` with `AGENT_TOOL_CONCURRENCY` (default 3) |
+| Successful tool output was absent from traces | `agent_step.output` now stores a 2,000-char success preview for MCP and native `read_tool_output` / `tool_search` calls |
+| MCP clients could not tell read-only from destructive tools | `tools/list` now sends `readOnlyHint`, `destructiveHint`, `idempotentHint` and `openWorldHint` |
+| SSE sent `[DONE]` but the forwarder cancelled early | The forwarder drains to upstream EOF before finalizing; runs end `done`, `error`, or `cancelled`, and the dashboard labels cancelled runs |
+
+Reuse decisions:
+
+- `p-limit` and `p-retry` are direct dependencies, not reimplemented primitives.
+- JSON Schema validation still uses `zod.fromJSONSchema`; no second schema converter.
+- Timeouts and cancellation use platform `AbortSignal`, not a custom timer registry.
+- `jsonrepair` remains the single tolerant JSON parser.
+- Chat run usage is written back to `agent_execution.total_tokens` instead of staying zero.
+
+Still open, in priority order:
+
+1. `packages/db/src/database.ts` still uses imperative `ensureColumn` migrations.
+   A migration ledger with checksums and a downgrade story is the largest
+   remaining operational debt.
+2. Enabled skill instructions are injected eagerly (up to 8,000 chars). A
+   `skill` tool that loads the body on demand would match OpenCode's progressive
+   disclosure and cut the base prompt.
+3. No `task`/subagent tool, no conversation-level undo/checkpoint, and no
+   background session runner. These are real gaps against OpenCode, but adding
+   them without a product decision would expand the harness faster than the
+   current UI can explain.
+4. MCP prompts are not exposed; tools and resources are.
+5. Vite still reports oversized chunks (`WritingEditor`, `elk`).
+
+Not treated as debt:
+
+- The 2-D PCA projection is about 60 lines and avoids a UMAP/t-SNE dependency
+  that would dominate the desktop bundle.
+- Passage merging is domain-specific retrieval logic, not a generic library
+  primitive.

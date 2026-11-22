@@ -43,6 +43,24 @@ describe('forwardOpenAiSse', () => {
     expect(joined).toContain('2 个项目');
   });
 
+  it('自然结束会继续读到 EOF，避免把正常完成误判为取消', async () => {
+    const encoder = new TextEncoder();
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        // 真实上游在 [DONE] 后还有一个微任务才 close；helper 不能在这里就 cancel。
+        setTimeout(() => controller.close(), 0);
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const { res } = fakeResponse();
+    await forwardOpenAiSse(res, { stream, forwardReasoning: false });
+    expect(cancelled).toBe(false);
+  });
+
   it('工具失败结果同样透传，不被 choices 解析丢掉', async () => {
     const { res, chunks } = fakeResponse();
     await forwardOpenAiSse(res, {
