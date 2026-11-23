@@ -109,8 +109,9 @@ export class NotificationService {
         });
         // 飞书 Webhook 失败也常返回 HTTP 200，错误在 JSON 的 code/StatusCode 里。
         const raw = await res.text().catch(() => '');
-        let body: { code?: number; StatusCode?: number; msg?: string } | null = null;
-        try { body = raw ? JSON.parse(raw) as typeof body : null; } catch { body = null; }
+        type FeishuWebhookResult = { code?: number; StatusCode?: number; msg?: string };
+        let body: FeishuWebhookResult | null = null;
+        try { body = raw ? JSON.parse(raw) as FeishuWebhookResult : null; } catch { body = null; }
         if (!res.ok) throw new Error(`HTTP ${res.status}${raw ? `: ${raw.slice(0, 120)}` : ''}`);
         const code = Number(body?.code ?? body?.StatusCode ?? 0);
         if (code !== 0) throw new Error(`飞书返回 code=${code}${body?.msg ? `: ${body.msg}` : ''}`);
