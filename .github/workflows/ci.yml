@@ -31,6 +31,8 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Install media tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Lint
         run: pnpm lint
       - name: Typecheck (server)
@@ -70,6 +72,8 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Install media tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -128,6 +132,8 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Install media tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Build server
         run: pnpm --filter @sciflow/server build
       - name: Install Playwright Chromium
