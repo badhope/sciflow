@@ -137,7 +137,7 @@ describe('桌面端 apiBase：令牌与 Content-Type', () => {
   it('metricsText 遇到非 2xx 必须报错，而不是把错误响应体当成指标文本渲染', async () => {
     const { api } = await import('./client');
     server.use(http.get(`${API}/api/metrics`, () => new HttpResponse('service unavailable', { status: 503 })));
-    await expect(api.config.metricsText()).rejects.toThrow(/服务暂时不可用|请求失败/);
+    await expect(api.config.metricsText()).rejects.toMatchObject({ message: expect.stringMatching(/服务暂时不可用|请求失败/) });
   });
 });
 

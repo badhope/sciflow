@@ -42,12 +42,12 @@ describe('useDocumentActions', () => {
 
   it('rejects without a document and surfaces the API error in state', async () => {
     const noDoc = renderHook(() => useDocumentActions(null));
-    await expect(noDoc.result.current.abstract()).rejects.toThrow('请先选择一篇文档');
+    await expect(noDoc.result.current.abstract()).rejects.toMatchObject({ message: expect.stringContaining('请先选择一篇文档') });
 
     mocked.polish.mockRejectedValue(new Error('润色失败'));
     const { result } = renderHook(() => useDocumentActions('doc-2'));
     await act(async () => {
-      await expect(result.current.polish('正文')).rejects.toThrow('润色失败');
+      await expect(result.current.polish('正文')).rejects.toMatchObject({ message: expect.stringContaining('润色失败') });
     });
     expect(result.current.error).toBe('润色失败');
   });

@@ -7,8 +7,9 @@ import {
   BookOpen, Brain, Beaker, LayoutDashboard, Plus, Pencil, RefreshCw, Search, Send, Settings, Trash2, ChevronRight, Command, Sun, Moon, Monitor, XCircle as XCircleIcon, Library, LayoutGrid, Menu as MenuIcon, Target, Smartphone,
 } from 'lucide-react';
 import { api } from './api/client';
-import { isNetworkError } from './api/core';
-import type { KnowledgeSearchHit, Project, Reference } from './types';
+import { ApiError, isNetworkError } from './api/core';
+import type { Project } from './types';
+import type { SearchHit, SearchType } from './api/search';
 import { errMsg } from './components/ui';
 import { applyTheme, readStoredStyle, readStoredTheme, resolveTheme, systemPrefersDark, THEME_OPTIONS, type ThemeMode, type ThemeStyle } from './lib/theme';
 import { AuthGate } from './components/AuthGate';
@@ -422,11 +423,16 @@ function AppInner() {
   const writingDocTitle = writingDocQuery.data ?? '';
 
 
-  // 启动数据（React Query）：项目列表带冷启动重试（4 次 / 2s），健康自检失败静默
+  // 启动数据（React Query）：项目列表带冷启动重试，健康自检失败静默。
+  // 离线重载时浏览器可能仍报 navigator.onLine=true，且 fetch 会无限挂起；这里加 5s 上限，
+  // 让 PWA 离线壳能显示「重新连接」，而不是永远停在启动 Spinner。
   const projectsQuery = useQuery({
     queryKey: ['projects'],
-    queryFn: () => api.projects.list(),
-    retry: 3,
+    queryFn: () => Promise.race([
+      api.projects.list(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new ApiError('无法连接服务器，请确认服务已启动', 0, true)), 5000)),
+    ]),
+    retry: (failureCount, error) => (isNetworkError(error) ? failureCount < 1 : failureCount < 3),
     retryDelay: 2000,
   });
   const healthQuery = useQuery({ queryKey: ['health'], queryFn: () => api.health(), retry: 0, staleTime: 60_000 });
@@ -518,6 +524,20 @@ function AppInner() {
   // 评审完成度：文档状态进入 reviewing/polished/final 即视为已评审（lowQualityDocs 只含 <60 分，不能当完成信号）
   const stageReviewedCount = stageDocs.filter((d) => ['reviewing', 'polished', 'final'].includes(d.status)).length;
   const stageSubmissionCount = stageSubsQuery.data?.length ?? 0;
+
+  // PWA 离线壳：Service Worker 已缓存页面，但 API 不可达。不要用无限 Spinner 假装在启动。
+  // 注意：部分浏览器离线重载后 navigator.onLine 仍为 true，所以以「项目查询网络失败」为准。
+  if (projectsQuery.isError && isNetworkError(projectsQuery.error) && projects.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-3 px-6 text-center">
+        <div className="text-lg font-semibold text-slate-700 dark:text-slate-200">当前离线，或连不上后端</div>
+        <div className="max-w-md text-sm text-slate-500 dark:text-slate-400">
+          SciFlow 的应用壳已由 Service Worker 缓存，离线也能打开；科研数据与 AI 能力需要连回后端。
+        </div>
+        <Button variant="outline" onClick={() => { void projectsQuery.refetch(); }}><RefreshCw size={14} /> 重新连接</Button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -683,7 +703,7 @@ function AppInner() {
         <RemoteControlModal open={showRemote} onClose={() => setShowRemote(false)} />
 
         {/* ============ Cmd+K 命令面板（大厂标配：搜索式快速跳转） ============ */}
-        {commandOpen && <CommandPalette projectId={currentProjectId} onClose={() => setCommandOpen(false)} onNavigate={(v) => setView(v)} onNewProject={() => { setCommandOpen(false); setShowNewProject(true); }} />}
+        {commandOpen && <CommandPalette projectId={currentProjectId} onClose={() => setCommandOpen(false)} onNavigate={(v) => setView(v)} onOpenRoute={(route) => { navigate(route); setCommandOpen(false); }} onNewProject={() => { setCommandOpen(false); setShowNewProject(true); }} />}
 
         {/* 全局 Toast 反馈 */}
         <ToastViewport items={toasts} onDone={(id) => setToasts((s) => s.filter((t) => t.id !== id))} />
@@ -926,7 +946,7 @@ function SidebarContent({
 }
 
 /** Cmd+K 命令面板：搜索导航项 + 快捷动作 + 内容搜索（文献/知识库） */
-function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onClose: () => void; onNavigate: (v: View) => void; onNewProject: () => void; projectId: string | null }) {
+function CommandPalette({ onClose, onNavigate, onOpenRoute, onNewProject, projectId }: { onClose: () => void; onNavigate: (v: View) => void; onOpenRoute: (route: string) => void; onNewProject: () => void; projectId: string | null }) {
   const [q, setQ] = useState('');
   const { setMode, setStyle } = useContext(ThemeContext);
   // F-3.1：命令清单单一来源 lib/commands.ts（label+keywords+hotkey 声明、run 注入），过滤走 filterCommands 双通道
@@ -938,12 +958,8 @@ function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onCl
   const filtered = useMemo(() => filterCommands(commands, q), [commands, q]);
   const [active, setActive] = useState(0);
 
-  /* ---- 差距#18：内容搜索（文献 references.search + 知识库 knowledge.search） ---- */
-  // 文献走 references.search（服务端检索）；知识库走 knowledge.search（服务端 BM25+向量，
-  // 按 docId 聚合去重展示）。两者并行，250ms 防抖。
-  const [docHits, setDocHits] = useState<Reference[]>([]);
-  // 知识库命中文块按文档聚合（hits=聚合命中数）
-  const [kbHits, setKbHits] = useState<(KnowledgeSearchHit & { hits: number })[]>([]);
+  /* A4：统一搜索走 SearchModule，一次拿到文档/会话/项目/实验/文献/知识库六类结果。 */
+  const [contentHits, setContentHits] = useState<SearchHit[]>([]);
   const [searching, setSearching] = useState(false);
   const qTrim = q.trim();
   const searchActive = !!projectId && qTrim.length >= 2;
@@ -953,46 +969,29 @@ function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onCl
     const timer = setTimeout(async () => {
       if (cancelled) return;
       setSearching(true);
-      const [refRes, kbRes] = await Promise.allSettled([
-        api.references.search(qTrim, 6, projectId),
-        api.knowledge.search(projectId, qTrim),
-      ]);
-      if (cancelled) return;
-      const refs = refRes.status === 'fulfilled' ? refRes.value : [];
-      // 命中文块按文档聚合：每文档取最高分块，展示「文档名 + N 处命中」
-      const hits = kbRes.status === 'fulfilled' ? kbRes.value : [];
-      const byDoc = new Map<string, KnowledgeSearchHit & { hits: number }>();
-      for (const h of hits) {
-        const key = h.docId;
-        const prev = byDoc.get(key);
-        if (prev) {
-          prev.hits += 1;
-          if (h.score > prev.score) {
-            byDoc.set(key, { ...h, hits: prev.hits });
-          }
-        } else {
-          byDoc.set(key, { ...h, hits: 1 });
-        }
+      try {
+        const hits = await api.search.query(projectId, qTrim);
+        if (!cancelled) setContentHits(hits);
+      } catch {
+        if (!cancelled) setContentHits([]);
+      } finally {
+        if (!cancelled) setSearching(false);
       }
-      const kb = [...byDoc.values()].sort((a, b) => b.score - a.score).slice(0, 6);
-      setDocHits(refs);
-      setKbHits(kb);
-      setSearching(false);
     }, 250);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
   }, [qTrim, searchActive, projectId]);
-  // 短查询/无项目时展示层派生为空（不在 effect 里强清 state）
-  const shownDocHits = searchActive ? docHits : [];
-  const shownKbHits = searchActive ? kbHits : [];
+  const shownHits = useMemo(() => (searchActive ? contentHits : []), [searchActive, contentHits]);
   const shownSearching = searchActive && searching;
-
-  const goTo = (v: View) => {
-    onNavigate(v);
-    onClose();
-  };
+  const hitGroups = useMemo(() => {
+    const order: SearchType[] = ['document', 'chat', 'project', 'experiment', 'reference', 'knowledge'];
+    const labels: Record<SearchType, string> = { document: '文档', chat: '会话', project: '项目', experiment: '实验', reference: '文献', knowledge: '知识库' };
+    return order
+      .map((type) => ({ type, label: labels[type], hits: shownHits.filter((h) => h.type === type) }))
+      .filter((g) => g.hits.length > 0);
+  }, [shownHits]);
 
   // 键盘导航：↑↓ 移动选中，Enter 执行（与底部提示一致）
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -1017,7 +1016,7 @@ function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onCl
           <input
             autoFocus
             className="flex-1 bg-transparent outline-none text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
-            placeholder="输入命令或页面名称…（Esc 关闭）"
+            placeholder="搜索页面、文档、会话、实验、文献…（Esc 关闭）"
             value={q}
             onChange={(e) => { setQ(e.target.value); setActive(0); }}
             onKeyDown={onKeyDown}
@@ -1025,7 +1024,7 @@ function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onCl
           <kbd className="text-[11px] text-slate-400 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5">Esc</kbd>
         </div>
         <div className="max-h-[min(60vh,420px)] overflow-y-auto py-2">
-          {filtered.length === 0 && shownDocHits.length === 0 && shownKbHits.length === 0 && !shownSearching && (
+          {filtered.length === 0 && shownHits.length === 0 && !shownSearching && (
             <div className="px-4 py-6 text-center text-sm text-slate-400">没有匹配的命令或内容</div>
           )}
           {filtered.map((c, i) => (
@@ -1040,41 +1039,28 @@ function CommandPalette({ onClose, onNavigate, onNewProject, projectId }: { onCl
             </button>
           ))}
 
-          {/* 差距#18：内容搜索结果（文献 / 知识库文档） */}
+          {/* A4：统一搜索六类结果，各自跳现有路由 */}
           {searching && <div className="px-4 py-2 text-[11px] text-slate-400">搜索内容…</div>}
-          {!shownSearching && searchActive && (shownDocHits.length > 0 || shownKbHits.length > 0) && (
-            <>
-              <div className="mt-1 pt-1 border-t border-slate-100 dark:border-slate-800 px-4 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                内容
+          {!shownSearching && hitGroups.map((g) => (
+            <div key={g.type}>
+              <div className="mt-1 pt-1 border-t border-slate-100 dark:border-slate-800 px-4 py-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                {g.label}
               </div>
-              {shownDocHits.map((r) => (
+              {g.hits.slice(0, 6).map((h) => (
                 <button
-                  key={`ref-${r.id}`}
-                  onClick={() => goTo('literature')}
+                  key={`${h.type}-${h.id}`}
+                  onClick={() => onOpenRoute(h.route)}
                   className="w-full flex items-center justify-between gap-2 px-4 py-1.5 text-left text-[13px] hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors"
                 >
                   <span className="min-w-0">
-                    <span className="text-slate-700 dark:text-slate-200 truncate block">{r.title}</span>
-                    <span className="text-[11px] text-slate-400">{[r.venue, r.year].filter(Boolean).join(' · ')}</span>
+                    <span className="text-slate-700 dark:text-slate-200 truncate block">{h.title}</span>
+                    {h.snippet && <span className="text-[11px] text-slate-400 truncate block">{h.snippet}</span>}
                   </span>
-                  <span className="text-[11px] text-teal-500 shrink-0">文献 → 文献调研</span>
+                  <span className="text-[11px] text-teal-500 shrink-0">{g.label} →</span>
                 </button>
               ))}
-              {shownKbHits.map((d) => (
-                <button
-                  key={`kb-${d.id}`}
-                  onClick={() => goTo('knowledge')}
-                  className="w-full flex items-center justify-between gap-2 px-4 py-1.5 text-left text-[13px] hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors"
-                >
-                  <span className="min-w-0">
-                    <span className="text-slate-700 dark:text-slate-200 truncate block">{d.docName}</span>
-                    <span className="text-[11px] text-slate-400">{d.hits} 处命中 · 片段「{d.context.slice(0, 26)}…」</span>
-                  </span>
-                  <span className="text-[11px] text-sky-500 shrink-0">知识库 → 知识库</span>
-                </button>
-              ))}
-            </>
-          )}
+            </div>
+          ))}
         </div>
         <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 flex items-center gap-3">
           <span><kbd className="border border-slate-200 dark:border-slate-700 rounded px-1">↑↓</kbd> 选择</span>

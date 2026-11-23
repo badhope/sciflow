@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req } from '@nestjs/common';
 import { KnowledgeService } from './knowledge.service';
+import { FileExtractService } from './file-extract.service';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -13,14 +14,19 @@ import type { AuthPayload } from '../auth/auth.service';
 export class KnowledgeController {
   constructor(
     private readonly knowledge: KnowledgeService,
+    private readonly files: FileExtractService,
     private readonly access: ProjectAccessService,
   ) {}
 
-  /** 上传资料（text | pdf | markdown；PDF 传 base64） */
+  /** 上传资料（文本/PDF/Office/EPUB/图片/音视频；二进制传 base64，type 为扩展名或 mime） */
   @Post('upload')
-  upload(@Body() body: { projectId: string; name: string; type: string; content: string }, @Req() req: { user?: AuthPayload }) {
+  async upload(
+    @Body() body: { projectId: string; name: string; type: string; mime?: string; content: string },
+    @Req() req: { user?: AuthPayload },
+  ) {
     this.access.assertProject(body.projectId, req.user);
-    return this.knowledge.upload(body.projectId, body.name, body.type || 'text', body.content);
+    const extracted = await this.files.extractKnowledgeUpload(body.name, body.mime || body.type || 'text', body.content);
+    return this.knowledge.uploadText(body.projectId, body.name, body.type || extracted.kind, extracted.text);
   }
 
   /**

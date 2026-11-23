@@ -1,6 +1,15 @@
 import type { ChatAttachment } from './chat-session';
 
-export const CHAT_ATTACHMENT_ACCEPT = 'application/pdf,text/plain,text/markdown,text/csv,application/json,image/png,image/jpeg,image/webp,image/gif,.txt,.md,.csv,.json,.pdf';
+export const CHAT_ATTACHMENT_ACCEPT = [
+  'application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json',
+  'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/epub+zip', 'audio/*', 'video/*',
+  '.txt', '.md', '.csv', '.json', '.pdf', '.docx', '.xlsx', '.pptx', '.epub',
+  '.mp3', '.wav', '.m4a', '.mp4', '.mov', '.mkv',
+].join(',');
 export const CHAT_ATTACHMENT_MAX_BYTES = 6 * 1024 * 1024;
 export const CHAT_ATTACHMENT_MAX_FILES = 4;
 

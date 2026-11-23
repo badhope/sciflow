@@ -4,7 +4,6 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { db, sqlite } from '../db/database';
 import { projects, documents, references, pipelineTasks, reflexionLogs, screeningQueue, extractionFields, extractionValues, reviewComments, experiments, submissions, submissionStatusEvents, citations, qualityReports, polishRecords, knowledgeDocs, knowledgeChunks, memoryLogs, agentExecutions, agentSteps, agentTasks, toolApprovals, agentPlans, llmCallLogs, chatSessions, researchBriefs } from '../db/schema';
-import { parseJson } from '../common/json-guard';
 import { clearProjectQualityStandard, getProjectQualityStandard, setProjectQualityStandard } from '../common/project-quality-standard';
 import { BUNDLE_TABLES, BUNDLE_VERSION, buildIdMap, bundleSelectSql, remapRow, renameOnImport, validateBundle } from './project-bundle';
 
@@ -20,7 +19,6 @@ const updateProjectSchema = z.object({
     name: z.string().min(1).max(200).optional(),
     description: z.string().max(5000).optional(),
     preface: z.string().max(10000).optional(),
-    templates: z.string().max(100000).optional(),
   }),
 });
 
@@ -79,18 +77,12 @@ export class ProjectsService {
     return row;
   }
 
-  update(id: string, patch: { name?: string; description?: string; preface?: string; templates?: string }) {
+  update(id: string, patch: { name?: string; description?: string; preface?: string }) {
     const validated = updateProjectSchema.parse({ id, patch });
     this.get(validated.id);
     // preface（项目级系统提示，差距 #22）只接受字符串，其余字段维持既有透传行为
     if (validated.patch.preface !== undefined && typeof validated.patch.preface !== 'string') {
       throw new BadRequestException('preface 必须为字符串');
-    }
-    // 差距 #1：templates 只接受合法 JSON 数组字符串（[{name,description,sections:[{title,points}]}]）
-    if (validated.patch.templates !== undefined) {
-      if (typeof validated.patch.templates !== 'string') throw new BadRequestException('templates 必须是 JSON 字符串');
-      const parsed = parseJson<unknown>(validated.patch.templates, null);
-      if (!parsed || !Array.isArray(parsed)) throw new BadRequestException('templates 必须是合法 JSON 数组');
     }
     const clean: Record<string, unknown> = { ...validated.patch, updatedAt: Date.now() };
     db.update(projects).set(clean).where(eq(projects.id, validated.id)).run();

@@ -81,6 +81,8 @@
 | POST | `/api/documents/:id/render-citations` | 按 8 种样式渲染引用 |
 | GET | `/api/documents/:id/export` | 导出 Markdown / HTML / LaTeX |
 | GET | `/api/documents/:id/export-docx` | 导出 Word(.docx) |
+| GET | `/api/documents/:id/export-pdf` | 服务端 Playwright 打印 PDF（A4、页码、参考文献悬挂缩进） |
+| GET | `/api/documents/:id/export-xlsx` | 导出三张表（正文/大纲/参考文献），ExcelJS 生成 |
 
 ### references —— 文献库 + 综述（`/api/references`）
 文献元数据管理、PRISMA 筛选、编码矩阵、引用网络、BibTeX/RIS 导入、综述分析。
@@ -288,6 +290,68 @@ NotebookLM 式本地知识库：上传资料 → 分块 → BM25+向量混合检
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/dashboard/overview` | 项目总览聚合数据 |
+
+### search —— 统一聚合搜索（`/api/search`）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/search?q=&projectId=&types=` | 一次聚合文档 / 会话 / 项目 / 实验 / 文献 / 知识库；返回统一 `{type,id,title,snippet,score,route}` |
+
+`types` 可传逗号分隔的 `document,chat,project,experiment,reference,knowledge`；空查询直接返回空数组，不发起数据库扫描。前端 Cmd+K 只调用这一条接口，按类型分组跳现有路由，不新增搜索页。
+
+### share —— 公开只读分享与评论（`/api/shares`，公开端 `/api/public/shares`）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/api/shares` | 创建分享；`targetType` 为 `document` 或 `conversation`，可带 `expiresInDays`、`allowComments` |
+| GET | `/api/shares` | 当前项目分享列表 |
+| DELETE | `/api/shares/:id` | 撤销分享（撤销后公开页 404） |
+| GET | `/api/shares/:id/comments` | 作者侧评论列表 |
+| DELETE | `/api/shares/:id/comments/:commentId` | 作者删除评论 |
+| GET | `/api/public/shares/:token` | 匿名读取快照（文档或对话） |
+| GET / POST | `/api/public/shares/:token/comments` | 匿名读取 / 提交评论，默认关闭 |
+
+对话快照只保留 `role/content`，剥离附件、推理与工具调用，最多 200 条，单条 50k 字符。
+
+### automation —— 自动化触发与通知（`/api/agent`，位于 `schedule/` 目录）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/agent/schedules` | 自动化列表（时间型与事件型） |
+| POST | `/api/agent/schedules` | 新建；`triggerType` 支持 `time/reference.created/pipeline.completed/quality.threshold/experiment.failed` |
+| PATCH / DELETE | `/api/agent/schedules/:id` | 更新 / 删除 |
+| POST | `/api/agent/schedules/:id/run` | 立即运行 |
+| GET | `/api/agent/notifications?projectId=&limit=` | 站内通知列表 |
+| PATCH | `/api/agent/notifications/:id/read?projectId=` | 标记已读 |
+| POST | `/api/agent/notifications/read-all` | 全部已读 |
+| POST | `/api/agent/notifications/:id/retry` | 重试飞书投递 |
+
+通知频道为 `inapp|browser|feishu`。飞书 Webhook 只允许 HTTPS 与 `FEISHU_WEBHOOK_HOSTS` 白名单（默认 `open.feishu.cn,open.larksuite.com`），8 秒超时，失败降级为站内系统通知。
+
+### extensions —— 扩展资产与聊天模板（`/api/extensions`）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/extensions/chat-prompts` | 已启用的 chat scope 提示词，供 `/` slash 菜单使用 |
+| POST | `/api/extensions/:id/apply` | 只对 tool scope 生效；chat scope 会被明确拒绝 |
+
+提示词 manifest 增加 `scope: 'tool'|'chat'`、`title`、`template`、`description`。chat scope 只进入聊天菜单，绝不写 `custom_prompt`，避免静默覆盖科研工具默认提示词。
+
+### connectors —— 官方连接器（`/api/connectors`，位于 `mcp/` 目录）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/connectors?projectId=` | 目录、脱敏凭据与最近状态 |
+| POST | `/api/connectors/connect` | 保存凭据（`secret-crypto` 加密落库） |
+| POST | `/api/connectors/disconnect` | 断开并清理状态 |
+| POST | `/api/connectors/test` | 连接测试，失败写可读状态 |
+| POST | `/api/connectors/zotero/import` | Zotero Web API 拉取文献并去重入库 |
+| POST | `/api/connectors/feishu/notify` | 官方飞书 SDK 发机器人消息 |
+| POST | `/api/connectors/feishu/import-doc` | 飞书云文档导入知识库 |
+| POST | `/api/connectors/notion/search` | 官方 Notion SDK 搜索 |
+| POST | `/api/connectors/drive/list` | 官方 googleapis 只读列目录 |
+
+连接器复用现有 MCP 模块，不新建集成中心；Overleaf 只做官方 Git 可达检测，不爬网页。
 
 ### health —— 健康检查（无模块前缀）
 

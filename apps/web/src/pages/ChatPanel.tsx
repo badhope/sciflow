@@ -1,11 +1,13 @@
-import { useState } from 'react';
-import { Bot, ChevronDown, ChevronUp, FileText, Loader2, MessageSquare, Send, Sparkles, Square, Wand2, Languages } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Bot, ChevronDown, ChevronUp, FileText, Loader2, MessageSquare, Sparkles, Wand2, Languages } from 'lucide-react';
 import { api } from '../api/client';
 import type { Doc, IntentResult, Project } from '../types';
 import { Card } from '../components/ui';
 import { AgentChatThread } from '../components/AgentChat';
-import { useChatSession, type ChatMessage } from '../lib/chat-session';
-import { applyChatCommand, filterChatCommands, type ChatCommand } from '../lib/chat-commands';
+import { ChatComposer } from '../components/ChatComposer';
+import { readChatAttachment } from '../lib/chat-attachments';
+import { useChatSession, type ChatAttachment, type ChatMessage } from '../lib/chat-session';
+import { applyChatCommand, chatPromptCommands, filterChatCommands, type ChatCommand } from '../lib/chat-commands';
 import { useDocumentActions } from '../lib/document-actions';
 
 /** Slash 命令（窄栏精简版） */
@@ -44,6 +46,13 @@ export function ChatPanel({
   const [intent, setIntent] = useState<IntentResult | null>(null);
   const [input, setInput] = useState('');
   const [slashOpen, setSlashOpen] = useState(false);
+  const [chatTemplates, setChatTemplates] = useState<ChatCommand[]>([]);
+  const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
+  useEffect(() => {
+    let alive = true;
+    api.extensions.chatPrompts().then((r) => { if (alive) setChatTemplates(chatPromptCommands(r.prompts)); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
   /** 当前文档上下文（标题+大纲+正文摘要） */
   const docContext = () => {
     if (!doc) return undefined;
@@ -59,13 +68,21 @@ export function ChatPanel({
 
   const send = () => {
     const text = input.trim();
-    if (!text || busy) return;
+    if ((!text && pendingAttachments.length === 0) || busy) return;
     setInput('');
     setSlashOpen(false);
-    chat.send(text, { projectId: project.id, docContext: docContext() });
+    chat.send(text || '请阅读附件并总结要点。', { projectId: project.id, docContext: docContext(), attachments: pendingAttachments });
+    setPendingAttachments([]);
   };
 
-  const slashFiltered = filterChatCommands(input, 'doc', 4);
+  const addAttachments = async (files: FileList) => {
+    const room = 4 - pendingAttachments.length;
+    const picked = Array.from(files).slice(0, Math.max(0, room));
+    const loaded = await Promise.all(picked.map((f) => readChatAttachment(f).catch(() => null)));
+    setPendingAttachments((list) => [...list, ...loaded.filter((a): a is ChatAttachment => !!a)].slice(0, 4));
+  };
+
+  const slashFiltered = filterChatCommands(input, 'doc', 4, chatTemplates);
 
   const applySlash = (c: ChatCommand) => {
     setInput(applyChatCommand(c));
@@ -125,6 +142,8 @@ export function ChatPanel({
             onStop={chat.stop}
             branches={chat.branches}
             onSwitchBranch={chat.switchBranch}
+            onEdit={(i, text) => chat.edit(i, text, { projectId: project.id, docContext: docContext() })}
+            onDelete={(i) => chat.remove(i)}
           />
           {intent && (
             <div className="px-3 pb-1 shrink-0">
@@ -134,84 +153,41 @@ export function ChatPanel({
             </div>
           )}
           {(error || actions.error) && <div className="px-3 pb-1 text-[11px] text-rose-500 shrink-0">{error || actions.error}</div>}
-          <div className="p-2 border-t border-slate-100 dark:border-slate-800 shrink-0 relative">
-            {/* Slash 下拉（窄栏） */}
-            {slashOpen && slashFiltered.length > 0 && (
-              <div className="absolute bottom-full left-2 right-2 mb-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg overflow-hidden page-in z-10">
-                {slashFiltered.map((c) => (
-                  <button
-                    key={c.name}
-                    onClick={() => applySlash(c)}
-                    className="w-full text-left px-2.5 py-1.5 hover:bg-teal-50 dark:hover:bg-teal-500/10 flex items-center gap-2"
-                  >
-                    <span className="text-[11px] font-semibold text-teal-700 dark:text-teal-300 w-16 shrink-0">/{c.name}</span>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{c.desc}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="flex gap-1 mb-1.5">
-              <button
-                onClick={() => startAction('polish')}
-                disabled={!doc || !!actionBusy}
-                className="flex-1 text-[11px] rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 py-1.5 flex items-center justify-center gap-1 disabled:opacity-50"
-              >
+          <div className="border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <div className="flex gap-1 px-2 pt-2">
+              <button onClick={() => startAction('polish')} disabled={!doc || !!actionBusy} className="flex-1 text-[11px] rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 py-1.5 flex items-center justify-center gap-1 disabled:opacity-50">
                 {actionBusy === 'polish' ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />} 润色全文
               </button>
-              <button
-                onClick={() => startAction('translate')}
-                disabled={!doc || !!actionBusy}
-                className="flex-1 text-[11px] rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 py-1.5 flex items-center justify-center gap-1 disabled:opacity-50"
-              >
+              <button onClick={() => startAction('translate')} disabled={!doc || !!actionBusy} className="flex-1 text-[11px] rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 py-1.5 flex items-center justify-center gap-1 disabled:opacity-50">
                 {actionBusy === 'translate' ? <Loader2 size={11} className="animate-spin" /> : <Languages size={11} />} 翻译全文
               </button>
-              <button
-                onClick={() => startAction('abstract')}
-                disabled={!doc || !!actionBusy}
-                className="flex-1 text-[11px] rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 py-1.5 flex items-center justify-center gap-1 disabled:opacity-50"
-              >
+              <button onClick={() => startAction('abstract')} disabled={!doc || !!actionBusy} className="flex-1 text-[11px] rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 py-1.5 flex items-center justify-center gap-1 disabled:opacity-50">
                 {actionBusy === 'abstract' ? <Loader2 size={11} className="animate-spin" /> : <MessageSquare size={11} />} 生成摘要
               </button>
             </div>
-            <div className="flex gap-1.5">
-              <input
-                className="flex-1 min-w-0 rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-1.5 text-xs text-slate-700 dark:text-slate-200 outline-none focus:ring-1 focus:ring-teal-500 placeholder:text-slate-400"
-                placeholder={doc ? '问当前论文…（/ 快捷指令）' : '写作问题…'}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  setSlashOpen(e.target.value.startsWith('/'));
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (slashOpen && slashFiltered.length > 0) applySlash(slashFiltered[0]);
-                    else send();
-                  } else if (e.key === 'Escape') {
-                    if (busy) chat.stop();
-                    setSlashOpen(false);
-                  }
-                }}
-              />
-              {busy ? (
-                <button
-                  onClick={() => chat.stop()}
-                  className="rounded-md bg-rose-500 hover:bg-rose-600 text-white px-2 py-1.5"
-                  title="停止生成（Esc）"
-                >
-                  <Square size={12} />
-                </button>
-              ) : (
-                <button
-                  onClick={send}
-                  disabled={busy || !input.trim()}
-                  className="rounded-md bubble-user hover:brightness-110 px-2 py-1.5 disabled:opacity-50"
-                  title="发送"
-                >
-                  <Send size={12} />
-                </button>
-              )}
-            </div>
+            <ChatComposer
+              compact
+              value={input}
+              onValueChange={(v) => { setInput(v); setSlashOpen(v.startsWith('/')); }}
+              onSend={send}
+              onStop={chat.stop}
+              streaming={busy}
+              placeholder={doc ? '问当前论文…（/ 快捷指令）' : '写作问题…'}
+              attachments={pendingAttachments}
+              onPickFiles={(files) => void addAttachments(files)}
+              onRemoveAttachment={(i) => setPendingAttachments((list) => list.filter((_, j) => j !== i))}
+              slash={{ open: slashOpen, items: slashFiltered, active: 0, onApply: applySlash }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (slashOpen && slashFiltered.length > 0) applySlash(slashFiltered[0]);
+                  else send();
+                } else if (e.key === 'Escape') {
+                  if (busy) chat.stop();
+                  setSlashOpen(false);
+                }
+              }}
+            />
           </div>
         </>
       )}

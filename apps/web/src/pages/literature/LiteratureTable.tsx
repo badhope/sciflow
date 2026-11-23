@@ -42,6 +42,8 @@ export interface LiteratureTableProps {
   setSearching: (v: boolean) => void;
   query: string;
   setQuery: (v: string) => void;
+  /** 全局搜索 ?focus= 命中文献：高亮并滚动定位 */
+  focusId?: string | null;
   imported: Set<string>;
   setImported: (updater: (prev: Set<string>) => Set<string>) => void;
   selectedRefs: Set<string>;
@@ -105,7 +107,7 @@ const authors = (a: string | string[] | undefined) =>
 export function LiteratureTable(props: LiteratureTableProps) {
   const {
     project, refs, setRefs,
-    hits, setHits, searching, setSearching, query, setQuery,
+    hits, setHits, searching, setSearching, query, setQuery, focusId,
     imported, setImported,
     selectedRefs, setSelectedRefs,
     tool: _tool, setTool,
@@ -483,6 +485,14 @@ export function LiteratureTable(props: LiteratureTableProps) {
   // 分批追加而不是虚拟滚动——卡片高度随「筛选理由/阅读状态」动态变化，固定行高会裁内容。
   const PAGE_SIZE = 60;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  useEffect(() => {
+    if (!focusId) return;
+    const idx = refs.findIndex((r) => r.id === focusId);
+    if (idx < 0) return;
+    setVisibleCount((v) => Math.max(v, idx + 1));
+    const timer = setTimeout(() => document.getElementById(`lit-ref-${focusId}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 50);
+    return () => clearTimeout(timer);
+  }, [focusId, refs]);
   // 切换项目或文献集合变化时回到第一批（否则新项目会沿用上个项目的展开量）
   useEffect(() => setVisibleCount(PAGE_SIZE), [project.id, refs.length]);
   const [showScreen, setShowScreen] = useState(false);
@@ -913,7 +923,7 @@ export function LiteratureTable(props: LiteratureTableProps) {
                 const sc = screenMap.get(r.id);
                 const scStatus: ScreenStatus = sc?.status ?? 'pending';
                 return (
-                  <div key={r.id} className="border border-slate-100 dark:border-slate-800 rounded-lg p-2.5 flex items-start gap-2">
+                  <div id={`lit-ref-${r.id}`} key={r.id} className={`border rounded-lg p-2.5 flex items-start gap-2 scroll-mt-24 ${focusId === r.id ? "border-teal-400 bg-teal-50/60 dark:bg-teal-500/10 ring-2 ring-teal-300/50" : "border-slate-100 dark:border-slate-800"}`}>
                     <input
                       type="checkbox"
                       className="mt-1.5 accent-teal-600"

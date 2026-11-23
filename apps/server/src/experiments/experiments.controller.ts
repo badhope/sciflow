@@ -4,6 +4,7 @@ import { ExperimentsService } from './experiments.service';
 import { ExperimentDto } from './experiments.dto';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @ApiTags('Experiments')
 @Controller('experiments')
@@ -11,6 +12,7 @@ export class ExperimentsController {
   constructor(
     private readonly experiments: ExperimentsService,
     private readonly access: ProjectAccessService,
+    private readonly events: EventEmitter2,
   ) {}
 
   /**
@@ -23,11 +25,15 @@ export class ExperimentsController {
    */
   @Post('run')
   @ApiOkResponse({ type: ExperimentDto })
-  run(@Body() body: { projectId: string; goal?: string; code: string; documentId?: string | null }, @Req() req: { user?: AuthPayload }) {
+  async run(@Body() body: { projectId: string; goal?: string; code: string; documentId?: string | null }, @Req() req: { user?: AuthPayload }) {
     if (!body?.projectId?.trim()) throw new BadRequestException('projectId 必填');
     this.access.assertProject(body.projectId, req.user);
     if (body.documentId) this.access.assertDocument(body.documentId, req.user);
-    return this.experiments.run(body);
+    const result = await this.experiments.run(body) as { id?: string; status?: string; stderr?: string };
+    if (result?.status === 'error' || result?.status === 'timeout') {
+      this.events.emit('experiment.failed', { projectId: body.projectId, experimentId: result.id, status: result.status, error: result.stderr, title: body.goal });
+    }
+    return result;
   }
 
   @Get()

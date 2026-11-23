@@ -125,10 +125,16 @@ export function ExtensionCenter({ defaultKind }: { defaultKind?: ExtensionKind }
                 <Badge tone={a.source === 'builtin-private' ? 'amber' : a.source === 'user' ? 'blue' : 'slate'}>
                   {a.source === 'builtin-private' ? '内置·私有' : a.source === 'builtin-public' ? '内置·开源' : a.source === 'import' ? '导入' : '自建'}
                 </Badge>
+                {a.kind === 'prompt' && (() => {
+                  try {
+                    const m = JSON.parse(a.manifest || '{}') as { scope?: string };
+                    return <Badge tone={m.scope === 'chat' ? 'blue' : 'slate'}>{m.scope === 'chat' ? '聊天模板' : '工具提示词'}</Badge>;
+                  } catch { return null; }
+                })()}
                 {a.license && <span className="text-[10px] text-slate-400">{a.license}</span>}
                 {a.install && <span className="text-[10px] text-slate-400 truncate max-w-[280px]" title={a.install}>安装：{a.install}</span>}
                 <span className="ml-auto flex items-center gap-1">
-                  {a.kind === 'prompt' && (
+                  {a.kind === 'prompt' && !(() => { try { return (JSON.parse(a.manifest || '{}') as { scope?: string }).scope === 'chat'; } catch { return false; } })() && (
                     <Button variant="outline" size="sm" disabled={busy === `apply-${a.id}`}
                       onClick={() => void run(`apply-${a.id}`, () => api.extensions.apply(a.id), `已应用「${a.name}」（同类模板自动让位）`)}>
                       应用
@@ -199,6 +205,7 @@ export function AddAssetPanel({ kind, templates, onDone }: {
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
   const [jsonText, setJsonText] = useState('');
+  const [promptScope, setPromptScope] = useState<'tool' | 'chat'>('tool');
   const [brief, setBrief] = useState('');
   const [draft, setDraft] = useState<string>('');
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -227,7 +234,19 @@ export function AddAssetPanel({ kind, templates, onDone }: {
       else if (kind === 'role') { manifest.systemPrompt = jsonText || desc; }
       else if (kind === 'constraint') { manifest.title = name; manifest.rule = jsonText || desc; manifest.level = 'must'; manifest.scope = 'all'; }
       else if (kind === 'hook') { manifest.event = 'chat:before'; manifest.type = 'prompt_inject'; manifest.config = { text: jsonText || desc }; }
-      else if (kind === 'prompt') { manifest.toolKey = 'polish'; manifest.prompt = jsonText || desc; manifest.enabled = 1; }
+      else if (kind === 'prompt') {
+        if (promptScope === 'chat') {
+          manifest.scope = 'chat';
+          manifest.title = name.trim();
+          manifest.description = desc.trim();
+          manifest.template = jsonText || '{{input}}';
+        } else {
+          manifest.scope = 'tool';
+          manifest.toolKey = 'polish';
+          manifest.prompt = jsonText || desc;
+          manifest.enabled = 1;
+        }
+      }
       await api.extensions.create({ kind, name: name.trim(), description: desc.trim() || name.trim(), manifest });
       setInfo('已创建并启用（已同步到对应子系统）');
       setName(''); setDesc('');
@@ -290,7 +309,13 @@ export function AddAssetPanel({ kind, templates, onDone }: {
         <div className="space-y-2">
           <Input placeholder="名称（必填）" value={name} onChange={(e) => setName(e.target.value)} />
           <Input placeholder={kind === 'mcp' ? '说明 / HTTP(S) 端点（会写入 manifest.url）' : '一句话描述'} value={desc} onChange={(e) => setDesc(e.target.value)} />
-          <Textarea rows={kind === 'role' || kind === 'prompt' ? 6 : 3} className="font-mono text-[12px]" placeholder={`${kind} 内容（提示词/规则/说明，按左侧模板填写）`} value={jsonText} onChange={(e) => setJsonText(e.target.value)} />
+          {kind === 'prompt' && (
+            <select value={promptScope} onChange={(e) => setPromptScope(e.target.value as 'tool' | 'chat')} className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900">
+              <option value="tool">科研工具提示词覆盖（polish 等）</option>
+              <option value="chat">聊天 slash 模板（不覆盖工具）</option>
+            </select>
+          )}
+          <Textarea rows={kind === 'role' || kind === 'prompt' ? 6 : 3} className="font-mono text-[12px]" placeholder={kind === 'prompt' && promptScope === 'chat' ? '模板正文，用 {{input}} 标记光标插入点' : `${kind} 内容（提示词/规则/说明，按左侧模板填写）`} value={jsonText} onChange={(e) => setJsonText(e.target.value)} />
           <div className="flex gap-1.5">
             <Button size="sm" disabled={!name.trim() || busy === 'form'} onClick={() => void submitForm()}>
               {busy === 'form' ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} 保存并启用

@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { McpController } from './mcp.controller';
+import { ConnectorsController } from './connectors.controller';
 import { McpService } from './mcp.service';
+import { ConnectorsService } from './connectors.service';
 import { CodeDiagnosticsService } from '../web-sandbox/code-diagnostics.service';
 import { AiModule } from '../ai/ai.module';
 import { ReferencesModule } from '../references/references.module';
@@ -17,8 +19,8 @@ import { ResearchBriefModule } from '../research-brief/research-brief.module';
 
 @Module({
   imports: [AiModule, ReferencesModule, KnowledgeModule, ConfigModule, ExtensionsModule, ProjectsModule, DocumentsModule, ResearchModule, ExperimentsModule, BrowserModule, MemoryModule, ResearchBriefModule],
-  controllers: [McpController],
-  providers: [McpService, CodeDiagnosticsService],
+  controllers: [McpController, ConnectorsController],
+  providers: [McpService, CodeDiagnosticsService, ConnectorsService],
   exports: [McpService],
 })
 export class McpModule {}

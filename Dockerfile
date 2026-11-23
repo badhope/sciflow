@@ -6,7 +6,7 @@ FROM node:22-slim AS build
 # 版本与仓库 packageManager 保持一致（此前写 pnpm@9，与 lockfile 混用会产生解析歧义）
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 # 原生模块兜底编译工具链（预编译不可用时回退源码编译）
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ poppler-utils ffmpeg tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng && rm -rf /var/lib/apt/lists/*
 # 桌面端（Electron）不参与容器构建：跳过其二进制下载，避免无谓的 ~100MB 拉取
 ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 WORKDIR /app

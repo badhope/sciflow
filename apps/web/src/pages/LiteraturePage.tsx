@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Project, Reference, DiscoveredReference, EvidenceResult, ExtractedPaper, DeepDiveResult, GapResult, PaperComparisonResult, ReferenceGraph, ExtractionField, ExtractionTableResult, ScreeningItem } from '../types';
 import { Card, errMsg } from '../components/ui';
@@ -39,6 +40,8 @@ export function LiteraturePage({ project }: { project: Project }) {
 
   // 文献库走共享 hook；表格内的增删改直接写同一个 query cache，避免本地 state 与缓存分叉
   const qc = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const focusId = searchParams.get('focus');
   const refsQuery = useProjectRefs(project.id, { retry: 0 });
   const refs = useMemo(() => refsQuery.data ?? [], [refsQuery.data]);
   const setRefs = (updater: (prev: Reference[]) => Reference[]) => {
@@ -185,6 +188,7 @@ export function LiteraturePage({ project }: { project: Project }) {
           searching={searching}
           setSearching={setSearching}
           query={query}
+          focusId={focusId}
           setQuery={setQuery}
           imported={imported}
           setImported={setImported}

@@ -7,6 +7,7 @@ import { ProjectAccessService } from '../common/project-access.service';
 import { ScholarSearchService, summarizeScholarSources } from '../research/scholar-search.service';
 import type { AuthPayload } from '../auth/auth.service';
 import { paginate } from '../common/paginate';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @ApiTags('References')
 @Controller('references')
@@ -15,6 +16,7 @@ export class ReferencesController {
     private readonly references: ReferencesService,
     private readonly access: ProjectAccessService,
     private readonly scholar: ScholarSearchService,
+    private readonly events: EventEmitter2,
   ) {}
 
   /**
@@ -141,7 +143,9 @@ export class ReferencesController {
   @ApiOkResponse({ type: ReferenceDto })
   create(@Body() body: { projectId: string; hit: Partial<PaperHit> & { title: string } }, @Req() req: { user?: AuthPayload }) {
     this.access.assertProject(body.projectId, req.user);
-    return this.references.create(body.projectId, body.hit);
+    const created = this.references.create(body.projectId, body.hit);
+    this.events.emit('reference.created', { projectId: body.projectId, referenceId: (created as { id?: string })?.id, title: body.hit?.title });
+    return created;
   }
 
   /** 批量导入 */

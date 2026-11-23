@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException, Logger, OnModuleInit } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Injectable, NotFoundException, BadRequestException, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { eq, and, sql, gte } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import pLimit from 'p-limit';
@@ -92,6 +93,7 @@ export class PipelineService implements OnModuleInit {
     private readonly config: ConfigCenterService,
     private readonly scholar: ScholarSearchService,
     private readonly novelty: NoveltyService,
+    @Optional() private readonly events?: EventEmitter2,
   ) {}
 
   onModuleInit() {
@@ -433,6 +435,7 @@ export class PipelineService implements OnModuleInit {
         try {
           const t = this.getTaskRow(taskId);
           void this.config.runEventHooks('pipeline:after', { taskId, projectId: t.projectId, topic: t.topic, documentId: t.documentId, tokens }, 'pipeline');
+          this.events?.emit('pipeline.completed', { projectId: t.projectId, documentId: t.documentId || undefined, title: t.topic, status: 'completed' });
         } catch { /* 结束钩子失败不影响终态 */ }
       }
     } catch (e: any) {

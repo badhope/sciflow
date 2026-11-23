@@ -25,6 +25,9 @@ export interface AgentChatThreadProps {
   onCite?: (source: NonNullable<ChatMessage['sources']>[number]) => void;
   onSendToWriting?: (index: number) => void;
   onFollowUp?: (followUp: string, index: number) => void;
+  onSaveAsDocument?: (index: number) => void;
+  onOpenDocument?: (documentId: string) => void;
+  onOpenWebProject?: (projectId: string) => void;
 }
 
 /**
@@ -53,6 +56,9 @@ export function AgentChatThread({
   onCite,
   onSendToWriting,
   onFollowUp,
+  onSaveAsDocument,
+  onOpenDocument,
+  onOpenWebProject,
 }: AgentChatThreadProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -91,6 +97,9 @@ export function AgentChatThread({
         onCite={onCite}
         onSendToWriting={onSendToWriting}
         onFollowUp={onFollowUp}
+        onSaveAsDocument={onSaveAsDocument}
+        onOpenDocument={onOpenDocument}
+        onOpenWebProject={onOpenWebProject}
         userBubble="plain"
       />
       {footer}

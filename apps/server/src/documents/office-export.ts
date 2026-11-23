@@ -1,5 +1,5 @@
 import PptxGenJS from 'pptxgenjs';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import type { ManuscriptOutline, ManuscriptReference } from './manuscript-docx';
 
 interface OfficeExportInput {
@@ -104,9 +104,21 @@ export async function buildManuscriptPptx(input: OfficeExportInput): Promise<{ b
   return { buffer: Buffer.from(data as ArrayBuffer), filename: safeName(input.title, 'pptx') };
 }
 
-export function buildManuscriptXlsx(input: OfficeExportInput): { buffer: Buffer; filename: string } {
-  const wb = XLSX.utils.book_new();
-  const bodyRows: string[][] = [['章节', '小节', '内容']];
+function addSheet(wb: ExcelJS.Workbook, name: string, rows: (string | number | null)[][], widths: number[]) {
+  const ws = wb.addWorksheet(name.slice(0, 31), { views: [{ state: 'frozen', ySplit: 1 }] });
+  rows.forEach((row) => ws.addRow(row));
+  widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  ws.getRow(1).font = { bold: true };
+  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F4F1' } };
+  return ws;
+}
+
+export async function buildManuscriptXlsx(input: OfficeExportInput): Promise<{ buffer: Buffer; filename: string }> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'SciFlow';
+  wb.created = new Date();
+
+  const bodyRows: (string | number | null)[][] = [['章节', '小节', '内容']];
   const blocks = splitSections(input.content || '');
   for (const block of blocks) {
     for (const para of block.body.split(/\n{2,}/).map((p) => cleanMarkdown(p)).filter(Boolean)) {
@@ -114,22 +126,22 @@ export function buildManuscriptXlsx(input: OfficeExportInput): { buffer: Buffer;
     }
   }
   if (bodyRows.length === 1) bodyRows.push(['正文', '', '']);
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bodyRows), '正文');
+  addSheet(wb, '正文', bodyRows, [18, 18, 90]);
 
-  const outlineRows: string[][] = [['序号', '章节', '小节']];
+  const outlineRows: (string | number | null)[][] = [['序号', '章节', '小节']];
   (input.outline.sections || []).forEach((s, i) => {
     if (s.subsections?.length) {
-      for (const sub of s.subsections) outlineRows.push([String(i + 1), s.title, sub]);
+      for (const sub of s.subsections) outlineRows.push([i + 1, s.title, sub]);
     } else {
-      outlineRows.push([String(i + 1), s.title, '']);
+      outlineRows.push([i + 1, s.title, '']);
     }
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(outlineRows), '大纲');
+  addSheet(wb, '大纲', outlineRows, [8, 28, 42]);
 
   const refRows: (string | number | null)[][] = [['序号', '标题', '作者', '年份', '期刊/会议', 'DOI']];
   input.refs.forEach((r, i) => refRows.push([i + 1, r.title, r.authors || '', r.year ?? '', r.venue || '', r.doi || '']));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(refRows), '参考文献');
+  addSheet(wb, '参考文献', refRows, [8, 50, 24, 10, 28, 24]);
 
-  const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
-  return { buffer, filename: safeName(input.title, 'xlsx') };
+  const written = await wb.xlsx.writeBuffer();
+  return { buffer: Buffer.from(written as ArrayBuffer), filename: safeName(input.title, 'xlsx') };
 }

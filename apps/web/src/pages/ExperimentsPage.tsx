@@ -1,4 +1,5 @@
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Beaker, Check, Copy, Loader2, Play, RotateCcw, Save, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
@@ -61,6 +62,7 @@ export function ExperimentsPage({ project }: { project: Project }) {
    * 历史记录从 list() 加载时该字段恒为 undefined，不显示标注（数据不可回溯）。
    */
   const [lastRunMem, setLastRunMem] = useState<{ id: string; value: boolean } | null>(null);
+  const [searchParams] = useSearchParams();
   const toast = useContext(ToastContext);
 
   const copyCmd = async (cmd: string) => {
@@ -79,7 +81,17 @@ export function ExperimentsPage({ project }: { project: Project }) {
     queryKey: qk.experiments(project.id),
     queryFn: () => api.experiments.list(project.id),
   });
-  const exps: Experiment[] = expsQuery.data ?? [];
+  const exps: Experiment[] = useMemo(() => expsQuery.data ?? [], [expsQuery.data]);
+  useEffect(() => {
+    const focus = searchParams.get('focus');
+    if (!focus || !exps.length) return;
+    const hit = exps.find((e) => e.id === focus);
+    if (hit && selected?.id !== hit.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- URL 定位参数命中后同步选中，属于外部导航输入
+      setSelected(hit);
+      setConclusionDraft(hit.conclusion || '');
+    }
+  }, [exps, searchParams, selected?.id]);
   const docs: Doc[] = docsQuery.data ?? [];
   const invalidateExps = () => {
     void qc.invalidateQueries({ queryKey: qk.experiments(project.id) });

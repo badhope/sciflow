@@ -181,3 +181,55 @@ Onyx、Khoj、SurfSense、AutoGen。吸收原则：**只吸收与本仓定位（
 
 - 二维 PCA 投影只有约 60 行，引入 UMAP/t-SNE 会让桌面包体明显变大。
 - Passage 合并是科研检索的领域逻辑，不是通用库能直接替的轮子。
+
+## 2026-11-23 AI 通用能力融合（22 项收口）
+
+本轮执行《SciFlow 通用 AI 能力融合实施计划》的 A1-A9、B1-B6、C1-C7，共 22 项。
+硬边界未动：没有新增产品页面，一级导航仍是 9 个入口；唯一新增的后端 Nest 模块是聚合搜索
+`SearchModule`，其余能力全部扩展现有模块。
+
+| 组 | 落地结果 |
+|---|---|
+| A1 会话 | 会话 CRUD、全文搜索、置顶/归档落服务端；`chat_session` 迁移与 E2E 覆盖 |
+| A2 分支 | 消息树 `id/parentId`、`activeLeafId`、编辑/重新生成分支、版本切换；`branch_json` 落库 |
+| A3 文件理解 | 统一 `FileExtractService`：PDF/OCR、DOCX、XLSX、PPTX、EPUB、图片 OCR、音频转写、视频抽音轨；聊天附件与知识库共用 |
+| A4 搜索 | `SearchModule` 聚合文档/会话/项目/实验/文献/知识库，`GET /api/search` 单次返回分组结果；⌘K 与 `?q/?focus/?session` 深链消费 |
+| A5 自动化 | 时间/事件触发器、阈值、站内信/浏览器/飞书通知、幂等去重、重试、最近运行状态；Croner 调度 |
+| A6 输出 | Playwright `printToPDF` 导出、演示模板、对话工具产物落文档/项目、回答存为文档 |
+| A7 分享 | 文档/对话快照分享、过期时间、只读匿名评论、作者删除；对话快照脱敏 |
+| A8 提示词 | 扩展 manifest 区分 `tool/chat` scope；聊天模板进入 slash 菜单，`/api/extensions/chat-prompts` |
+| A9 连接器 | Zotero/飞书/Notion/Drive/Overleaf 目录、加密凭据、测试/导入/通知；官方 SDK 优先 |
+| B1 输入区 | 工作台与写作页共用 `ChatComposer`，删除两套重复附件/slash/停止逻辑 |
+| B2 收件箱 | AgentOps 自动化卡片展示任务、审批、通知；统一 `useAgentInbox` 查询键与轮询 |
+| B3 证据库 | 知识库 Tab 直接导入 Office/EPUB/音视频，`?q=` 过滤，不新增文件库 |
+| B4 写作页 | PDF/PPTX 导出、模板选择器复用 A6，模板切换不覆盖正文 |
+| B5 设置 | 连接器进“扩展与工具”，数据导出/清理进“用量与审计”，设置仍 9 组 |
+| B6 模板字段 | 删除未使用的 `project.templates` 与 DTO；v19 迁移删列；模板统一由 `outline-templates` 提供 |
+| C1 PWA | 手写 `sw.js` 换成 `vite-plugin-pwa`，`navigateFallback`、`cleanupOutdatedCaches`、`/api` 排除缓存 |
+| C2 定时 | Croner 解析/计算 nextRun，保留 DB 持久化与扫描器 |
+| C3 Office | `officeparser + mammoth + exceljs`，不手写 OOXML 解包 |
+| C4 OCR | `tesseract.js` 懒加载 `chi_sim+eng`，页数/像素上限，失败可降级 |
+| C5 PDF | Playwright `printToPDF`，A4、页边距、表头重复、公式、参考文献悬挂缩进 |
+| C6 XLSX | 导出从 SheetJS `xlsx` 换成 `exceljs`，三张 sheet 读回校验 |
+| C7 保留清单 | CodeMirror 6、Recharts、Streamdown/remark/rehype/KaTeX、unpdf、pptxgenjs/docx 保留；`cmdk` 不引入 |
+
+### C7 保留清单（禁止为换而换）
+
+| 依赖 | 用途 | 决策 |
+|---|---|---|
+| CodeMirror 6 | 写作编辑器 | 保留；现有扩展与主题已稳定 |
+| Recharts | 图表 | 保留；统一走 `components/charts.tsx` |
+| Streamdown / remark / rehype / KaTeX | Markdown 与公式渲染 | 保留；与聊天流式输出耦合 |
+| unpdf | PDF 文本抽取 | 保留；OCR 只做扫描件兜底 |
+| pptxgenjs / docx | PPTX/DOCX 导出 | 保留；导出结构与现有模板一致 |
+| `cmdk` | 命令面板 | 不引入；现有面板与权限、路由深度耦合，重写收益低 |
+
+只有出现明确维护或安全问题时才替换上述依赖；不为“看起来更生态”重写。
+
+### 验收与诚实边界
+
+- 全量门禁：server/web 单测、lint、typecheck、build、首屏 chunk budget、OpenAPI 生成。
+- 真实样本：图片 OCR、扫描 PDF OCR、真实 mp4 抽音轨转写、DOCX 表格、EPUB、XLSX 多 sheet。
+- 未闭环（环境限制，不是代码通过）：真实飞书 Webhook（本机 DNS 把 `open.feishu.cn` 指向回环，出站守卫正确拦截）、
+  Zotero/Notion/Drive/Overleaf 真实凭据链路、真实音频 `/audio/transcriptions` 端点、PWA 真机安装与更新旧缓存。
+- 产品口径：路线图“不做协作 UI”按“不新增页面、公开分享 + 只读评论优先、团队协作后置”执行。

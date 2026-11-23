@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { AiService, ChatMessage, ChatStreamOptions } from '../ai/ai.service';
 import { MemoryService } from '../memory/memory.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
+import { FileExtractService } from '../knowledge/file-extract.service';
 import { ChatSessionService } from './chat-session.service';
 import { CompactionService } from './compaction.service';
 import { WebSearchService } from '../websearch/websearch.service';
@@ -83,6 +84,7 @@ export class ChatService {
     private readonly ai: AiService,
     private readonly memory: MemoryService,
     private readonly knowledge: KnowledgeService,
+    private readonly files: FileExtractService,
     private readonly chatSession: ChatSessionService,
     private readonly compaction: CompactionService,
     private readonly websearch: WebSearchService,
@@ -235,7 +237,7 @@ export class ChatService {
       onRunStarted?: (runId: string) => void;
     } = {},
   ) {
-    const prepared = await prepareChatTurn(message, opts.attachments);
+    const prepared = await prepareChatTurn(message, opts.attachments, this.files.extract.bind(this.files));
     const promptText = prepared.message;
     // 非流式入口同样执行 chat:before 钩子（block 在此拦截；prompt_inject 由 AI 层注入）
     const before = await this.config.runEventHooks('chat:before', { text: message, projectId }, 'chat');
@@ -319,7 +321,7 @@ export class ChatService {
       this.logger.log(`[compact] 压缩 ${compacted.beforeChars} → ${compacted.afterChars} 字符，归纳 ${compacted.droppedTurns} 轮`);
     }
     return this.contextFor(projectId, message, docContext, effectiveHistory.length, opts.webSearch === true).then(async ({ context, sources }) => {
-      const prepared = await prepareChatTurn(message, opts.attachments);
+      const prepared = await prepareChatTurn(message, opts.attachments, this.files.extract.bind(this.files));
       const promptText = prepared.message;
       // chat:before 钩子：block 类型在此拦截（抛错由 controller 转为 SSE error 事件）
       const before = await this.config.runEventHooks('chat:before', { text: message, projectId }, 'chat');

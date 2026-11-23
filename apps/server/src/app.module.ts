@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { CommonModule } from './common/common.module';
@@ -32,11 +33,13 @@ import { WebSearchModule } from './websearch/websearch.module';
 import { RemoteModule } from './remote/remote.module';
 import { ShareModule } from './share/share.module';
 import { ScheduleModule } from './schedule/schedule.module';
+import { SearchModule } from './search/search.module';
 import { HealthController } from './health.controller';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 
 @Module({
   imports: [
+    EventEmitterModule.forRoot({ wildcard: false, maxListeners: 20 }),
     // 结构化日志（pino）：LOG_LEVEL 可配；LOG_PRETTY=1 时本地人类可读
     LoggerModule.forRoot({
       pinoHttp: {
@@ -79,6 +82,7 @@ import { HttpExceptionFilter } from './common/http-exception.filter';
     RemoteModule,
     ShareModule,
     ScheduleModule,
+    SearchModule,
   ],
   controllers: [HealthController],
   providers: [

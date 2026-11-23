@@ -8,6 +8,8 @@ import { Badge, Button, Modal, Spinner, errMsg } from '../../components/ui';
 import { StructuredDetails } from '../../components/StructuredDetails';
 import { HBar } from '../../components/charts';
 import { useAgentInbox } from '../../lib/agent-inbox';
+import { useBrowserNotifications, requestBrowserNotifyPermission } from '../../lib/browser-notify';
+import { BellRing } from 'lucide-react';
 import { qk } from '../../lib/query-keys';
 
 /**
@@ -55,6 +57,11 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
   const [schedHour, setSchedHour] = useState(9);
   const [schedMinute, setSchedMinute] = useState(0);
   const [schedBusy, setSchedBusy] = useState(false);
+  const [schedTrigger, setSchedTrigger] = useState<'time' | 'reference.created' | 'pipeline.completed' | 'quality.threshold' | 'experiment.failed'>('time');
+  const [schedThreshold, setSchedThreshold] = useState(80);
+  const [schedFeishu, setSchedFeishu] = useState(false);
+  const [schedWebhook, setSchedWebhook] = useState('');
+  const [notifyPermission, setNotifyPermission] = useState(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
 
   const metricsQuery = useQuery({
     queryKey: qk.agentMetrics(projectId),
@@ -97,10 +104,16 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
     approvalsQuery,
     decideApproval: approvalMutation,
     decidePlan: planMutation,
-  } = useAgentInbox(projectId, { tasksInterval: 15_000, approvalsInterval: 15_000 });
+    notificationsQuery,
+    markNotificationRead,
+    markAllNotificationsRead,
+    retryNotification,
+  } = useAgentInbox(projectId, { tasksInterval: 15_000, approvalsInterval: 15_000, notificationsInterval: 5_000 });
 
   // Agent 任务 SSE：有变化时统一失效查询；15s 轮询保留为断线降级。
   const [live, setLive] = useState(false);
+  const notifications = notificationsQuery.data?.notifications ?? [];
+  useBrowserNotifications(notifications, `sciflow-notify-seen:${projectId}`);
   useEffect(() => {
     const close = openSse<{ tasks: unknown[]; summary: unknown; approvals: unknown[]; plans: unknown[] }>(
       `/api/agent/events?projectId=${encodeURIComponent(projectId)}`,
@@ -209,16 +222,20 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
     try {
       await api.agent.createSchedule({
         projectId,
-        name: schedName.trim() || '定时任务',
+        name: schedName.trim() || '自动化任务',
         cadence: schedCadence,
         message: schedMessage.trim(),
         hourOfDay: schedHour,
         minuteOfHour: schedMinute,
+        triggerType: schedTrigger,
+        triggerConfig: schedTrigger === 'quality.threshold' ? { threshold: schedThreshold } : {},
+        notifyChannels: ['inapp', 'browser', ...(schedFeishu ? ['feishu' as const] : [])],
+        notifyTarget: schedFeishu ? schedWebhook.trim() : '',
       });
-      toast('success', '定时任务已创建');
+      toast('success', '自动化任务已创建');
       void qc.invalidateQueries({ queryKey: ['agent-schedules', projectId] });
     } catch (e: unknown) {
-      toast('error', errMsg(e) || '定时任务创建失败');
+      toast('error', errMsg(e) || '自动化任务创建失败');
     } finally {
       setSchedBusy(false);
     }
@@ -229,7 +246,7 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
       await api.agent.updateSchedule(id, projectId, { enabled });
       void qc.invalidateQueries({ queryKey: ['agent-schedules', projectId] });
     } catch (e: unknown) {
-      toast('error', errMsg(e) || '定时任务更新失败');
+      toast('error', errMsg(e) || '自动化任务更新失败');
     }
   };
 
@@ -247,7 +264,7 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
   const removeSchedule = async (id: string) => {
     try {
       await api.agent.deleteSchedule(id, projectId);
-      toast('success', '定时任务已删除');
+      toast('success', '自动化任务已删除');
       void qc.invalidateQueries({ queryKey: ['agent-schedules', projectId] });
     } catch (e: unknown) {
       toast('error', errMsg(e) || '删除失败');
@@ -391,16 +408,38 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
       <div className="mt-3 rounded-lg border border-slate-200/80 bg-white/40 p-2.5 dark:border-slate-700 dark:bg-slate-900/30">
         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
           <CalendarClock size={13} className="text-teal-600 dark:text-teal-400" aria-hidden="true" />
-          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">定时任务</span>
-          <span className="text-[10px] text-slate-400">按小时 / 每天 / 每周自动入队</span>
+          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">自动化</span>
+          <span className="text-[10px] text-slate-400">按时间或事件自动入队，可推送到站内信 / 浏览器 / 飞书</span>
         </div>
-        <div className="grid gap-1.5 sm:grid-cols-[1fr_auto]">
+        <div className="grid gap-1.5 sm:grid-cols-[1fr_auto_auto]">
           <input value={schedName} onChange={(e) => setSchedName(e.target.value)} placeholder="任务名称" className="min-w-0 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] outline-none focus:border-teal-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
-          <select value={schedCadence} onChange={(e) => setSchedCadence(e.target.value as typeof schedCadence)} className="rounded border border-slate-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+          <select value={schedTrigger} onChange={(e) => setSchedTrigger(e.target.value as typeof schedTrigger)} className="rounded border border-slate-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" aria-label="触发方式">
+            <option value="time">按时间</option>
+            <option value="reference.created">新文献入库</option>
+            <option value="pipeline.completed">流水线完成</option>
+            <option value="quality.threshold">质量分低于阈值</option>
+            <option value="experiment.failed">实验失败</option>
+          </select>
+          <select value={schedCadence} disabled={schedTrigger !== 'time'} onChange={(e) => setSchedCadence(e.target.value as typeof schedCadence)} className="rounded border border-slate-200 bg-white px-1.5 py-1 text-[11px] disabled:opacity-40 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
             <option value="hourly">每小时</option>
             <option value="daily">每天</option>
             <option value="weekly">每周</option>
           </select>
+        </div>
+        {schedTrigger === 'quality.threshold' && (
+          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+            <span>低于</span>
+            <input type="number" min={0} max={100} value={schedThreshold} onChange={(e) => setSchedThreshold(Number(e.target.value))} className="w-14 rounded border border-slate-200 bg-white px-1.5 py-1 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+            <span>分触发</span>
+          </div>
+        )}
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+          <label className="flex items-center gap-1"><input type="checkbox" checked={schedFeishu} onChange={(e) => setSchedFeishu(e.target.checked)} /> 飞书 Webhook</label>
+          {schedFeishu && <input value={schedWebhook} onChange={(e) => setSchedWebhook(e.target.value)} placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…" className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-[10px] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />}
+          {notifyPermission !== 'granted' && notifyPermission !== 'unsupported' && (
+            <button type="button" className="text-teal-600 hover:underline dark:text-teal-300" onClick={() => void requestBrowserNotifyPermission().then((ok) => setNotifyPermission(ok ? 'granted' : Notification.permission))}>开启浏览器通知</button>
+          )}
+          {notifyPermission === 'granted' && <span className="text-emerald-600 dark:text-emerald-400">浏览器通知已开启</span>}
         </div>
         <div className="mt-1.5 flex gap-1.5">
           <input value={schedMessage} onChange={(e) => setSchedMessage(e.target.value)} placeholder="到点后要 Agent 做什么…" className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] outline-none focus:border-teal-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
@@ -434,6 +473,28 @@ export function AgentOpsPanel({ projectId }: { projectId: string }) {
           </ul>
         )}
       </div>
+
+      {(notifications.length > 0 || (notificationsQuery.data?.unread ?? 0) > 0) && (
+        <div className="mt-3 rounded-lg border border-amber-200/70 bg-amber-50/60 p-2.5 dark:border-amber-900/40 dark:bg-amber-950/20">
+          <div className="mb-1.5 flex items-center gap-1.5">
+            <BellRing size={13} className="text-amber-600 dark:text-amber-400" aria-hidden="true" />
+            <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">自动化通知</span>
+            {(notificationsQuery.data?.unread ?? 0) > 0 && <Badge tone="amber">{notificationsQuery.data?.unread}</Badge>}
+            {(notificationsQuery.data?.unread ?? 0) > 0 && <button type="button" className="ml-auto text-[10px] text-slate-500 hover:underline" onClick={() => void markAllNotificationsRead.mutateAsync()}>全部已读</button>}
+          </div>
+          <ul className="space-y-1">
+            {notifications.slice(0, 5).map((n) => (
+              <li key={n.id} className={`flex flex-wrap items-center gap-1.5 rounded border px-2 py-1.5 text-[11px] ${n.read ? 'border-slate-100 bg-white/40 dark:border-slate-800 dark:bg-slate-900/30' : 'border-amber-200 bg-white/80 dark:border-amber-900/50 dark:bg-slate-900/60'}`}>
+                {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />}
+                <span className="min-w-0 flex-1"><span className="font-medium text-slate-700 dark:text-slate-200">{n.title}</span>{n.body && <span className="ml-1 text-slate-400">{n.body}</span>}</span>
+                {n.link && <a href={n.link} className="text-teal-600 hover:underline dark:text-teal-300" onClick={() => void markNotificationRead.mutateAsync(n.id).catch(() => undefined)}>打开</a>}
+                {n.kind === 'system' && n.body?.includes('飞书') && <button type="button" className="text-amber-600 hover:underline" onClick={() => void retryNotification.mutateAsync(n.id).catch(() => undefined)}>重试</button>}
+                {!n.read && <button type="button" className="text-slate-500 hover:underline" onClick={() => void markNotificationRead.mutateAsync(n.id).catch(() => undefined)}>已读</button>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {summary && summary.total > 0 && (
         <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">

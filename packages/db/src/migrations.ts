@@ -59,6 +59,16 @@ function addIfExists(db: Database.Database, table: string, column: string, ddl: 
   ensureColumn(db, table, column, ddl);
 }
 
+/** 幂等删列；SQLite 3.35+ 支持 DROP COLUMN，旧库/新库都能安全跑。 */
+function dropIfExists(db: Database.Database, table: string, column: string): void {
+  if (!tableExists(db, table)) return;
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`);
+  }
+}
+
+
 /** v1 迁移：pipeline / memory 的旧列。 */
 const m001PipelineMemory: SchemaMigration = {
   version: 1,
@@ -336,6 +346,65 @@ const m016ChatSessionConversations: SchemaMigration = {
   },
 };
 
+
+/** v17 迁移：自动化触发器 + 统一 Agent 收件箱。 */
+const m017AutomationNotifications: SchemaMigration = {
+  version: 17,
+  name: 'automation-notifications',
+  up(db) {
+    addIfExists(db, 'agent_schedule', 'trigger_type', "TEXT DEFAULT 'time'");
+    addIfExists(db, 'agent_schedule', 'trigger_config', "TEXT DEFAULT '{}'");
+    addIfExists(db, 'agent_schedule', 'notify_channels', "TEXT DEFAULT '[\"inapp\"]'");
+    addIfExists(db, 'agent_schedule', 'notify_target', "TEXT DEFAULT ''");
+    addIfExists(db, 'agent_schedule', 'last_status', "TEXT DEFAULT 'pending'");
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS agent_notification (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        kind TEXT DEFAULT 'system',
+        title TEXT NOT NULL,
+        body TEXT DEFAULT '',
+        link TEXT DEFAULT '',
+        read INTEGER DEFAULT 0,
+        dedupe_key TEXT DEFAULT '',
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_notification_project ON agent_notification(project_id, created_at DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_notification_dedupe ON agent_notification(project_id, dedupe_key) WHERE dedupe_key <> '';
+    `);
+  },
+};
+
+/** v18 迁移：对话分享 + 公开页只读评论。 */
+const m018ShareConversationComments: SchemaMigration = {
+  version: 18,
+  name: 'share-conversation-comments',
+  up(db) {
+    addIfExists(db, 'share_link', 'allow_comments', 'INTEGER DEFAULT 0');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS share_comment (
+        id TEXT PRIMARY KEY,
+        share_id TEXT NOT NULL,
+        author_name TEXT DEFAULT '匿名读者',
+        content TEXT NOT NULL,
+        status TEXT DEFAULT 'visible',
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_share_comment_share ON share_comment(share_id, created_at);
+    `);
+  },
+};
+
+
+/** v19 迁移：删除未被前端使用的 project.templates 死字段（模板统一由 outline-templates 提供）。 */
+const m019DropProjectTemplates: SchemaMigration = {
+  version: 19,
+  name: 'drop-project-templates',
+  up(db) {
+    dropIfExists(db, 'project', 'templates');
+  },
+};
+
 export const MIGRATIONS: SchemaMigration[] = [
   m001PipelineMemory,
   m002KnowledgeColumns,
@@ -353,6 +422,9 @@ export const MIGRATIONS: SchemaMigration[] = [
   m014ShareLinks,
   m015AgentSchedules,
   m016ChatSessionConversations,
+  m017AutomationNotifications,
+  m018ShareConversationComments,
+  m019DropProjectTemplates,
 ];
 
 interface LedgerRow {

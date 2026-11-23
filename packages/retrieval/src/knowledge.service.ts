@@ -147,6 +147,11 @@ export class KnowledgeService {
     } else {
       text = content;
     }
+    return this.uploadText(projectId, name, type, text);
+  }
+
+  /** 已解析正文入库：统一文件理解（A3）由 FileExtractService 解析后走这里，保留原分块/嵌入链路。 */
+  async uploadText(projectId: string, name: string, type: string, text: string) {
     const chunks = await this.chunkText(text);
     if (chunks.length === 0) throw new HttpException('文档内容为空或无法解析', HttpStatus.BAD_REQUEST);
 

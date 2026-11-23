@@ -1,6 +1,7 @@
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import type { Doc, Project } from '../types';
 
 /**
@@ -70,7 +71,9 @@ async function renderPage() {
   await act(async () => {
     result = render(
       <QueryClientProvider client={qc}>
+        <MemoryRouter>
         <WorkspacePage project={project} initialDocId={null} onOpenFullEditor={() => undefined} />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
     await Promise.resolve();

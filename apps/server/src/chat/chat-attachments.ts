@@ -17,6 +17,11 @@ export interface PreparedChatTurn {
   summary: string[];
 }
 
+export type FileExtractor = (
+  input: { name: string; mime: string; data: Buffer },
+  options?: { maxBytes?: number; maxChars?: number },
+) => Promise<{ text: string; parser?: string; notes?: string[] }>;
+
 export const MAX_ATTACHMENT_FILES = 4;
 export const MAX_ATTACHMENT_BYTES = 6 * 1024 * 1024;
 export const MAX_ATTACHMENT_TEXT_CHARS = 40_000;
@@ -69,6 +74,7 @@ async function extractPdf(data: Buffer, name: string): Promise<string> {
 export async function prepareChatTurn(
   message: string,
   attachments: ChatAttachmentInput[] | undefined,
+  extractor?: FileExtractor,
 ): Promise<PreparedChatTurn> {
   const list = (attachments || []).filter((a) => a && a.data);
   if (!list.length) return { message, summary: [] };
@@ -99,7 +105,15 @@ export async function prepareChatTurn(
     }
 
     let text = '';
-    if (mime === 'application/pdf' || /\.pdf$/i.test(name)) {
+    if (extractor) {
+      const extracted = await extractor(
+        { name, mime: mime || 'application/octet-stream', data: bytes },
+        { maxBytes: MAX_ATTACHMENT_BYTES, maxChars: MAX_ATTACHMENT_TEXT_CHARS },
+      );
+      text = extracted.text;
+      summary.push(`${extracted.parser || mime || '文件'}：${name}（${text.length} 字）`);
+      for (const note of extracted.notes || []) summary.push(note);
+    } else if (mime === 'application/pdf' || /\.pdf$/i.test(name)) {
       text = await extractPdf(bytes, name);
       summary.push(`PDF：${name}（${text.length} 字）`);
     } else if (TEXT_MIMES.has(mime) || /\.(txt|md|csv|json|xml|yaml|yml)$/i.test(name)) {

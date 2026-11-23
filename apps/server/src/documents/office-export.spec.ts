@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { unzipSync, strFromU8 } from 'fflate';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { buildManuscriptPptx, buildManuscriptXlsx } from './office-export';
 
 const input = {
@@ -20,12 +20,13 @@ describe('office export', () => {
     expect(strFromU8(zip['ppt/presentation.xml'])).toContain('sldIdLst');
   });
 
-  it('builds a workbook with body/outline/references sheets', () => {
-    const { buffer, filename } = buildManuscriptXlsx(input);
+  it('builds a workbook with body/outline/references sheets', async () => {
+    const { buffer, filename } = await buildManuscriptXlsx(input);
     expect(filename).toBe('测试论文.xlsx');
-    const wb = XLSX.read(buffer, { type: 'buffer' });
-    expect(wb.SheetNames).toEqual(['正文', '大纲', '参考文献']);
-    const body = XLSX.utils.sheet_to_json<string[]>(wb.Sheets['正文'], { header: 1 });
-    expect(body.some((row) => String(row[2] || '').includes('第一段'))).toBe(true);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+    expect(wb.worksheets.map((ws) => ws.name)).toEqual(['正文', '大纲', '参考文献']);
+    const body = wb.getWorksheet('正文')!;
+    expect(String(body.getCell('C2').value || '')).toContain('第一段');
   });
 });

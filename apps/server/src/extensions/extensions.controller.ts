@@ -30,6 +30,12 @@ export class ExtensionsController {
     };
   }
 
+  /** 聊天 slash 模板（A8）：不新建提示词库，管理仍在扩展中心。 */
+  @Get('chat-prompts')
+  chatPrompts() {
+    return { prompts: this.extensions.chatPrompts() };
+  }
+
   @Get('templates')
   templates() {
     return this.extensions.templates();

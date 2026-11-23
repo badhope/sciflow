@@ -98,3 +98,63 @@ Not treated as debt:
   that would dominate the desktop bundle.
 - Passage merging is domain-specific retrieval logic, not a generic library
   primitive.
+
+## 2026-11-23 AI capability integration (22 items)
+
+This round delivered A1-A9, B1-B6 and C1-C7 of the SciFlow AI capability
+integration plan. The product boundary did not move: no new pages, the primary
+navigation still has 9 entries, and the only new Nest module is the aggregate
+`SearchModule`; every other capability extends an existing module.
+
+| Group | Delivered |
+|---|---|
+| A1 sessions | Server-side CRUD, full-text search, pin/archive; `chat_session` migration and E2E |
+| A2 branching | Message tree with `id/parentId`, `activeLeafId`, edit/regenerate branches, version switching; `branch_json` persisted |
+| A3 files | One `FileExtractService` for PDF/OCR, DOCX, XLSX, PPTX, EPUB, image OCR, audio transcription and video audio-track extraction; shared by chat attachments and the knowledge base |
+| A4 search | `GET /api/search` aggregates documents, chats, projects, experiments, references and knowledge; ⌘K and deep links consume grouped results |
+| A5 automation | Time/event triggers, thresholds, in-app/browser/Feishu notifications, idempotent dedupe, retry, last-run status; Croner scheduling |
+| A6 output | Playwright `printToPDF`, presentation outline template, tool artifacts into documents/projects, save answer as document |
+| A7 sharing | Document/conversation snapshot shares, expiry, anonymous read-only comments, author deletion; conversation snapshots are sanitized |
+| A8 prompts | Extension manifest separates `tool/chat` scope; chat templates enter the slash menu via `/api/extensions/chat-prompts` |
+| A9 connectors | Zotero/Feishu/Notion/Drive/Overleaf catalog, encrypted credentials, test/import/notify, official SDKs first |
+| B1 composer | Workspace and writing page share `ChatComposer`; duplicated attachment/slash/stop logic removed |
+| B2 inbox | AgentOps automation card shows tasks, approvals and notifications through one `useAgentInbox` query set |
+| B3 knowledge | Office/EPUB/media import in the existing knowledge tab, `?q=` filtering, no new file library |
+| B4 writing | PDF/PPTX export and the A6 template selector; switching templates never overwrites body text |
+| B5 settings | Connectors under Extensions & Tools, data export/cleanup under Usage & Audit; settings stay at 9 groups |
+| B6 templates | Removed unused `project.templates` and DTO; v19 migration drops the column; `outline-templates` is the single template source |
+| C1 PWA | Hand-written `sw.js` replaced by `vite-plugin-pwa` with `navigateFallback`, `cleanupOutdatedCaches` and `/api` excluded |
+| C2 scheduling | Croner parses and computes nextRun while DB persistence and the scanner stay |
+| C3 Office | `officeparser + mammoth + exceljs`; no hand-written OOXML package parsing |
+| C4 OCR | Lazy `tesseract.js` with `chi_sim+eng`, page/pixel caps and graceful fallback |
+| C5 PDF | Playwright `printToPDF` with A4, margins, repeated table headers, formulas and hanging-indent references |
+| C6 XLSX | Export moved from SheetJS `xlsx` to `exceljs`; three sheets are read back in tests |
+| C7 keep list | CodeMirror 6, Recharts, Streamdown/remark/rehype/KaTeX, unpdf and pptxgenjs/docx are kept; `cmdk` is not added |
+
+### C7 keep list (no replacement for novelty)
+
+| Dependency | Use | Decision |
+|---|---|---|
+| CodeMirror 6 | Writing editor | Keep; extensions and theming are stable |
+| Recharts | Charts | Keep; all charts go through `components/charts.tsx` |
+| Streamdown / remark / rehype / KaTeX | Markdown and formulas | Keep; coupled to streaming chat |
+| unpdf | PDF text | Keep; OCR is only a scanned-file fallback |
+| pptxgenjs / docx | PPTX/DOCX export | Keep; output matches the existing templates |
+| `cmdk` | Command palette | Do not add; the existing palette is tightly coupled to permissions and routing |
+
+Replace these only on a concrete maintenance or security issue, never merely to
+look more “ecosystem-native”.
+
+### Verification and honest boundaries
+
+- Full gates: server/web unit tests, lint, typecheck, build, first-load chunk
+  budget and OpenAPI generation.
+- Real samples: image OCR, scanned-PDF OCR, real mp4 audio-track transcription,
+  DOCX tables, EPUB and multi-sheet XLSX.
+- Still open because of the environment, not because the code passed: a real
+  Feishu webhook (local DNS resolves `open.feishu.cn` to loopback and the
+  outbound guard correctly blocks it), real Zotero/Notion/Drive/Overleaf
+  credentials, a real `/audio/transcriptions` endpoint, and PWA installation /
+  stale-cache update on a physical device.
+- Product wording: “no collaboration UI” is implemented as “no new pages,
+  public share + read-only comments first, team collaboration deferred”.

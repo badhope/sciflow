@@ -23,9 +23,6 @@ export class ProjectDto {
   @ApiPropertyOptional({ description: '项目级系统提示（写作偏好等）' })
   preface?: string;
 
-  @ApiPropertyOptional({ description: '自定义大纲模板 JSON 字符串' })
-  templates?: string;
-
   @ApiPropertyOptional({ description: '企业模式归属用户；本地模式为空串' })
   ownerId?: string;
 }

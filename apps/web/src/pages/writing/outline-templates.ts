@@ -27,13 +27,28 @@ export const OUTLINE_TEMPLATES: { key: string; label: string; build: (topic: str
   },
   {
     key: 'imrad',
-    label: 'IMRaD（实证研究）',
+    label: '论文（IMRaD 实证）',
     build: (topic) =>
       template(topic, ['Introduction 引言', 'Methods 方法', 'Results 结果', 'Discussion 讨论', 'Conclusion 结论']),
   },
   {
+    key: 'presentation',
+    label: '演示报告（PPT）',
+    build: (topic) =>
+      template(`${topic}：汇报演示`, [
+        '研究背景与问题',
+        '研究现状与缺口',
+        '研究目标与假设',
+        '方法与技术路线',
+        '实验设计与数据',
+        '主要结果与发现',
+        '结论、贡献与展望',
+        '致谢',
+      ]),
+  },
+  {
     key: 'grant',
-    label: '基金提案（Proposal）',
+    label: '开题 / 基金提案',
     build: (topic) =>
       template(`${topic}（项目申请书）`, [
         '立项依据与研究意义',

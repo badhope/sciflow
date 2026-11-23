@@ -107,4 +107,15 @@ describe('schema migration ledger', () => {
       ]),
     );
   });
+
+  it('v19 删除 project.templates 死字段且可重复执行', () => {
+    const db = new Database(':memory:');
+    db.exec("CREATE TABLE project (id TEXT PRIMARY KEY, templates TEXT DEFAULT '[]')");
+    const migration = MIGRATIONS.find((m) => m.version === 19);
+    expect(migration).toBeTruthy();
+    runMigrations(db, [migration!]);
+    const cols = db.prepare('PRAGMA table_info(project)').all() as { name: string }[];
+    expect(cols.some((c) => c.name === 'templates')).toBe(false);
+    expect(() => migration!.up(db)).not.toThrow();
+  });
 });

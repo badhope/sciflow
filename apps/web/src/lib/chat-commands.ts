@@ -60,9 +60,17 @@ export const CHAT_COMMANDS: ChatCommand[] = [
 ];
 
 /** 输入 `/` 后的候选；`limit` 保留各入口原有展示数量。 */
-export function filterChatCommands(input: string, scope: ChatCommandScope, limit: number): ChatCommand[] {
+export function filterChatCommands(input: string, scope: ChatCommandScope, limit: number, extra: ChatCommand[] = []): ChatCommand[] {
   if (!input.startsWith('/')) return [];
-  return CHAT_COMMANDS.filter((c) => c.scopes.includes(scope) && c.name.includes(input.slice(1))).slice(0, limit);
+  return [...extra, ...CHAT_COMMANDS].filter((c) => c.scopes.includes(scope) && c.name.includes(input.slice(1))).slice(0, limit);
+}
+
+/** 扩展中心里的 chat 提示词 manifest → slash 命令（两个聊天入口都可用）。 */
+export function chatPromptCommands(prompts: { title: string; description?: string; template: string }[] | undefined): ChatCommand[] {
+  if (!prompts?.length) return [];
+  return prompts
+    .filter((p) => p.title && p.template)
+    .map((p) => ({ name: p.title.slice(0, 20), desc: p.description || '自定义提示词', template: p.template, scopes: ['workspace', 'doc'] as ChatCommandScope[] }));
 }
 
 /** 把模板里的插入点替换为空，光标留在末尾；Workspace 与 ChatPanel 共用。 */

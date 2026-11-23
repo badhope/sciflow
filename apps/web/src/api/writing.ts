@@ -119,6 +119,8 @@ export const writing = {
       request<{ markdown: string; filename: string }>(`/api/documents/${id}/export`),
     exportDocx: (id: string) =>
       request<{ base64: string; filename: string }>(`/api/documents/${id}/export-docx`),
+    exportPdf: (id: string) =>
+      request<{ base64: string; filename: string }>(`/api/documents/${id}/export-pdf`),
     exportPptx: (id: string) =>
       request<{ base64: string; filename: string }>(`/api/documents/${id}/export-pptx`),
     exportXlsx: (id: string) =>

@@ -10,8 +10,6 @@ export const projects = sqliteTable('project', {
   updatedAt: integer('updated_at').notNull(),
   /** 项目级系统提示（projectPreface）：写作/规划时注入 system prompt 开头（差距 #22） */
   preface: text('preface').default(''),
-  /** 差距#1：自定义大纲模板（JSON 字符串：[{name,description,sections:[{title,points}]}]） */
-  templates: text('templates').default('[]'),
   /** 归属用户（AUTH_MODE=jwt 企业模式使用；空串=本地单用户模式的公共项目） */
   ownerId: text('owner_id').default(''),
 });
@@ -971,7 +969,7 @@ export type ResearchBrief = typeof researchBriefs.$inferSelect;
 export const shareLinks = sqliteTable('share_link', {
   id: text('id').primaryKey(),
   projectId: text('project_id').notNull(),
-  targetType: text('target_type').notNull(), // document（当前支持）
+  targetType: text('target_type').notNull(), // document | conversation
   targetId: text('target_id').notNull(),
   token: text('token').notNull(),
   title: text('title').default(''),
@@ -979,9 +977,23 @@ export const shareLinks = sqliteTable('share_link', {
   createdAt: integer('created_at').notNull(),
   expiresAt: integer('expires_at'),
   revokedAt: integer('revoked_at'),
+  /** 公开页是否允许只读评论；默认关闭，避免链接被当留言板 */
+  allowComments: integer('allow_comments').default(0),
 });
 
 export type ShareLink = typeof shareLinks.$inferSelect;
+
+/** 公开分享页的只读评论（作者可在分享管理里删除）。 */
+export const shareComments = sqliteTable('share_comment', {
+  id: text('id').primaryKey(),
+  shareId: text('share_id').notNull(),
+  authorName: text('author_name').default('匿名读者'),
+  content: text('content').notNull(),
+  status: text('status').default('visible'), // visible | hidden
+  createdAt: integer('created_at').notNull(),
+});
+
+export type ShareComment = typeof shareComments.$inferSelect;
 
 /** 定时任务：复用 BackgroundRunService 入队执行，支持一次/每小时/每天/每周。 */
 export const agentSchedules = sqliteTable('agent_schedule', {
@@ -996,6 +1008,16 @@ export const agentSchedules = sqliteTable('agent_schedule', {
   sessionKey: text('session_key').default('schedule'),
   model: text('model').default(''),
   enabled: integer('enabled').default(1),
+  /** time | reference.created | pipeline.completed | quality.threshold | experiment.failed */
+  triggerType: text('trigger_type').default('time'),
+  /** 触发条件 JSON（如 {threshold:60} / {event:'reference.created'}） */
+  triggerConfig: text('trigger_config').default('{}'),
+  /** 通知渠道 JSON 数组：inapp | browser | feishu */
+  notifyChannels: text('notify_channels').default('["inapp"]'),
+  /** 飞书自定义机器人 Webhook URL（只存目标，不存 token） */
+  notifyTarget: text('notify_target').default(''),
+  /** 最近一次运行状态：pending | running | ok | error */
+  lastStatus: text('last_status').default('pending'),
   lastRunAt: integer('last_run_at'),
   nextRunAt: integer('next_run_at').notNull(),
   createdAt: integer('created_at').notNull(),
@@ -1003,3 +1025,21 @@ export const agentSchedules = sqliteTable('agent_schedule', {
 });
 
 export type AgentSchedule = typeof agentSchedules.$inferSelect;
+
+/** Agent 统一收件箱：任务完成/审批/自动化通知共用，不新增通知中心页面。 */
+export const agentNotifications = sqliteTable('agent_notification', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  /** task | approval | automation | quality | system */
+  kind: text('kind').default('system'),
+  title: text('title').notNull(),
+  body: text('body').default(''),
+  /** 站内跳转（现有路由，不新开页面） */
+  link: text('link').default(''),
+  read: integer('read').default(0),
+  /** 幂等键：同一调度/同一事件重复投递时只保留一条 */
+  dedupeKey: text('dedupe_key').default(''),
+  createdAt: integer('created_at').notNull(),
+});
+
+export type AgentNotification = typeof agentNotifications.$inferSelect;

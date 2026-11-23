@@ -260,6 +260,13 @@ export class DocumentsController {
     return this.documents.exportMarkdown(id);
   }
 
+  /** 导出 PDF（A4 打印样式，公式/表格/参考文献） */
+  @Get(':id/export-pdf')
+  async exportPdf(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertDocument(id, req.user);
+    return this.documents.exportPdf(id);
+  }
+
   /** 导出 PPTX 演示稿（标题/大纲/正文/参考文献） */
   @Get(':id/export-pptx')
   async exportPptx(@Param('id') id: string, @Req() req: { user?: AuthPayload }) {

@@ -83,6 +83,18 @@ describe('扩展中心服务', () => {
     expect(JSON.parse(arxiv[0].manifest).url).toBe('https://arxiv.caseyjhand.com/mcp');
   });
 
+  it('chat scope：只进 slash 清单，启用不写 custom_prompt，applyPrompt 拒绝', () => {
+    const row = svc.upsert({
+      kind: 'prompt', key: 'prompt-chat-test', name: '文献速读', description: '聊天模板测试',
+      manifest: { scope: 'chat', title: '文献速读', description: '先给结论', template: '请用三句话总结：{{input}}' },
+    }, { source: 'import' });
+    const before = sqlite.prepare("SELECT COUNT(*) AS n FROM custom_prompt").get() as { n: number };
+    expect(svc.chatPrompts().some((p) => p.id === row.id && p.title === '文献速读')).toBe(true);
+    const after = sqlite.prepare("SELECT COUNT(*) AS n FROM custom_prompt").get() as { n: number };
+    expect(after.n).toBe(before.n);
+    expect(() => svc.applyPrompt(row.id)).toThrow('聊天模板不能应用');
+  });
+
   it('导出包排除 private 私有优势工具', () => {
     const bundle = svc.exportBundle();
     expect(bundle.assets.length).toBe(svc.listPublic().length);

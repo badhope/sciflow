@@ -142,6 +142,7 @@ export function WritingPage({
   /* ============ 文档管理状态 ============ */
   const [showNewDoc, setShowNewDoc] = useState(false);
   const [newDocTitle, setNewDocTitle] = useState('');
+  const [newDocTemplate, setNewDocTemplate] = useState('');
   const [creatingDoc, setCreatingDoc] = useState(false);
   const [deletingDoc, setDeletingDoc] = useState<Doc | null>(null);
 
@@ -395,11 +396,17 @@ export function WritingPage({
     setError('');
     try {
       const d = await api.documents.create(project.id, title);
+      const tpl = OUTLINE_TEMPLATES.find((t) => t.key === newDocTemplate);
+      if (tpl) {
+        const outline = tpl.build(title);
+        await api.documents.update(d.id, { outline: JSON.stringify(outline) });
+      }
       await loadDocs();
       setDocId(d.id);
       setNewDocTitle('');
+      setNewDocTemplate('');
       setShowNewDoc(false);
-      toast('success', `文档「${d.title}」已创建`);
+      toast('success', `文档「${d.title}」已创建${tpl ? `（已套用 ${tpl.label}）` : ''}`);
     } catch (e: unknown) {
       setError(errMsg(e));
     } finally {
@@ -614,6 +621,20 @@ export function WritingPage({
       toast('success', 'Word 文档已导出（含标题/大纲/正文/参考文献）');
     } catch {
       toast('error', 'Word 导出失败');
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const exportPdf = async () => {
+    if (!doc) return;
+    try {
+      setAiBusy(true);
+      const { base64, filename } = await api.documents.exportPdf(doc.id);
+      downloadBase64(filename, base64, 'application/pdf');
+      toast('success', 'PDF 已导出（A4 打印样式，含公式/表格/参考文献）');
+    } catch {
+      toast('error', 'PDF 导出失败');
     } finally {
       setAiBusy(false);
     }
@@ -841,6 +862,13 @@ export function WritingPage({
         onKeyDown={(e) => e.key === 'Enter' && createDoc()}
         autoFocus
       />
+      <div className="mt-2">
+        <select value={newDocTemplate} onChange={(e) => setNewDocTemplate(e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" aria-label="成稿模板">
+          <option value="">空白文档（不套模板）</option>
+          {OUTLINE_TEMPLATES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+        </select>
+        <div className="mt-1 text-[11px] text-slate-400">模板只生成大纲骨架，不覆盖标题与后续正文。</div>
+      </div>
       <div className="mt-4 flex justify-end gap-2">
         <Button variant="ghost" onClick={() => setShowNewDoc(false)}>
           取消
@@ -916,6 +944,7 @@ export function WritingPage({
             project={project}
             onExportFull={exportFullDoc}
             onExportWord={exportWord}
+            onExportPdf={exportPdf}
             onExportPpt={exportPpt}
             onExportExcel={exportExcel}
             aiBusy={aiBusy}

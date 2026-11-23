@@ -12,6 +12,11 @@ const approvalsMock = vi.fn();
 const tasksMock = vi.fn();
 const decidePlanMock = vi.fn();
 const decideApprovalMock = vi.fn();
+const notificationsMock = vi.fn();
+const markNotificationReadMock = vi.fn();
+const markAllNotificationsReadMock = vi.fn();
+const retryNotificationMock = vi.fn();
+const schedulesMock = vi.fn();
 
 vi.mock('../../api/client', () => ({
   api: {
@@ -24,6 +29,15 @@ vi.mock('../../api/client', () => ({
       tasks: (...a: unknown[]) => tasksMock(...a),
       decidePlan: (...a: unknown[]) => decidePlanMock(...a),
       decideApproval: (...a: unknown[]) => decideApprovalMock(...a),
+      notifications: (...a: unknown[]) => notificationsMock(...a),
+      markNotificationRead: (...a: unknown[]) => markNotificationReadMock(...a),
+      markAllNotificationsRead: (...a: unknown[]) => markAllNotificationsReadMock(...a),
+      retryNotification: (...a: unknown[]) => retryNotificationMock(...a),
+      schedules: (...a: unknown[]) => schedulesMock(...a),
+      createSchedule: (...a: unknown[]) => schedulesMock('create', ...a),
+      updateSchedule: (...a: unknown[]) => schedulesMock('update', ...a),
+      deleteSchedule: (...a: unknown[]) => schedulesMock('delete', ...a),
+      runSchedule: (...a: unknown[]) => schedulesMock('run', ...a),
     },
   },
   errMsg: (e: unknown) => String(e),
@@ -47,6 +61,10 @@ describe('AgentOpsPanel', () => {
   beforeEach(() => {
     executionsMock.mockReset();
     getRunMock.mockReset();
+    notificationsMock.mockReset();
+    schedulesMock.mockReset();
+    notificationsMock.mockResolvedValue({ notifications: [], unread: 0 });
+    schedulesMock.mockResolvedValue({ schedules: [] });
     executionsMock.mockResolvedValue({ executions: [] });
   });
   afterEach(() => cleanup());
@@ -111,6 +129,28 @@ describe('AgentOpsPanel', () => {
     expect(screen.getByText('60%')).toBeInTheDocument();
     expect(screen.getByText('document.update')).toBeInTheDocument();
     expect(screen.getByText(/有效至/)).toBeInTheDocument();
+  });
+
+  it('同一屏展示任务、审批与自动化通知，且各自只请求一次', { timeout: 20000 }, async () => {
+    metricsMock.mockResolvedValue({
+      rangeDays: 7,
+      toolCalls: { total: 0, ok: 0, fail: 0, successRate: 0, avgMs: 0, p95Ms: 0 }, byTool: [], byDay: [],
+      runs: { total: 0, done: 0, error: 0, running: 0, avgDurationMs: 0, totalTokens: 0 },
+    });
+    plansMock.mockResolvedValue({ plans: [] });
+    approvalsMock.mockResolvedValue({ approvals: [{ id: 'a-1', toolName: 'document.update', args: '{}', reason: '写入测试稿', status: 'pending', projectId: 'p-1', runId: null, createdAt: 0, decidedAt: null }] });
+    tasksMock.mockResolvedValue({ tasks: [{ id: 't-1', content: '跑实验', status: 'in_progress', priority: 'medium', seq: 1 }], summary: { total: 1, completed: 0, inProgress: 0, pending: 1, percent: 0 } });
+    notificationsMock.mockResolvedValue({ notifications: [{ id: 'n-1', projectId: 'p-1', kind: 'automation', title: '流水线已完成', body: '可以查看结果', link: '/pipeline', read: false, createdAt: 0 }], unread: 1 });
+
+    renderPanel();
+    expect(await screen.findByText('自动化')).toBeInTheDocument();
+    expect(await screen.findByText('自动化通知')).toBeInTheDocument();
+    expect(await screen.findByText('流水线已完成')).toBeInTheDocument();
+    expect(screen.getByText('写入测试稿')).toBeInTheDocument();
+    expect(screen.getByText(/任务清单 0\/1/)).toBeInTheDocument();
+    expect(tasksMock).toHaveBeenCalledTimes(1);
+    expect(approvalsMock).toHaveBeenCalledTimes(1);
+    expect(notificationsMock).toHaveBeenCalledTimes(1);
   });
 
   it('用户中止的执行显示“已中止”，不再伪装成完成', { timeout: 20000 }, async () => {

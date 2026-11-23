@@ -6,7 +6,8 @@ import { computeNextRun, ScheduleService } from './schedule.service';
 
 const PROJ = 'test-schedule-001';
 const background = { start: vi.fn(() => ({ id: 'job-1' })) } as never;
-const service = new ScheduleService(background);
+const notifications = { notify: vi.fn(async () => ({ id: 'n1' })) } as never;
+const service = new ScheduleService(background, notifications);
 
 function cleanup() {
   db.delete(agentSchedules).where(eq(agentSchedules.projectId, PROJ)).run();
@@ -51,6 +52,24 @@ describe('ScheduleService', () => {
     expect(paused.enabled).toBe(0);
     expect(service.remove(s.id, PROJ).deleted).toBe(true);
     expect(service.list(PROJ)).toHaveLength(0);
+  });
+
+  it('event schedules wait for events and keep notification channels', () => {
+    const s = service.create({
+      projectId: PROJ, name: '文献入库后总结', cadence: 'daily', message: '总结新文献',
+      triggerType: 'reference.created', triggerConfig: { minCount: 2 },
+      notifyChannels: ['inapp', 'feishu'], notifyTarget: 'https://open.feishu.cn/open-apis/bot/v2/hook/x',
+    });
+    expect(s.triggerType).toBe('reference.created');
+    expect(JSON.parse(s.notifyChannels)).toEqual(['inapp', 'feishu']);
+    expect(s.nextRunAt).toBeGreaterThan(Date.now() + 300 * 24 * 3600_000);
+  });
+
+  it('once schedules are disabled after a due run', async () => {
+    const s = service.create({ projectId: PROJ, name: '一次性', cadence: 'once', message: '跑一次', delayMinutes: 1 });
+    await service.runDue(s.nextRunAt + 1000);
+    const row = service.list(PROJ).find((x) => x.id === s.id)!;
+    expect(row.enabled).toBe(0);
   });
 
   it('runs a schedule now through the background executor', () => {

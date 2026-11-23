@@ -34,14 +34,14 @@ describe('api client × msw（网络层拦截）', () => {
 
   it('后端中文业务错误：原样透传 message（不覆盖为状态码文案）', async () => {
     const { api } = await import('./client');
-    await expect(api.pipeline.create('p1', '')).rejects.toThrow(/请先输入研究主题/);
+    await expect(api.pipeline.create('p1', '')).rejects.toMatchObject({ message: expect.stringContaining('请先输入研究主题') });
   });
 
   it('英文错误 + 500：转译为友好中文提示', async () => {
     // 走真实的 request() 出口，而不是裸 fetch——否则测不到错误翻译层。
     // /api/boom 返回 message="kaboom"（非中文）且状态 500，应被翻译成状态码对应的中文。
     const { request } = await import('./core');
-    await expect(request('/api/boom')).rejects.toThrow(/服务内部错误|请求失败/);
+    await expect(request('/api/boom')).rejects.toMatchObject({ message: expect.stringMatching(/服务内部错误|请求失败/) });
     // 且错误必须携带状态码，便于上层区分「服务端故障」与「网络不通」
     await expect(request('/api/boom')).rejects.toMatchObject({ status: 500 });
   });
@@ -57,12 +57,12 @@ describe('api client × msw（网络层拦截）', () => {
       ),
     );
     const { api } = await import('./client');
-    await expect(api.quality.review('d1', 't', 'x')).rejects.toThrow(/文档内容过短，暂无法评分/);
+    await expect(api.quality.review('d1', 't', 'x')).rejects.toMatchObject({ message: expect.stringContaining('文档内容过短，暂无法评分') });
   });
 
   it('网络失败：给出可识别的连接提示（而不是吞成通用错误）', async () => {
     server.use(http.get('http://msw.test/api/offline', () => HttpResponse.error()));
     const { request } = await import('./core');
-    await expect(request('/api/offline')).rejects.toThrow(/无法连接服务器/);
+    await expect(request('/api/offline')).rejects.toMatchObject({ message: expect.stringContaining('无法连接服务器') });
   });
 });

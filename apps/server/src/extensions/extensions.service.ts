@@ -174,6 +174,27 @@ export class ExtensionsService {
   //  查询                                                              //
   // ------------------------------------------------------------------ //
 
+  /** 聊天 slash 模板：只返回 enabled 的 chat scope prompt 资产，按名称排序。 */
+  chatPrompts() {
+    return this.list('prompt')
+      .filter((row) => row.enabled === 1)
+      .map((row) => {
+        let manifest: Record<string, unknown> = {};
+        try { manifest = JSON.parse(row.manifest || '{}') as Record<string, unknown>; } catch { /* 坏 manifest 跳过 */ }
+        return { row, manifest };
+      })
+      .filter(({ manifest }) => String(manifest.scope || 'tool') === 'chat')
+      .map(({ row, manifest }) => ({
+        id: row.id,
+        key: row.key,
+        title: String(manifest.title || row.name || '').slice(0, 40),
+        description: String(manifest.description || row.description || '').slice(0, 120),
+        template: String(manifest.template || manifest.prompt || '').slice(0, 8000),
+      }))
+      .filter((p) => p.title && p.template)
+      .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'));
+  }
+
   list(kind?: string, opts: { includePrivate?: boolean } = {}): ExtensionRow[] {
     const where: string[] = [];
     const args: unknown[] = [];
@@ -566,6 +587,8 @@ export class ExtensionsService {
    * 只有用户显式点「应用」（applyPrompt）才写入 custom_prompt；未应用时保持系统默认。
    */
   private projectPrompt(row: ExtensionRow, manifest: Record<string, unknown>, enabled: boolean): void {
+    // chat scope 只做 slash 模板资产，绝不写 custom_prompt（否则会静默覆盖科研工具默认提示词）
+    if (String(manifest.scope || 'tool') === 'chat') return;
     const toolKey = String(manifest.toolKey || '');
     const prompt = String(manifest.prompt || '').trim();
     if (!toolKey || !prompt) return;
@@ -600,6 +623,7 @@ export class ExtensionsService {
     const row = this.get(id);
     if (row.kind !== 'prompt') throw new BadRequestException('只有提示词模板支持「应用」');
     const manifest = JSON.parse(row.manifest || '{}') as Record<string, unknown>;
+    if (String(manifest.scope || 'tool') === 'chat') throw new BadRequestException('聊天模板不能应用，只能作为 slash 模板使用');
     const toolKey = String(manifest.toolKey || '');
     // 同 toolKey 的其他模板停用（只允许一个生效）
     for (const other of this.list('prompt')) {

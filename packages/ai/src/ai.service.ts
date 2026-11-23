@@ -97,6 +97,36 @@ export class AiService extends AiTransportService {
     }
   }
 
+  /**
+   * 音频转写：走 OpenAI-compatible `/audio/transcriptions`，不手写音频解码。
+   * 未配置模型或端点不支持时抛可读错误，由附件层转成 400；mock 模式返回固定文本，
+   * 让无外网的测试仍能覆盖“音频进入问答”的链路。
+   */
+  async transcribeAudio(buffer: Buffer, filename: string, mime: string): Promise<string> {
+    if (!buffer.length) throw new Error('音频为空');
+    if (this.mockConnectionActive) {
+      return `[音频转写模拟] ${filename}（${Math.max(1, Math.round(buffer.length / 1024))} KB）`;
+    }
+    if (!this.configured) throw new Error('未配置音频转写模型：请先在设置中配置 AI 连接');
+    const model = process.env.AI_TRANSCRIBE_MODEL || 'whisper-1';
+    const form = new FormData();
+    form.append('file', new Blob([buffer], { type: mime || 'application/octet-stream' }), filename || 'audio');
+    form.append('model', model);
+    const res = await safeOutboundFetch(`${this.baseUrl}/audio/transcriptions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+      body: form as unknown as never,
+    });
+    if (!res.ok) {
+      const detail = (await res.text().catch(() => '')).slice(0, 300);
+      throw new Error(`音频转写失败（HTTP ${res.status}）${detail ? `：${detail}` : ''}`);
+    }
+    const payload = (await res.json()) as { text?: string };
+    const text = String(payload.text || '').trim();
+    if (!text) throw new Error('音频转写结果为空');
+    return text;
+  }
+
   /** 宽松 JSON 解析：jsonrepair 修复近合法输出（围栏/前缀/截断），失败抛错 */
   jsonOf<T>(text: string): T {
     return JSON.parse(jsonrepair(text)) as T;

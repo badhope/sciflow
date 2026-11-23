@@ -16,9 +16,7 @@ const queryClient = new QueryClient({
   },
 });
 
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => void navigator.serviceWorker.register('/sw.js').catch(() => undefined));
-}
+// PWA 由 vite-plugin-pwa 在构建时注入注册（generateSW + autoUpdate）；手写 sw.js 已删除。
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

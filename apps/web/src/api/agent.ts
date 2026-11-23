@@ -40,6 +40,21 @@ export interface BackgroundJob {
   finishedAt: number | null;
 }
 
+export type AgentTriggerType = 'time' | 'reference.created' | 'pipeline.completed' | 'quality.threshold' | 'experiment.failed';
+export type AgentNotifyChannel = 'inapp' | 'browser' | 'feishu';
+
+export interface AgentNotification {
+  id: string;
+  projectId: string;
+  kind: string;
+  title: string;
+  body: string;
+  link: string | null;
+  read: number;
+  dedupeKey: string | null;
+  createdAt: number;
+}
+
 export interface AgentSchedule {
   id: string;
   projectId: string;
@@ -54,6 +69,11 @@ export interface AgentSchedule {
   enabled: number;
   lastRunAt: number | null;
   nextRunAt: number;
+  triggerType: AgentTriggerType;
+  triggerConfig: string;
+  notifyChannels: string;
+  notifyTarget: string | null;
+  lastStatus: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -120,11 +140,29 @@ export const agent = {
     projectId: string; name: string; cadence: 'once' | 'hourly' | 'daily' | 'weekly';
     message: string; minuteOfHour?: number; hourOfDay?: number; weekday?: number; delayMinutes?: number;
     model?: string;
+    triggerType?: AgentTriggerType;
+    triggerConfig?: Record<string, unknown>;
+    notifyChannels?: AgentNotifyChannel[];
+    notifyTarget?: string;
   }) => request<AgentSchedule>('/api/schedules', { method: 'POST', body: JSON.stringify(body) }),
-  updateSchedule: (id: string, projectId: string, body: { enabled?: boolean; message?: string; name?: string }) =>
+  updateSchedule: (id: string, projectId: string, body: {
+    enabled?: boolean; message?: string; name?: string;
+    triggerType?: AgentTriggerType; triggerConfig?: Record<string, unknown>;
+    notifyChannels?: AgentNotifyChannel[]; notifyTarget?: string;
+  }) =>
     request<AgentSchedule>(`/api/schedules/${id}?projectId=${encodeURIComponent(projectId)}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteSchedule: (id: string, projectId: string) =>
     request<{ deleted: boolean }>(`/api/schedules/${id}?projectId=${encodeURIComponent(projectId)}`, { method: 'DELETE' }),
   runSchedule: (id: string, projectId: string) =>
     request<{ job: BackgroundJob }>(`/api/schedules/${id}/run?projectId=${encodeURIComponent(projectId)}`, { method: 'POST' }),
+
+  /** 自动化通知收件箱（站内信） */
+  notifications: (projectId: string, limit = 20) =>
+    request<{ notifications: AgentNotification[]; unread: number }>(`/api/agent/notifications?projectId=${encodeURIComponent(projectId)}&limit=${limit}`),
+  markNotificationRead: (id: string, projectId: string) =>
+    request<{ ok: boolean }>(`/api/agent/notifications/${id}/read?projectId=${encodeURIComponent(projectId)}`, { method: 'PATCH' }),
+  markAllNotificationsRead: (projectId: string) =>
+    request<{ ok: boolean }>('/api/agent/notifications/read-all', { method: 'POST', body: JSON.stringify({ projectId }) }),
+  retryNotification: (id: string, projectId: string) =>
+    request<{ ok: boolean }>(`/api/agent/notifications/${id}/retry`, { method: 'POST', body: JSON.stringify({ projectId }) }),
 };

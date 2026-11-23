@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Brain, Check, Download, ExternalLink, FilePlus2, Globe, Loader2, MessageSquare, Navigation, Pencil,
-  Copy, Paperclip, PlayCircle, Plus, Quote, Search, Send, Share2, Sparkles, Square, Trash2, Workflow, X,
+  Copy, PlayCircle, Plus, Quote, Search, Share2, Sparkles, Trash2, Workflow,
   Pin, Archive, ArchiveRestore, Cloud, GitBranch,
 } from 'lucide-react';
 import { PIPELINE_STEPS } from '@sciflow/core/pipeline-steps';
@@ -26,12 +27,13 @@ import { useHotkeys } from '../lib/hotkeys';
 import { useAsyncAction } from '../lib/async';
 import { useChatSession, parseFollowUps, FOLLOWUP_HINT, type ChatAttachment, type ChatMessage, type SendOptions } from '../lib/chat-session';
 import { activeBranchSummary } from '../lib/chat-branch';
-import { CHAT_ATTACHMENT_ACCEPT, CHAT_ATTACHMENT_MAX_FILES, readChatAttachment } from '../lib/chat-attachments';
+import { CHAT_ATTACHMENT_MAX_FILES, readChatAttachment } from '../lib/chat-attachments';
 import { shares, absoluteShareUrl, type ShareLinkInfo } from '../api/shares';
 import { useProjectDocs, useProjectKnowledge, useProjectRefs } from '../lib/queries';
 import { useTabActive } from '../lib/tab-visibility';
 import { qk } from '../lib/query-keys';
-import { applyChatCommand, filterChatCommands, type ChatCommand } from '../lib/chat-commands';
+import { applyChatCommand, chatPromptCommands, filterChatCommands, type ChatCommand } from '../lib/chat-commands';
+import { ChatComposer } from '../components/ChatComposer';
 import { useAgentInbox } from '../lib/agent-inbox';
 import {
   createSession, deriveTitle, loadActiveSessionId, loadDraft, loadSessions, saveActiveSessionId, saveDraft, saveSessions,
@@ -163,7 +165,8 @@ export function WorkspacePage({
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [shareInfo, setShareInfo] = useState<ShareLinkInfo | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [shareTarget, setShareTarget] = useState<{ type: 'document' | 'conversation'; id: string; title: string } | null>(null);
+  const [shareAllowComments, setShareAllowComments] = useState(false);
   const [sessionFilter, setSessionFilter] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [sessionSyncError, setSessionSyncError] = useState('');
@@ -493,6 +496,21 @@ export function WorkspacePage({
     },
   ]);
 
+  /** A6：把整条回答落成现有文档（标题可改），刷新后仍可编辑/导出。 */
+  const saveAnswerAsDocument = async (index: number) => {
+    const message = messages[index];
+    if (!message?.content?.trim()) return;
+    const fallback = message.content.replace(/[#>*`]/g, '').trim().split('\n')[0].slice(0, 40) || '对话产物';
+    const title = window.prompt('保存为文档的标题', fallback);
+    if (!title?.trim()) return;
+    try {
+      const d = await api.documents.create(project.id, title.trim());
+      await api.documents.update(d.id, { content: message.content });
+      await qc.invalidateQueries({ queryKey: qk.docs(project.id) });
+      setDocId(d.id);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  };
+
   const onComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // 中文输入法组词中的 Enter 不能当作发送（历史缺陷：拼音未上屏就发出）
     if (e.nativeEvent.isComposing) return;
@@ -589,7 +607,7 @@ export function WorkspacePage({
     void api.chat.createSession({ projectId: project.id, id: s.id, title: s.title }).catch(() => undefined);
   };
 
-  const openSession = async (id: string) => {
+  const openSession = useCallback(async (id: string) => {
     const target = await loadSession(id);
     if (!target) return;
     setActiveId(id);
@@ -597,7 +615,22 @@ export function WorkspacePage({
     chat.reset(target.messages.length ? (target.messages as ChatMessage[]) : [], target.branch?.activeLeafId ?? null);
     setInput(loadDraft(project.id, id));
     setIntent(null);
-  };
+  }, [loadSession, project.id, chat]);
+
+  const openSessionRef = useRef<((id: string) => Promise<void>) | null>(null);
+  useEffect(() => { openSessionRef.current = openSession; }, [openSession]);
+
+  // 全局搜索 ⌘K 的会话命中用 ?session= 定位；只在首次挂载消费一次，不覆盖用户后续手动切换。
+  const [searchParams] = useSearchParams();
+  const focusSessionId = searchParams.get('session');
+  const focusSessionConsumed = useRef(false);
+  useEffect(() => {
+    if (!focusSessionId || focusSessionConsumed.current) return;
+    const local = sessionsRef.current.some((s) => s.id === focusSessionId);
+    if (!local && !serverSessionsQuery.data) return;
+    focusSessionConsumed.current = true;
+    void openSessionRef.current?.(focusSessionId);
+  }, [focusSessionId, serverSessionsQuery.data, searchParams]);
 
   const deleteSession = async (id: string) => {
     const next = sessionsRef.current.filter((s) => s.id !== id);
@@ -720,7 +753,13 @@ export function WorkspacePage({
 
   const busy = task && (task.status === 'running' || task.status === 'awaiting_confirmation');
   const hasConversation = messages.some((m) => m.role === 'user');
-  const slashFiltered = filterChatCommands(input, 'workspace', 5);
+  const chatTemplatesQuery = useQuery({
+    queryKey: ['chat-prompt-templates'],
+    queryFn: () => api.extensions.chatPrompts(),
+    staleTime: 60_000,
+    retry: 0,
+  });
+  const slashFiltered = filterChatCommands(input, 'workspace', 5, chatPromptCommands(chatTemplatesQuery.data?.prompts));
 
   // @ 提及候选：文献 + 知识库资料 + 当前项目文档
   const mentionItems: MentionItem[] = useMemo(() => {
@@ -780,13 +819,18 @@ export function WorkspacePage({
     });
   };
 
+  const openShare = (type: 'document' | 'conversation', id: string, title: string) => {
+    setShareTarget({ type, id, title });
+    setShareInfo(null);
+    setShareOpen(true);
+  };
+
   const createShare = async () => {
-    if (!effectiveDocId || shareBusy) return;
+    if (!shareTarget || shareBusy) return;
     setShareBusy(true);
     try {
-      const info = await shares.create({ projectId: project.id, targetType: 'document', targetId: effectiveDocId });
+      const info = await shares.create({ projectId: project.id, targetType: shareTarget.type, targetId: shareTarget.id, allowComments: shareAllowComments });
       setShareInfo(info);
-      setShareOpen(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -827,7 +871,7 @@ export function WorkspacePage({
           <Download size={14} /> 导出
         </Button>
         {effectiveDocId && (
-          <Button variant="outline" onClick={() => void createShare()} loading={shareBusy} title="生成只读分享链接">
+          <Button variant="outline" onClick={() => openShare('document', effectiveDocId, activeDoc?.title || '文档')} loading={shareBusy} title="生成只读分享链接">
             <Share2 size={14} /> 分享
           </Button>
         )}
@@ -848,11 +892,25 @@ export function WorkspacePage({
         )}
       </div>
 
-      <Modal open={shareOpen} title="只读分享链接" onClose={() => setShareOpen(false)} width="max-w-lg">
-        {shareInfo ? (
+      <Modal open={shareOpen} title="只读分享链接" onClose={() => { setShareOpen(false); setShareTarget(null); }} width="max-w-lg">
+        {!shareInfo && shareTarget ? (
           <div className="space-y-3">
             <div className="text-xs text-slate-500 dark:text-slate-400">
-              任何人拿到此链接都可只读查看《{shareInfo.title}》的当前快照；有效期至 {shareInfo.expiresAt ? new Date(shareInfo.expiresAt).toLocaleDateString() : '永久'}。
+              将《{shareTarget.title}》的当前快照生成为匿名只读链接；{shareTarget.type === 'conversation' ? '附件、工具结果与系统提示不会进入快照。' : '正文与引用快照固定，后续修改不影响已分享内容。'}
+            </div>
+            <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+              <input type="checkbox" checked={shareAllowComments} onChange={(e) => setShareAllowComments(e.target.checked)} />
+              允许匿名读者在公开页留言（作者可按分享删除）
+            </label>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setShareOpen(false)}>取消</Button>
+              <Button onClick={() => void createShare()} loading={shareBusy}>生成链接</Button>
+            </div>
+          </div>
+        ) : shareInfo ? (
+          <div className="space-y-3">
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              任何人拿到此链接都可只读查看《{shareInfo.title}》的当前{shareInfo.targetType === 'conversation' ? '对话' : '文档'}快照；有效期至 {shareInfo.expiresAt ? new Date(shareInfo.expiresAt).toLocaleDateString() : '永久'}；评论{shareInfo.allowComments ? '已开启' : '已关闭'}。
             </div>
             <div className="flex gap-2">
               <input readOnly value={absoluteShareUrl(shareInfo.path)} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs dark:border-slate-700 dark:bg-slate-800" onFocus={(e) => e.currentTarget.select()} />
@@ -964,6 +1022,12 @@ export function WorkspacePage({
                       aria-label={`重命名会话 ${s.title}`}
                     ><Pencil size={11} /></button>
                     <button
+                      onClick={(e) => { e.stopPropagation(); openShare('conversation', s.id, s.title); }}
+                      className="p-1 text-slate-400 hover:text-teal-600 rounded"
+                      aria-label={`分享会话 ${s.title}`}
+                      title="分享对话快照"
+                    ><Share2 size={11} /></button>
+                    <button
                       onClick={(e) => { e.stopPropagation(); setDeletingSession({ id: s.id, title: s.title }); }}
                       className="p-1 text-slate-400 hover:text-rose-500 rounded"
                       aria-label={`删除会话 ${s.title}`}
@@ -1058,6 +1122,8 @@ export function WorkspacePage({
             onSwitchBranch={chat.switchBranch}
             onCite={(src) => openCite(src)}
             onSendToWriting={(i) => void sendWriting.run(i)}
+            onSaveAsDocument={(i) => void saveAnswerAsDocument(i)}
+            onOpenDocument={(id) => setDocId(id)}
             onFollowUp={(f, i) => chat.send(f, { ...chatOpts(), baseMessages: messages.slice(0, i + 1) })}
             empty={(
               <div className="pt-4">
@@ -1186,121 +1252,52 @@ export function WorkspacePage({
             )}
           </AgentChatThread>
 
-          {/* 输入区 */}
-          <div className="border-t border-slate-100 dark:border-slate-800 p-2.5 shrink-0 relative">
-            {/* Slash 下拉 */}
-            {slashOpen && (
-              <div className="absolute bottom-full left-3 right-3 mb-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-[var(--card)] shadow-lg overflow-hidden page-in z-10" role="listbox" aria-label="快捷指令">
-                {slashFiltered.map((c, ci) => (
-                  <button
-                    key={c.name}
-                    type="button"
-                    onClick={() => applySlash(c)}
-                    className={`w-full text-left px-3 py-2 flex items-center gap-2 ${ci === slashActive ? 'bg-teal-50 dark:bg-teal-500/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'}`}
-                  >
-                    <span className="text-xs font-semibold text-teal-700 dark:text-teal-300 w-20 shrink-0">/{c.name}</span>
-                    <span className="text-[11px] text-slate-400 truncate">{c.desc}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {pendingAttachments.length > 0 && (
-              <div className="mb-1.5 flex flex-wrap gap-1.5">
-                {pendingAttachments.map((a, i) => (
-                  <span key={`${a.name}-${i}`} className="inline-flex max-w-full items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 py-1 text-[11px] text-teal-700 dark:border-teal-800 dark:bg-teal-500/10 dark:text-teal-300">
-                    <Paperclip size={11} />
-                    <span className="max-w-[180px] truncate">{a.name}</span>
-                    <button type="button" onClick={() => setPendingAttachments((list) => list.filter((_, j) => j !== i))} className="text-teal-600 hover:text-rose-500 dark:text-teal-400" aria-label={`移除 ${a.name}`}>
-                      <X size={11} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept={CHAT_ATTACHMENT_ACCEPT}
-                className="hidden"
-                onChange={(e) => { void addAttachments(e.target.files); e.currentTarget.value = ''; }}
+          {/* 输入区：与写作 ChatPanel 共用 ChatComposer，附件/slash/停止/移动端布局不再两套 */}
+          <ChatComposer
+            testId="workspace-composer"
+            value={input}
+            onValueChange={(v, caret) => {
+              setInput(v);
+              setSlashDismissed(false);
+              const parsed = parseMentionQuery(v, caret ?? v.length);
+              setMention(parsed);
+              setMentionActive(0);
+            }}
+            onSend={send}
+            onStop={chat.stop}
+            streaming={streaming}
+            placeholder="问问题 / 让 AI 起草内容（Enter 发送，/ 唤出快捷指令）…"
+            attachments={pendingAttachments}
+            onPickFiles={(files) => void addAttachments(files)}
+            onRemoveAttachment={(i) => setPendingAttachments((list) => list.filter((_, j) => j !== i))}
+            slash={{ open: slashOpen, items: slashFiltered, active: slashActive, onApply: applySlash }}
+            textareaRef={taRef}
+            onKeyDown={onComposerKeyDown}
+            overlay={mention && mentionFiltered.length > 0 ? (
+              <MentionPicker
+                items={mentionFiltered}
+                activeIndex={mentionActive}
+                onActiveChange={setMentionActive}
+                onPick={pickMention}
+                onClose={() => setMention(null)}
               />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={streaming || pendingAttachments.length >= CHAT_ATTACHMENT_MAX_FILES}
-                className="flex items-center gap-1 text-[11px] rounded-md px-1.5 py-1 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700 disabled:opacity-40"
-                title="上传 PDF、文本、CSV 或图片（最多 4 个）"
-              >
-                <Paperclip size={12} /> 附件{pendingAttachments.length ? ` · ${pendingAttachments.length}` : ''}
-              </button>
-              <button
-                onClick={() => setWebSearch((v) => !v)}
-                aria-pressed={webSearch}
+            ) : null}
+            toolbar={<>
+              <button onClick={() => setWebSearch((v) => !v)} aria-pressed={webSearch}
                 className={`flex items-center gap-1 text-[11px] rounded-md px-1.5 py-1 border transition-colors ${webSearch ? 'bg-teal-50 dark:bg-teal-500/10 border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
-                title="联网搜索：本轮回答会检索公开网页"
-              >
-                <Globe size={12} /> 联网{webSearch ? '已开' : ''}
-              </button>
-              <button
-                onClick={() => setThinking((v) => !v)}
-                aria-pressed={thinking}
+                title="联网搜索：本轮回答会检索公开网页"><Globe size={12} /> 联网{webSearch ? '已开' : ''}</button>
+              <button onClick={() => setThinking((v) => !v)} aria-pressed={thinking}
                 className={`flex items-center gap-1 text-[11px] rounded-md px-1.5 py-1 border transition-colors ${thinking ? 'bg-teal-50 dark:bg-teal-500/10 border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
-                title="深度思考：先输出推理过程（需模型支持）"
-              >
-                <Brain size={12} /> 深度思考
-              </button>
+                title="深度思考：先输出推理过程（需模型支持）"><Brain size={12} /> 深度思考</button>
               {models.length > 0 && (
-                <select
-                  className="text-[11px] bg-transparent text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md px-1.5 py-1 max-w-[140px] outline-none focus:ring-1 focus:ring-teal-500"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  title="本次问答使用的模型"
-                >
+                <select className="text-[11px] bg-transparent text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md px-1.5 py-1 max-w-[140px] outline-none focus:ring-1 focus:ring-teal-500" value={model} onChange={(e) => setModel(e.target.value)} title="本次问答使用的模型">
                   <option value="">默认模型</option>
                   {models.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
               )}
               <span className="text-[11px] text-slate-400 ml-auto hidden sm:inline">Enter 发送 · Esc 停止 · / 快捷指令</span>
-            </div>
-            <div className="relative flex items-end gap-2">
-              {mention && mentionFiltered.length > 0 && (
-                <MentionPicker
-                  items={mentionFiltered}
-                  activeIndex={mentionActive}
-                  onActiveChange={setMentionActive}
-                  onPick={pickMention}
-                  onClose={() => setMention(null)}
-                />
-              )}
-              <textarea
-                rows={2}
-                ref={taRef}
-                className="flex-1 resize-none rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-900 outline-none focus:border-teal-500"
-                placeholder="问问题 / 让 AI 起草内容（Enter 发送，/ 唤出快捷指令）…"
-                value={input}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setInput(v);
-                  setSlashDismissed(false);
-                  // @ 触发：光标前最近的 @ 且处于词首
-                  const parsed = parseMentionQuery(v, e.target.selectionStart ?? v.length);
-                  setMention(parsed);
-                  setMentionActive(0);
-                }}
-                onKeyDown={onComposerKeyDown}
-              />
-              {streaming ? (
-                <Button variant="danger" onClick={chat.stop} title="停止生成">
-                  <Square size={14} /> 停止
-                </Button>
-              ) : (
-                <Button onClick={send} disabled={(!input.trim() && pendingAttachments.length === 0) || streaming} title="发送">
-                  <Send size={14} /> 发送
-                </Button>
-              )}
-            </div>
-          </div>
+            </>}
+          />
         </div>
 
         {/* 右侧文档预览 */}

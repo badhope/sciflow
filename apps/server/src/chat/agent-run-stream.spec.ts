@@ -5,7 +5,7 @@ import { ChatService } from './chat.service';
 describe('agent run stream lifecycle', () => {
   it('读完才 finishRun(done)，首块到达时仍保持运行中', async () => {
     const finishRun = vi.fn();
-    const svc = new (ChatService as any)({}, {}, {}, {}, {}, {}, {}, { finishRun }, {});
+    const svc = new (ChatService as any)({}, {}, {}, {}, {}, {}, {}, {}, { finishRun }, {});
     const source = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(new TextEncoder().encode('a'));
@@ -31,7 +31,7 @@ describe('agent run stream lifecycle', () => {
 
   it('用户中止流时标记 cancelled，不伪装成完成', async () => {
     const finishRun = vi.fn();
-    const svc = new (ChatService as any)({}, {}, {}, {}, {}, {}, {}, { finishRun }, {});
+    const svc = new (ChatService as any)({}, {}, {}, {}, {}, {}, {}, {}, { finishRun }, {});
     const source = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(new TextEncoder().encode('a'));
@@ -50,7 +50,7 @@ describe('agent run stream lifecycle', () => {
 
   it('上游异常标记 error 并透传错误', async () => {
     const finishRun = vi.fn();
-    const svc = new (ChatService as any)({}, {}, {}, {}, {}, {}, {}, { finishRun }, {});
+    const svc = new (ChatService as any)({}, {}, {}, {}, {}, {}, {}, {}, { finishRun }, {});
     const source = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.error(new Error('gateway reset'));

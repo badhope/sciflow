@@ -1,14 +1,28 @@
 # Changelog
 
-## [Unreleased]
+## [1.19.16] - 2026-11-23
 
 ### Added
+
+- **统一文件理解（A3）**：对话附件与知识库共用 `FileExtractService`，覆盖 PDF 文本/OCR、DOCX、XLSX 多 sheet、PPTX、EPUB、图片 OCR、音频转写与视频抽音轨；Docker 镜像补 `poppler-utils`、`ffmpeg`、`tesseract-ocr-chi-sim`，优先使用系统语言包，离线不再等 GitHub 下载。
+- **自动化卡片与统一收件箱（B2）**：AgentOps 的“定时任务”扩为“自动化”，同一屏展示任务、审批和通知；查询键与轮询统一走 `useAgentInbox`，不再重复请求。
+- **统一聚合搜索（A4）**：唯一新增后端 `SearchModule`，`GET /api/search` 一次聚合文档、会话、项目、实验、文献与知识库；Cmd+K 按类型分组并带定位参数跳转。
+- **自动化闭环（A5）**：`agent_schedule` 支持时间型与四类事件触发，`agent_notification` 收件箱、浏览器通知与飞书 Webhook；Croner 计算 nextRun，失败降级与重试可审计。
+- **输出闭环（A6）**：`GET /api/documents/:id/export-pdf` 用 Playwright 打印 A4 PDF；新增论文/综述/开题/演示模板；对话工具产物可保存为文档或跳转现有模块。
+- **分享闭环（A7）**：文档与对话快照均可公开分享；对话剥离附件、推理与工具调用；评论默认关闭、仅作者可删。
+- **提示词资产（A8）**：扩展中心 prompt 支持 `scope: chat|tool`，chat 模板进入 `/` 菜单且绝不覆盖 `custom_prompt`。
+- **官方连接器（A9）**：复用 MCP 模块接入 Zotero、飞书、Notion、Google Drive、Overleaf；凭据加密落库，测试/断开/最近错误可见。
+- **共享聊天输入区（B1）**：工作台与写作页统一使用 `ChatComposer`，附件、slash、停止与发送只有一套实现。
+- **PWA 与数据管理**：手写 Service Worker 换成 `vite-plugin-pwa`，离线可打开应用壳并显示重连页；设置页“用量与审计”增加项目包导出与本机缓存清理。
+- **XLSX 导出换 ExcelJS**：移除长期无维护的 SheetJS `xlsx`，三张 sheet 结构测试保持通过。
+- **模板死字段清理（B6）**：删除未被前端使用的 `project.templates` 与 DTO，v19 迁移删列；模板统一由 `outline-templates` 提供，项目包导入仍兼容。
+- **保留清单（C7）**：CodeMirror 6、Recharts、Streamdown/remark/rehype/KaTeX、unpdf、pptxgenjs/docx 保留；不引入 `cmdk`。只有出现明确维护或安全问题时才替换。
+
+### Changed
 
 - **Agent 工具大输出可回读**：单结果超过 `AGENT_TOOL_OUTPUT_MAX_CHARS`（默认 20,000 字）时只把有界预览交给模型，完整内容落到权限 0600 的临时文件；新增 `read_tool_output` 分页读取，不再靠模型猜省略内容。
 - **工具层可靠性护栏**：只读工具的瞬时失败自动重试，写工具永不重试；支持 AI SDK 取消信号、并发上限和单轮总输出预算。
 - **MCP 工具安全注解**：`tools/list` 返回 `readOnlyHint`、`destructiveHint`、`idempotentHint`、`openWorldHint`，外部 MCP 客户端能区分只读与破坏性操作。
-
-### Changed
 
 - **Agent 轨迹保留成功输出**：`agent_step.output` 记录工具成功结果预览，排查时不再只能看到错误；`read_tool_output`、`tool_search` 等原生工具也写入轨迹。
 - **流式执行收尾对齐真实状态**：等 SSE 流真正 EOF、异常或用户中止才结束 Agent 执行，并把真实 usage 写进本轮 `total_tokens`；驾驶舱新增“已中止”，不再提前标“完成”。

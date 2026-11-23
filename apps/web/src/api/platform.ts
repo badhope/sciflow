@@ -70,6 +70,7 @@ export const platform = {
     logout: () => setToken(null),
   },
   extensions: {
+    chatPrompts: () => request<{ prompts: { id: string; key: string; title: string; description: string; template: string }[] }>('/api/extensions/chat-prompts'),
     list: (kind?: string) => request<import('../types').ExtensionKindsResponse>(`/api/extensions${kind ? `?kind=${kind}` : ''}`),
     create: (p: {
       id?: string; kind: string; key?: string; name: string; description?: string;

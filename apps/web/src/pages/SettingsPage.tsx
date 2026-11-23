@@ -12,10 +12,12 @@ import { LocalModels } from './settings/LocalModels';
 import { WebSearchSettings } from './settings/WebSearchSettings';
 import { UsageStats } from './settings/UsageStats';
 import { AuditLogPanel } from './settings/AuditLogPanel';
+import { DataManagementPanel } from './settings/DataManagementPanel';
 import { McpToolList } from './settings/McpToolList';
 import { PersonaSettings } from './settings/PersonaSettings';
 import { ConfigCenterSettings } from './settings/ConfigCenterSettings';
 import { ExtensionCenter, ExtensionQuickAdd } from './settings/ExtensionCenter';
+import { ConnectorsPanel } from './settings/ConnectorsPanel';
 import { AppearanceSettings } from './settings/AppearanceSettings';
 import { AgentAccessSettings } from './settings/AgentAccessSettings';
 import { useAuthRole } from '../lib/use-auth-role';
@@ -708,6 +710,7 @@ function SettingsLayout() {
 
       {/* 扩展与工具：内置社区资产 + 自定义扩展 + MCP 工具清单 */}
       <div id="settings-tooling" className="space-y-3 mb-4">
+        <ConnectorsPanel />
         <ExtensionCenter />
         <McpToolList />
       </div>
@@ -718,6 +721,7 @@ function SettingsLayout() {
       {/* 用量与审计：成本看板 + 可回溯审计流水 */}
       <div id="settings-observability" className="space-y-3 mb-4">
         <UsageStats />
+        <DataManagementPanel />
         <AuditLogPanel />
       </div>
 

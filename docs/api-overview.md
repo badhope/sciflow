@@ -23,7 +23,7 @@ document is the authoritative contract; this page is a map of the surface.
 | Group | Base | Main operations |
 |---|---|---|
 | Projects | `/api/projects` | list, create, read, update, delete (cascades project data) |
-| Documents | `/api/documents` | outline, section drafting, revision queue, polish, citations, export |
+| Documents | `/api/documents` | outline, section drafting, revision queue, polish, citations, PDF/DOCX/XLSX export |
 | References | `/api/references` | search, screening, coding matrix, graph, import, DOI check, review |
 | Knowledge | `/api/knowledge` | upload, list, hybrid search, passage context, bind, delete |
 | Pipeline | `/api/pipeline` | start, list, detail, confirm outline, stop, delete |
@@ -33,6 +33,11 @@ document is the authoritative contract; this page is a map of the surface.
 | Judgment | `/api/judgment` | intent classification |
 | Experiments | `/api/experiments` | run Python, list, detail, update, delete |
 | Chat | `/api/chat` | one-shot answer, SSE streaming, cloud session CRUD, full-text session search |
+| Search | `/api/search` | cross-domain aggregate search with typed routes |
+| Shares | `/api/shares` | document/conversation snapshots, expiry, public read-only comments |
+| Automation | `/api/agent` | time/event schedules, in-app/browser/Feishu notifications |
+| Extensions | `/api/extensions` | scoped prompt assets and chat slash templates |
+| Connectors | `/api/connectors` | Zotero, Feishu, Notion, Drive, Overleaf credentials and import/test |
 | Memory | `/api/memory` | write, list, delete |
 | MCP | `/api/mcp` | info, tools, call, external discovery and call |
 | Settings | `/api/settings` | read, connection check, provider CRUD, MCP server CRUD |
@@ -47,6 +52,24 @@ The writing surface exposes the complete manuscript path: generate an outline,
 draft a section, run a revision queue, polish or translate, attach citations and
 export. A revision queue runs in the background and returns per-item before/after
 results. It can be stopped; the current item finishes, pending items are skipped.
+
+### Aggregate search, sharing, automation and connectors
+
+`GET /api/search` returns one typed result list across documents, chat sessions,
+projects, experiments, references and knowledge. `POST /api/shares` now accepts
+`targetType: "conversation"`; conversation snapshots strip attachments, reasoning
+and tool calls. Comments are off by default and stored separately.
+
+Automation extends the existing schedule module: `triggerType` supports
+`time`, `reference.created`, `pipeline.completed`, `quality.threshold` and
+`experiment.failed`; notifications are idempotent and Fan-out to in-app,
+browser and Feishu webhook channels. Feishu webhooks are HTTPS-only and
+host-allowlisted.
+
+Connectors live under the existing MCP module (`/api/connectors`). Credentials
+are encrypted at rest; Zotero imports references, Feishu sends bot messages or
+imports docs, Notion and Drive use official SDKs, and Overleaf only checks Git
+reachability.
 
 ### Chat and SSE
 

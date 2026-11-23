@@ -381,6 +381,7 @@ export interface DocExporterProps {
   project: { id: string; name?: string };
   onExportFull: () => void;
   onExportWord: () => void;
+  onExportPdf: () => void;
   onExportPpt: () => void;
   onExportExcel: () => void;
   aiBusy: boolean;
@@ -395,7 +396,7 @@ function safeName(title: string, ext: string): string {
  * 导出面板：Markdown / Word 走后端接口（含大纲、引用等完整结构）；
  * LaTeX / HTML 在前端本地转换（mdToLatex / mdToHtmlSync 是纯函数，无需网络）。
  */
-export function DocExporter({ doc, content, onExportFull, onExportWord, onExportPpt, onExportExcel, aiBusy }: DocExporterProps) {
+export function DocExporter({ doc, content, onExportFull, onExportWord, onExportPdf, onExportPpt, onExportExcel, aiBusy }: DocExporterProps) {
   const title = doc?.title || '论文';
   const hasContent = Boolean(content?.trim());
 
@@ -422,6 +423,9 @@ export function DocExporter({ doc, content, onExportFull, onExportWord, onExport
       </button>
       <button className={btn} onClick={onExportWord} disabled={aiBusy}>
         导出 Word
+      </button>
+      <button className={btn} onClick={onExportPdf} disabled={aiBusy} title="A4 打印样式，含公式、表格与参考文献">
+        导出 PDF
       </button>
       <button className={btn} onClick={onExportPpt} disabled={aiBusy} title="标题/大纲/正文/参考文献生成 PPTX">
         导出 PPTX

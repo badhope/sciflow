@@ -22,6 +22,9 @@ allowBuilds:
   # electron-builder 26 引入的 Windows 安装器辅助包；仅打包 Squirrel 目标时用到，
   # 本项目出 NSIS 安装包，不需要其构建脚本
   electron-winstaller: false
+  ffmpeg-static: true
+  tesseract.js: true
+  protobufjs: set this to true or false
 
 minimumReleaseAgeExclude:
   - '@typescript-eslint/eslint-plugin@8.71.2'
@@ -120,3 +123,8 @@ overrides:
 ignoredBuiltDependencies:
   - '@scarf/scarf'
   - autoevals
+
+# 允许解析/OCR 依赖下载或生成原生资源
+onlyBuiltDependencies:
+  - ffmpeg-static
+  - tesseract.js

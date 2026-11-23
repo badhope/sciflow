@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Optional, NotFoundException, BadRequestException } from '@nestjs/common';
 import { eq, asc, inArray } from 'drizzle-orm';
 import { Cite } from '@citation-js/core';
 import '@citation-js/plugin-bibtex';
@@ -9,6 +9,7 @@ import { db } from '../db/database';
 import { documents, citations, references, polishRecords, qualityReports, reviewComments, experiments, pipelineTasks } from '../db/schema';
 import { checkPaperQuality } from '../common/quality-audit';
 import { auditCitations } from '../common/citation-audit';
+import { PdfExportService } from './pdf-export.service';
 import { buildManuscriptDocx } from './manuscript-docx';
 import { buildManuscriptPptx, buildManuscriptXlsx } from './office-export';
 import { AiService } from '../ai/ai.service';
@@ -30,6 +31,7 @@ export class DocumentsService {
   constructor(
     private readonly ai: AiService,
     private readonly refs: ReferencesService,
+    @Optional() private readonly pdf?: PdfExportService,
   ) {}
 
   /** 全部文档（仅本地/桌面单用户模式；企业模式由控制器拒绝） */
@@ -736,6 +738,16 @@ export class DocumentsService {
     return { markdown: lines.join('\n'), filename: `${doc.title.replace(/[\\/:*?"<>|]/g, '_')}.md` };
   }
 
+  /** 导出 PDF：复用 Markdown 成稿 → KaTeX MathML → Chromium 打印 CSS（A4/页脚页码）。 */
+  async exportPdf(id: string) {
+    if (!this.pdf) throw new Error('PDF 导出服务未就绪');
+    const doc = this.get(id);
+    const { markdown, filename } = this.exportMarkdown(id);
+    const html = this.pdf.renderMarkdown(markdown);
+    const buffer = await this.pdf.renderPdf({ title: doc.title || 'SciFlow 文档', html, footer: 'SciFlow · 全自动 AI 科研助手' });
+    return { base64: buffer.toString('base64'), filename: filename.replace(/\.md$/, '.pdf') };
+  }
+
   /** 导出 Word(.docx) 全文——交稿/投稿刚需（标题 + 大纲 + 正文 + 参考文献） */
   /**
    * B-4.3 引用体检：正文锚点 × citation 落库记录交叉审计。
@@ -815,11 +827,11 @@ export class DocumentsService {
     return { base64: built.buffer.toString('base64'), filename: built.filename };
   }
 
-  exportXlsx(id: string) {
+  async exportXlsx(id: string) {
     const doc = this.get(id);
     const outline = parseJson<{ title: string; sections: { title: string; subsections: string[] }[] }>(doc.outline, EMPTY_OUTLINE);
     const refList = this.listCitations(id).map((r) => r.reference);
-    const built = buildManuscriptXlsx({
+    const built = await buildManuscriptXlsx({
       title: doc.title || '',
       outline,
       content: doc.content || '',

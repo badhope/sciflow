@@ -4,7 +4,7 @@ import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { AlertCircle, Brain, Check, ChevronLeft, ChevronRight, Circle, Copy, FileText, GitBranch, Loader2, Paperclip, Pencil, PlayCircle, Quote, RotateCcw, Square, Trash2, Wrench, X } from 'lucide-react';
+import { AlertCircle, Brain, Check, ChevronLeft, ChevronRight, Circle, Copy, ExternalLink, FilePlus2, FileText, GitBranch, Loader2, Paperclip, Pencil, PlayCircle, Quote, RotateCcw, Square, Trash2, Wrench, X } from 'lucide-react';
 import type { BranchMeta } from '../lib/chat-branch';
 import type { ChatMessage } from '../lib/chat-session';
 import { IconButton } from './ui';
@@ -83,6 +83,23 @@ function ToolCallList({ calls, streaming }: { calls: ToolCall[]; streaming?: boo
       </ul>
     </details>
   );
+}
+
+/** 工具返回 JSON 里挑出真实产物 id；解析失败/无 id 一律不显示按钮，避免假操作。 */
+export function toolArtifactRefs(m: ChatMessage): { documentId?: string; webProjectId?: string } {
+  const refs: { documentId?: string; webProjectId?: string } = {};
+  for (const t of m.toolCalls ?? []) {
+    if (t.status !== 'done' || !t.result) continue;
+    try {
+      const raw = JSON.parse(t.result) as Record<string, unknown>;
+      const nested = (raw.result && typeof raw.result === 'object' ? raw.result : raw) as Record<string, unknown>;
+      const docId = [nested.documentId, nested.docId, nested.document_id].find((v) => typeof v === 'string' && v);
+      if (docId && /document|doc_|writing/i.test(t.name)) refs.documentId = String(docId);
+      const webId = [nested.webProjectId, nested.projectId].find((v) => typeof v === 'string' && v);
+      if (webId && /web|browser|site/i.test(t.name)) refs.webProjectId = String(webId);
+    } catch { /* 非 JSON 工具输出不显示落地按钮 */ }
+  }
+  return refs;
 }
 
 /** 助手消息正文（Markdown + 公式 + 流式光标）：三个聊天入口共用同一渲染契约 */
@@ -215,6 +232,11 @@ export interface MessageListProps {
   onSendToWriting?: (index: number) => void;
   /** 后续追问建议点击（科研问答页；点击即以该问题续发） */
   onFollowUp?: (text: string, assistantIndex: number) => void;
+  /** 把整条回答保存为现有项目里的文档（A6 产物落地） */
+  onSaveAsDocument?: (assistantIndex: number) => void;
+  /** 工具结果里已生成的文档/Web 项目：只给真实 id 时显示入口 */
+  onOpenDocument?: (documentId: string) => void;
+  onOpenWebProject?: (projectId: string) => void;
   /** 空态（消息为空时渲染） */
   empty?: ReactNode;
   /** 用户气泡样式：气泡 / 平铺 */
@@ -242,6 +264,9 @@ export function MessageList({
   onCite,
   onSendToWriting,
   onFollowUp,
+  onSaveAsDocument,
+  onOpenDocument,
+  onOpenWebProject,
   empty,
   userBubble = 'bubble',
   className = '',
@@ -369,6 +394,9 @@ export function MessageList({
                   <BranchSwitcher meta={branches[m.id]} onSwitch={(d) => onSwitchBranch(m.id!, d)} />
                 )}
                 {onSendToWriting && <IconButton size={32} label="发送到写作页" icon={<FileText size={14} />} onClick={() => onSendToWriting(i)} />}
+                {onSaveAsDocument && m.content.trim().length > 20 && <IconButton size={32} label="保存为文档" icon={<FilePlus2 size={14} />} onClick={() => onSaveAsDocument(i)} />}
+                {onOpenDocument && toolArtifactRefs(m).documentId && <IconButton size={32} label="打开生成的文档" icon={<ExternalLink size={14} />} onClick={() => onOpenDocument(toolArtifactRefs(m).documentId!)} />}
+                {onOpenWebProject && toolArtifactRefs(m).webProjectId && <IconButton size={32} label="打开 Web 项目" icon={<ExternalLink size={14} />} onClick={() => onOpenWebProject(toolArtifactRefs(m).webProjectId!)} />}
                 {onDelete && <IconButton size={32} tone="danger" label="删除回答" icon={<Trash2 size={14} />} onClick={() => onDelete(i)} />}
               </div>
             )}

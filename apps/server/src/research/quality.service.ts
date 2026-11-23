@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { eq, desc, and, gte } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
@@ -22,7 +23,7 @@ const DIM_CN: Record<string, string> = {
 
 @Injectable()
 export class QualityService {
-  constructor(private readonly ai: AiService) {}
+  constructor(private readonly ai: AiService, @Optional() private readonly events?: EventEmitter2) {}
 
   /**
    * 报告行 → API DTO。
@@ -82,6 +83,7 @@ export class QualityService {
       createdAt: Date.now(),
     };
     db.insert(qualityReports).values(row).run();
+    this.events?.emit('quality.scored', { projectId: doc.projectId, documentId, score: objective.totalScore, title });
     return this.toDto(row as typeof qualityReports.$inferSelect);
   }
 

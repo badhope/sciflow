@@ -675,6 +675,151 @@
         ]
       }
     },
+    "/connectors": {
+      "get": {
+        "operationId": "ConnectorsController_list",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/connectors/connect": {
+      "post": {
+        "operationId": "ConnectorsController_connect",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/connectors/disconnect": {
+      "post": {
+        "operationId": "ConnectorsController_disconnect",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/connectors/test": {
+      "post": {
+        "operationId": "ConnectorsController_test",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/connectors/zotero/import": {
+      "post": {
+        "operationId": "ConnectorsController_zoteroImport",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/connectors/feishu/notify": {
+      "post": {
+        "operationId": "ConnectorsController_feishuNotify",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/connectors/feishu/import-doc": {
+      "post": {
+        "operationId": "ConnectorsController_feishuImport",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/connectors/notion/search": {
+      "post": {
+        "operationId": "ConnectorsController_notion",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
+    "/connectors/drive/list": {
+      "post": {
+        "operationId": "ConnectorsController_drive",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Connectors"
+        ]
+      }
+    },
     "/references/discover": {
       "post": {
         "operationId": "ReferencesController_discover",
@@ -2518,6 +2663,20 @@
         ]
       }
     },
+    "/extensions/chat-prompts": {
+      "get": {
+        "operationId": "ExtensionsController_chatPrompts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
     "/extensions/templates": {
       "get": {
         "operationId": "ExtensionsController_templates",
@@ -3731,6 +3890,29 @@
     "/documents/{id}/export": {
       "get": {
         "operationId": "DocumentsController_exportMarkdown",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/documents/{id}/export-pdf": {
+      "get": {
+        "operationId": "DocumentsController_exportPdf",
         "parameters": [
           {
             "name": "id",
@@ -7071,6 +7253,76 @@
         ]
       }
     },
+    "/shares/{id}/comments": {
+      "get": {
+        "operationId": "ShareController_comments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Share"
+        ]
+      }
+    },
+    "/shares/{id}/comments/{commentId}": {
+      "delete": {
+        "operationId": "ShareController_deleteComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "commentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Share"
+        ]
+      }
+    },
     "/public/shares/{token}": {
       "get": {
         "operationId": "PublicShareController_get",
@@ -7086,6 +7338,60 @@
         ],
         "responses": {
           "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "PublicShare"
+        ]
+      }
+    },
+    "/public/shares/{token}/comments": {
+      "get": {
+        "operationId": "PublicShareController_comments",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "PublicShare"
+        ]
+      },
+      "post": {
+        "operationId": "PublicShareController_comment",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
             "description": ""
           }
         },
@@ -7239,12 +7545,142 @@
           "Schedule"
         ]
       }
+    },
+    "/agent/notifications": {
+      "get": {
+        "operationId": "NotificationController_list",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notification"
+        ]
+      }
+    },
+    "/agent/notifications/{id}/read": {
+      "patch": {
+        "operationId": "NotificationController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notification"
+        ]
+      }
+    },
+    "/agent/notifications/read-all": {
+      "post": {
+        "operationId": "NotificationController_readAll",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notification"
+        ]
+      }
+    },
+    "/agent/notifications/{id}/retry": {
+      "post": {
+        "operationId": "NotificationController_retry",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notification"
+        ]
+      }
+    },
+    "/search": {
+      "get": {
+        "operationId": "SearchController_run",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "types",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Search"
+        ]
+      }
     }
   },
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "1.19.15",
+    "version": "1.19.16",
     "contact": {}
   },
   "tags": [],
@@ -8068,6 +8504,17 @@
         },
         "required": [
           "plan"
+        ]
+      },
+      "ProjectBody": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectId"
         ]
       },
       "DiscoveredReferenceDto": {
@@ -9446,10 +9893,6 @@
             "type": "string",
             "description": "项目级系统提示（写作偏好等）"
           },
-          "templates": {
-            "type": "string",
-            "description": "自定义大纲模板 JSON 字符串"
-          },
           "ownerId": {
             "type": "string",
             "description": "企业模式归属用户；本地模式为空串"
@@ -10497,24 +10940,43 @@
           },
           "targetType": {
             "type": "string",
-            "description": "目标类型；当前只支持 document",
+            "description": "目标类型",
             "enum": [
-              "document"
+              "document",
+              "conversation"
             ]
           },
           "targetId": {
             "type": "string",
-            "description": "文档 ID"
+            "description": "文档 ID 或会话 ID"
           },
           "expiresInDays": {
             "type": "number",
             "description": "有效天数，默认 30，范围 1-365"
+          },
+          "allowComments": {
+            "type": "boolean",
+            "description": "是否开启只读评论（默认关闭）"
           }
         },
         "required": [
           "projectId",
           "targetType",
           "targetId"
+        ]
+      },
+      "CommentRequest": {
+        "type": "object",
+        "properties": {
+          "authorName": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
         ]
       },
       "CreateScheduleRequest": {
@@ -10558,6 +11020,35 @@
           "delayMinutes": {
             "type": "number",
             "description": "仅 once：多少分钟后触发"
+          },
+          "triggerType": {
+            "type": "string",
+            "enum": [
+              "time",
+              "reference.created",
+              "pipeline.completed",
+              "quality.threshold",
+              "experiment.failed"
+            ]
+          },
+          "triggerConfig": {
+            "type": "object",
+            "description": "事件触发条件，如 {threshold: 80}"
+          },
+          "notifyChannels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "inapp",
+                "browser",
+                "feishu"
+              ]
+            }
+          },
+          "notifyTarget": {
+            "type": "string",
+            "description": "飞书机器人 Webhook（仅官方域名）"
           }
         },
         "required": [
@@ -10599,6 +11090,26 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "triggerType": {
+            "type": "string"
+          },
+          "triggerConfig": {
+            "type": "object"
+          },
+          "notifyChannels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "inapp",
+                "browser",
+                "feishu"
+              ]
+            }
+          },
+          "notifyTarget": {
+            "type": "string"
           }
         }
       }

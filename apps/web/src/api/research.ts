@@ -107,8 +107,8 @@ export const research = {
   },
   knowledge: {
     list: (projectId: string) => request<KnowledgeDoc[]>(`/api/knowledge?projectId=${projectId}`),
-    upload: (projectId: string, name: string, type: string, content: string) =>
-      request<KnowledgeDoc>(`/api/knowledge/upload`, { method: 'POST', body: JSON.stringify({ projectId, name, type, content }) }),
+    upload: (projectId: string, name: string, type: string, content: string, mime?: string) =>
+      request<KnowledgeDoc>(`/api/knowledge/upload`, { method: 'POST', body: JSON.stringify({ projectId, name, type, content, mime }) }),
     query: (projectId: string, question: string) =>
       request<KnowledgeQueryResult>(`/api/knowledge/query`, { method: 'POST', body: JSON.stringify({ projectId, question }) }),
     /** 学习复盘取数：单文档全部分块正文（按 seq 升序）+ outline（Markdown 标题派生） */

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookMarked, Brain, Check, ChevronDown, ChevronUp, FileText, Link2, Loader2, MessageSquare, Quote, ScatterChart, Trash2, Unlink, Upload } from 'lucide-react';
 import { api } from '../api/client';
@@ -157,7 +158,8 @@ function buildLeaves(docName: string, detail: KnowledgeDocDetail | null): string
 }
 
 function StudyReviewCard({ docs }: { docs: KnowledgeDoc[] }) {
-  const [docId, setDocId] = useState('');
+  const [searchParams] = useSearchParams();
+  const [docId, setDocId] = useState(() => searchParams.get('doc') || '');
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
   const [detail, setDetail] = useState<KnowledgeDocDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -252,6 +254,8 @@ function StudyReviewCard({ docs }: { docs: KnowledgeDoc[] }) {
 }
 
 export function KnowledgePage({ project }: { project: Project }) {
+  const [searchParams] = useSearchParams();
+  const [kbFilter, setKbFilter] = useState(() => searchParams.get('q') || '');
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState<KnowledgeQueryResult | null>(null);
   const [busy, setBusy] = useState('');
@@ -286,6 +290,7 @@ export function KnowledgePage({ project }: { project: Project }) {
     retry: 0,
   });
   const docs: KnowledgeDoc[] = useMemo(() => kbDocsQuery.data ?? [], [kbDocsQuery.data]);
+  const visibleDocs = useMemo(() => kbFilter.trim() ? docs.filter((d) => d.name.toLowerCase().includes(kbFilter.trim().toLowerCase())) : docs, [docs, kbFilter]);
   const refs: Reference[] = useMemo(() => kbRefsQuery.data ?? [], [kbRefsQuery.data]);
   const load = async () => {
     await qc.invalidateQueries({ queryKey: qk.knowledge(project.id) });
@@ -384,13 +389,15 @@ export function KnowledgePage({ project }: { project: Project }) {
   );
 
   const uploadFile = async (file: File) => {
-    const isPdf = file.name.toLowerCase().endsWith('.pdf');
-    const type = isPdf ? 'pdf' : file.name.toLowerCase().endsWith('.md') ? 'markdown' : 'text';
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const isPlain = ['txt', 'md', 'csv', 'json', 'xml', 'yaml', 'yml', 'tex', 'bib', 'ris', 'html', 'htm'].includes(ext)
+      || (file.type.startsWith('text/') && !file.type.includes('csv'));
+    const type = ext || file.type || 'text';
     setBusy(`upload:${file.name}`);
     setError('');
     try {
-      const content = isPdf ? await fileToBase64(file) : await file.text();
-      await api.knowledge.upload(project.id, file.name, type, content);
+      const content = isPlain ? await file.text() : await fileToBase64(file);
+      await api.knowledge.upload(project.id, file.name, type, content, file.type);
       toast('success', `「${file.name}」已入库`);
       await load();
     } catch (e: unknown) {
@@ -457,7 +464,7 @@ export function KnowledgePage({ project }: { project: Project }) {
           <input
             ref={fileRef}
             type="file"
-            accept=".pdf,.txt,.md"
+            accept=".pdf,.txt,.md,.csv,.json,.docx,.xlsx,.pptx,.epub,.png,.jpg,.jpeg,.webp,.mp3,.wav,.m4a,.mp4,.mov,.mkv"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -469,7 +476,7 @@ export function KnowledgePage({ project }: { project: Project }) {
             <Upload size={15} className="text-teal-600" aria-hidden="true" /> 研究资料
           </span>
           <span className="text-[11px] text-slate-400 dark:text-slate-500">
-            PDF / TXT / Markdown，拖拽或点击上传
+            PDF / Office / EPUB / 图片 / 音视频 / 文本，拖拽或点击上传
           </span>
           <Button size="sm" variant="outline" className="ml-auto" onClick={() => fileRef.current?.click()}>
             <FileText size={13} /> 上传
@@ -527,12 +534,17 @@ export function KnowledgePage({ project }: { project: Project }) {
 
         {/* 资料列表 */}
         <div className="mt-4">
-          <div className="text-xs text-slate-400 dark:text-slate-500 mb-2">资料列表</div>
-          {docs.length === 0 ? (
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-xs text-slate-400 dark:text-slate-500">资料列表</span>
+            <input value={kbFilter} onChange={(e) => setKbFilter(e.target.value)} placeholder="按标题过滤资料…" className="ml-auto w-44 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] dark:border-slate-700 dark:bg-slate-900" aria-label="过滤知识库资料" />
+            {kbFilter && <button type="button" className="text-[11px] text-slate-400 hover:text-teal-600" onClick={() => setKbFilter('')}>清除</button>}
+          </div>
+          {kbFilter && <div className="mb-2 text-[11px] text-slate-400">“{kbFilter}”命中 {visibleDocs.length} / {docs.length} 份资料</div>}
+          {visibleDocs.length === 0 ? (
             <EmptyState illustration="knowledge" title="知识库还没有资料" hint="上传 PDF / Markdown / 文本后即可基于资料提问" />
           ) : (
             <div className="list-heavy space-y-2">
-              {docs.map((d) => (
+              {visibleDocs.map((d) => (
                 <div key={d.id} className="flex items-center gap-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 px-3 py-2.5">
                   <BookMarked size={15} className="text-teal-500 shrink-0" />
                   <div className="flex-1 min-w-0">

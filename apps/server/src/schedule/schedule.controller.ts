@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ScheduleService, type ScheduleCadence } from './schedule.service';
+import { ScheduleService, type ScheduleCadence, type TriggerType } from './schedule.service';
+import type { NotificationChannel } from './notification.service';
 import { ProjectAccessService } from '../common/project-access.service';
 import type { AuthPayload } from '../auth/auth.service';
 
@@ -15,6 +16,10 @@ export class CreateScheduleRequest {
   @ApiPropertyOptional() sessionKey?: string;
   @ApiPropertyOptional() model?: string;
   @ApiPropertyOptional({ description: '仅 once：多少分钟后触发' }) delayMinutes?: number;
+  @ApiPropertyOptional({ enum: ['time', 'reference.created', 'pipeline.completed', 'quality.threshold', 'experiment.failed'] }) triggerType?: TriggerType;
+  @ApiPropertyOptional({ description: '事件触发条件，如 {threshold: 80}' }) triggerConfig?: Record<string, unknown>;
+  @ApiPropertyOptional({ enum: ['inapp', 'browser', 'feishu'], isArray: true }) notifyChannels?: NotificationChannel[];
+  @ApiPropertyOptional({ description: '飞书机器人 Webhook（仅官方域名）' }) notifyTarget?: string;
 }
 
 export class UpdateScheduleRequest {
@@ -26,6 +31,10 @@ export class UpdateScheduleRequest {
   @ApiPropertyOptional() weekday?: number;
   @ApiPropertyOptional() model?: string;
   @ApiPropertyOptional() enabled?: boolean;
+  @ApiPropertyOptional() triggerType?: TriggerType;
+  @ApiPropertyOptional() triggerConfig?: Record<string, unknown>;
+  @ApiPropertyOptional({ enum: ['inapp', 'browser', 'feishu'], isArray: true }) notifyChannels?: NotificationChannel[];
+  @ApiPropertyOptional() notifyTarget?: string;
 }
 
 @Controller('schedules')

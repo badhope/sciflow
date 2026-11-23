@@ -11,7 +11,7 @@ import { qk } from './query-keys';
  */
 export function useAgentInbox(
   projectId: string,
-  options: { tasksInterval?: number; approvalsInterval?: number } = {},
+  options: { tasksInterval?: number; approvalsInterval?: number; notificationsInterval?: number } = {},
 ) {
   const qc = useQueryClient();
   const tasksQuery = useQuery({
@@ -25,6 +25,24 @@ export function useAgentInbox(
     queryFn: () => api.agent.pendingApprovals(projectId),
     retry: 0,
     refetchInterval: options.approvalsInterval ?? 3000,
+  });
+  const notificationsQuery = useQuery({
+    queryKey: qk.agentNotifications(projectId),
+    queryFn: () => api.agent.notifications(projectId, 20),
+    retry: 0,
+    refetchInterval: options.notificationsInterval ?? 5000,
+  });
+  const markNotificationRead = useMutation({
+    mutationFn: (id: string) => api.agent.markNotificationRead(id, projectId),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.agentNotifications(projectId) }),
+  });
+  const markAllNotificationsRead = useMutation({
+    mutationFn: () => api.agent.markAllNotificationsRead(projectId),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.agentNotifications(projectId) }),
+  });
+  const retryNotification = useMutation({
+    mutationFn: (id: string) => api.agent.retryNotification(id, projectId),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.agentNotifications(projectId) }),
   });
   const decideApproval = useMutation({
     mutationFn: ({ id, approved }: { id: string; approved: boolean }) => api.agent.decideApproval(id, approved),
@@ -44,11 +62,16 @@ export function useAgentInbox(
   return {
     tasksQuery,
     approvalsQuery,
+    notificationsQuery,
+    markNotificationRead,
+    markAllNotificationsRead,
+    retryNotification,
     decideApproval,
     decidePlan,
     invalidate: () => {
       void qc.invalidateQueries({ queryKey: qk.agentTasks(projectId) });
       void qc.invalidateQueries({ queryKey: qk.agentApprovals(projectId) });
+      void qc.invalidateQueries({ queryKey: qk.agentNotifications(projectId) });
     },
   };
 }

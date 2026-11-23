@@ -16,6 +16,8 @@ import { programs } from './programs';
 import { researchCycles } from './research-cycles';
 import { longform } from './longform';
 import { webProjects, browser } from './web-projects';
+import { search } from './search';
+import { connectors } from './connectors';
 
 export const api = {
   ...writing,
@@ -25,6 +27,8 @@ export const api = {
   programs,
   researchCycles,
   longform,
+  search,
+  connectors,
   webProjects,
   browser,
 };
