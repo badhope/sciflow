@@ -24,7 +24,8 @@ allowBuilds:
   electron-winstaller: false
   ffmpeg-static: true
   tesseract.js: true
-  protobufjs: set this to true or false
+  # promptfoo 的传递依赖；postinstall 仅做版本兼容提示，允许执行无副作用，显式禁止避免 CI 严格模式报错
+  protobufjs: false
 
 minimumReleaseAgeExclude:
   - '@typescript-eslint/eslint-plugin@8.71.2'
