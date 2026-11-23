@@ -19,6 +19,8 @@
 - **跨项目 `?session=` 静默回落**：服务端会话列表不含目标会话时明确提示“该会话不属于当前项目，已阻止打开”，不再新建对话、把附件和文档写进错误项目；补回归单测与浏览器证据。
 - **分享评论入口缺失**：作者此前只能生成链接，看不到也无法删除评论；现在可审核并删除。
 - **保存回答把内部标记写进成稿**：“保存为文档”原样落 `message.content`，可能把 `---FOLLOWUPS---` 与追问草稿写进正文。现在落稿前统一 `parseFollowUps(...).content.trim()`；旧会话在打开时也剥离标记，不再在气泡里露出内部约定。
+- **飞书 Webhook 把 HTTP 200 当成功**：飞书失败响应也常是 200，错误只在 JSON 的 `code`/`StatusCode`。现在解析 body，非 0 按失败降级为站内“飞书通知失败”，不再把无效 hook 记成已送达。
+- **CI 干净安装缺依赖**：`@nestjs/event-emitter`、`ffprobe-static`、`croner` 只存在于旧 node_modules，未在 `apps/server/package.json` 声明；补齐并加 `ffmpeg` 安装步骤，复现“新机器从零安装”的真实门禁。
 - **分享评论开关串台**：新分享的 checkbox 可能沿用上一个目标的 true。`openShare` 每次先重置为 false，按 `targetId` 命中已有分享才恢复；并用 `shareLookupSeq` 丢弃晚到的旧查询。
 - **测试并发门禁**：页面模块预加载前移到 `beforeAll`，DOCX 用例单独放宽超时，server Vitest 设 `testTimeout` / `hookTimeout`，全量测试不再因并发首载超时。
 - **`PipelinePage` effect 同步 setState**：父组件已用 `key={project.id}` 重挂载，删除冗余 effect，lint 通过。

@@ -107,7 +107,13 @@ export class NotificationService {
           }),
           signal: AbortSignal.timeout(8000),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        // 飞书 Webhook 失败也常返回 HTTP 200，错误在 JSON 的 code/StatusCode 里。
+        const raw = await res.text().catch(() => '');
+        let body: { code?: number; StatusCode?: number; msg?: string } | null = null;
+        try { body = raw ? JSON.parse(raw) as typeof body : null; } catch { body = null; }
+        if (!res.ok) throw new Error(`HTTP ${res.status}${raw ? `: ${raw.slice(0, 120)}` : ''}`);
+        const code = Number(body?.code ?? body?.StatusCode ?? 0);
+        if (code !== 0) throw new Error(`飞书返回 code=${code}${body?.msg ? `: ${body.msg}` : ''}`);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e);
         this.logger.warn(`飞书通知失败：${message}`);
