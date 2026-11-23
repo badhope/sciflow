@@ -85,4 +85,8 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: release-artifacts/*
-          generate_release_notes: true
+          # 不再用 generate_release_notes：action 在 tag 被重推时会重复合并
+          # “Full Changelog”段落（softprops/action-gh-release#827）。发版前把
+          # docs/RELEASE-NOTES.md 更新为当前版本说明，这里只负责替换正文与附件。
+          generate_release_notes: false
+          body_path: docs/RELEASE-NOTES.md
