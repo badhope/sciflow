@@ -28,6 +28,9 @@ export default defineConfig({
     // 桌面端白屏回归（2026-10-22）就是缺这层静态契约测试才漏到用户手里。
     include: ['src/**/*.spec.ts', '../../packages/*/src/**/*.spec.ts', '../desktop/src/**/*.spec.ts'],
     environment: 'node',
+    // 共享依赖图 + 单进程扫描全部 spec 时，冷启动/DB 建表会占掉数秒；5s 默认超时在 CI 并发下会误杀真实用例。
+    testTimeout: 20000,
+    hookTimeout: 30000,
     // 共用一份依赖图（isolate: false）：本项目 spec 均为纯函数/服务级用例，
     // 不依赖模块级可变状态（DB 已按进程隔离）。实测 40 个 spec 的 import 开销占 85% 时长，
     // 关掉隔离后总耗时下降约 40%，且不改变任何断言语义。

@@ -468,38 +468,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/connectors/notion/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["ConnectorsController_notion"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/drive/list": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["ConnectorsController_drive"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/references/discover": {
         parameters: {
             query?: never;
@@ -4635,9 +4603,6 @@ export interface components {
         AgentPlanResponseDto: {
             plan: components["schemas"]["AgentPlanDto"];
         };
-        ProjectBody: {
-            projectId: string;
-        };
         DiscoveredReferenceDto: {
             /** @description 标题 */
             title: string;
@@ -6367,44 +6332,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_notion: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConnectorsController_drive: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProjectBody"];
-            };
-        };
         responses: {
             201: {
                 headers: {

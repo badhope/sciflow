@@ -1147,8 +1147,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 
-/** 裸路径白名单直接取自 VIEW_KEYS，避免两份视图清单漂移（此前 longform/websandbox/browser 就漏了）。 */
-const BARE_ROUTES = new Set<string>(VIEW_KEYS);
+/** 裸路径白名单取自 VIEW_KEYS，并额外放行公开分享 /share/<token>（HashRouter 需要先归一化到 hash 路由）。 */
+const BARE_ROUTES = new Set<string>([...VIEW_KEYS, 'share']);
 
 /**
  * 裸路径兼容：HashRouter 只认 `#/writing`，而用户/文档/收藏夹常写 `/writing`。

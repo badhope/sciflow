@@ -16,6 +16,8 @@ README 是短版，这些文档往深处走。每页顶部都有语言切换。
 | [`QUALITY-BASELINE.zh-CN.md`](QUALITY-BASELINE.zh-CN.md) | 确定性门禁与发布证据 | [English](QUALITY-BASELINE.md) |
 | [`SECURITY.zh-CN.md`](SECURITY.zh-CN.md) | 威胁模型、审计记录与残留风险 | [English](SECURITY.md) |
 | [`product-roadmap.zh-CN.md`](product-roadmap.zh-CN.md) | 能力状态与明确不做的事 | [English](product-roadmap.md) |
+| [`COLLABORATION-BOUNDARY.zh-CN.md`](COLLABORATION-BOUNDARY.zh-CN.md) | 分享权限、快照内容、评论规则与明确不做的事 | [English](COLLABORATION-BOUNDARY.md) |
+| [`ACCEPTANCE-REPORT.zh-CN.md`](ACCEPTANCE-REPORT.zh-CN.md) | 1.19.17 真实验收：连接器、浏览器旅程、搜索 P95、PWA 与 token 计量 | [English](ACCEPTANCE-REPORT.md) |
 | [`RELEASE.zh-CN.md`](RELEASE.zh-CN.md) | 版本规则、发布清单与镜像 | [English](RELEASE.md) |
 | [`BRAND.zh-CN.md`](BRAND.zh-CN.md) | 品牌身份、色彩、标志与语调 | [English](BRAND.md) |
 | [`ECOSYSTEM-AUDIT.zh-CN.md`](ECOSYSTEM-AUDIT.zh-CN.md) | 历史生态与 Harness 审计 | [English](ECOSYSTEM-AUDIT.md) |

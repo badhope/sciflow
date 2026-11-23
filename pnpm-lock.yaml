@@ -200,9 +200,6 @@ importers:
       '@nestjs/throttler':
         specifier: ^6.4.0
         version: 6.7.1(@nestjs/common@11.2.6(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/core@11.2.6)(reflect-metadata@0.2.2)
-      '@notionhq/client':
-        specifier: ^5.31.1
-        version: 5.31.1
       ai:
         specifier: ^7.0.137
         version: 7.0.137(zod@4.6.6)
@@ -245,9 +242,6 @@ importers:
       fluent-ffmpeg:
         specifier: ^2.1.3
         version: 2.1.3
-      googleapis:
-        specifier: ^190.0.0
-        version: 190.0.0
       helmet:
         specifier: ^8.3.0
         version: 8.3.0
@@ -2249,6 +2243,12 @@ packages:
     cpu: [arm64]
     os: [android]
 
+  '@napi-rs/canvas-android-arm64@1.2.0':
+    resolution: {integrity: sha512-Ya2Db4BrwM5WnQtdmA2iOw5O2yZ9vcd5fuX9GjlkQ3k87iWzDUxnijVz11IJrF8c+xBxUHzEgENXmA1yPdnZ2g==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [android]
+
   '@napi-rs/canvas-darwin-arm64@0.1.80':
     resolution: {integrity: sha512-O64APRTXRUiAz0P8gErkfEr3lipLJgM6pjATwavZ22ebhjYl/SUbpgM0xcWPQBNMP1n29afAC/Us5PX1vg+JNQ==}
     engines: {node: '>= 10'}
@@ -2561,10 +2561,6 @@ packages:
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [win32]
-
-  '@notionhq/client@5.31.1':
-    resolution: {integrity: sha512-LuVlgHTkHPZf0LOILKVaDboYOyIXNHP9x2DSMhrJzUJjB7GzWjves1OA+8iqJxn1QPW6OqXdp0sS/z0Vh+JACA==}
-    engines: {node: '>=22'}
 
   '@open-draft/until@3.0.1':
     resolution: {integrity: sha512-s7/9ELP4aP9YZtW7RJaa0Xf3RISaRH9+EFN18FtykJYRHGNrl8f9ymvoNXzjhrjmftFvkQudtuDU9RYhk0xs3A==}
@@ -5688,14 +5684,6 @@ packages:
   google-logging-utils@2.1.1:
     resolution: {integrity: sha512-jYZOPMaRGS3Hldyudft6bdibW9ZWUKBkMdB2TeSETkV1c2T9TR4zxEWZETHv9xJ8KHr2hgkNLaSa8kcEcwlpeQ==}
     engines: {node: '>=22'}
-
-  googleapis-common@9.3.1:
-    resolution: {integrity: sha512-wtv/e7JYgmtpIPcSez2EFD/Wx49DPsRX2rj15D7hTwc7tDsP82dcwoX/I4+zE38mu6S9PcghizzzADLf+ZMunA==}
-    engines: {node: '>=22'}
-
-  googleapis@190.0.0:
-    resolution: {integrity: sha512-/1dTKpv9epj6RPMsrlKdyNtby1flh+d39rCWYCU+6bY4RHgZUPYB+B9cRKYsBqqTWyfBkHum0NCthIWJROcUjw==}
-    engines: {node: '>=22.0.0'}
 
   gopd@1.2.0:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
@@ -8877,9 +8865,6 @@ packages:
   url-join@4.0.1:
     resolution: {integrity: sha512-jk1+QP6ZJqyOiuEI9AEWQfju/nB2Pw466kbA0LEZljHwKeMgd9WrAEgEGxjPDD2+TNbbb37rTyhEfrCXfuKXnA==}
 
-  url-template@2.0.8:
-    resolution: {integrity: sha512-XdVKMF4SJ0nP/O7XIPB0JwAEuT9lDIYnNsK8yGVe43y0AWoKeJNdv3ZNWh7ksJ6KqQFjOO6ox/VEitLnaVNufw==}
-
   use-sync-external-store@1.7.0:
     resolution: {integrity: sha512-6L+EeigHMQhdaIPNIFUKwfWJSwWFQ8gJbJ2DLOs5sDIegTwR9fRxvnM3uciHKjIZhFz+KAv2emhWMRvDmMcY8A==}
     peerDependencies:
@@ -11594,6 +11579,9 @@ snapshots:
   '@napi-rs/canvas-android-arm64@0.1.80':
     optional: true
 
+  '@napi-rs/canvas-android-arm64@1.2.0':
+    optional: true
+
   '@napi-rs/canvas-darwin-arm64@0.1.80':
     optional: true
 
@@ -11667,6 +11655,7 @@ snapshots:
 
   '@napi-rs/canvas@1.2.0':
     optionalDependencies:
+      '@napi-rs/canvas-android-arm64': 1.2.0
       '@napi-rs/canvas-darwin-arm64': 1.2.0
       '@napi-rs/canvas-darwin-x64': 1.2.0
       '@napi-rs/canvas-linux-arm-gnueabihf': 1.2.0
@@ -11792,8 +11781,6 @@ snapshots:
 
   '@node-llama-cpp/win-x64@3.22.1':
     optional: true
-
-  '@notionhq/client@5.31.1': {}
 
   '@open-draft/until@3.0.1': {}
 
@@ -15095,26 +15082,9 @@ snapshots:
       jws: 4.0.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   google-logging-utils@2.1.1: {}
-
-  googleapis-common@9.3.1:
-    dependencies:
-      extend: 3.0.2
-      gaxios: 8.3.2
-      google-auth-library: 11.3.4
-      google-logging-utils: 2.1.1
-      qs: 6.17.1
-      url-template: 2.0.8
-    transitivePeerDependencies:
-      - supports-color
-
-  googleapis@190.0.0:
-    dependencies:
-      google-auth-library: 11.3.4
-      googleapis-common: 9.3.1
-    transitivePeerDependencies:
-      - supports-color
 
   gopd@1.2.0: {}
 
@@ -18997,8 +18967,6 @@ snapshots:
       punycode: 2.3.1
 
   url-join@4.0.1: {}
-
-  url-template@2.0.8: {}
 
   use-sync-external-store@1.7.0(react@19.3.0):
     dependencies:

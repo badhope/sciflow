@@ -61,6 +61,8 @@ node scripts/seed-demo.mjs
 - [`docs/OPERATIONS.zh-CN.md`](docs/OPERATIONS.zh-CN.md) — 健康检查、备份与故障处理
 - [`docs/README.zh-CN.md`](docs/README.zh-CN.md) — 完整索引，每页都有英文入口
 - [`docs/product-roadmap.zh-CN.md`](docs/product-roadmap.zh-CN.md) — 已交付能力与明确不做的事
+- [`docs/COLLABORATION-BOUNDARY.zh-CN.md`](docs/COLLABORATION-BOUNDARY.zh-CN.md) — 谁能看、谁能评论、谁能撤销分享
+- [`docs/ACCEPTANCE-REPORT.zh-CN.md`](docs/ACCEPTANCE-REPORT.zh-CN.md) — 1.19.17 真实验收证据，包括仍未闭环的边界
 - [`CONTRIBUTING.zh-CN.md`](CONTRIBUTING.zh-CN.md) · [`SECURITY.zh-CN.md`](SECURITY.zh-CN.md) · [`CHANGELOG.md`](CHANGELOG.md)
 
 每份指南顶部都有可点击的 `English` 切换。

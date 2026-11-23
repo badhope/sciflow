@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.19.17] - 2026-11-24
+
+### Added
+
+- **作者侧评论审核（A7 收口）**：分享弹窗按 `targetType + targetId` 复用已有链接，显示“读者评论 · N”，作者可逐条删除；服务层仍是软删除并保留审计行。
+- **PWA 离线重连页**：Service Worker 已缓存应用壳但 API 不可达时，页面显示“当前离线，或连不上后端”与“重新连接”，不再用无限 Spinner 假装启动。
+- **统一验收报告**：新增 `docs/ACCEPTANCE-REPORT.md` 与中文版，记录 1.19.17 的真实第三方调用、浏览器旅程、1 万条搜索 P95、PWA 旧缓存与 token 计量，并明确列出未闭环边界。
+
+### Changed
+
+- **连接器国内优先（A9 收口）**：`ConnectorKey` 收敛为 `zotero | feishu`；Notion、Google Drive、Overleaf 的目录项、检查分支、REST 端点、前端 UI、`@notionhq/client` 与 `googleapis` 依赖全部移除，不做“待凭据”的假入口。
+- **飞书双模式**：连接器支持自定义机器人 Webhook（HTTPS + `open.feishu.cn` / `open.larksuite.com` 白名单，解析 `code` / `StatusCode`），也保留 App ID/Secret 应用模式；Webhook 优先，云文档导入仍要求应用凭据。
+- **PWA 可诊断**：构建 ID 注入 `meta[name=sciflow-build]` 与 `window.__SCIFLOW_BUILD__`，便于区分旧缓存页面与新构建。
+
+### Fixed
+
+- **跨项目 `?session=` 静默回落**：服务端会话列表不含目标会话时明确提示“该会话不属于当前项目，已阻止打开”，不再新建对话、把附件和文档写进错误项目；补回归单测与浏览器证据。
+- **分享评论入口缺失**：作者此前只能生成链接，看不到也无法删除评论；现在可审核并删除。
+- **保存回答把内部标记写进成稿**：“保存为文档”原样落 `message.content`，可能把 `---FOLLOWUPS---` 与追问草稿写进正文。现在落稿前统一 `parseFollowUps(...).content.trim()`；旧会话在打开时也剥离标记，不再在气泡里露出内部约定。
+- **分享评论开关串台**：新分享的 checkbox 可能沿用上一个目标的 true。`openShare` 每次先重置为 false，按 `targetId` 命中已有分享才恢复；并用 `shareLookupSeq` 丢弃晚到的旧查询。
+- **测试并发门禁**：页面模块预加载前移到 `beforeAll`，DOCX 用例单独放宽超时，server Vitest 设 `testTimeout` / `hookTimeout`，全量测试不再因并发首载超时。
+- **`PipelinePage` effect 同步 setState**：父组件已用 `key={project.id}` 重挂载，删除冗余 effect，lint 通过。
+
+### Verification
+
+- 全量 `pnpm -r test`：server 949 passed / 1 skipped，web 276 passed，desktop 5 passed。
+- lint、web typecheck、server build、web build、chunk budget 均通过；OpenAPI 生成 268 paths。最终 web build `2026-11-23T18:37:54.791Z`，PWA 168 条 precache / 8,706.62 KiB；在该构建上实测旧缓存清理与离线重连。
+- 1 万条种子库：service 文档 P95 1.26 ms，全类型 P95 3.90 ms，HTTP 文档 P95 4.44 ms。
+- 单次执行与同窗口 LLM 调用均为 8,158 tokens，API 与 SQLite 交叉一致。
+- 最终浏览器 F 轮：扫描件→真实回答→干净文档 `4f1d9c7f...`→PDF 367,596 字节→分享→评论→作者删除→撤销。
+
+### Known boundaries
+
+- 飞书自定义机器人 Webhook 仍缺真实群 URL；应用模式仍缺真实 App ID/Secret，成功送达未验证。
+- PWA 安装与更新只在桌面 Chromium 验证，未上真实 iOS/Android 设备。
+- Zotero 暂留为用户自带的文献 API；若“国内优先”要求连它也移除，需单独产品决策。
+- 写作页 `tab=citations` 深链仍需手点一次“引用与导出”。
+
 ## [1.19.16] - 2026-11-23
 
 ### Added

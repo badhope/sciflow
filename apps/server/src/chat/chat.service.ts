@@ -237,7 +237,8 @@ export class ChatService {
       onRunStarted?: (runId: string) => void;
     } = {},
   ) {
-    const prepared = await prepareChatTurn(message, opts.attachments, this.files.extract.bind(this.files));
+    const prepared = await prepareChatTurn(message, opts.attachments, (input, options) =>
+      this.files.extract(input, { ...options, transcribe: this.ai.transcribeAudio.bind(this.ai) }));
     const promptText = prepared.message;
     // 非流式入口同样执行 chat:before 钩子（block 在此拦截；prompt_inject 由 AI 层注入）
     const before = await this.config.runEventHooks('chat:before', { text: message, projectId }, 'chat');
@@ -321,7 +322,8 @@ export class ChatService {
       this.logger.log(`[compact] 压缩 ${compacted.beforeChars} → ${compacted.afterChars} 字符，归纳 ${compacted.droppedTurns} 轮`);
     }
     return this.contextFor(projectId, message, docContext, effectiveHistory.length, opts.webSearch === true).then(async ({ context, sources }) => {
-      const prepared = await prepareChatTurn(message, opts.attachments, this.files.extract.bind(this.files));
+      const prepared = await prepareChatTurn(message, opts.attachments, (input, options) =>
+        this.files.extract(input, { ...options, transcribe: this.ai.transcribeAudio.bind(this.ai) }));
       const promptText = prepared.message;
       // chat:before 钩子：block 类型在此拦截（抛错由 controller 转为 SSE error 事件）
       const before = await this.config.runEventHooks('chat:before', { text: message, projectId }, 'chat');
@@ -352,7 +354,8 @@ export class ChatService {
         // usage 同时用于计划记账和 agent_execution 实际 token；此前 chat run 的
         // total_tokens 永远是 0，驾驶舱只能看到耗时看不到成本。
         onUsage: (usage) => {
-          streamTokens = Number(usage.totalTokens) || 0;
+          // 累加而非覆盖：一次对话内可能发生多次补全（工具步/续写），覆盖会漏账。
+          streamTokens += Number(usage.totalTokens) || 0;
           if (projectId && useTools) this.tools.recordPlanTokens(projectId, usage.totalTokens);
         },
         ...(prepared.parts ? { userParts: prepared.parts } : {}),

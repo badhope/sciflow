@@ -37,7 +37,7 @@ document is the authoritative contract; this page is a map of the surface.
 | Shares | `/api/shares` | document/conversation snapshots, expiry, public read-only comments |
 | Automation | `/api/agent` | time/event schedules, in-app/browser/Feishu notifications |
 | Extensions | `/api/extensions` | scoped prompt assets and chat slash templates |
-| Connectors | `/api/connectors` | Zotero, Feishu, Notion, Drive, Overleaf credentials and import/test |
+| Connectors | `/api/connectors` | Zotero and Feishu credentials, import/test; foreign SaaS connectors removed by domestic-first policy |
 | Memory | `/api/memory` | write, list, delete |
 | MCP | `/api/mcp` | info, tools, call, external discovery and call |
 | Settings | `/api/settings` | read, connection check, provider CRUD, MCP server CRUD |
@@ -67,9 +67,10 @@ browser and Feishu webhook channels. Feishu webhooks are HTTPS-only and
 host-allowlisted.
 
 Connectors live under the existing MCP module (`/api/connectors`). Credentials
-are encrypted at rest; Zotero imports references, Feishu sends bot messages or
-imports docs, Notion and Drive use official SDKs, and Overleaf only checks Git
-reachability.
+are encrypted at rest. The current catalog is domestic-first: Zotero imports
+references; Feishu supports a custom-bot Webhook or app credentials, sends real
+notifications and imports cloud docs. Notion, Google Drive and Overleaf were
+removed instead of kept as credential-blocked placeholders.
 
 ### Chat and SSE
 

@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 const coreSrc = fileURLToPath(new URL('../../packages/core/src', import.meta.url));
 
 export default defineConfig({
+  /** 每次构建唯一 ID：用于 PWA 新旧缓存/热更新验收与线上问题定位。 */
+  define: { __SCIFLOW_BUILD__: JSON.stringify(new Date().toISOString()) },
   /**
    * 资源基础路径。
    *  - Web 部署（nginx / 根路径）：'/'，与历史行为一致

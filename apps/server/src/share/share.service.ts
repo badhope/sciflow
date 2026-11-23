@@ -171,13 +171,14 @@ export class ShareService {
 
   private view(row: {
     id: string; token: string; title: string | null; createdAt: number; expiresAt: number | null;
-    revokedAt?: number | null; targetType?: string; allowComments?: number | null;
+    revokedAt?: number | null; targetType?: string; targetId?: string | null; allowComments?: number | null;
   }) {
     return {
       id: row.id,
       token: row.token,
       title: row.title || '',
       targetType: row.targetType === 'conversation' ? 'conversation' : 'document',
+      targetId: row.targetId || '',
       allowComments: !!row.allowComments,
       path: `/share/${row.token}`,
       createdAt: row.createdAt,

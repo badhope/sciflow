@@ -17,6 +17,8 @@ language switch at the top.
 | [`QUALITY-BASELINE.md`](QUALITY-BASELINE.md) | Deterministic gate and release evidence | [中文](QUALITY-BASELINE.zh-CN.md) |
 | [`SECURITY.md`](SECURITY.md) | Threat model, review record and residual risks | [中文](SECURITY.zh-CN.md) |
 | [`product-roadmap.md`](product-roadmap.md) | Capability status and deliberate non-goals | [中文](product-roadmap.zh-CN.md) |
+| [`COLLABORATION-BOUNDARY.md`](COLLABORATION-BOUNDARY.md) | Share permissions, snapshot contents, comment rules and non-goals | [中文](COLLABORATION-BOUNDARY.zh-CN.md) |
+| [`ACCEPTANCE-REPORT.md`](ACCEPTANCE-REPORT.md) | 1.19.17 live acceptance: connectors, browser journey, search P95, PWA and token accounting | [中文](ACCEPTANCE-REPORT.zh-CN.md) |
 | [`RELEASE.md`](RELEASE.md) | Versioning, release checklist and mirrors | [中文](RELEASE.zh-CN.md) |
 | [`BRAND.md`](BRAND.md) | Identity, colour, logo and voice | [中文](BRAND.zh-CN.md) |
 | [`ECOSYSTEM-AUDIT.md`](ECOSYSTEM-AUDIT.md) | Historical ecosystem and harness audit | [中文](ECOSYSTEM-AUDIT.zh-CN.md) |

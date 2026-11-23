@@ -765,7 +765,7 @@ sqlite.exec(`CREATE TABLE IF NOT EXISTS chat_session (
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_chat_session_project ON chat_session(project_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_chat_session_project_last ON chat_session(project_id, last_message_at DESC);
+-- last_message_at 是 v16 新增列：旧库此时还没有，索引必须等迁移补列后再建。
 `);
 
 

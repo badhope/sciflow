@@ -1,14 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import { createRequire } from 'node:module';
 import { safeOutboundFetch } from '../common/safe-outbound';
 import { db } from '../db/database';
 import { appSettings } from '../db/schema';
 import { encryptSecret, decryptSecret } from '../common/secret-crypto';
 import { ReferencesService } from '../references/references.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
+import { assertWebhookUrl } from '../schedule/notification.service';
 
-export type ConnectorKey = 'zotero' | 'feishu' | 'notion' | 'drive' | 'overleaf';
+export type ConnectorKey = 'zotero' | 'feishu';
 
 export interface ConnectorField {
   key: string;
@@ -17,33 +17,22 @@ export interface ConnectorField {
   placeholder?: string;
 }
 
-export const CONNECTORS: { key: ConnectorKey; name: string; type: 'api' | 'sdk' | 'git'; description: string; fields: ConnectorField[] }[] = [
+export const CONNECTORS: { key: ConnectorKey; name: string; type: 'api' | 'sdk'; description: string; fields: ConnectorField[] }[] = [
   {
     key: 'zotero', name: 'Zotero', type: 'api', description: 'Zotero Web API 同步文献库到证据库（按标题指纹去重）',
     fields: [
       { key: 'libraryId', label: '用户 ID 或群组 ID', placeholder: '例如 4758492' },
       { key: 'libraryType', label: '库类型（user / group）', placeholder: 'user' },
-      { key: 'apiKey', label: 'Zotero API Key', secret: true },
+      { key: 'apiKey', label: 'Zotero API Key（公开库可留空）', secret: true },
     ],
   },
   {
-    key: 'feishu', name: '飞书', type: 'sdk', description: '官方 Node SDK：发机器人通知、导入云文档到知识库',
+    key: 'feishu', name: '飞书', type: 'sdk', description: '自定义机器人 Webhook 或官方应用：真实发通知、导入云文档',
     fields: [
-      { key: 'appId', label: 'App ID', placeholder: 'cli_xxx' },
-      { key: 'appSecret', label: 'App Secret', secret: true },
-      { key: 'receiveId', label: '通知接收人 open_id（可选）', placeholder: 'ou_xxx' },
-    ],
-  },
-  { key: 'notion', name: 'Notion', type: 'sdk', description: '官方 SDK：验证令牌并搜索页面/数据库', fields: [{ key: 'token', label: 'Integration Token', secret: true }] },
-  {
-    key: 'drive', name: 'Google Drive', type: 'sdk', description: '官方 googleapis：只读列出/导入 Drive 文档',
-    fields: [{ key: 'serviceAccount', label: 'Service Account JSON', secret: true, placeholder: '{"type":"service_account",…}' }],
-  },
-  {
-    key: 'overleaf', name: 'Overleaf', type: 'git', description: '官方 Git 集成：检测仓库可达（不爬网页）',
-    fields: [
-      { key: 'gitUrl', label: 'Git URL', placeholder: 'https://git.overleaf.com/xxxx' },
-      { key: 'token', label: 'Git Token（可选）', secret: true },
+      { key: 'webhookUrl', label: '自定义机器人 Webhook（推荐；填了即走 Webhook）', secret: true, placeholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/…' },
+      { key: 'appId', label: 'App ID（应用模式可选）', placeholder: 'cli_xxx' },
+      { key: 'appSecret', label: 'App Secret（应用模式可选）', secret: true },
+      { key: 'receiveId', label: '通知接收人 open_id（应用模式可选）', placeholder: 'ou_xxx' },
     ],
   },
 ];
@@ -130,38 +119,29 @@ export class ConnectorsService {
 
   private async check(key: ConnectorKey, c: StoredConfig): Promise<string> {
     if (key === 'zotero') {
-      const res = await safeOutboundFetch(`https://api.zotero.org/${c.libraryType === 'group' ? 'groups' : 'users'}/${encodeURIComponent(c.libraryId)}/items/top?limit=1&format=json`, { headers: { 'Zotero-API-Key': c.apiKey, 'Zotero-API-Version': '3' } });
+      const headers: Record<string, string> = { 'Zotero-API-Version': '3' };
+      if (c.apiKey) headers['Zotero-API-Key'] = c.apiKey;
+      const res = await safeOutboundFetch(`https://api.zotero.org/${c.libraryType === 'group' ? 'groups' : 'users'}/${encodeURIComponent(c.libraryId)}/items/top?limit=1&format=json`, { headers });
       if (!res.ok) throw new Error(`Zotero ${res.status}: ${(await res.text()).slice(0, 120)}`);
       const total = res.headers.get('total-results');
       return `Zotero 连接正常${total ? `，库内 ${total} 条` : ''}`;
     }
     if (key === 'feishu') {
+      if (c.webhookUrl) {
+        const sent = await this.postFeishuWebhook(c.webhookUrl, `SciFlow 连接测试：飞书 Webhook 已连通（${new Date().toLocaleString('zh-CN', { hour12: false })}）`);
+        return `飞书 Webhook 发送成功（${sent}）`;
+      }
+      if (!c.appId || !c.appSecret) throw new Error('未配置飞书 Webhook 或应用凭据');
       const lark = await import('@larksuiteoapi/node-sdk');
       const client = new lark.Client({ appId: c.appId, appSecret: c.appSecret, appType: lark.AppType.SelfBuild, domain: lark.Domain.Feishu });
-      const res = await (client as unknown as { request: (o: { method: string; url: string }) => Promise<unknown> }).request({ method: 'GET', url: '/open-apis/tenant/tenant_access_token/internal' }).catch(() => null);
-      void res;
-      return '飞书 SDK 已加载（发送/导入时校验租户令牌）';
-    }
-    if (key === 'notion') {
-      const { Client } = await import('@notionhq/client');
-      const notion = new Client({ auth: c.token });
-      const me = await notion.users.me({});
-      return `Notion 连接正常：${'name' in me && me.name ? me.name : me.type}`;
-    }
-    if (key === 'drive') {
-      const { google } = loadGoogleApis();
-      const creds = JSON.parse(c.serviceAccount) as { client_email?: string; private_key?: string };
-      if (!creds.client_email || !creds.private_key) throw new Error('Service Account JSON 缺少 client_email/private_key');
-      const auth = new google.auth.JWT({ email: creds.client_email, key: creds.private_key, scopes: ['https://www.googleapis.com/auth/drive.readonly'] });
-      const drive = google.drive({ version: 'v3', auth });
-      const res = await drive.files.list({ pageSize: 1, fields: 'files(id,name)' });
-      return `Drive 连接正常，可见 ${res.data.files?.length ?? 0} 个文件（抽样）`;
-    }
-    if (key === 'overleaf') {
-      const url = c.gitUrl.replace(/^https:\/\//, c.token ? `https://${encodeURIComponent('git')}:${encodeURIComponent(c.token)}@` : 'https://');
-      const res = await safeOutboundFetch(url, { method: 'HEAD' });
-      if (!res.ok) throw new Error(`Overleaf Git ${res.status}`);
-      return 'Overleaf Git 仓库可达';
+      // 必须真的换到 tenant_access_token，不能只证明 SDK 能 import。
+      const auth = client as unknown as {
+        auth: { tenantAccessToken: { internal: (p: { data: { app_id: string; app_secret: string } }) => Promise<{ code?: number; msg?: string; data?: { tenant_access_token?: string } }> } };
+      };
+      const res = await auth.auth.tenantAccessToken.internal({ data: { app_id: c.appId || '', app_secret: c.appSecret || '' } });
+      if (res.code && res.code !== 0) throw new Error(`飞书鉴权失败：${res.msg || res.code}`);
+      if (!res.data?.tenant_access_token) throw new Error('飞书鉴权未返回 tenant_access_token');
+      return '飞书应用凭据有效，tenant_access_token 已获取';
     }
     throw new BadRequestException('未知连接器');
   }
@@ -170,7 +150,9 @@ export class ConnectorsService {
   async importZotero(projectId: string, limit = 10) {
     const c = this.requireConfig('zotero', projectId);
     const max = Math.min(100, Math.max(1, Math.floor(limit)));
-    const res = await safeOutboundFetch(`https://api.zotero.org/${c.libraryType === 'group' ? 'groups' : 'users'}/${encodeURIComponent(c.libraryId)}/items/top?limit=${max}&format=json`, { headers: { 'Zotero-API-Key': c.apiKey, 'Zotero-API-Version': '3' } });
+    const headers: Record<string, string> = { 'Zotero-API-Version': '3' };
+    if (c.apiKey) headers['Zotero-API-Key'] = c.apiKey;
+    const res = await safeOutboundFetch(`https://api.zotero.org/${c.libraryType === 'group' ? 'groups' : 'users'}/${encodeURIComponent(c.libraryId)}/items/top?limit=${max}&format=json`, { headers });
     if (!res.ok) throw new BadRequestException(`Zotero 拉取失败（${res.status}）：${(await res.text()).slice(0, 160)}`);
     const rows = await res.json() as { data?: Record<string, unknown> }[];
     let added = 0; let duplicate = 0; let skipped = 0;
@@ -201,9 +183,32 @@ export class ConnectorsService {
     return { fetched: rows.length, added, duplicate, skipped };
   }
 
+  /** 飞书自定义机器人：只走官方域名白名单，返回可审计的 code。 */
+  private async postFeishuWebhook(rawUrl: string, text: string): Promise<string> {
+    const url = assertWebhookUrl(rawUrl);
+    const res = await safeOutboundFetch(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ msg_type: 'text', content: { text } }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const body = await res.text();
+    if (!res.ok) throw new Error(`飞书 Webhook HTTP ${res.status}：${body.slice(0, 120)}`);
+    let parsed: { code?: number; StatusCode?: number; msg?: string; StatusMessage?: string } = {};
+    try { parsed = JSON.parse(body) as typeof parsed; } catch { throw new Error(`飞书 Webhook 返回非 JSON：${body.slice(0, 120)}`); }
+    const code = parsed.code ?? parsed.StatusCode;
+    if (code !== undefined && code !== 0) throw new Error(`飞书 Webhook 返回 code=${code} ${parsed.msg || parsed.StatusMessage || ''}`.trim());
+    return code === 0 ? 'code=0' : 'HTTP 2xx';
+  }
+
   async feishuNotify(projectId: string, text: string) {
     const c = this.requireConfig('feishu', projectId);
-    if (!c.receiveId) throw new BadRequestException('未配置 receiveId（open_id）');
+    if (c.webhookUrl) {
+      await this.postFeishuWebhook(c.webhookUrl, text.slice(0, 2000));
+      this.writeStatus('feishu', projectId, true, 'Webhook 通知发送成功');
+      return { ok: true };
+    }
+    if (!c.receiveId) throw new BadRequestException('未配置 receiveId（open_id），也未配置 Webhook');
     const lark = await import('@larksuiteoapi/node-sdk');
     const client = new lark.Client({ appId: c.appId, appSecret: c.appSecret, appType: lark.AppType.SelfBuild, domain: lark.Domain.Feishu });
     try {
@@ -222,6 +227,7 @@ export class ConnectorsService {
 
   async feishuImportDoc(projectId: string, documentId: string) {
     const c = this.requireConfig('feishu', projectId);
+    if (!c.appId || !c.appSecret) throw new BadRequestException('导入云文档需要飞书应用 App ID / App Secret；Webhook 只用于通知');
     const lark = await import('@larksuiteoapi/node-sdk');
     const client = new lark.Client({ appId: c.appId, appSecret: c.appSecret, appType: lark.AppType.SelfBuild, domain: lark.Domain.Feishu });
     type LarkRaw = { code?: number; msg?: string; data?: { content?: string } };
@@ -236,39 +242,4 @@ export class ConnectorsService {
     return { doc };
   }
 
-  async notionSearch(projectId: string, query: string) {
-    const c = this.requireConfig('notion', projectId);
-    const { Client } = await import('@notionhq/client');
-    const notion = new Client({ auth: c.token });
-    const res = await notion.search({ query: query.slice(0, 100), page_size: 20 });
-    return { results: res.results.map((r) => ({ id: r.id, type: r.object, title: r.object === 'page' ? pageTitle(r) : '' })) };
-  }
-
-  async driveList(projectId: string) {
-    const c = this.requireConfig('drive', projectId);
-    const { google } = loadGoogleApis();
-    const creds = JSON.parse(c.serviceAccount) as { client_email: string; private_key: string };
-    const auth = new google.auth.JWT({ email: creds.client_email, key: creds.private_key, scopes: ['https://www.googleapis.com/auth/drive.readonly'] });
-    const drive = google.drive({ version: 'v3', auth });
-    const res = await drive.files.list({ pageSize: 20, fields: 'files(id,name,mimeType,modifiedTime)' });
-    return { files: res.data.files ?? [] };
-  }
-}
-
-type GoogleApis = {
-  google: {
-    auth: { JWT: new (o: { email: string; key: string; scopes: string[] }) => unknown };
-    drive: (o: { version: string; auth: unknown }) => { files: { list: (o: Record<string, unknown>) => Promise<{ data: { files?: { id?: string | null; name?: string | null; mimeType?: string | null }[] } }> } };
-  };
-};
-
-/** googleapis 类型图极大（会拖垮 tsc 内存），运行时按需加载，不参与类型解析。 */
-function loadGoogleApis(): GoogleApis {
-  return createRequire(__filename)('googleapis') as GoogleApis;
-}
-
-function pageTitle(r: unknown): string {
-  const page = r as { properties?: Record<string, { title?: { plain_text?: string }[] }> };
-  const prop = page.properties?.title || page.properties?.Name;
-  return prop?.title?.map((t) => t.plain_text || '').join('') || '';
 }

@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi, beforeEach } from 'vitest';
 
 /**
  * 质量页「客观检查器」契约（v1.8）。
@@ -71,6 +71,9 @@ async function renderPage() {
   });
   return result!;
 }
+
+// 预加载页面模块：首次动态 import 在 CI 并发负载下可能超过单测默认超时；把冷启动放到 beforeAll。
+beforeAll(async () => { await import('./QualityPage'); }, 60000);
 
 describe('质量页：客观检查器卡片', () => {
   afterEach(() => cleanup());

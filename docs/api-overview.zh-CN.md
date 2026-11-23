@@ -346,12 +346,10 @@ NotebookLM 式本地知识库：上传资料 → 分块 → BM25+向量混合检
 | POST | `/api/connectors/disconnect` | 断开并清理状态 |
 | POST | `/api/connectors/test` | 连接测试，失败写可读状态 |
 | POST | `/api/connectors/zotero/import` | Zotero Web API 拉取文献并去重入库 |
-| POST | `/api/connectors/feishu/notify` | 官方飞书 SDK 发机器人消息 |
+| POST | `/api/connectors/feishu/notify` | 自定义机器人 Webhook 或飞书应用发真实通知 |
 | POST | `/api/connectors/feishu/import-doc` | 飞书云文档导入知识库 |
-| POST | `/api/connectors/notion/search` | 官方 Notion SDK 搜索 |
-| POST | `/api/connectors/drive/list` | 官方 googleapis 只读列目录 |
 
-连接器复用现有 MCP 模块，不新建集成中心；Overleaf 只做官方 Git 可达检测，不爬网页。
+连接器复用现有 MCP 模块，不新建集成中心。当前目录只保留 Zotero 与飞书：Zotero 负责文献同步，飞书支持自定义机器人 Webhook 与应用凭据。Notion、Google Drive、Overleaf 已按“国内平台优先”移除，不再以“待凭据”占位。
 
 ### health —— 健康检查（无模块前缀）
 

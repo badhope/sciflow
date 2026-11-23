@@ -116,7 +116,7 @@ navigation still has 9 entries, and the only new Nest module is the aggregate
 | A6 output | Playwright `printToPDF`, presentation outline template, tool artifacts into documents/projects, save answer as document |
 | A7 sharing | Document/conversation snapshot shares, expiry, anonymous read-only comments, author deletion; conversation snapshots are sanitized |
 | A8 prompts | Extension manifest separates `tool/chat` scope; chat templates enter the slash menu via `/api/extensions/chat-prompts` |
-| A9 connectors | Zotero/Feishu/Notion/Drive/Overleaf catalog, encrypted credentials, test/import/notify, official SDKs first |
+| A9 connectors | Domestic-first catalog: Zotero + Feishu, encrypted credentials, test/import/notify/Webhook; Notion/Drive/Overleaf removed |
 | B1 composer | Workspace and writing page share `ChatComposer`; duplicated attachment/slash/stop logic removed |
 | B2 inbox | AgentOps automation card shows tasks, approvals and notifications through one `useAgentInbox` query set |
 | B3 knowledge | Office/EPUB/media import in the existing knowledge tab, `?q=` filtering, no new file library |
@@ -151,10 +151,12 @@ look more “ecosystem-native”.
   budget and OpenAPI generation.
 - Real samples: image OCR, scanned-PDF OCR, real mp4 audio-track transcription,
   DOCX tables, EPUB and multi-sheet XLSX.
-- Still open because of the environment, not because the code passed: a real
-  Feishu webhook (local DNS resolves `open.feishu.cn` to loopback and the
-  outbound guard correctly blocks it), real Zotero/Notion/Drive/Overleaf
-  credentials, a real `/audio/transcriptions` endpoint, and PWA installation /
-  stale-cache update on a physical device.
+- Verified live: Zotero public Web API read/import and Feishu OpenAPI message
+  delivery. Still open: a real custom-bot Feishu Webhook URL, because Feishu
+  exposes bot creation only in the group settings UI (no OpenAPI), and PWA
+  stale-cache update on a physical device. Notion, Google Drive and Overleaf
+  were removed by the domestic-first connector policy.
+- Real audio uses a local `faster-whisper` fallback (`scripts/local-transcribe.py`)
+  when the configured model endpoint has no `/audio/transcriptions`.
 - Product wording: “no collaboration UI” is implemented as “no new pages,
   public share + read-only comments first, team collaboration deferred”.

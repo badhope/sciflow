@@ -61,6 +61,8 @@ Desktop and Docker builds are documented in [`docs/DESKTOP.md`](docs/DESKTOP.md)
 - [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — health, backup and failure handling
 - [`docs/README.md`](docs/README.md) — full index, with a Chinese link for every page
 - [`docs/product-roadmap.md`](docs/product-roadmap.md) — what is shipped and what is deliberately out of scope
+- [`docs/COLLABORATION-BOUNDARY.md`](docs/COLLABORATION-BOUNDARY.md) — who can read, comment and revoke a share
+- [`docs/ACCEPTANCE-REPORT.md`](docs/ACCEPTANCE-REPORT.md) — 1.19.17 live acceptance evidence, including what is still blocked
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) · [`CHANGELOG.md`](CHANGELOG.md)
 
 Every guide starts with a clickable `简体中文` switch.

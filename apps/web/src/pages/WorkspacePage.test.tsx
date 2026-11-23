@@ -61,17 +61,19 @@ vi.mock('../api/client', () => ({
   streamChat: (opts: Record<string, unknown>) => streamChatMock(opts),
 }));
 
+import { api } from '../api/client';
 import { WorkspacePage } from './WorkspacePage';
+import { parseFollowUps } from '../lib/chat-session';
 
 const project: Project = { id: 'p-1', name: '测试项目', description: '', status: 'active', createdAt: 0, updatedAt: 0 } as Project;
 
-async function renderPage() {
+async function renderPage(initialPath = '/') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let result: ReturnType<typeof render>;
   await act(async () => {
     result = render(
       <QueryClientProvider client={qc}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[initialPath]}>
         <WorkspacePage project={project} initialDocId={null} onOpenFullEditor={() => undefined} />
         </MemoryRouter>
       </QueryClientProvider>,
@@ -85,6 +87,7 @@ async function renderPage() {
 describe('WorkspacePage（对话+预览工作台）', () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.clearAllMocks();
     lastOpts = null;
     streamChatMock.mockClear();
   });
@@ -104,6 +107,12 @@ describe('WorkspacePage（对话+预览工作台）', () => {
     expect(screen.getByText('开始与 SciFlow 对话')).toBeTruthy();
     const sendBtn = screen.getByRole('button', { name: /发送/ });
     expect(sendBtn).toBeDisabled();
+  });
+
+  it('外来项目的 ?session= 不静默开新对话：明确报错且不请求跨项目详情', async () => {
+    await renderPage('/?session=foreign-session');
+    await waitFor(() => expect(screen.getByText(/该会话不属于当前项目/)).toBeTruthy());
+    expect(api.chat.getSession).not.toHaveBeenCalled();
   });
 
   it('顶部提供运行流水线与完整编辑器入口', async () => {
@@ -197,5 +206,13 @@ describe('WorkspacePage（对话+预览工作台）', () => {
       // 中文业务错误必须原样呈现，不能被改写成"无法连接服务器"
       expect(text).toContain('文档内容过短');
     });
+  });
+
+  it('落稿正文解析剥离内部 FOLLOWUPS 约定，只留正文', () => {
+    const full = '研究结论正文，这是一段足够长的落稿内容。\n---FOLLOWUPS---\n1. 还需要补什么？';
+    const parsed = parseFollowUps(full);
+    expect(parsed.content).toBe('研究结论正文，这是一段足够长的落稿内容。');
+    expect(parsed.content).not.toContain('---FOLLOWUPS---');
+    expect(parsed.followUps).toEqual(['还需要补什么？']);
   });
 });

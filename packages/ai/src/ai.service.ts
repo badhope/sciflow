@@ -13,6 +13,12 @@ import { parseJson } from '../../core/src/json-guard';
 import { embedMany } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
 
 /** 项目上下文注入的兜底规则：先查工具，查不到才用专业知识并标注未核验。 */
 const CONTEXT_NOTE =
@@ -119,12 +125,47 @@ export class AiService extends AiTransportService {
     });
     if (!res.ok) {
       const detail = (await res.text().catch(() => '')).slice(0, 300);
-      throw new Error(`音频转写失败（HTTP ${res.status}）${detail ? `：${detail}` : ''}`);
+      const remoteError = `音频转写失败（HTTP ${res.status}）${detail ? `：${detail}` : ''}`;
+      const local = await this.transcribeLocal(buffer, filename, remoteError).catch((e: unknown) => {
+        throw new Error(`${remoteError}；本地 Whisper 回退失败：${e instanceof Error ? e.message : String(e)}`);
+      });
+      return local;
     }
     const payload = (await res.json()) as { text?: string };
     const text = String(payload.text || '').trim();
     if (!text) throw new Error('音频转写结果为空');
     return text;
+  }
+
+  /**
+   * 本地 faster-whisper 回退：仅当显式配置 LOCAL_WHISPER_MODEL 时启用。
+   * 远端网关没有 /audio/transcriptions 时，视频/音频附件仍能真正转写，而不是直接 400。
+   */
+  private async transcribeLocal(buffer: Buffer, filename: string, remoteError: string): Promise<string> {
+    const modelDir = (process.env.LOCAL_WHISPER_MODEL || '').trim();
+    if (!modelDir) throw new Error(`${remoteError}；未配置 LOCAL_WHISPER_MODEL，无法本地转写`);
+    if (!existsSync(modelDir)) throw new Error(`LOCAL_WHISPER_MODEL 路径不存在：${modelDir}`);
+    const script = resolveLocalWhisperScript();
+    if (!script) throw new Error('找不到 scripts/local-transcribe.py（可用 LOCAL_WHISPER_SCRIPT 指定）');
+    const dir = await mkdtemp(path.join(tmpdir(), 'sciflow-whisper-'));
+    const ext = path.extname(filename || '') || '.audio';
+    const input = path.join(dir, `input${ext}`);
+    try {
+      await writeFile(input, buffer);
+      const python = process.env.LOCAL_WHISPER_PYTHON || 'python3';
+      const timeout = Number(process.env.LOCAL_WHISPER_TIMEOUT_MS) || 300_000;
+      const { stdout } = await promisify(execFile)(python, [script, input, modelDir], {
+        timeout,
+        maxBuffer: 4 * 1024 * 1024,
+        env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+      });
+      const parsed = JSON.parse(String(stdout || '{}')) as { text?: string };
+      const text = String(parsed.text || '').trim();
+      if (!text) throw new Error('本地 Whisper 转写结果为空');
+      return text;
+    } finally {
+      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 
   /** 宽松 JSON 解析：jsonrepair 修复近合法输出（围栏/前缀/截断），失败抛错 */
@@ -709,3 +750,15 @@ ${response}`
 
 export type ReviewResult = Awaited<ReturnType<AiService['reviewPaper']>>;
 export { ChatMessage, ChatStreamOptions, CompleteOptions, ChatContentPart } from './ai-transport.service';
+
+/** 本地 Whisper 脚本定位：仓库内 scripts/ 或环境变量显式指定。 */
+function resolveLocalWhisperScript(): string | null {
+  const explicit = (process.env.LOCAL_WHISPER_SCRIPT || '').trim();
+  if (explicit) return existsSync(explicit) ? explicit : null;
+  const candidates = [
+    path.resolve(process.cwd(), 'scripts/local-transcribe.py'),
+    path.resolve(process.cwd(), '../../scripts/local-transcribe.py'),
+    path.resolve(__dirname, '../../../../scripts/local-transcribe.py'),
+  ];
+  return candidates.find((p) => existsSync(p)) || null;
+}

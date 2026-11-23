@@ -39,7 +39,7 @@ describe('cleanExtractedText', () => {
 });
 
 describe('FileExtractService', () => {
-  it('解析 DOCX 正文与表格', async () => {
+  it('解析 DOCX 正文与表格', { timeout: 30000 }, async () => {
     const doc = new Document({
       sections: [{
         children: [

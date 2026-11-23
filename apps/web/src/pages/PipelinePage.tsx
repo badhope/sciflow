@@ -198,8 +198,8 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
   const [activeId, setActiveId] = useState<string | null>(null);
   const [topic, setTopic] = useState('');
   const [templateId, setTemplateId] = useState<string>('');
-  /* —— 模板管理：自定义模板（按项目后端 templates 字段持久化）—— */
-  const [customs, setCustoms] = useState<ManagedTemplate[]>([]);
+  /* —— 模板管理：自定义模板（按项目隔离，本机持久化）—— */
+  const [customs, setCustoms] = useState<ManagedTemplate[]>(() => loadCustomTemplates(project.id));
   const [manageOpen, setManageOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null); // null = 新增
@@ -228,40 +228,8 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
   const [stopping, setStopping] = useState(false);
 
 
-  /** 自定义模板按项目隔离加载：后端 templates 字段优先；后端为空且 localStorage 有旧值时一次性迁移写回后端 */
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      let fromBackend: ManagedTemplate[] = [];
-      try {
-        if (project.templates) fromBackend = parseTemplateArr(JSON.parse(project.templates));
-      } catch {
-        fromBackend = [];
-      }
-      if (!cancelled) setCustoms(fromBackend);
-      // 一次性迁移：后端为空但 localStorage 有旧自定义模板 → 写回后端并清本地
-      if (fromBackend.length === 0) {
-        const old = loadCustomTemplates(project.id);
-        if (old.length > 0) {
-          if (!cancelled) setCustoms(old);
-          try {
-            await api.projects.update(project.id, { templates: JSON.stringify(stripTemplates(old)) });
-            try {
-              localStorage.removeItem(tplStorageKey(project.id));
-            } catch {
-              /* 隐私模式清不掉也无妨 */
-            }
-          } catch {
-            /* 迁移失败：保留本地 customs，下次进入再试 */
-          }
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [project.id, project.templates]);
-
+  // 自定义模板按项目隔离：v19 删除 project.templates 后统一落本机 localStorage。
+  // 父组件用 key={project.id} 挂载本页，切项目即重挂载；初始 useState 已加载，无需 effect 再 setState。
   // 研究深度：读全局运行参数（失败静默用默认 1；保存失败 toast）
   useEffect(() => {
     let cancelled = false;
@@ -286,10 +254,10 @@ export function PipelinePage({ project, onOpenDoc }: { project: Project; onOpenD
     }
   };
 
-  /** 自定义模板持久化：写后端项目 templates 字段（PATCH /api/projects/:id），失败 toast 提示 */
-  const persistCustomTemplates = async (list: ManagedTemplate[]) => {
+  /** 自定义模板本机持久化；不写已删除的 project.templates 字段。 */
+  const persistCustomTemplates = (list: ManagedTemplate[]) => {
     try {
-      await api.projects.update(project.id, { templates: JSON.stringify(stripTemplates(list)) });
+      localStorage.setItem(tplStorageKey(project.id), JSON.stringify(stripTemplates(list)));
     } catch (e: unknown) {
       toast('error', '模板保存失败：' + errMsg(e));
     }

@@ -10,6 +10,7 @@ import { PIPELINE_STEPS } from '@sciflow/core/pipeline-steps';
 import { api } from '../api/client';
 import { AgentChatThread } from '../components/AgentChat';
 import { DocumentSelect } from '../components/DocumentSelect';
+import { IconButton } from '../components/ui';
 import { TaskListPanel } from '../components/TaskListPanel';
 import { ApprovalDialog } from '../components/ApprovalDialog';
 import { PlanApprovalCard } from '../components/PlanApprovalCard';
@@ -28,7 +29,7 @@ import { useAsyncAction } from '../lib/async';
 import { useChatSession, parseFollowUps, FOLLOWUP_HINT, type ChatAttachment, type ChatMessage, type SendOptions } from '../lib/chat-session';
 import { activeBranchSummary } from '../lib/chat-branch';
 import { CHAT_ATTACHMENT_MAX_FILES, readChatAttachment } from '../lib/chat-attachments';
-import { shares, absoluteShareUrl, type ShareLinkInfo } from '../api/shares';
+import { shares, absoluteShareUrl, type PublicComment, type ShareLinkInfo } from '../api/shares';
 import { useProjectDocs, useProjectKnowledge, useProjectRefs } from '../lib/queries';
 import { useTabActive } from '../lib/tab-visibility';
 import { qk } from '../lib/query-keys';
@@ -76,6 +77,15 @@ function mergeServerSession(existing: ChatSession | undefined, s: ChatSessionSum
     messageCount: s.messageCount,
     branch: existing?.branch,
   };
+}
+
+/** 旧会话可能把 ---FOLLOWUPS--- 一起落盘；打开时在渲染层剥离，历史数据不需要迁移。 */
+function stripFollowUpsFromHistory(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((m) => {
+    if (m.role !== 'assistant' || !m.content.includes('---FOLLOWUPS---')) return m;
+    const parsed = parseFollowUps(m.content);
+    return { ...m, content: parsed.content, followUps: m.followUps?.length ? m.followUps : parsed.followUps };
+  });
 }
 
 /** 会话抽屉的分支标签：只对已有 activeLeaf 的新会话计算，旧线性会话不误报。 */
@@ -167,6 +177,10 @@ export function WorkspacePage({
   const [shareInfo, setShareInfo] = useState<ShareLinkInfo | null>(null);
   const [shareTarget, setShareTarget] = useState<{ type: 'document' | 'conversation'; id: string; title: string } | null>(null);
   const [shareAllowComments, setShareAllowComments] = useState(false);
+  const [shareComments, setShareComments] = useState<PublicComment[]>([]);
+  const [shareCommentsBusy, setShareCommentsBusy] = useState(false);
+  const [shareLookupBusy, setShareLookupBusy] = useState(false);
+  const shareLookupSeq = useRef(0);
   const [sessionFilter, setSessionFilter] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [sessionSyncError, setSessionSyncError] = useState('');
@@ -252,7 +266,7 @@ export function WorkspacePage({
   const chat = useChatSession({
     initialMessages: (() => {
       const target = sessions.find((s) => s.id === activeId);
-      return target && target.messages.length ? (target.messages as ChatMessage[]) : [];
+      return target && target.messages.length ? stripFollowUpsFromHistory(target.messages as ChatMessage[]) : [];
     })(),
     onSend: (text) => {
       setIntentBusy(true);
@@ -337,7 +351,7 @@ export function WorkspacePage({
         setActiveId(next[0].id);
         saveActiveSessionId(project.id, next[0].id);
         void loadSession(next[0].id).then((s) => {
-          if (s) chatResetRef.current(s.messages as ChatMessage[], s.branch?.activeLeafId ?? null);
+          if (s) chatResetRef.current(stripFollowUpsFromHistory(s.messages as ChatMessage[]), s.branch?.activeLeafId ?? null);
         });
       }
     }
@@ -500,12 +514,15 @@ export function WorkspacePage({
   const saveAnswerAsDocument = async (index: number) => {
     const message = messages[index];
     if (!message?.content?.trim()) return;
-    const fallback = message.content.replace(/[#>*`]/g, '').trim().split('\n')[0].slice(0, 40) || '对话产物';
+    // 气泡里已经剥离了 ---FOLLOWUPS---；落文档时必须用同一份正文，不能把内部约定写进稿子。
+    const body = parseFollowUps(message.content).content.trim();
+    if (!body) return;
+    const fallback = body.replace(/[#>*`]/g, '').trim().split('\n')[0].slice(0, 40) || '对话产物';
     const title = window.prompt('保存为文档的标题', fallback);
     if (!title?.trim()) return;
     try {
       const d = await api.documents.create(project.id, title.trim());
-      await api.documents.update(d.id, { content: message.content });
+      await api.documents.update(d.id, { content: body });
       await qc.invalidateQueries({ queryKey: qk.docs(project.id) });
       setDocId(d.id);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -612,7 +629,7 @@ export function WorkspacePage({
     if (!target) return;
     setActiveId(id);
     saveActiveSessionId(project.id, id);
-    chat.reset(target.messages.length ? (target.messages as ChatMessage[]) : [], target.branch?.activeLeafId ?? null);
+    chat.reset(target.messages.length ? stripFollowUpsFromHistory(target.messages as ChatMessage[]) : [], target.branch?.activeLeafId ?? null);
     setInput(loadDraft(project.id, id));
     setIntent(null);
   }, [loadSession, project.id, chat]);
@@ -627,8 +644,16 @@ export function WorkspacePage({
   useEffect(() => {
     if (!focusSessionId || focusSessionConsumed.current) return;
     const local = sessionsRef.current.some((s) => s.id === focusSessionId);
+    // 服务端列表是按当前项目 scoped 的：列表已返回但其中没有该 id，说明会话属于别的项目。
+    // 历史缺陷：此时仍调用 openSession，接口 404 后静默退回新对话，用户消息会落到错误项目。
+    const serverHas = serverSessionsQuery.data?.sessions.some((s) => s.id === focusSessionId) ?? false;
     if (!local && !serverSessionsQuery.data) return;
     focusSessionConsumed.current = true;
+    if (!local && !serverHas) {
+      setError('该会话不属于当前项目，已阻止打开；请切换到会话所属项目后重试。');
+      return;
+    }
+    setError('');
     void openSessionRef.current?.(focusSessionId);
   }, [focusSessionId, serverSessionsQuery.data, searchParams]);
 
@@ -645,7 +670,7 @@ export function WorkspacePage({
       saveActiveSessionId(project.id, fallbackId);
       if (fallback) {
         const loaded = await loadSession(fallback.id);
-        chat.reset(loaded?.messages.length ? (loaded.messages as ChatMessage[]) : [], loaded?.branch?.activeLeafId ?? null);
+        chat.reset(loaded?.messages.length ? stripFollowUpsFromHistory(loaded.messages as ChatMessage[]) : [], loaded?.branch?.activeLeafId ?? null);
       } else {
         chat.reset([]);
       }
@@ -819,10 +844,42 @@ export function WorkspacePage({
     });
   };
 
+  const loadShareComments = async (info: ShareLinkInfo) => {
+    setShareCommentsBusy(true);
+    try {
+      const pub = await shares.getPublic(info.token);
+      setShareComments(pub.comments ?? []);
+    } catch {
+      setShareComments([]);
+    } finally {
+      setShareCommentsBusy(false);
+    }
+  };
+
   const openShare = (type: 'document' | 'conversation', id: string, title: string) => {
+    const seq = ++shareLookupSeq.current;
     setShareTarget({ type, id, title });
     setShareInfo(null);
+    setShareComments([]);
+    setShareAllowComments(false);
     setShareOpen(true);
+    setShareLookupBusy(true);
+    void (async () => {
+      try {
+        const list = await shares.list(project.id);
+        if (seq !== shareLookupSeq.current) return;
+        const existing = list.shares.find((s) => s.targetType === type && s.targetId === id);
+        if (existing) {
+          setShareInfo(existing);
+          setShareAllowComments(existing.allowComments);
+          if (existing.allowComments) void loadShareComments(existing);
+        }
+      } catch {
+        /* 列表读取失败时按“新建分享”处理，不阻断主流程 */
+      } finally {
+        if (seq === shareLookupSeq.current) setShareLookupBusy(false);
+      }
+    })();
   };
 
   const createShare = async () => {
@@ -831,6 +888,7 @@ export function WorkspacePage({
     try {
       const info = await shares.create({ projectId: project.id, targetType: shareTarget.type, targetId: shareTarget.id, allowComments: shareAllowComments });
       setShareInfo(info);
+      if (info.allowComments) void loadShareComments(info);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -892,8 +950,10 @@ export function WorkspacePage({
         )}
       </div>
 
-      <Modal open={shareOpen} title="只读分享链接" onClose={() => { setShareOpen(false); setShareTarget(null); }} width="max-w-lg">
-        {!shareInfo && shareTarget ? (
+      <Modal open={shareOpen} title="只读分享链接" onClose={() => { shareLookupSeq.current += 1; setShareOpen(false); setShareTarget(null); }} width="max-w-lg">
+        {!shareInfo && shareTarget && shareLookupBusy ? (
+          <div className="flex items-center gap-2 py-2 text-sm text-slate-500"><Loader2 size={14} className="animate-spin" /> 正在读取已有分享…</div>
+        ) : !shareInfo && shareTarget ? (
           <div className="space-y-3">
             <div className="text-xs text-slate-500 dark:text-slate-400">
               将《{shareTarget.title}》的当前快照生成为匿名只读链接；{shareTarget.type === 'conversation' ? '附件、工具结果与系统提示不会进入快照。' : '正文与引用快照固定，后续修改不影响已分享内容。'}
@@ -916,6 +976,32 @@ export function WorkspacePage({
               <input readOnly value={absoluteShareUrl(shareInfo.path)} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs dark:border-slate-700 dark:bg-slate-800" onFocus={(e) => e.currentTarget.select()} />
               <Button onClick={() => void copyShare()}><Copy size={13} /> 复制</Button>
             </div>
+            {shareInfo.allowComments && (
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5">
+                <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  <MessageSquare size={12} /> 读者评论 · {shareComments.length}
+                  {shareCommentsBusy && <Loader2 size={11} className="animate-spin" />}
+                </div>
+                {shareComments.length === 0 ? (
+                  <div className="text-[11px] text-slate-400">还没有评论。</div>
+                ) : (
+                  <div className="max-h-36 space-y-1 overflow-y-auto">
+                    {shareComments.map((c) => (
+                      <div key={c.id} className="flex items-start gap-2 rounded-md bg-slate-50 px-2 py-1.5 text-[11px] dark:bg-slate-800/60">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-slate-400">{c.authorName || '匿名读者'} · {new Date(c.createdAt).toLocaleString('zh-CN', { hour12: false })}</div>
+                          <div className="whitespace-pre-wrap break-words text-slate-600 dark:text-slate-300">{c.content}</div>
+                        </div>
+                        <IconButton size={28} label="删除评论" icon={<Trash2 size={12} />} onClick={async () => {
+                          await shares.deleteComment(shareInfo.id, c.id, project.id);
+                          await loadShareComments(shareInfo);
+                        }} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="text-[11px] text-slate-400">撤销后链接立即失效；已打开的页面刷新后也无法再读取。</div>
             <div className="flex justify-end">
               <Button variant="ghost" onClick={async () => { await shares.revoke(shareInfo.id, project.id); setShareOpen(false); setShareInfo(null); }}>撤销链接</Button>

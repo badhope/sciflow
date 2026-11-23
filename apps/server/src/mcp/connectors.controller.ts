@@ -56,15 +56,4 @@ export class ConnectorsController {
     return this.connectors.feishuImportDoc(body.projectId, body.documentId);
   }
 
-  @Post('notion/search')
-  notion(@Body() body: ProjectBody & { query?: string }, @Req() req: { user?: AuthPayload }) {
-    this.access.assertProject(body.projectId, req.user);
-    return this.connectors.notionSearch(body.projectId, body.query || '');
-  }
-
-  @Post('drive/list')
-  drive(@Body() body: ProjectBody, @Req() req: { user?: AuthPayload }) {
-    this.access.assertProject(body.projectId, req.user);
-    return this.connectors.driveList(body.projectId);
-  }
 }

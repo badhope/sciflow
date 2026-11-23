@@ -8,7 +8,7 @@ const PROJ = 'test-connector-001';
 const svc = new ConnectorsService({} as never, {} as never);
 
 function cleanup() {
-  for (const key of ['zotero', 'feishu', 'notion', 'drive', 'overleaf']) {
+  for (const key of ['zotero', 'feishu']) {
     db.delete(appSettings).where(eq(appSettings.key, `connector:${key}:${PROJ}`)).run();
     db.delete(appSettings).where(eq(appSettings.key, `connector-status:${key}:${PROJ}`)).run();
   }
@@ -17,10 +17,10 @@ function cleanup() {
 afterEach(cleanup);
 
 describe('ConnectorsService', () => {
-  it('目录固定 5 个官方连接器且未连接时为空', () => {
+  it('目录固定 2 个国内优先连接器且未连接时为空', () => {
     cleanup();
     const list = svc.list(PROJ);
-    expect(list.map((c) => c.key)).toEqual(['zotero', 'feishu', 'notion', 'drive', 'overleaf']);
+    expect(list.map((c) => c.key)).toEqual(['zotero', 'feishu']);
     expect(list.every((c) => !c.connected)).toBe(true);
     expect(list.find((c) => c.key === 'feishu')?.type).toBe('sdk');
   });
@@ -37,13 +37,20 @@ describe('ConnectorsService', () => {
   });
 
   it('空凭据拒绝，断开后状态清空', () => {
-    expect(() => svc.connect('notion', PROJ, {})).toThrow('至少填写');
-    svc.connect('notion', PROJ, { token: 'ntn_x' });
-    svc.disconnect('notion', PROJ);
-    expect(svc.list(PROJ).find((c) => c.key === 'notion')?.connected).toBe(false);
+    expect(() => svc.connect('feishu', PROJ, {})).toThrow('至少填写');
+    svc.connect('feishu', PROJ, { appId: 'cli_x', appSecret: 'secret_x' });
+    svc.disconnect('feishu', PROJ);
+    expect(svc.list(PROJ).find((c) => c.key === 'feishu')?.connected).toBe(false);
   });
 
   it('未配置凭据时 test 直接报错，不发起外网请求', async () => {
-    await expect(svc.test('drive', PROJ)).rejects.toThrow('尚未配置凭据');
+    await expect(svc.test('feishu', PROJ)).rejects.toThrow('尚未配置凭据');
+  });
+
+  it('飞书 Webhook 只允许官方 HTTPS 域名，非法 URL 在发请求前被拒绝', async () => {
+    svc.connect('feishu', PROJ, { webhookUrl: 'http://127.0.0.1:9999/hook' });
+    const r = await svc.test('feishu', PROJ);
+    expect(r.ok).toBe(false);
+    expect(r.message).toContain('HTTPS');
   });
 });

@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi, beforeEach } from 'vitest';
 
 /**
  * 记忆中心的项目作用域契约（v1.8）。
@@ -33,6 +33,9 @@ async function renderPage() {
     </QueryClientProvider>,
   );
 }
+
+// 预加载页面模块：首次动态 import 在 CI 并发负载下可能超过单测默认超时；把冷启动放到 beforeAll。
+beforeAll(async () => { await import('./MemoryPage'); }, 60000);
 
 describe('记忆中心：项目作用域', () => {
   // 显式 cleanup：并发跑全量时 RTL 自动清理可能滞后，导致上一次渲染残留、查询命中多个元素

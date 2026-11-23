@@ -788,7 +788,8 @@ ${augmentation}` };
           tools: opts.tools,
           stopWhen: stepCountIs(opts.maxSteps && opts.maxSteps > 1 ? opts.maxSteps : 1),
         });
-        const usage = r.usage;
+        // totalUsage 才是多步工具循环的累计值；r.usage 只反映最后一步。
+        const usage = r.totalUsage ?? r.usage;
         const pt = usage?.inputTokens ?? 0;
         const ct = usage?.outputTokens ?? 0;
         this.logLlmCall({ caller, model, promptTokens: pt, completionTokens: ct, latencyMs: Date.now() - t0, success: true });
@@ -924,7 +925,7 @@ ${augmentation}` };
           // 最终文本
           const text = r.text ?? '';
           if (text) enqueue({ choices: [{ delta: { content: text }, index: 0 }] });
-          const usage = r.usage;
+          const usage = r.totalUsage ?? r.usage;
           const pt = usage?.inputTokens ?? 0;
           const ct = usage?.outputTokens ?? 0;
           const total = pt + ct;
@@ -1061,7 +1062,8 @@ ${augmentation}` };
                   break;
               }
             }
-            const usage = await result.usage;
+            // 多步工具循环必须用 totalUsage 累计，result.usage 只是最后一步。
+            const usage = await result.totalUsage;
             const pt = usage?.inputTokens ?? 0;
             const ct = usage?.outputTokens ?? 0;
             const total = pt + ct;

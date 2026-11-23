@@ -782,44 +782,6 @@
         ]
       }
     },
-    "/connectors/notion/search": {
-      "post": {
-        "operationId": "ConnectorsController_notion",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Connectors"
-        ]
-      }
-    },
-    "/connectors/drive/list": {
-      "post": {
-        "operationId": "ConnectorsController_drive",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ProjectBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Connectors"
-        ]
-      }
-    },
     "/references/discover": {
       "post": {
         "operationId": "ReferencesController_discover",
@@ -7680,7 +7642,7 @@
   "info": {
     "title": "SciFlow API",
     "description": "本地优先科研工作台（单用户）",
-    "version": "1.19.16",
+    "version": "1.19.17",
     "contact": {}
   },
   "tags": [],
@@ -8504,17 +8466,6 @@
         },
         "required": [
           "plan"
-        ]
-      },
-      "ProjectBody": {
-        "type": "object",
-        "properties": {
-          "projectId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "projectId"
         ]
       },
       "DiscoveredReferenceDto": {

@@ -3,7 +3,7 @@
 **English** · [简体中文](product-roadmap.zh-CN.md)
 
 
-Last reviewed: 2026-11-23 · Current release: **1.19.16**
+Last reviewed: 2026-11-24 · Current release: **1.19.17**
 
 This document states what exists today, what is deliberately out of scope, and
 what is planned next. It is the single source of truth for product scope; the
@@ -77,6 +77,7 @@ decision not to build it.
 | Integration | MCP server and client | Shipped | Expose tools and resources; attach external MCP servers |
 | Integration | Headless CLI | Shipped | `sciflow run` produces a manuscript without the UI |
 | Integration | Desktop application | Shipped | Packaging works locally with a C++ toolchain, and the `desktop-installer` CI workflow builds the Windows NSIS installer on a runner for anyone without one (v1.12.0 artifact verified green) |
+| Integration | Domestic-first connectors | Partial | Zotero public Web API verified live (read + import); Feishu OpenAPI message delivery verified live, custom-bot Webhook supported by code but waiting for a real group Webhook URL; Notion, Drive and Overleaf removed by policy instead of kept as blocked placeholders |
 | Operations | Deep health probe | Shipped | `GET /api/health/deep` reports subsystem status |
 | Agent | Task list | Shipped | Model-maintained plan with progress summary; survives restart |
 | Agent | Context compaction | Shipped | Extraction-based digest once history passes the budget |
@@ -97,10 +98,13 @@ decision not to build it.
 
 - **Multi-tenant SaaS.** No hosted accounts, no shared storage, no per-organisation
   billing inside this repository.
-- **Collaboration UI and plugin marketplace.** The JWT mode isolates data by owner,
-  but this repository does not build invites, shared projects, comment threads,
-  paid plugin listings or a signature-trading marketplace. Local extension assets
-  remain supported as a toolbox, not as an app store.
+- **Team collaboration UI and plugin marketplace.** The JWT mode isolates data by
+  owner, but this repository does not build invites, members, roles, RBAC,
+  shared project editing, comment threads/replies, paid plugin listings or a
+  signature-trading marketplace. Public read-only snapshots with author-moderated
+  anonymous comments are shipped; the exact boundary is in
+  [`COLLABORATION-BOUNDARY.md`](COLLABORATION-BOUNDARY.md). Local extension assets
+  remain a toolbox, not an app store.
 - **Publisher automation.** No logged-in crawling of submission systems and no
   background polling of editorial mailboxes. The tool organises what the user
   already has.

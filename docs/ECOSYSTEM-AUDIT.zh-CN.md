@@ -198,7 +198,7 @@ Onyx、Khoj、SurfSense、AutoGen。吸收原则：**只吸收与本仓定位（
 | A6 输出 | Playwright `printToPDF` 导出、演示模板、对话工具产物落文档/项目、回答存为文档 |
 | A7 分享 | 文档/对话快照分享、过期时间、只读匿名评论、作者删除；对话快照脱敏 |
 | A8 提示词 | 扩展 manifest 区分 `tool/chat` scope；聊天模板进入 slash 菜单，`/api/extensions/chat-prompts` |
-| A9 连接器 | Zotero/飞书/Notion/Drive/Overleaf 目录、加密凭据、测试/导入/通知；官方 SDK 优先 |
+| A9 连接器 | 国内优先目录：Zotero + 飞书，加密凭据、测试/导入/通知/Webhook；Notion/Drive/Overleaf 已移除 |
 | B1 输入区 | 工作台与写作页共用 `ChatComposer`，删除两套重复附件/slash/停止逻辑 |
 | B2 收件箱 | AgentOps 自动化卡片展示任务、审批、通知；统一 `useAgentInbox` 查询键与轮询 |
 | B3 证据库 | 知识库 Tab 直接导入 Office/EPUB/音视频，`?q=` 过滤，不新增文件库 |
@@ -230,6 +230,8 @@ Onyx、Khoj、SurfSense、AutoGen。吸收原则：**只吸收与本仓定位（
 
 - 全量门禁：server/web 单测、lint、typecheck、build、首屏 chunk budget、OpenAPI 生成。
 - 真实样本：图片 OCR、扫描 PDF OCR、真实 mp4 抽音轨转写、DOCX 表格、EPUB、XLSX 多 sheet。
-- 未闭环（环境限制，不是代码通过）：真实飞书 Webhook（本机 DNS 把 `open.feishu.cn` 指向回环，出站守卫正确拦截）、
-  Zotero/Notion/Drive/Overleaf 真实凭据链路、真实音频 `/audio/transcriptions` 端点、PWA 真机安装与更新旧缓存。
+- 已真实通过：Zotero 公开 Web API 读取/导入、飞书 OpenAPI 消息发送。
+- 未闭环：群内真实自定义机器人 Webhook URL（飞书只在群设置 UI 提供创建入口，OpenAPI 不支持）、PWA 真机安装与更新旧缓存。
+  Notion、Google Drive、Overleaf 已按国内优先策略移除，不再保留“待凭据”占位。
+- 真实音频在模型端点没有 `/audio/transcriptions` 时，走本地 `faster-whisper` 兜底（`scripts/local-transcribe.py`）。
 - 产品口径：路线图“不做协作 UI”按“不新增页面、公开分享 + 只读评论优先、团队协作后置”执行。

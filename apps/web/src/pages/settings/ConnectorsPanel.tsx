@@ -65,7 +65,7 @@ export function ConnectorsPanel() {
       <SectionTitle>
         <span className="flex items-center gap-2"><Cable size={16} className="text-teal-600" /> 连接器</span>
         <span className="ml-auto flex items-center gap-2 text-[11px] font-normal text-slate-400">
-          官方 MCP/SDK 优先
+          国内平台优先 · 凭据本地加密
           <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="rounded border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900">
             {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
@@ -113,15 +113,6 @@ export function ConnectorsPanel() {
                     if (id) void run('feishu-import', () => api.connectors.feishuImportDoc(projectId, id.trim()), '飞书文档已导入知识库');
                   }}>导入文档</Button>
                 </>
-              )}
-              {c.key === 'notion' && c.connected && (
-                <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => {
-                  const q = window.prompt('Notion 搜索关键词');
-                  if (q !== null) void run('notion-search', () => api.connectors.notionSearch(projectId, q.trim()), 'Notion 搜索完成');
-                }}>搜索页面</Button>
-              )}
-              {c.key === 'drive' && c.connected && (
-                <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => void run('drive-list', () => api.connectors.driveList(projectId), 'Drive 文件列表已获取')}><RefreshCw size={12} /> 列出文件</Button>
               )}
             </div>
             {!c.connected && <div className="mt-1 text-[10px] text-slate-400">未配置凭据；连接失败会返回可读错误。</div>}

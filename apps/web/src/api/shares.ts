@@ -5,6 +5,7 @@ export interface ShareLinkInfo {
   token: string;
   title: string;
   targetType: 'document' | 'conversation';
+  targetId: string;
   allowComments: boolean;
   path: string;
   createdAt: number;
