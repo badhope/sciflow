@@ -3,7 +3,7 @@
 [简体中文](ACCEPTANCE-REPORT.zh-CN.md) · **English**
 
 Last run: **2026-11-24 02:38–02:45 CST** · Release under test: **1.19.17** ·
-Code base: `8eac623` plus the 1.19.17 working-tree changes described below.
+Code base: the `v1.19.17` release commit, identical on all five remotes and the tag.
 
 This report closes the three acceptance tickets that had been left open:
 
@@ -29,7 +29,7 @@ what was deliberately not claimed. A blocked item is not rewritten as a pass.
 | 10,000-document search P95 | **PASS** | Fresh seeded database: service document P95 **1.26 ms**, all-type service P95 **3.90 ms**, HTTP document P95 **4.44 ms** |
 | PWA stale-cache cleanup | **PASS (desktop Chromium)** | A newer service worker removed the injected legacy precache; the offline shell rendered the reconnect screen instead of an endless spinner |
 | Real token accounting | **PASS** | API and SQLite agree; one clean execution and its LLM call both report **8,158** tokens |
-| Deterministic gates | **PASS** | 949 server + 276 web + 5 desktop tests passed, 1 skipped; lint, typecheck, server build, web build and chunk budget passed |
+| Deterministic gates | **PASS** | 951 server + 276 web + 5 desktop tests passed, 1 skipped; lint, typecheck, server build, web build and chunk budget passed; `full_regression.py` 222 PASS / 0 FAIL |
 
 ## 1. Real third-party connectors
 
@@ -292,8 +292,9 @@ This is a direct, same-window equality, not an estimate.
 
 | Gate | Result |
 | --- | --- |
-| `pnpm -r test` | 138 server files / 949 passed / 1 skipped; 51 web files / 276 passed; 1 desktop file / 5 passed; exit 0 |
+| `pnpm -r test` | 138 server files / 951 passed / 1 skipped; 51 web files / 276 passed; 1 desktop file / 5 passed; exit 0 |
 | `pnpm lint` | exit 0 |
+| `python3 scripts/full_regression.py` | 222 PASS / 0 FAIL on an isolated AI_MOCK database |
 | Web typecheck | exit 0 |
 | Server build | exit 0 |
 | Web build | exit 0, PWA 168 precache entries / 8,706.62 KiB |

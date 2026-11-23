@@ -110,6 +110,22 @@ describe('FileExtractService', () => {
     expect(result.parser).toBe('epub2');
   });
 
+  it('知识库内联 text 上传不依赖扩展名', async () => {
+    const result = await service.extractKnowledgeUpload(
+      'GNN 测试文献', 'text', '图神经网络通过消息传递聚合邻居特征。',
+    );
+    expect(result.kind).toBe('text');
+    expect(result.text).toContain('消息传递');
+  });
+
+  it('知识库 text 上传即使文件名带 .pdf 也按纯文本处理', async () => {
+    const result = await service.extractKnowledgeUpload(
+      'Attention Is All You Need Deep Read.pdf', 'text', 'Transformer 的自注意力机制。',
+    );
+    expect(result.kind).toBe('text');
+    expect(result.text).toContain('自注意力');
+  });
+
   it('不支持格式与损坏文件返回可读错误', async () => {
     await expect(service.extract({ name: 'a.zip', data: Buffer.from('x') })).rejects.toThrow('不支持的格式');
     await expect(service.extract({ name: 'broken.docx', data: Buffer.from('not a zip') })).rejects.toThrow('解析失败');

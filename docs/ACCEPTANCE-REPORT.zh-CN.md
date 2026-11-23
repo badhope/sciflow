@@ -3,7 +3,7 @@
 **简体中文** · [English](ACCEPTANCE-REPORT.md)
 
 最后执行：**2026-11-24 02:38–02:45（CST）** · 受测版本：**1.19.17** ·
-代码基线：`8eac623` 加上本报告列出的 1.19.17 工作区改动。
+代码基线：`v1.19.17` 发布提交（五远端 main 与 tag 一致）。
 
 这份报告收口三张一直未闭环的验收票：
 
@@ -27,7 +27,7 @@
 | 1 万条搜索 P95 | **已做完 / PASS** | 新灌 1 万条：service 文档 P95 **1.26 ms**，全类型 P95 **3.90 ms**，HTTP 文档 P95 **4.44 ms** |
 | PWA 旧缓存 | **已做完（桌面 Chromium）/ PASS** | 新 Service Worker 清掉注入的 legacy 缓存；离线壳显示重连页 |
 | 真实 token 计量 | **已做完 / PASS** | API 与 SQLite 交叉一致；单次执行与同窗口 LLM 调用均为 **8,158** tokens |
-| 确定性门禁 | **已做完 / PASS** | 949 server + 276 web + 5 desktop 通过，1 skipped；lint、typecheck、双端 build、chunk budget 全过 |
+| 确定性门禁 | **已做完 / PASS** | 951 server + 276 web + 5 desktop 通过，1 skipped；lint、typecheck、双端 build、chunk budget 全过；`full_regression.py` 222 PASS / 0 FAIL |
 
 ## 1. 真实第三方链路
 
@@ -249,8 +249,9 @@ HTTP 首轮撞上全局限流 `429`，丢弃后等冷却，再顺序测 50 次�
 
 | 门禁 | 结果 |
 | --- | --- |
-| `pnpm -r test` | server 138 文件 / 949 passed / 1 skipped；web 51 文件 / 276 passed；desktop 1 文件 / 5 passed；exit 0 |
+| `pnpm -r test` | server 138 文件 / 951 passed / 1 skipped；web 51 文件 / 276 passed；desktop 1 文件 / 5 passed；exit 0 |
 | `pnpm lint` | exit 0 |
+| `python3 scripts/full_regression.py` | 222 PASS / 0 FAIL（AI_MOCK 隔离库） |
 | Web typecheck | exit 0 |
 | Server build | exit 0 |
 | Web build | exit 0，PWA 168 precache / 8,706.62 KiB |

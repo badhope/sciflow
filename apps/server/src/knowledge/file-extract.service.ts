@@ -41,6 +41,8 @@ export interface ExtractOptions {
   maxChars?: number;
   /** OCR 页数上限（扫描 PDF / 图片型 PPTX） */
   maxOcrPages?: number;
+  /** 调用方已确定内容类型时跳过扩展名/MIME 探测（如知识库内联 text）。 */
+  forceKind?: ExtractKind;
 }
 
 const TEXT_EXT = /\.(txt|md|markdown|csv|tsv|json|xml|yaml|yml|tex|bib|ris|html|htm|log)$/i;
@@ -388,7 +390,7 @@ export class FileExtractService {
     if (data.byteLength > maxBytes) {
       throw new BadRequestException(`「${name}」超过 ${Math.round(maxBytes / 1024 / 1024)}MB 上限`);
     }
-    const kind = detectExtractKind(name, mime);
+    const kind = options.forceKind ?? detectExtractKind(name, mime);
     if (!kind) {
       throw new BadRequestException(`不支持的格式：${mime || extOf(name) || name}（支持 PDF/Office/EPUB/图片/音视频/文本）`);
     }
@@ -447,10 +449,12 @@ export class FileExtractService {
   async extractKnowledgeUpload(name: string, type: string, content: string): Promise<ExtractFileResult> {
     const kind = detectExtractKind(name, type);
     const isPlain = type === 'text' || type === 'markdown' || type === 'txt' || kind === 'text';
+    // type=text 表示正文已是纯文本：即使用户把文件名写成 .pdf，也不能再按 PDF 二进制解析。
+    const mime = isPlain ? 'text/plain' : type === 'pdf' ? 'application/pdf' : type;
     const data = isPlain ? Buffer.from(content || '', 'utf8') : Buffer.from(content || '', 'base64');
     return this.extract(
-      { name, mime: type === 'pdf' ? 'application/pdf' : type, data },
-      { maxBytes: MAX_KNOWLEDGE_FILE_BYTES, maxChars: MAX_EXTRACT_CHARS },
+      { name, mime, data },
+      { maxBytes: MAX_KNOWLEDGE_FILE_BYTES, maxChars: MAX_EXTRACT_CHARS, forceKind: isPlain ? 'text' : undefined },
     );
   }
 }

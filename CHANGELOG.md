@@ -23,11 +23,15 @@
 - **CI 干净安装缺依赖**：`@nestjs/event-emitter`、`ffprobe-static`、`croner` 只存在于旧 node_modules，未在 `apps/server/package.json` 声明；补齐并加 `ffmpeg` 安装步骤，复现“新机器从零安装”的真实门禁。
 - **分享评论开关串台**：新分享的 checkbox 可能沿用上一个目标的 true。`openShare` 每次先重置为 false，按 `targetId` 命中已有分享才恢复；并用 `shareLookupSeq` 丢弃晚到的旧查询。
 - **测试并发门禁**：页面模块预加载前移到 `beforeAll`，DOCX 用例单独放宽超时，server Vitest 设 `testTimeout` / `hookTimeout`，全量测试不再因并发首载超时。
+- **知识库内联 text 上传被扩展名劫持**：`type=text` 的正文只要文件名以 `.pdf` 结尾，就被二进制 PDF 解析器接管并报 `Invalid PDF structure`。`extractKnowledgeUpload` 现在显式 `forceKind='text'`，不再让扩展名改写调用方已经声明的纯文本类型；补两条单测。
+- **Full mock regression 旧断言与 B6 冲突**：脚本仍要求 `project.templates` 回显，而 1.19.16 已按 B6 删列。回归改为负向断言（PATCH/GET/list 均不得复活该字段），并把 text/PDF 夹具统一走内联文本语义；222 PASS / 0 FAIL。
+
 - **`PipelinePage` effect 同步 setState**：父组件已用 `key={project.id}` 重挂载，删除冗余 effect，lint 通过。
 
 ### Verification
 
-- 全量 `pnpm -r test`：server 949 passed / 1 skipped，web 276 passed，desktop 5 passed。
+- 全量 `pnpm -r test`：server 951 passed / 1 skipped，web 276 passed，desktop 5 passed。
+- `scripts/full_regression.py`：222 PASS / 0 FAIL；CI `Types / Unit / Build`、`E2E + prompt evals`、`Full mock regression` 三 job 全绿。
 - lint、web typecheck、server build、web build、chunk budget 均通过；OpenAPI 生成 268 paths。最终 web build `2026-11-23T18:37:54.791Z`，PWA 168 条 precache / 8,706.62 KiB；在该构建上实测旧缓存清理与离线重连。
 - 1 万条种子库：service 文档 P95 1.26 ms，全类型 P95 3.90 ms，HTTP 文档 P95 4.44 ms。
 - 单次执行与同窗口 LLM 调用均为 8,158 tokens，API 与 SQLite 交叉一致。

@@ -1142,28 +1142,25 @@ if MOCK:
                 check("25.2 产物文档正文含零命中结构化引导段",
                       "研究阶段未在本地文献库" in c0, f"len={len(c0)} tail={c0[-160:]!r}")
 
-# ---------- 26. 技术债收口后端：自定义模板透传(templates) + 知识库来源补作者/年份(referenceAuthors/referenceYear) ----------
-# 纯后端可测，不依赖 AI：projects PATCH/GET 回读 templates JSON 字符串；
+# ---------- 26. 技术债收口后端：B6 删除 templates 的负向断言 + 知识库来源补作者/年份(referenceAuthors/referenceYear) ----------
+# 纯后端可测，不依赖 AI：templates 已按 B6 移除，PATCH 不得复活；
 # 种子一条「对象数组形态 authors」的文献 + 同名知识库文档（标题指纹自动绑定），search 命中块断言归一化作者串与年份。
 st, p26 = req("POST", "/api/projects", {"name": "技术债收口项目", "description": "tech-debt segment 26"})
 p26id = p26.get("id") if st == 201 else None
 check("26.0 建项目供模板/作者断言", st == 201 and bool(p26id), f"st={st} {str(p26)[:80]}")
 
 if p26id:
-    # 26.1 自定义模板（差距#1）：PATCH templates(JSON 数组字符串) → GET 回读逐字节一致
+    # 26.1 B6 已删除 project.templates：PATCH 不应复活字段，GET/列表也不回显。
     st, patched = req("PATCH", f"/api/projects/{p26id}", {"templates": '[{"name":"T1","description":"模板一","sections":[{"title":"引言","points":["背景"]}]}]'})
-    check("26.1 PATCH templates 200 且回包带 templates", st == 200 and isinstance(patched, dict) and patched.get("templates") == '[{"name":"T1","description":"模板一","sections":[{"title":"引言","points":["背景"]}]}]',
-          f"st={st} templates={str(patched.get('templates'))[:120]}")
+    check("26.1 B6 已移除 project.templates，PATCH 不回显", st == 200 and isinstance(patched, dict) and "templates" not in patched,
+          f"st={st} keys={list(patched.keys()) if isinstance(patched, dict) else patched}")
     st, got = req("GET", f"/api/projects/{p26id}")
-    check("26.1 GET /:id 回读 templates 与写入一致", st == 200 and got.get("templates") == '[{"name":"T1","description":"模板一","sections":[{"title":"引言","points":["背景"]}]}]',
+    check("26.1 GET /:id 不再回显 templates", st == 200 and "templates" not in got,
           f"st={st} templates={str(got.get('templates'))[:120]}")
     st, pl = req("GET", "/api/projects")
     _p26 = next((x for x in (pl or []) if x.get("id") == p26id), None)
-    check("26.1 GET /list 项目条目含 templates 字段", st == 200 and isinstance(_p26, dict) and "templates" in _p26, f"st={st} keys={list(_p26.keys()) if _p26 else _p26}")
-    # 26.1b 非法 templates（非 JSON 数组）应 400，不脏库
-    st, bad = req("PATCH", f"/api/projects/{p26id}", {"templates": "this-is-not-json"})
-    check("26.1b 非法 templates 拒绝(400)且不破坏原值", st == 400 and got.get("templates") == '[{"name":"T1","description":"模板一","sections":[{"title":"引言","points":["背景"]}]}]',
-          f"st={st} {str(bad)[:80]}")
+    check("26.1 GET /list 项目条目不含 templates", st == 200 and isinstance(_p26, dict) and "templates" not in _p26,
+          f"st={st} keys={list(_p26.keys()) if _p26 else _p26}")
 
     # 26.2 知识库来源补作者/年份（差距#2）：对象数组 authors 归一化；标题同名上传知识库文档自动绑定文献
     st, ref = req("POST", "/api/references", {"projectId": p26id, "hit": {
