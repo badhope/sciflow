@@ -295,6 +295,7 @@ This is a direct, same-window equality, not an estimate.
 | `pnpm -r test` | 138 server files / 951 passed / 1 skipped; 51 web files / 276 passed; 1 desktop file / 5 passed; exit 0 |
 | `pnpm lint` | exit 0 |
 | `python3 scripts/full_regression.py` | 222 PASS / 0 FAIL on an isolated AI_MOCK database |
+| CI run `45251532442` | `Types / Unit / Build`, `E2E + prompt evals` and `Full mock regression` all PASS |
 | Web typecheck | exit 0 |
 | Server build | exit 0 |
 | Web build | exit 0, PWA 168 precache entries / 8,706.62 KiB |
@@ -310,9 +311,17 @@ OpenAPI diff. Generation itself succeeded.
 These items are not silently marked complete:
 
 1. **Feishu custom-bot Webhook** needs a real group Webhook URL. Without it, only the
-   validated HTTPS guard and error parsing are proven.
+   validated HTTPS guard and error parsing are proven. Actionable takeover path: in the
+   Feishu client open the acceptance group → Settings → Bots → Add Bot → Custom Bot →
+   copy the Webhook → paste it into SciFlow project settings → Connectors → Feishu →
+   save and test.
 2. **Feishu app connector** needs real App ID / App Secret. The fake-credential attempt
    proves the token exchange is attempted, but not that a message is delivered.
+   Actionable takeover path: create a self-built app in the developer console, add bot
+   capability and `im:message:send_as_bot`, publish it, add the app to the acceptance
+   group, then fill App ID / App Secret / `receiveId`. Alternatively use
+   `@larksuiteoapi/node-sdk` `registerApp` device authorization to create the app and
+   return real credentials after the user confirms the QR/link.
 3. **Mobile PWA install and update** were not run on a physical iOS or Android device.
    Desktop Chromium registration, update and offline shell passed.
 4. **Zotero policy** is a product decision. It is retained as a user-supplied literature

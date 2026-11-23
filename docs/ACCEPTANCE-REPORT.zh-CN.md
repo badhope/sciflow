@@ -252,6 +252,7 @@ HTTP 首轮撞上全局限流 `429`，丢弃后等冷却，再顺序测 50 次�
 | `pnpm -r test` | server 138 文件 / 951 passed / 1 skipped；web 51 文件 / 276 passed；desktop 1 文件 / 5 passed；exit 0 |
 | `pnpm lint` | exit 0 |
 | `python3 scripts/full_regression.py` | 222 PASS / 0 FAIL（AI_MOCK 隔离库） |
+| CI run `45251532442` | `Types / Unit / Build`、`E2E + prompt evals`、`Full mock regression` 三 job 全 PASS |
 | Web typecheck | exit 0 |
 | Server build | exit 0 |
 | Web build | exit 0，PWA 168 precache / 8,706.62 KiB |
@@ -266,8 +267,13 @@ HTTP 首轮撞上全局限流 `429`，丢弃后等冷却，再顺序测 50 次�
 以下项目没有被偷偷写成完成：
 
 1. **飞书自定义机器人 Webhook** 需要真实群 Webhook URL；没有它，只验证了 HTTPS 守卫与
-   错误解析。
+   错误解析。可执行接管路径：飞书客户端进入验收群 → 设置 → 群机器人 → 添加机器人 →
+   自定义机器人 → 复制 Webhook → 填进 SciFlow 项目设置 → 连接器 → 飞书 → 保存并测试。
 2. **飞书应用连接器** 需要真实 App ID / App Secret；假凭据只能证明确实发起了换 token。
+   可执行接管路径：开放平台创建企业自建应用，添加机器人能力并申请
+   `im:message:send_as_bot`，发布后把应用加入验收群，填入 App ID / App Secret /
+   `receiveId`；也可用 `@larksuiteoapi/node-sdk` 的 `registerApp` 设备授权一键创建，
+   用户扫码确认后直接返回真实凭据。
 3. **手机 PWA 安装与更新** 没有在真实 iOS / Android 设备上跑；桌面 Chromium 的注册、
    更新、离线壳已通过。
 4. **Zotero 去留** 是产品决策。1.19.17 保留为用户自带的文献 API；若“国内优先”要求连它
