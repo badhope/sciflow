@@ -13,7 +13,7 @@
   /* 对比度修正：默认 slate-400 (#94a3b8) 在白底上仅 2.6:1，达不到 WCAG AA。
      辅助文字统一提升到 slate-500 档（4.6:1），深色模式保持原亮度。 */
   --color-slate-400: #5b6b82;
-  /* ---- 品牌令牌 ·「朱印 1.0」（2026-11 去模板化重塑）----
+  /* ---- 品牌令牌 ·「朱印 3.0 · 回锋」（2026-11-25 收口）----
      三色体系：纸（暖白底）· 墨（近黑正文）· 黛（蓝灰主色）· 朱砂（签名点睛）。
      teal-* 工具类整段重映射为黛蓝阶——组件类名零改动即整站换色，
      与主题风格包（styles/themes.css）同一机制。 */
@@ -586,13 +586,6 @@ select:focus-visible {
 /* 用户气泡：品牌 600 黛蓝，白字对比 7.6:1 */
 .bubble-user { background: var(--brand-600); color: var(--bubble-user-ink); }
 
-/* 品牌渐变文字/图标辅助 */
-.brand-gradient-text {
-  background: var(--brand-grad);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
 
 /* 品牌主按钮：平涂感两档微差底 + 极轻投影；光晕只在 hover 出现且幅度收敛 */
 .brand-btn {
@@ -620,9 +613,7 @@ select:focus-visible {
 .brand-logo {
   position: relative;
   overflow: hidden;
-  background:
-    radial-gradient(120% 120% at 26% 18%, rgba(255, 255, 255, 0.16), transparent 48%),
-    var(--brand-seal-light, #be3b2a);
+  background: var(--brand-seal-light, #be3b2a);
   /* 徽标内图形恒为白色：与 icon-master 的白文主笔同源 */
   color: #ffffff;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 4px 12px -6px rgba(80, 20, 10, 0.42);
@@ -649,7 +640,7 @@ select:focus-visible {
 }
 .brand-logo > * { position: relative; z-index: 1; }
 
-/* 侧边栏品牌区（墨流 2.0）：左上品牌光晕 + 底部渐变分隔线 */
+/* 侧边栏品牌区（朱印 3.0）：左上品牌光晕 + 底部渐变分隔线 */
 .shell-brand-zone {
   position: relative;
   background: radial-gradient(140% 110% at 0% 0%, var(--ambient-1), transparent 58%),

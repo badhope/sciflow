@@ -7,6 +7,8 @@
  *   apps/desktop/build/icon.png        1024×1024（electron-builder 自动转 ico/icns）
  *   apps/desktop/build/icon-512.png    512×512（Linux/商店等场景）
  *   apps/web/public/apple-touch-icon.png  180×180（iOS 主屏）
+ *   apps/web/public/icon-192.png          192×192（PWA）
+ *   apps/web/public/icon-512.png          512×512（PWA）
  *   docs/brand/logo-mark-1024.png      独立标志位图（浅色底文档用）
  *
  * 依赖：@resvg/resvg-js（workspace devDependency，pnpm icons 自动安装于根）
@@ -46,8 +48,10 @@ async function main() {
   // 主图标（应用安装包用）
   render(master, 1024, path.join(root, 'apps', 'desktop', 'build', 'icon.png'));
   render(master, 512, path.join(root, 'apps', 'desktop', 'build', 'icon-512.png'));
-  // Web / iOS
+  // Web / PWA / iOS
   render(master, 180, path.join(root, 'apps', 'web', 'public', 'apple-touch-icon.png'));
+  render(master, 192, path.join(root, 'apps', 'web', 'public', 'icon-192.png'));
+  render(master, 512, path.join(root, 'apps', 'web', 'public', 'icon-512.png'));
   // 品牌文档用独立标志位图
   render(markSvg, 1024, path.join(root, 'docs', 'brand', 'logo-mark-1024.png'));
 

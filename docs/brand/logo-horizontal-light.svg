@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 96" role="img" aria-label="SciFlow horizontal logo light">
+  <g transform="translate(8 8)">
+    <rect width="64" height="64" rx="14" fill="#BE3B2A"/>
+    <rect x="2.5" y="2.5" width="59" height="59" rx="11.5" fill="none" stroke="#F5F4F0" stroke-width="0.6" opacity="0.18"/>
+    <path d="M 43.125 20 C 43.125 14.375 35 13.125 29.375 15.3125 C 23.125 17.8125 21.875 24.375 26.875 28.125 C 31.875 31.875 38.75 29.375 40.9375 33.75 C 43.125 38.4375 38.75 44.375 31.875 44.6875 C 26.25 45 21.875 43.125 20.625 40"
+          fill="none" stroke="#F5F4F0" stroke-width="5.75" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="46.125" y="46.125" width="3.6" height="3.6" rx="1" fill="#F5F4F0"/>
+  </g>
+  <text x="86" y="48" font-family="-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',Helvetica,Arial,sans-serif" font-size="34" font-weight="700" letter-spacing="-0.5"><tspan fill="#F5F4F0">Sci</tspan><tspan fill="#D4674F">Flow</tspan></text>
+  <text x="87" y="72" font-family="-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',Helvetica,Arial,sans-serif" font-size="12" fill="#A9BED2" letter-spacing="1.2">让科研从想法到成文</text>
+</svg>

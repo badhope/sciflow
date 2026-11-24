@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" role="img" aria-label="SciFlow — 一条会驳回自己的科研循环">
+  <!-- SciFlow README hero · 朱印 3.0 · 2026-11-25
+       纸、墨、朱砂；无多色渐变、无玻璃辉光。 -->
+  <rect width="1280" height="420" fill="#0E1B2A"/>
+  <g stroke="#FFFFFF" opacity="0.035">
+    <path d="M64 0V420M128 0V420M192 0V420M256 0V420M320 0V420M384 0V420M448 0V420M512 0V420M576 0V420M640 0V420M704 0V420M768 0V420M832 0V420M896 0V420M960 0V420M1024 0V420M1088 0V420M1152 0V420M1216 0V420"/>
+    <path d="M0 64H1280M0 128H1280M0 192H1280M0 256H1280M0 320H1280M0 384H1280"/>
+  </g>
+  <circle cx="1120" cy="430" r="280" fill="#BE3B2A" opacity="0.08"/>
+
+  <text x="72" y="62" fill="#8FA6BC" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="12" font-weight="600" letter-spacing="2.4">SCIFLOW / RESEARCH WORKBENCH</text>
+
+  <!-- 朱印 -->
+  <g transform="translate(72 92)">
+    <rect width="96" height="96" rx="21" fill="#BE3B2A"/>
+    <rect x="4" y="4" width="88" height="88" rx="17" fill="none" stroke="#FFFFFF" stroke-width="1" opacity="0.18"/>
+    <path d="M 64.69 30 C 64.69 21.56 52.5 19.69 44.06 22.97 C 34.69 26.72 32.81 36.56 40.31 42.19 C 47.81 47.81 58.13 44.06 61.41 50.63 C 64.69 57.66 58.13 66.56 47.81 67.03 C 39.38 67.5 32.81 64.69 30.94 60" fill="none" stroke="#F5F4F0" stroke-width="8.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="69" y="69" width="6" height="6" rx="1.6" fill="#F5F4F0"/>
+  </g>
+
+  <text x="188" y="140" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="42" font-weight="700" letter-spacing="-1"><tspan fill="#F5F4F0">Sci</tspan><tspan fill="#D4674F">Flow</tspan></text>
+  <text x="190" y="172" fill="#A9BED2" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="17" letter-spacing="0.5">让科研从想法到成文</text>
+
+  <text x="72" y="286" fill="#F5F4F0" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="46" font-weight="700" letter-spacing="-1">一条会<tspan fill="#D4674F">驳回</tspan>自己的科研循环</text>
+  <text x="74" y="330" fill="#A9BED2" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="19" letter-spacing="0.4">本地优先 · 确定性质量门 · 引用逐层可溯</text>
+
+  <g font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="12" fill="#C7D5E2">
+    <rect x="72" y="360" width="132" height="28" rx="14" fill="#142B44" stroke="#2B4761"/>
+    <text x="86" y="379">1 个 SQLite 文件</text>
+    <rect x="214" y="360" width="132" height="28" rx="14" fill="#142B44" stroke="#2B4761"/>
+    <text x="228" y="379">0 个托管账号</text>
+    <rect x="356" y="360" width="132" height="28" rx="14" fill="#142B44" stroke="#2B4761"/>
+    <text x="370" y="379">237 项回归通过</text>
+  </g>
+
+  <!-- 右侧：科研循环 -->
+  <g transform="translate(804 78)" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif">
+    <ellipse cx="190" cy="130" rx="158" ry="84" fill="none" stroke="#3A5570" stroke-width="1.4" opacity="0.72"/>
+    <path d="M190 214 C 100 246 30 198 32 132" fill="none" stroke="#D4674F" stroke-width="2" stroke-dasharray="5 8" opacity="0.95"/>
+    <path d="M32 132 L26 146 L44 144 Z" fill="#D4674F"/>
+    <text x="82" y="250" fill="#D4674F" font-size="12" letter-spacing="1">驳回 · 重写</text>
+
+    <g>
+      <circle cx="32" cy="130" r="22" fill="#142B44" stroke="#7090B4" stroke-width="1.5"/>
+      <text x="32" y="135" fill="#F5F4F0" font-size="13" font-weight="700" text-anchor="middle">01</text>
+      <text x="32" y="174" fill="#A9BED2" font-size="12" text-anchor="middle">问题</text>
+    </g>
+    <g>
+      <circle cx="190" cy="46" r="22" fill="#142B44" stroke="#7090B4" stroke-width="1.5"/>
+      <text x="190" y="51" fill="#F5F4F0" font-size="13" font-weight="700" text-anchor="middle">02</text>
+      <text x="190" y="20" fill="#A9BED2" font-size="12" text-anchor="middle">协议</text>
+    </g>
+    <g>
+      <circle cx="348" cy="130" r="22" fill="#142B44" stroke="#7090B4" stroke-width="1.5"/>
+      <text x="348" y="135" fill="#F5F4F0" font-size="13" font-weight="700" text-anchor="middle">03</text>
+      <text x="348" y="174" fill="#A9BED2" font-size="12" text-anchor="middle">实验</text>
+    </g>
+    <g>
+      <circle cx="190" cy="214" r="22" fill="#3A1E1B" stroke="#D4674F" stroke-width="1.8"/>
+      <text x="190" y="219" fill="#F5F4F0" font-size="13" font-weight="700" text-anchor="middle">04</text>
+      <text x="190" y="250" fill="#D4674F" font-size="12" text-anchor="middle">评审</text>
+    </g>
+  </g>
+
+  <text x="1208" y="394" fill="#6F8AA3" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="11" text-anchor="end" letter-spacing="1">v1.19.18 · LOCAL FIRST</text>
+</svg>

@@ -1,7 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SciFlow mark (light)">
-  <!-- SciFlow 独立标志 · 朱印 1.0 · 2026-11-03（深色/照片底用）
-       纯白主笔 + 提亮朱砂收笔点（#D4674F，暗底上比 #BE3B2A 更可读） -->
-  <path d="M 43.2 21.4 A 11 11 0 1 0 32 32 A 11 11 0 1 1 20.8 42.6"
-        fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="19.4" cy="44" r="3.2" fill="#D4674F"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="SciFlow mark light">
+  <!-- SciFlow 独立标志 · 朱印 3.0 · 深色底：纸白主笔 + 提亮朱砂押角 -->
+  <path d="M 690 320 C 690 230 560 210 470 245 C 370 285 350 390 430 450 C 510 510 620 470 655 540 C 690 615 620 710 510 715 C 420 720 350 690 330 640"
+        fill="none" stroke="#F5F4F0" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="738" y="738" width="58" height="58" rx="16" fill="#D4674F"/>
 </svg>

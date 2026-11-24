@@ -1,9 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <!-- SciFlow favicon · 朱印 1.0 · 2026-11-03
-       16px 可辨识：平涂朱砂印底 + 白文主笔 + 收笔朱点；
-       删去旧版的光晕/外环/轨道（16px 下全部糊成噪点） -->
-  <rect width="48" height="48" rx="10.5" fill="#BE3B2A"/>
-  <path d="M 32.4 16.05 A 8.25 8.25 0 1 0 24 24 A 8.25 8.25 0 1 1 15.6 31.95"
-        fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="14.55" cy="33" r="2.4" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- SciFlow favicon · 朱印 3.0 · 回锋 · 2026-11-25
+       16px 可辨识：平涂朱砂印底 + 回锋主笔 + 押角；不放大内框，以免小尺寸糊成噪点。 -->
+  <rect width="1024" height="1024" rx="224" fill="#BE3B2A"/>
+  <path d="M 690 320 C 690 230 560 210 470 245 C 370 285 350 390 430 450 C 510 510 620 470 655 540 C 690 615 620 710 510 715 C 420 720 350 690 330 640"
+        fill="none" stroke="#F5F4F0" stroke-width="96" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="738" y="738" width="58" height="58" rx="16" fill="#F5F4F0"/>
 </svg>

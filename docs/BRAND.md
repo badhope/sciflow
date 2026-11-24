@@ -13,27 +13,35 @@ cinnabar seal.
 - **Dai blue** is the working accent: `#47719e` at the mid step, with
   `#7090b4`, `#2f5480` and `#234367` around it.
 - **Cinnabar** is the signature: `#be3b2a` on light, `#d4674f` on dark. It marks
-  the seal, the dot and the Flow wordmark, not whole buttons.
+  the seal, the corner and the Flow wordmark, not whole buttons.
 - The dark surface is `#101318`.
 
 ## Logo
 
-The mark is a single ink stroke with a cinnabar dot, enclosed by a seal when used
-as an app icon. The master files live in `docs/brand/`:
+**朱印 3.0 · 回锋** (2026-11-25). The mark is one continuous return-stroke S
+with a cinnabar corner: the stroke moves forward, turns at the evidence, and
+comes back before it finishes. It is set in a flat cinnabar seal when used as an
+app icon. There is no gradient, orbit, node ring or sparkle in the mark itself.
 
-- `icon-master.svg` — 1024×1024 app icon source
-- `logo-mark.svg` — light-background mark
-- `logo-mark-light.svg` — mark for dark or photographic backgrounds
-- `logo-horizontal.svg` — seal, wordmark and tagline
+The master files live in `docs/brand/`:
+
+- `icon-master.svg` — 1024×1024 app icon source, with a debossed seal frame
+- `logo-mark.svg` — light-background mark, Dai-blue stroke + cinnabar corner
+- `logo-mark-light.svg` — dark-background mark, paper-white stroke + lit cinnabar
+- `logo-horizontal.svg` — seal, wordmark and tagline for light backgrounds
+- `logo-horizontal-light.svg` — the same lockup for dark backgrounds
+- `readme-hero.svg` — 1280×420 README hero
+- `readme-loop.svg` — 1200×300 six-node research loop
 
 Do not redraw or recollect the bitmaps. PNG, ICO and ICNS files are generated
 from the master.
 
 ## Rules
 
-- No rainbow gradients, glassmorphism or permanent glow. The brand gradient is a
-  two-step tonal shift that reads as a flat fill.
-- No orbital rings, nodes or generic AI sparkles.
+- No rainbow gradients, glassmorphism or permanent glow. Two-step tonal shifts
+  are allowed on controls; the seal itself is a flat cinnabar fill.
+- No orbital rings, nodes or generic AI sparkles. The mark is a stroke and a
+  corner, nothing else.
 - Use the logo on a clear background with generous space. Do not stretch, rotate
   or recolour it outside the token palette.
 - Keep body text at a comfortable reading size; the UI is a tool, not a poster.
@@ -58,5 +66,5 @@ Error messages should explain the next action, not blame the user.
 
 Web, desktop, docs and release assets all use the same tokens. A brand change
 starts from the token table in `apps/web/src/index.css`, then updates the master
-SVG and this page. The full Chinese guide has the historical rationale and the
-complete token table: [BRAND.zh-CN.md](BRAND.zh-CN.md).
+SVG, runs `pnpm icons`, and updates this page. The full Chinese guide has the
+historical rationale and the complete token table: [BRAND.zh-CN.md](BRAND.zh-CN.md).

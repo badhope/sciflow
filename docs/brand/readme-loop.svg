@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-label="SciFlow 科研循环：问题、协议、实验、评审、质量门、投稿包">
+  <rect x="1" y="1" width="1198" height="298" rx="20" fill="#F7F6F2" stroke="#E2DDD2"/>
+  <text x="54" y="52" fill="#BE3B2A" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="12" font-weight="700" letter-spacing="2.2">THE LOOP</text>
+  <text x="54" y="70" fill="#6B7280" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="13">科研不是一次生成，</text>
+  <text x="54" y="88" fill="#6B7280" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="13">是一条带记忆与驳回的回路。</text>
+
+  <!-- return arc -->
+  <path d="M 647 112 C 647 34 305 34 305 112" fill="none" stroke="#BE3B2A" stroke-width="1.8" stroke-dasharray="5 7"/>
+  <path d="M305 112 L297 96 L315 95 Z" fill="#BE3B2A"/>
+  <text x="476" y="30" fill="#BE3B2A" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="12" font-weight="600" text-anchor="middle">被驳回就重写，不重抽</text>
+
+  <g font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif">
+    <!-- 01 -->
+    <rect x="60" y="112" width="150" height="72" rx="12" fill="#FFFFFF" stroke="#D8D3C8"/>
+    <text x="78" y="140" fill="#8FA0B2" font-size="11" font-weight="700" letter-spacing="1">01</text>
+    <text x="78" y="164" fill="#262B33" font-size="18" font-weight="700">问题</text>
+    <text x="128" y="164" fill="#6B7280" font-size="11">可检验</text>
+    <!-- 02 -->
+    <rect x="230" y="112" width="150" height="72" rx="12" fill="#FFFFFF" stroke="#D8D3C8"/>
+    <text x="248" y="140" fill="#8FA0B2" font-size="11" font-weight="700" letter-spacing="1">02</text>
+    <text x="248" y="164" fill="#262B33" font-size="18" font-weight="700">协议</text>
+    <text x="298" y="164" fill="#6B7280" font-size="11">四道门</text>
+    <!-- 03 -->
+    <rect x="400" y="112" width="150" height="72" rx="12" fill="#FFFFFF" stroke="#D8D3C8"/>
+    <text x="418" y="140" fill="#8FA0B2" font-size="11" font-weight="700" letter-spacing="1">03</text>
+    <text x="418" y="164" fill="#262B33" font-size="18" font-weight="700">实验</text>
+    <text x="468" y="164" fill="#6B7280" font-size="11">沙箱</text>
+    <!-- 04 -->
+    <rect x="570" y="112" width="150" height="72" rx="12" fill="#FBEDE9" stroke="#D9A79D"/>
+    <text x="588" y="140" fill="#BE3B2A" font-size="11" font-weight="700" letter-spacing="1">04</text>
+    <text x="588" y="164" fill="#262B33" font-size="18" font-weight="700">评审</text>
+    <text x="638" y="164" fill="#9B4A3D" font-size="11">证据不足</text>
+    <!-- 05 -->
+    <rect x="740" y="112" width="150" height="72" rx="12" fill="#FBEDE9" stroke="#D9A79D"/>
+    <text x="758" y="140" fill="#BE3B2A" font-size="11" font-weight="700" letter-spacing="1">05</text>
+    <text x="758" y="164" fill="#262B33" font-size="18" font-weight="700">质量门</text>
+    <text x="824" y="164" fill="#9B4A3D" font-size="11">同文同分</text>
+    <!-- 06 -->
+    <rect x="910" y="112" width="170" height="72" rx="12" fill="#2F5480" stroke="#2F5480"/>
+    <text x="928" y="140" fill="#AFC6DC" font-size="11" font-weight="700" letter-spacing="1">06</text>
+    <text x="928" y="164" fill="#F7FAFD" font-size="18" font-weight="700">投稿包</text>
+    
+  </g>
+
+  <!-- connectors -->
+  <g stroke="#A8B4C2" stroke-width="1.6" fill="none">
+    <path d="M210 148 H230"/><path d="M380 148 H400"/><path d="M550 148 H570"/><path d="M720 148 H740"/><path d="M890 148 H910"/>
+  </g>
+  <g fill="#A8B4C2">
+    <path d="M230 148 L220 143 L220 153 Z"/><path d="M400 148 L390 143 L390 153 Z"/><path d="M570 148 L560 143 L560 153 Z"/><path d="M740 148 L730 143 L730 153 Z"/><path d="M910 148 L900 143 L900 153 Z"/>
+  </g>
+
+  <text x="600" y="238" fill="#6B7280" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="13" text-anchor="middle">每个结论都能回到一次真实运行；没有证据，就退回重写。</text>
+  <text x="600" y="264" fill="#9AA6B2" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="11" text-anchor="middle" letter-spacing="0.8">PI → EXPERIMENT → CRITIC → SYNTHESIZE → SUBMIT</text>
+</svg>

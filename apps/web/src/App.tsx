@@ -797,7 +797,7 @@ function SidebarContent({
   const { closeSidebar } = useAppShell();
   return (
     <>
-      {/* 品牌区（墨流 2.0 氛围：光晕 + 渐变分隔线） */}
+      {/* 品牌区（朱印 3.0 氛围：光晕 + 渐变分隔线） */}
       <div className="shell-brand-zone px-4 pb-3 pt-4">
         <BrandLockup />
       </div>

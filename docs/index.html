@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SciFlow · 从选题到可投稿：确定性质量门的科研全流程工作台</title>
-<meta property="og:title" content="SciFlow · 从选题到可投稿：确定性质量门的科研全流程工作台">
-<meta property="og:description" content="一条流水线直通投稿：确定性的七维质量门（同文同分可复现）、引用三级追踪与七类体检、证据链断点直接标出。每个数字都能在你自己的机器上重跑验证。">
+<title>SciFlow · 本地优先的科研工作台：不过质量门不交稿</title>
+<meta property="og:title" content="SciFlow · 本地优先的科研工作台：不过质量门不交稿">
+<meta property="og:description" content="一条会驳回自己的科研循环：确定性七维质量门（同文同分可复现）、引用三级追踪、证据链断点直接标出。数据与模型都留在你自己的机器上。">
 <meta property="og:type" content="website">
-<meta name="description" content="SciFlow 是一个科研全流程工作台：确定性的七维质量门、引用三级追踪与七类体检、证据链断点直接标出，LangGraph 编排覆盖文献调研→写作→质量门→投稿全生命周期。">
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2714%27%20fill%3D%27%23BE3B2A%27%2F%3E%3Cpath%20d%3D%27M%2043.2%2021.4%20A%2011%2011%200%201%200%2032%2032%20A%2011%2011%200%201%201%2020.8%2042.6%27%20fill%3D%27none%27%20stroke%3D%27%23fff%27%20stroke-width%3D%276.4%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%2F%3E%3Ccircle%20cx%3D%2719.4%27%20cy%3D%2744%27%20r%3D%273.2%27%20fill%3D%27%23fff%27%2F%3E%3C%2Fsvg%3E">
+<meta name="description" content="SciFlow 是一个本地优先的科研工作台：一个 SQLite 文件、你自己的模型接口、没有托管账号。文献调研、写作、确定性七维质量门与投稿包，在同一条可回溯的循环里。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%201024%201024%22%3E%20%3Crect%20width=%221024%22%20height=%221024%22%20rx=%22224%22%20fill=%22%23BE3B2A%22/%3E%20%3Cpath%20d=%22M%20690%20320%20C%20690%20230%20560%20210%20470%20245%20C%20370%20285%20350%20390%20430%20450%20C%20510%20510%20620%20470%20655%20540%20C%20690%20615%20620%20710%20510%20715%20C%20420%20720%20350%20690%20330%20640%22%20fill=%22none%22%20stroke=%22%23F5F4F0%22%20stroke-width=%2296%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22/%3E%20%3Crect%20x=%22738%22%20y=%22738%22%20width=%2258%22%20height=%2258%22%20rx=%2216%22%20fill=%22%23F5F4F0%22/%3E%20%3C/svg%3E">
 <style>
 /* ============ 主题变量 ============ */
 :root{
@@ -52,8 +52,8 @@ header.nav{
 }
 .nav-inner{display:flex;align-items:center;justify-content:space-between;height:64px}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.18rem;letter-spacing:-.01em}
-.brand .logo{width:30px;height:30px;border-radius:8px;background:var(--grad);display:grid;place-items:center;color:#fff;flex:none}
-.brand .logo svg{width:18px;height:18px}
+.brand .logo{width:30px;height:30px;border-radius:8px;background:#BE3B2A;display:grid;place-items:center;color:#fff;flex:none}
+.brand .logo svg{width:20px;height:20px}
 nav.links{display:flex;align-items:center;gap:26px}
 nav.links a{color:var(--muted);font-size:.94rem;font-weight:500;transition:color .2s}
 nav.links a:hover{color:var(--brand2)}
@@ -217,7 +217,7 @@ footer a:hover{color:var(--brand2)}
   <div class="wrap nav-inner">
     <a class="brand" href="#top">
       <span class="logo">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M6 7h8a3.5 3.5 0 0 1 0 7h-4a3.5 3.5 0 0 0 0 7h8" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <svg viewBox="0 0 64 64" fill="none"><path d="M43.125 20C43.125 14.375 35 13.125 29.375 15.3125C23.125 17.8125 21.875 24.375 26.875 28.125C31.875 31.875 38.75 29.375 40.9375 33.75C43.125 38.4375 38.75 44.375 31.875 44.6875C26.25 45 21.875 43.125 20.625 40" stroke="white" stroke-width="5.75" stroke-linecap="round" stroke-linejoin="round"/><rect x="46.125" y="46.125" width="3.6" height="3.6" rx="1" fill="white"/></svg>
       </span>
       SciFlow
     </a>
@@ -245,9 +245,9 @@ footer a:hover{color:var(--brand2)}
 <!-- ===== Hero ===== -->
 <section class="hero" id="top">
   <div class="wrap">
-    <span class="eyebrow">Research Workbench · 确定性质量门 · 引用可溯 · 可验证工程</span>
+    <span class="eyebrow">Local-first Research Workbench · 确定性质量门 · 引用可溯</span>
     <h1>从选题到投稿<br><span class="grad-text">不过质量门不交稿</span></h1>
-      <p class="tag">SciFlow 把科研闭环做成一条可验收的流水线：输入研究主题，LangGraph 编排完成文献调研 → 写作 → 质量门 → 投稿辅助。质量门由确定性规则计分（同文同分），引用从正文锚点到文献条目三级可溯，证据链断在哪一步直接标出来。</p>
+      <p class="tag">SciFlow 把整条科研链路留在你自己的机器上：一个 SQLite 文件、你自己的模型接口、没有托管账号。输入研究主题，文献调研、写作、质量门与投稿辅助依次推进；质量门由确定性规则计分（同文同分），引用从正文锚点到文献条目三级可溯。证据链断在哪一步，直接标出来。</p>
     <div class="badges">
       <span class="badge">🔍 <b>引用可溯</b> 锚点 → citation → reference</span>
       <span class="badge">🚦 <b>确定性质量门</b> 同文同分可复现</span>

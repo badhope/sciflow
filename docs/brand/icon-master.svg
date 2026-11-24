@@ -1,18 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="SciFlow app icon">
   <!--
-    SciFlow 主图标（App Icon Master · 1024×1024）· 朱印 1.0 · 2026-11-03
-    概念：一方朱砂印章。平涂印底（无渐变）+ 一笔白文 S，如刻印般干脆。
-      - 朱砂（#BE3B2A）是中国学术批注的传统色——审阅、评定、定稿的印记；
-      - 一笔 S = 科研全流程一笔贯通（沿用墨流 3.0 的单笔势，删去轨道环与节点圆点，
-        那两项是 AI 产品图标的模板件，与「自己的品牌」相悖）；
-      - 全图标只有两个颜色、三个形状：印底、主笔、印角留白。
+    SciFlow 主图标（App Icon Master · 1024×1024）· 朱印 3.0 · 回锋 · 2026-11-25
+    概念：一方朱砂印。平涂印底 + 一道回锋的 S + 右下押角。
     规范：唯一图标源；PNG/ICO/ICNS 由 scripts/generate-icons.mjs 从此渲染，禁止手改位图。
-    深色桌面上朱砂与黑底对比 3.4:1，白色主笔始终是第一可读元素。
   -->
   <rect width="1024" height="1024" rx="224" fill="#BE3B2A"/>
-  <!-- 主笔：单条连续 S 形水流（右上起笔 → 中宫转折 → 左下收笔） -->
-  <path d="M 691.2 342.4 A 176 176 0 1 0 512 512 A 176 176 0 1 1 332.8 681.6"
-        fill="none" stroke="#ffffff" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- 印角留白：右下角一方小白印角，如钤印时垫纸的错位感 -->
-  <rect x="736" y="736" width="64" height="64" rx="20" fill="#ffffff" opacity="0.92"/>
+  <rect x="34" y="34" width="956" height="956" rx="198" fill="none" stroke="#F5F4F0" stroke-width="8" opacity="0.16"/>
+  <path d="M 690 320 C 690 230 560 210 470 245 C 370 285 350 390 430 450 C 510 510 620 470 655 540 C 690 615 620 710 510 715 C 420 720 350 690 330 640"
+        fill="none" stroke="#F5F4F0" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="738" y="738" width="58" height="58" rx="16" fill="#F5F4F0"/>
 </svg>

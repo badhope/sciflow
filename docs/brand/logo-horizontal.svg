@@ -1,25 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 96" role="img" aria-label="SciFlow 横版标识">
-  <!--
-    SciFlow 横版组合标识（Logo Lockup）· 朱印 1.0 · 2026-11-03
-    结构：朱砂印标志（平涂印底 + 白文 S + 印角留白）+ 词标「SciFlow」（Flow 收朱砂）+ 标语
-    适用：README、官网页头、文档封面、启动页。最小宽度 220px。
-    原则：无渐变、无辉光、无轨道节点——印章的干脆就是辨识度。
-  -->
-  <!-- 标志（80×80，视觉留白 8px；与 icon-master 同一几何） -->
-  <g transform="translate(8 8) scale(1.25)">
-    <rect width="64" height="64" rx="15" fill="#BE3B2A"/>
-    <path d="M 43.2 21.4 A 11 11 0 1 0 32 32 A 11 11 0 1 1 20.8 42.6"
-          fill="none" stroke="#ffffff" stroke-width="6.4" stroke-linecap="round" stroke-linejoin="round"/>
-    <rect x="45" y="45" width="5" height="5" rx="1.6" fill="#ffffff" opacity="0.92"/>
+  <!-- SciFlow 横版组合 · 朱印 3.0 · 2026-11-25
+       朱砂印（回锋 S + 押角）+ 词标 Sci 墨色 / Flow 朱砂 + 标语。最小宽度 220px。 -->
+  <g transform="translate(8 8)">
+    <rect width="64" height="64" rx="14" fill="#BE3B2A"/>
+    <rect x="2.5" y="2.5" width="59" height="59" rx="11.5" fill="none" stroke="#F5F4F0" stroke-width="0.6" opacity="0.18"/>
+    <path d="M 43.125 20 C 43.125 14.375 35 13.125 29.375 15.3125 C 23.125 17.8125 21.875 24.375 26.875 28.125 C 31.875 31.875 38.75 29.375 40.9375 33.75 C 43.125 38.4375 38.75 44.375 31.875 44.6875 C 26.25 45 21.875 43.125 20.625 40"
+          fill="none" stroke="#F5F4F0" stroke-width="5.75" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="46.125" y="46.125" width="3.6" height="3.6" rx="1" fill="#F5F4F0"/>
   </g>
-
-  <!-- 词标：Sci 墨色 + Flow 朱砂（与印底同色，字标即印文） -->
-  <text x="104" y="52" font-family="-apple-system,&apos;Segoe UI&apos;,&apos;PingFang SC&apos;,&apos;Microsoft YaHei&apos;,Helvetica,Arial,sans-serif"
-        font-size="34" font-weight="700" letter-spacing="-0.5">
-    <tspan fill="#262B33">Sci</tspan><tspan fill="#BE3B2A">Flow</tspan>
-  </text>
-
-  <!-- 标语 -->
-  <text x="105" y="74" font-family="-apple-system,&apos;Segoe UI&apos;,&apos;PingFang SC&apos;,&apos;Microsoft YaHei&apos;,Helvetica,Arial,sans-serif"
-        font-size="13" fill="#6B7280" letter-spacing="1">让科研从想法到成文</text>
+  <text x="86" y="48" font-family="-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',Helvetica,Arial,sans-serif" font-size="34" font-weight="700" letter-spacing="-0.5"><tspan fill="#262B33">Sci</tspan><tspan fill="#BE3B2A">Flow</tspan></text>
+  <text x="87" y="72" font-family="-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',Helvetica,Arial,sans-serif" font-size="12" fill="#6B7280" letter-spacing="1.2">让科研从想法到成文</text>
 </svg>

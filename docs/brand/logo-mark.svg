@@ -1,9 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SciFlow mark">
-  <!-- SciFlow 独立标志 · 朱印 1.0 · 2026-11-03（浅色底用）
-       墨色主笔（黛蓝 #2F5480）+ 收笔一点朱砂（#BE3B2A）。
-       「一点朱砂」是全品牌的签名细节：流程走完，落下一个审阅的印记。
-       深色底请用 logo-mark-light.svg；两者几何完全同源，只换颜色。 -->
-  <path d="M 43.2 21.4 A 11 11 0 1 0 32 32 A 11 11 0 1 1 20.8 42.6"
-        fill="none" stroke="#2F5480" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="19.4" cy="44" r="3.2" fill="#BE3B2A"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="SciFlow mark">
+  <!-- SciFlow 独立标志 · 朱印 3.0 · 浅色底：黛蓝主笔 + 朱砂押角 -->
+  <path d="M 690 320 C 690 230 560 210 470 245 C 370 285 350 390 430 450 C 510 510 620 470 655 540 C 690 615 620 710 510 715 C 420 720 350 690 330 640"
+        fill="none" stroke="#2F5480" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="738" y="738" width="58" height="58" rx="16" fill="#BE3B2A"/>
 </svg>

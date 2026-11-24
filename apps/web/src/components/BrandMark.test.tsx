@@ -5,9 +5,8 @@ import { BrandLockup, BrandMark } from './BrandMark';
 /**
  * 品牌组件契约：logo 是品牌识别的唯一来源，改动必须锁住关键结构。
  *
- * 2026-11 契约变更（朱印 1.0）：图形从「主流线 + 主笔 + 节点外环」三层
- * 简化为「主笔 + 收笔朱点」两层——轨道线与节点外环是 AI 产品图标的模板件，
- * 与「自己的品牌」相悖，已删除且不允许改回（防止被"顺手"复原成三层结构）。
+ * 2026-11 契约变更（朱印 3.0 · 回锋）：图形固定为「一条回锋主笔 + 一个押角」两层——
+ * 不加轨道、不加节点环、不改回多色渐变；几何锁定，防止被"顺手"改回模板件。
  * 「Flow」词标固定朱砂色（字标即印文），不再吃品牌渐变裁切。
  */
 describe('BrandMark', () => {
@@ -36,11 +35,11 @@ describe('BrandMark', () => {
     expect(dot).toContain('brand-seal');
   });
 
-  it('inverse 变体主笔纯白（放在朱砂印底上需要反白），朱点用暗底提亮档', () => {
+  it('inverse 变体主笔与押角都用纸白（朱砂印底上必须反白）', () => {
     const { container } = render(<BrandMark variant="inverse" />);
     expect(container.querySelector('linearGradient')).toBeNull();
-    expect(container.querySelector('path')!.getAttribute('stroke')).toBe('#ffffff');
-    expect(container.querySelector('circle')!.getAttribute('fill')).toContain('on-dark');
+    expect(container.querySelector('path')!.getAttribute('stroke')).toBe('#F5F4F0');
+    expect(container.querySelector('circle')!.getAttribute('fill')).toBe('#F5F4F0');
   });
 
   it('mono 变体整体跟随 currentColor（单色/暗底场景）', () => {
