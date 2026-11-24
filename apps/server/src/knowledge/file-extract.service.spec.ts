@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { strToU8, zipSync } from 'fflate';
@@ -9,6 +10,22 @@ import ExcelJS from 'exceljs';
 import PptxGenJS from 'pptxgenjs';
 import { FileExtractService, cleanExtractedText, detectExtractKind } from './file-extract.service';
 import type { AiService } from '../ai/ai.service';
+
+const nodeRequire = createRequire(import.meta.url);
+const ffmpegBin = (() => {
+  try {
+    const bundled = nodeRequire('ffmpeg-static') as string | null;
+    if (bundled && existsSync(bundled)) return bundled;
+  } catch {
+    // fall through to the system binary
+  }
+  try {
+    execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' });
+    return 'ffmpeg';
+  } catch {
+    return null;
+  }
+})();
 
 const service = new FileExtractService({} as AiService);
 
@@ -41,17 +58,26 @@ describe('cleanExtractedText', () => {
 describe('FileExtractService', () => {
   it('解析 DOCX 正文与表格', { timeout: 30000 }, async () => {
     const doc = new Document({
-      sections: [{
-        children: [
-          new Paragraph({ children: [new TextRun('研究问题与假设')] }),
-          new Table({
-            rows: [
-              new TableRow({ children: [new TableCell({ children: [new Paragraph('变量')] }), new TableCell({ children: [new Paragraph('测量')] })] }),
-              new TableRow({ children: [new TableCell({ children: [new Paragraph('满意度')] }), new TableCell({ children: [new Paragraph('五点量表')] })] }),
-            ],
-          }),
-        ],
-      }],
+      sections: [
+        {
+          children: [
+            new Paragraph({ children: [new TextRun('研究问题与假设')] }),
+            new Table({
+              rows: [
+                new TableRow({
+                  children: [new TableCell({ children: [new Paragraph('变量')] }), new TableCell({ children: [new Paragraph('测量')] })],
+                }),
+                new TableRow({
+                  children: [
+                    new TableCell({ children: [new Paragraph('满意度')] }),
+                    new TableCell({ children: [new Paragraph('五点量表')] }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        },
+      ],
     });
     const buffer = await Packer.toBuffer(doc);
     const result = await service.extract({ name: 'plan.docx', data: Buffer.from(buffer) });
@@ -111,17 +137,13 @@ describe('FileExtractService', () => {
   });
 
   it('知识库内联 text 上传不依赖扩展名', async () => {
-    const result = await service.extractKnowledgeUpload(
-      'GNN 测试文献', 'text', '图神经网络通过消息传递聚合邻居特征。',
-    );
+    const result = await service.extractKnowledgeUpload('GNN 测试文献', 'text', '图神经网络通过消息传递聚合邻居特征。');
     expect(result.kind).toBe('text');
     expect(result.text).toContain('消息传递');
   });
 
   it('知识库 text 上传即使文件名带 .pdf 也按纯文本处理', async () => {
-    const result = await service.extractKnowledgeUpload(
-      'Attention Is All You Need Deep Read.pdf', 'text', 'Transformer 的自注意力机制。',
-    );
+    const result = await service.extractKnowledgeUpload('Attention Is All You Need Deep Read.pdf', 'text', 'Transformer 的自注意力机制。');
     expect(result.kind).toBe('text');
     expect(result.text).toContain('自注意力');
   });
@@ -136,8 +158,19 @@ describe('FileExtractService', () => {
     try {
       const image = path.join(dir, 'scan.png');
       execFileSync('convert', [
-        '-size', '900x260', 'xc:white', '-font', 'Noto-Sans-CJK-SC', '-pointsize', '64',
-        '-gravity', 'center', '-annotate', '0', '科研数据 2026', image,
+        '-size',
+        '900x260',
+        'xc:white',
+        '-font',
+        'Noto-Sans-CJK-SC',
+        '-pointsize',
+        '64',
+        '-gravity',
+        'center',
+        '-annotate',
+        '0',
+        '科研数据 2026',
+        image,
       ]);
       const imageResult = await service.extract({ name: 'scan.png', data: readFileSync(image) });
       expect(imageResult.text).toContain('科研');
@@ -145,7 +178,9 @@ describe('FileExtractService', () => {
       const pdf = path.join(dir, 'scan.pdf');
       // 用 reportlab 把同一张位图铺满 PDF 页面：没有文本层，才是真正的扫描件。
       // ImageMagick 发行版默认禁止写 PDF，不能拿 convert 生成测试样本。
-      execFileSync('python3', ['-c', `
+      execFileSync('python3', [
+        '-c',
+        `
 import sys
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
@@ -154,7 +189,10 @@ w, h = 900, 260
 c = canvas.Canvas(out, pagesize=(w, h))
 c.drawImage(ImageReader(img), 0, 0, width=w, height=h)
 c.save()
-`, image, pdf]);
+`,
+        image,
+        pdf,
+      ]);
       const pdfResult = await service.extract({ name: 'scan.pdf', data: readFileSync(pdf) });
       expect(pdfResult.text).toContain('科研');
       expect(pdfResult.parser).toContain('tesseract');
@@ -163,15 +201,31 @@ c.save()
     }
   });
 
-  it('视频抽音轨后走转写回调', async () => {
+  it.skipIf(!ffmpegBin)('视频抽音轨后走转写回调', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'sciflow-video-test-'));
     try {
       const video = path.join(dir, 'clip.mp4');
-      execFileSync('ffmpeg', [
-        '-y', '-f', 'lavfi', '-i', 'color=c=teal:s=320x180:d=2',
-        '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2',
-        '-shortest', '-c:v', 'mpeg4', '-c:a', 'libmp3lame', video,
-      ], { stdio: 'ignore' });
+      execFileSync(
+        ffmpegBin!,
+        [
+          '-y',
+          '-f',
+          'lavfi',
+          '-i',
+          'color=c=teal:s=320x180:d=2',
+          '-f',
+          'lavfi',
+          '-i',
+          'sine=frequency=440:duration=2',
+          '-shortest',
+          '-c:v',
+          'mpeg4',
+          '-c:a',
+          'libmp3lame',
+          video,
+        ],
+        { stdio: 'ignore' },
+      );
       const result = await service.extract(
         { name: 'clip.mp4', data: readFileSync(video) },
         { transcribe: async (_b, name) => `视频转写：${name}` },
