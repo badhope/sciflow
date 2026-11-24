@@ -9,7 +9,7 @@ and no generated chat text. Every cycle below is a real HTTP run.
 
 Two consecutive real cycles reached `synthesize` with `supported`:
 
-| Item | Cycle 5 | Cycle 6 (final build) |
+| Item | Cycle 5 | Cycle 6 |
 | --- | --- | --- |
 | Cycle | `230db717-bbd0-42c2-be8c-397775c75a61` | `582f9dad-c625-4817-92d3-9b3eb0d3594a` |
 | State | `synthesize` / `completed` / `supported` | same |
@@ -29,6 +29,11 @@ Event trail for cycle 6 (server log):
 4. `execute` → `ok:true` in 745 ms
 5. `evaluate` → `supported`, confidence 95, `topicAligned=true`
 6. `synthesize` → completed, 16,681 tokens
+
+Cycle 6 ran on the build before the last `把握程度` prose-confidence
+normalization patch. That patch is covered by the transport unit tests
+(`structured-output-normalize.spec.ts`); cycle 6 is not presented as a run of
+the final binary.
 
 ## Earlier runs in the same session
 
