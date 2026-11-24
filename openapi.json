@@ -6158,6 +6158,29 @@
         ]
       }
     },
+    "/research-cycles/{cycleId}/recover": {
+      "post": {
+        "operationId": "ResearchCycleController_recover",
+        "parameters": [
+          {
+            "name": "cycleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ResearchCycle"
+        ]
+      }
+    },
     "/research-cycles/{cycleId}": {
       "get": {
         "operationId": "ResearchCycleController_status",

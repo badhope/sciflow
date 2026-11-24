@@ -37,6 +37,16 @@ function makeDeps(overrides: {
   expertThrows?: boolean;
   /** 文献检索是否抛错（验证降级） */
   literatureThrows?: boolean;
+  /** 计划阶段就已消耗的 token（验证预算门禁前移） */
+  planTokens?: number;
+  /** 模拟重启前已落库的 run（验证 execute 重放不重复执行） */
+  priorRun?: {
+    id: string;
+    cycleId?: string | null;
+    protocolId?: string | null;
+    status?: string | null;
+    manifest?: Record<string, unknown>;
+  };
 } = {}) {
   const rec: Recorder = {
     plan: 0,
@@ -83,6 +93,7 @@ function makeDeps(overrides: {
       },
     },
     records: {
+      listRuns: () => (overrides.priorRun ? [overrides.priorRun] : []),
       createRun: () => ({ id: `run-${rec.experiments + 1}` }),
       updateRun: () => undefined,
       createClaim: () => {
@@ -147,7 +158,14 @@ function makeDeps(overrides: {
       return [{ title: 'A Prior Study', year: 2020, venue: 'J. Test', doi: '10.1/x' }];
     },
     autonomyLevel: () => overrides.autonomy || 'L3',
-    tokensSpent: () => overrides.maxTokens ?? 0,
+    // 预算测试需要区分「计划后」与「实验后」：默认实验前 0，实验后等于测试预算；
+    // planTokens 显式模拟计划阶段就超预算的场景。
+    tokensSpent: () =>
+      overrides.planTokens !== undefined
+        ? overrides.planTokens
+        : rec.experiments > 0
+          ? overrides.maxTokens ?? 0
+          : 0,
     notify: (event) => rec.events.push(event),
     logger: { log: () => undefined, warn: () => undefined, error: () => undefined },
   };
@@ -180,6 +198,25 @@ describe('自主研究循环图', () => {
     expect(rec.claims).toBe(1);
     expect(result.stopReason).toBe('completed');
     expect(result.verdict).toBe('supported');
+  });
+
+  it('重启重放 execute 时复用已完成的 run，不重复跑实验', async () => {
+    const { deps, rec } = makeDeps({
+      verdicts: ['supported'],
+      priorRun: {
+        id: 'run-prior',
+        cycleId: 'cycle-1',
+        protocolId: 'proto-1',
+        status: 'completed',
+        manifest: { iteration: 0, stdout: 'n= 1200\nmean_abs_error= 1.8\nauroc= 0.82' },
+      },
+    });
+    const graph = buildResearchCycleGraph(deps, { checkpointer: saver });
+    const result: any = await graph.invoke(initialState as never, { configurable: { thread_id: 't-reuse' } } as never);
+    expect(rec.experiments).toBe(0);
+    expect(result.runId).toBe('run-prior');
+    expect(result.runOutput).toContain('auroc=');
+    expect(result.stopReason).toBe('completed');
   });
 
   it('结论 refuted 时走回边修订再来一轮（这正是单次 DAG 做不到的事）', async () => {
@@ -217,7 +254,7 @@ describe('自主研究循环图', () => {
     expect(rec.experiments).toBe(3);
   });
 
-  it('token 预算耗尽时终止（预算优先于轮次与停滞）', async () => {
+  it('token 预算耗尽时终止（实验后预算优先于轮次与停滞）', async () => {
     const { deps, rec } = makeDeps({ verdicts: ['refuted'], maxTokens: 1 });
     const graph = buildResearchCycleGraph(deps, { checkpointer: saver });
     const result: any = await graph.invoke(
@@ -226,6 +263,17 @@ describe('自主研究循环图', () => {
     );
     expect(result.stopReason).toBe('budget_exceeded');
     expect(rec.experiments).toBe(1);
+  });
+
+  it('计划阶段已超预算时，不进入实验执行', async () => {
+    const { deps, rec } = makeDeps({ verdicts: ['refuted'], maxTokens: 1, planTokens: 5 });
+    const graph = buildResearchCycleGraph(deps, { checkpointer: saver });
+    const result: any = await graph.invoke(
+      { ...initialState, maxIterations: 5, maxTokens: 1 } as never,
+      { configurable: { thread_id: 't5b' } } as never,
+    );
+    expect(result.stopReason).toBe('budget_exceeded');
+    expect(rec.experiments).toBe(0);
   });
 
   it('L2 门禁：协议未审批时挂起，不执行实验', async () => {

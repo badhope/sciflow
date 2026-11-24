@@ -6,6 +6,9 @@ README 是短版，这些文档往深处走。每页顶部都有语言切换。
 
 | 文档 | 内容 | English |
 |---|---|---|
+| [`PROJECT-BASELINE.zh-CN.md`](PROJECT-BASELINE.zh-CN.md) | 项目基线唯一事实源：当前状态、已交付清单、任务池与路线图 | [English](PROJECT-BASELINE.md) |
+| [`COMPETITIVE-ANALYSIS.zh-CN.md`](COMPETITIVE-ANALYSIS.zh-CN.md) | 竞品矩阵、场景边界与全自动科研可行性论证 | [English](COMPETITIVE-ANALYSIS.md) |
+| [`PROMPT-BRANCH-MATRIX.zh-CN.md`](PROMPT-BRANCH-MATRIX.zh-CN.md) | 研究循环全分支：触发、提示词契约、确定性行为与测试证据 | [English](PROMPT-BRANCH-MATRIX.md) |
 | [`../ARCHITECTURE.zh-CN.md`](../ARCHITECTURE.zh-CN.md) | 模块边界、数据流、存储与契约 | [English](../ARCHITECTURE.md) |
 | [`CONFIGURATION.zh-CN.md`](CONFIGURATION.zh-CN.md) | 模型端点、检索、鉴权、Agent 与环境配置 | [English](CONFIGURATION.md) |
 | [`OPERATIONS.zh-CN.md`](OPERATIONS.zh-CN.md) | 健康探针、备份、恢复与故障处理 | [English](OPERATIONS.md) |

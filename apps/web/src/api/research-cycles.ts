@@ -27,6 +27,11 @@ export const researchCycles = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  recover: (cycleId: string) =>
+    request<ResearchCycleStatus>(`/api/research-cycles/${cycleId}/recover`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   status: (cycleId: string) => request<ResearchCycleStatus>(`/api/research-cycles/${cycleId}`),
   list: (programId: string) =>
     request<ResearchCycle[]>(`/api/research-cycles?programId=${encodeURIComponent(programId)}`),

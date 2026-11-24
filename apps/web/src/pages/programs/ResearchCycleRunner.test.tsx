@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const start = vi.fn();
 const resume = vi.fn();
+const recover = vi.fn();
 const status = vi.fn();
 const list = vi.fn();
 const approveProtocol = vi.fn();
@@ -22,6 +23,7 @@ vi.mock('../../api/client', () => ({
     researchCycles: {
       start: (...a: unknown[]) => start(...a),
       resume: (...a: unknown[]) => resume(...a),
+      recover: (...a: unknown[]) => recover(...a),
       status: (...a: unknown[]) => status(...a),
       list: (...a: unknown[]) => list(...a),
     },
@@ -81,6 +83,7 @@ describe('ResearchCycleRunner', () => {
   beforeEach(() => {
     start.mockReset();
     resume.mockReset();
+    recover.mockReset();
     status.mockReset();
     list.mockReset();
     approveProtocol.mockReset();
@@ -88,6 +91,7 @@ describe('ResearchCycleRunner', () => {
     status.mockResolvedValue(cycleStatus);
     start.mockResolvedValue(cycleStatus);
     resume.mockResolvedValue(cycleStatus);
+    recover.mockResolvedValue(cycleStatus);
     approveProtocol.mockResolvedValue({ id: 'proto-1', status: 'approved' });
   });
 
@@ -149,5 +153,15 @@ describe('ResearchCycleRunner', () => {
     await renderPanel();
     expect(await screen.findByText(/token 1234/)).toBeTruthy();
     expect(screen.getByText(/待审批协议/)).toBeTruthy();
+  });
+
+  it('blocked 状态提供从断点恢复动作', async () => {
+    status.mockResolvedValue({ ...cycleStatus, state: 'blocked', summary: '看门狗：长时间无心跳' });
+    await renderPanel();
+    expect(await screen.findByText('从断点恢复')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByText('从断点恢复'));
+    });
+    await waitFor(() => expect(recover).toHaveBeenCalledWith('cycle-1'));
   });
 });

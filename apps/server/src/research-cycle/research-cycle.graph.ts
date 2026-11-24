@@ -2,6 +2,7 @@ import { START, END, StateGraph, interrupt } from '@langchain/langgraph';
 import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
 import { createHash } from 'node:crypto';
 import { sqlite } from '../db/database';
+import { errorMessage } from '../common/error-message';
 import { ResearchCycleAnnotation } from './research-cycle-state';
 import type { LiteratureRef } from './research-cycle-state';
 import type { PiPlan } from './agents/pi.agent';
@@ -37,7 +38,9 @@ export interface ResearchCycleGraphDeps {
     updateCycle(cycleId: string, patch: { state?: string; summary?: string }): void;
   };
   records: {
-    createRun(programId: string, input: { cycleId?: string; protocolId?: string; status?: string; summary?: string }): { id: string };
+    /** 用于重启续跑时按 cycle + protocol + iteration 找回同一 run，避免重复落库 */
+    listRuns(programId: string): { id: string; cycleId?: string | null; protocolId?: string | null; status?: string | null; manifest?: Record<string, unknown> }[];
+    createRun(programId: string, input: { cycleId?: string; protocolId?: string; status?: string; summary?: string; manifest?: unknown }): { id: string };
     updateRun(runId: string, patch: { status?: string; manifest?: unknown; summary?: string; experimentId?: string }): void;
     createClaim(programId: string, input: { statement?: string; cycleId?: string; protocolId?: string; confidence?: number; status?: string }): { id: string };
     updateClaim(claimId: string, patch: { status?: string; confidence?: number }): void;
@@ -91,6 +94,8 @@ export interface ResearchCycleGraphDeps {
   autonomyLevel(programId: string): string;
   /** 当前循环已消耗 token（按循环维度归集：caller 前缀 research-cycle:<cycleId>:） */
   tokensSpent(cycleId: string): number;
+  /** 节点心跳：服务层看门狗据此判断循环是否还在推进（长 LLM/沙箱调用期间也要报活） */
+  heartbeat?(cycleId: string, node: string): void;
   /** 事件通知（写轨迹/事件流） */
   notify(event: string, payload: Record<string, unknown>): void;
   logger: { log(m: string): void; warn(m: string): void; error(m: string): void };
@@ -149,6 +154,7 @@ export function buildResearchCycleGraph(
 ) {
   const graph = new StateGraph(ResearchCycleAnnotation)
     .addNode('plan', async (s) => {
+      deps.heartbeat?.(s.cycleId, 'plan');
       deps.programs.updateCycle(s.cycleId, { state: 'protocol', summary: `第 ${s.iteration + 1} 轮：正在生成假设与实验协议` });
       const program = deps.programs.getProgram(s.programId);
       const question = s.questionText || program.goal || program.title || '';
@@ -162,8 +168,8 @@ export function buildResearchCycleGraph(
         try {
           literature = await deps.literatureSearch({ query: question, limit: 6 });
           deps.notify('literature', { count: literature.length });
-        } catch (e: any) {
-          deps.logger.warn(`[研究循环] 文献检索失败，按无背景继续：${String(e?.message || e).slice(0, 160)}`);
+        } catch (e: unknown) {
+          deps.logger.warn(`[研究循环] 文献检索失败，按无背景继续：${errorMessage(e, 160)}`);
           literature = [];
         }
       }
@@ -193,8 +199,8 @@ export function buildResearchCycleGraph(
             cycleId: s.cycleId,
           });
           break;
-        } catch (e: any) {
-          lastError = String(e?.message || e).slice(0, 600);
+        } catch (e: unknown) {
+          lastError = errorMessage(e, 600);
           deps.notify('plan', { iteration: s.iteration, agentError: lastError, willRetry: attempt === 0 });
         }
       }
@@ -244,8 +250,21 @@ export function buildResearchCycleGraph(
       };
     })
     .addNode('gate', async (s) => {
+      deps.heartbeat?.(s.cycleId, 'gate');
       // plan 失败已给出终止原因：不再进入审批/执行
       if (s.stopReason) return {};
+      // 预算门禁前移：plan 已可能烧掉超过预算；不能等实验跑完再判预算，否则一次执行就会越界。
+      const spentBeforeGate = deps.tokensSpent(s.cycleId);
+      if (s.maxTokens > 0 && spentBeforeGate >= s.maxTokens) {
+        deps.programs.updateCycle(s.cycleId, {
+          state: 'stopped',
+          summary: `预算耗尽：${spentBeforeGate}/${s.maxTokens} tokens，未进入实验执行`,
+        });
+        return {
+          stopReason: 'budget_exceeded',
+          feedback: `计划阶段已消耗 ${spentBeforeGate} tokens，达到预算上限 ${s.maxTokens}，按策略终止，不执行实验。`,
+        };
+      }
       const protocols = deps.programs.listProtocols(s.hypothesisId);
       const current = protocols.find((p) => p.id === s.protocolId);
       if (current?.status === 'approved') return {};
@@ -262,8 +281,8 @@ export function buildResearchCycleGraph(
             design: s.design as Record<string, unknown>,
             cycleId: s.cycleId,
           });
-        } catch (e: any) {
-          const msg = String(e?.message || e).slice(0, 400);
+        } catch (e: unknown) {
+          const msg = errorMessage(e, 400);
           deps.logger.error(`[研究循环] AI 专家审批失败，按 blocked 终止：${msg}`);
           deps.notify('gate', { protocolId: s.protocolId, approved: false, by: 'expert', error: msg });
           return { stopReason: 'agent_error', feedback: `AI 专家审批不可用：${msg}` };
@@ -320,15 +339,40 @@ export function buildResearchCycleGraph(
       return { stopReason: 'approval_rejected' };
     })
     .addNode('execute', async (s) => {
+      deps.heartbeat?.(s.cycleId, 'execute');
       deps.programs.updateCycle(s.cycleId, { state: 'execute', summary: '正在执行实验（沙箱）' });
       const design = s.design as Record<string, unknown>;
-      const run = deps.records.createRun(s.programId, {
-        cycleId: s.cycleId,
-        protocolId: s.protocolId,
-        status: 'running',
-        summary: '',
-      });
-      deps.notify('execute', { runId: run.id });
+      const runKey = Number(s.iteration);
+      // 重启恢复时 LangGraph 会从 execute 之前的 checkpoint 重放本节点。
+      // 用 cycle + protocol + iteration 找回同一 run：已完成就直接复用输出，未完成则复用记录重跑。
+      const priorRun = deps.records.listRuns(s.programId).find(
+        (r) =>
+          r.cycleId === s.cycleId &&
+          r.protocolId === s.protocolId &&
+          Number(r.manifest?.iteration) === runKey,
+      );
+      if (priorRun?.status === 'completed' && String(priorRun.manifest?.stdout || '').trim()) {
+        deps.notify('execute', { runId: priorRun.id, reused: true });
+        return {
+          runId: priorRun.id,
+          runOutput: String(priorRun.manifest?.stdout || '').slice(0, 20_000),
+          runFailed: false,
+        };
+      }
+      const run = priorRun
+        ? (deps.records.updateRun(priorRun.id, {
+            status: 'running',
+            summary: '重启续跑：复用中断前的运行记录',
+            manifest: { iteration: runKey, resumed: true },
+          }), priorRun)
+        : deps.records.createRun(s.programId, {
+            cycleId: s.cycleId,
+            protocolId: s.protocolId,
+            status: 'running',
+            summary: '',
+            manifest: { iteration: runKey },
+          });
+      deps.notify('execute', { runId: run.id, resumed: Boolean(priorRun) });
 
       // 最多两次尝试：第一次若因语法/导入错误失败，把报错回灌给实验者做**修复**（不是重写思路）。
       let code = '';
@@ -345,11 +389,11 @@ export function buildResearchCycleGraph(
             cycleId: s.cycleId,
             previousError: attempt === 0 ? undefined : repairNote,
           });
-        } catch (e: any) {
+        } catch (e: unknown) {
           // 智能体本身失败（模型不可用/结构化输出被截断/不合规）不该让整轮循环崩掉。
           // 实测最常见的是「模型输出被 max_tokens 截断 → JSON 解析失败」，
           // 这种可以带着错误再试一次（要求更短的脚本），两次都不行才记为失败运行。
-          const msg = String(e?.message || e).slice(0, 800);
+          const msg = errorMessage(e, 800);
           if (attempt === 0) {
             repairNote = `上一次生成实验脚本失败：${msg}`;
             deps.notify('execute', { runId: run.id, agentError: msg, willRetry: true });
@@ -377,8 +421,8 @@ export function buildResearchCycleGraph(
         } else {
           try {
             out = await deps.runExperiment({ projectId: s.projectId, goal: experimentDesign.goal, code: experimentDesign.code });
-          } catch (e: any) {
-            out = { id: '', stdout: '', stderr: String(e?.message || e).slice(0, 2000), status: 'error' };
+          } catch (e: unknown) {
+            out = { id: '', stdout: '', stderr: errorMessage(e, 2000), status: 'error' };
           }
           if (out.status === 'ok' && !(out.stdout || '').trim()) {
             out = { ...out, status: 'error', stderr: '脚本运行成功但 stdout 为空：必须 print 出关键统计量，否则评审无法核验' };
@@ -405,6 +449,7 @@ export function buildResearchCycleGraph(
         status: ok ? 'completed' : 'failed',
         experimentId: out.id,
         manifest: {
+          iteration: runKey,
           code,
           stdout: (out.stdout || '').slice(0, 20_000),
           stderr: (out.stderr || '').slice(0, 4000),
@@ -420,6 +465,7 @@ export function buildResearchCycleGraph(
       };
     })
     .addNode('evaluate', async (s) => {
+      deps.heartbeat?.(s.cycleId, 'evaluate');
       deps.programs.updateCycle(s.cycleId, { state: 'analyze', summary: '正在评审实验输出' });
       const designSummary = JSON.stringify(s.design ?? {}, null, 2).slice(0, 4000);
       let verdict: CriticVerdict;
@@ -435,9 +481,9 @@ export function buildResearchCycleGraph(
           brief: deps.brief?.(s.projectId) ?? '',
           literature: s.literature ?? [],
         });
-      } catch (e: any) {
+      } catch (e: unknown) {
         // 评审不可用时按 inconclusive 落库：证据不足就诚实说不足，不要伪造结论
-        const msg = String(e?.message || e).slice(0, 400);
+        const msg = errorMessage(e, 400);
         deps.logger.warn(`[研究循环] 评审不可用（${msg}），本轮按 inconclusive 落库`);
         verdict = {
           verdict: 'inconclusive',
@@ -477,6 +523,7 @@ export function buildResearchCycleGraph(
       };
     })
     .addNode('decide', async (s) => {
+      deps.heartbeat?.(s.cycleId, 'decide');
       const spent = deps.tokensSpent(s.cycleId);
       const nextIteration = s.iteration + 1;
       const stagnant =
@@ -514,6 +561,7 @@ export function buildResearchCycleGraph(
       };
     })
     .addNode('synthesize', async (s) => {
+      deps.heartbeat?.(s.cycleId, 'synthesize');
       deps.programs.updateCycle(s.cycleId, { state: 'synthesize' });
       deps.notify('synthesize', { claimId: s.claimId, verdict: s.verdict });
       return { stopReason: 'completed' };

@@ -9,6 +9,7 @@ import type { AuthPayload } from '../auth/auth.service';
  * 端点：
  *  - POST /research-cycles/start        启动一轮循环（PI→审批→实验→评审→修订）
  *  - POST /research-cycles/:cycleId/resume  审批后恢复（协议已批准走 DB 状态；approved=false 表示驳回并终止）
+ *  - POST /research-cycles/:cycleId/recover 手动从 checkpoint 恢复 blocked 循环
  *  - GET  /research-cycles/:cycleId      循环状态（驾驶舱轮询）
  *  - GET  /research-cycles?programId=... 某研究项目的全部循环
  */
@@ -41,6 +42,13 @@ export class ResearchCycleController {
   ) {
     this.access.assertResearchCycle(cycleId, req.user);
     return this.cycles.resume(cycleId, { approved: body?.approved !== false });
+  }
+
+  /** 手动恢复一个 blocked 且仍有 checkpoint 的循环 */
+  @Post(':cycleId/recover')
+  recover(@Param('cycleId') cycleId: string, @Req() req: { user?: AuthPayload }) {
+    this.access.assertResearchCycle(cycleId, req.user);
+    return this.cycles.recover(cycleId);
   }
 
   @Get(':cycleId')

@@ -3524,6 +3524,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/research-cycles/{cycleId}/recover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ResearchCycleController_recover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/research-cycles/{cycleId}": {
         parameters: {
             query?: never;
@@ -11051,6 +11067,25 @@ export interface operations {
         };
     };
     ResearchCycleController_resume: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ResearchCycleController_recover: {
         parameters: {
             query?: never;
             header?: never;

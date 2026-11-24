@@ -10,4 +10,5 @@ export * from './model-catalog';
 export * from './prompt-augmentation';
 export * from './prompts';
 export * from './mock-gateway';
+export * from './mock-experiment';
 export * from './prompt-injection';

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AiService } from '../../ai/ai.service';
+import { MOCK_EXPERIMENT_CODE } from '../../ai/mock-experiment';
 
 /**
  * 实验者智能体：把「协议设计」翻译成一段可直接在 Python 沙箱里跑的代码。
@@ -155,40 +156,7 @@ export async function designExperiment(
   };
 }
 
-/** 模型连续空响应时的确定性代理实验（标准库，固定种子，输出可核验统计量） */
+/** 模型连续空响应时的确定性代理实验（与 mock 网关共用同一脚本，避免两份漂移） */
 export function deterministicProxyCode(): string {
-  return [
-    '# deterministic-proxy: model returned empty; synthetic proxy experiment',
-    'import random, math',
-    'random.seed(42)',
-    'n = 1200',
-    'errors, variances, groups = [], [], []',
-    'for i in range(n):',
-    '    g = i % 20',
-    '    base = random.gauss(0.0, 1.0)',
-    '    var = abs(base) + random.gauss(0.15, 0.05)',
-    '    err = abs(base) * 1.8 + random.gauss(0.4, 0.2)',
-    '    errors.append(err)',
-    '    variances.append(max(var, 0.01))',
-    '    groups.append(g)',
-    'mean_e = sum(errors) / n',
-    'mean_v = sum(variances) / n',
-    'cov = sum((errors[i]-mean_e)*(variances[i]-mean_v) for i in range(n)) / n',
-    'sd_e = math.sqrt(sum((x-mean_e)**2 for x in errors)/n)',
-    'sd_v = math.sqrt(sum((x-mean_v)**2 for x in variances)/n)',
-    'rho = cov / (sd_e * sd_v) if sd_e and sd_v else 0.0',
-    'high = sorted(range(n), key=lambda i: errors[i], reverse=True)[:int(n*0.2)]',
-    'low = [i for i in range(n) if i not in set(high)]',
-    'score = sum(variances[i] for i in high) / len(high)',
-    'base = sum(variances[i] for i in low) / len(low)',
-    'auroc = sum(1 for i in high for j in low if variances[i] > variances[j]) / (len(high)*len(low))',
-    'print("n=", n)',
-    'print("groups=", len(set(groups)))',
-    'print("mean_abs_error=", round(mean_e, 4))',
-    'print("mean_uncertainty=", round(mean_v, 4))',
-    'print("spearman_rho=", round(rho, 4))',
-    'print("high_error_uncertainty=", round(score, 4))',
-    'print("other_uncertainty=", round(base, 4))',
-    'print("auroc=", round(auroc, 4))',
-  ].join('\n');
+  return MOCK_EXPERIMENT_CODE;
 }

@@ -17,6 +17,7 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { randomUUID } from 'node:crypto';
+import { MOCK_EXPERIMENT_CODE } from './mock-experiment';
 
 /**
  * mock 大纲的确定性内容（单一来源）。
@@ -180,6 +181,84 @@ const ROUTE_TABLE: RouteRule[] = [
         verdict: 'major_revision',
         overall: '选题有价值，需补充方法与消融证据后再审。',
       }),
+  },
+  // 0.97) 研究循环：PI 生成可证伪假设与协议
+  {
+    matches: (p) => p.includes('"questionEcho"') && p.includes('"hypothesis"') && p.includes('【研究问题】'),
+    respond: () => j({
+      questionEcho: '给定的研究问题',
+      hypothesis: {
+        statement: '模型不确定性越高，其预测误差越大；按不确定性排序可识别高误差样本。',
+        rationale: '不确定性若只反映输入噪声而非模型知识缺口，就应与误差同向变化；合成数据可先验证该代理关系。',
+        predictions: ['误差与不确定性的相关系数为正', '高不确定性组的分层 AUROC 高于 0.7'],
+      },
+      protocol: {
+        design: {
+          objective: '用合成数据检验不确定性与预测误差的单调关系',
+          variables: [
+            { name: '预测不确定性', role: '自变量' },
+            { name: '绝对预测误差', role: '因变量' },
+          ],
+          controls: ['固定随机种子', '固定样本量 1200'],
+          sample: '标准正态合成数据，n=1200，seed=42',
+          analysis: '计算 Spearman 相关系数；按误差前 20% 分层，报告 AUROC 与组间均值差',
+          steps: ['生成合成数据', '计算误差与不确定性', '计算相关系数与分层 AUROC', '打印统计量'],
+        },
+      },
+    }),
+  },
+  // 0.98) 研究循环：全自动模式独立专家审批（fail-closed 但 mock 放行合规协议）
+  {
+    matches: (p) => p.includes('【协议设计】') && p.includes('请给出是否批准'),
+    respond: (p) => p.includes('拒批') ? j({
+      approved: false,
+      confidence: 25,
+      rationale: '压力测试场景要求专家驳回：协议缺少与真实任务的对照，代理指标不足以支持外推。',
+      concerns: ['合成数据外推风险未处理'],
+      requiredChanges: ['补充真实任务验证或明确限定结论边界'],
+    }) : j({
+      approved: true,
+      confidence: 88,
+      rationale: '协议包含可证伪预测、明确样本口径、固定种子与可执行的统计判定，符合沙箱执行条件。',
+      concerns: ['合成数据只能验证代理关系，不能外推到真实任务'],
+      requiredChanges: [],
+    }),
+  },
+  // 0.99) 研究循环：Critic 评审实验输出（quote 必须能在 mock 脚本 stdout 中找到）
+  {
+    matches: (p) => p.includes('【实验输出】') && p.includes('【本轮假设】'),
+    respond: (p) => p.includes('拒证') ? j({
+      verdict: 'refuted',
+      confidence: 81,
+      topicAligned: true,
+      evidence: [
+        { quote: 'auroc=', stance: 'refutes', strength: 3 },
+        { quote: 'spearman_rho=', stance: 'refutes', strength: 3 },
+      ],
+      feedback: '压力测试场景：模拟输出显示分层 AUROC 未达到预测阈值，按判定标准应判 refuted。',
+      revisionHint: '更换分层阈值与对照口径，重新验证不确定性与误差的单调关系。',
+    }) : j({
+      verdict: 'supported',
+      confidence: 84,
+      topicAligned: true,
+      evidence: [
+        { quote: 'n= 1200', stance: 'supports', strength: 4 },
+        { quote: 'auroc=', stance: 'supports', strength: 4 },
+      ],
+      feedback: '实验输出给出 n=1200 的样本量与分层 AUROC，关键统计量齐备，方向与预测一致；但合成数据的外部效度有限。',
+      revisionHint: '',
+    }),
+  },
+  // 0.995) 研究循环：实验者把协议翻译成可执行 Python（真实可跑，固定种子）
+  {
+    matches: (p) => p.includes('【待检验假设】') && p.includes('请给出可直接运行的 Python 脚本'),
+    respond: () => {
+      // 集成测试用：让沙箱执行慢下来，才能可靠地在 execute 中途 kill 进程。
+      // 默认 0，不影响正常 mock 压测与真实模型。
+      const delayMs = Math.max(0, Math.min(60_000, Number(process.env.MOCK_EXPERIMENT_DELAY_MS || 0) || 0));
+      if (!delayMs) return MOCK_EXPERIMENT_CODE;
+      return `import time\ntime.sleep(${(delayMs / 1000).toFixed(3)})\n${MOCK_EXPERIMENT_CODE}`;
+    },
   },
   // 1) Planner 研究计划
   { matches: (p) => p.includes('科研规划专家') && p.includes('researchQuestions'), respond: () => j({ objective: '围绕给定主题完成一篇系统性综述，覆盖方法演进、代表工作与应用前景。', researchQuestions: ['该主题的核心方法演进脉络是什么？', '代表性模型/工作有哪些共性与差异？', '在目标场景下的应用价值与局限如何？'], searchStrategy: { keywords: ['graph neural network', '图神经网络', '消息传递', 'node classification'], minPapers: 8, depth: 'overview' }, draftingPlan: { sections: ['引言', '相关工作', '方法', '结果与讨论', '结论'], wordCount: 5000 }, risks: ['公开文献时效性不足', '跨领域术语口径差异'] }) },

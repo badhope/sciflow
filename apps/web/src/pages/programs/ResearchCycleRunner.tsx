@@ -108,6 +108,20 @@ export function ResearchCycleRunner({
     }
   };
 
+  const recover = async () => {
+    if (!cycleId) return;
+    setBusy('recover');
+    try {
+      await api.researchCycles.recover(cycleId);
+      await refreshAll();
+      toast('success', '已从断点恢复循环');
+    } catch (e) {
+      toast('error', errMsg(e));
+    } finally {
+      setBusy('');
+    }
+  };
+
   const pendingProtocol = status?.protocols?.find((p) => p.status === 'draft');
 
   return (
@@ -207,6 +221,17 @@ export function ResearchCycleRunner({
                     <X size={11} /> 驳回并终止
                   </Button>
                 </div>
+              </div>
+            ) : null}
+
+            {status.state === 'blocked' ? (
+              <div className="space-y-2 rounded border border-rose-300 bg-rose-50 p-2 dark:border-rose-800 dark:bg-rose-950/30">
+                <p className="text-[11px] text-rose-800 dark:text-rose-300">
+                  循环已停止：可能是智能体失败、看门狗超时或服务重启。若断点仍在，可从断点继续；断点已清理时会提示重新启动。
+                </p>
+                <Button size="xs" variant="ghost" loading={busy === 'recover'} onClick={() => void recover()}>
+                  <RefreshCw size={11} /> 从断点恢复
+                </Button>
               </div>
             ) : null}
 

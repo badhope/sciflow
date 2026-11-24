@@ -20,6 +20,16 @@ SciFlow 把整条科研链路留在你自己的电脑上：一个 SQLite 文件�
 - **分享、评论与自动化。** 文档和对话可以生成只读快照分享，评论默认关闭；定时/事件任务在新文献入库、流水线完成、质量分低于阈值或实验失败时触发，支持站内、浏览器与飞书通知。
 - **手机远程控制。** 桌面端生成一次性二维码/链接，手机扫码后打开完整工作台；后端仍只监听回环，网关只做鉴权与转发，可随时刷新或停止。
 
+## 界面一览
+
+| 科研驾驶舱 | 研究设计与循环 |
+| --- | --- |
+| <img src="docs/screenshots/dashboard.png" alt="SciFlow 科研驾驶舱" width="100%" /> | <img src="docs/screenshots/programs.png" alt="研究计划与循环设计" width="100%" /> |
+| **知识与证据** | **确定性质量门** |
+| <img src="docs/screenshots/knowledge.png" alt="知识库混合检索" width="100%" /> | <img src="docs/screenshots/quality.png" alt="七维质量评审" width="100%" /> |
+| **写作与评审** | **投稿包** |
+| <img src="docs/screenshots/writing.png" alt="长篇写作与引用检查" width="100%" /> | <img src="docs/screenshots/submission.png" alt="投稿就绪检查与投稿包" width="100%" /> |
+
 ## 手机远程控制
 
 桌面端点「远程」生成一次性二维码/链接。手机打开的是完整工作台，不是裁剪版：项目、科研对话、写作、流水线、审批和设置都能操作，数据与 Agent 仍留在电脑上。
@@ -56,6 +66,8 @@ node scripts/seed-demo.mjs
 
 ## 文档
 
+- [`docs/PROJECT-BASELINE.zh-CN.md`](docs/PROJECT-BASELINE.zh-CN.md) — 当前状态、已交付清单、任务池与路线图
+- [`docs/COMPETITIVE-ANALYSIS.zh-CN.md`](docs/COMPETITIVE-ANALYSIS.zh-CN.md) — 竞品矩阵、场景边界与可行性
 - [`ARCHITECTURE.zh-CN.md`](ARCHITECTURE.zh-CN.md) — 模块边界与数据流
 - [`docs/CONFIGURATION.zh-CN.md`](docs/CONFIGURATION.zh-CN.md) — 模型、检索、鉴权与 Agent 配置
 - [`docs/OPERATIONS.zh-CN.md`](docs/OPERATIONS.zh-CN.md) — 健康检查、备份与故障处理

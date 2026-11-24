@@ -69,6 +69,7 @@ export class HealthController {
       vecOk = false;
     }
     const ai = this.ai.config;
+    const cycleStates = this.countCycleStates();
     return {
       status: dbOk ? 'ok' : 'degraded',
       time: Date.now(),
@@ -76,8 +77,32 @@ export class HealthController {
         db: { ok: dbOk, latencyMs: dbLatencyMs },
         vector: { ok: vecOk, extensionLoaded: vecLoaded, embeddedChunks: vecRows },
         ai: { configured: ai.configured, mock: ai.mock, model: ai.model, strongModel: ai.strongModel, baseUrl: ai.baseUrl },
+        researchCycles: {
+          active: cycleStates.active,
+          awaitingApproval: cycleStates.awaitingApproval,
+          blocked: cycleStates.blocked,
+        },
       },
     };
+  }
+
+  /** 研究循环状态计数（看门狗/重启恢复的可观测面，失败返回 0 不阻断探针）。 */
+  private countCycleStates(): { active: number; awaitingApproval: number; blocked: number } {
+    try {
+      const rows = sqlite.prepare('SELECT state, COUNT(*) AS c FROM research_cycle GROUP BY state').all() as {
+        state: string;
+        c: number;
+      }[];
+      const by = new Map(rows.map((r) => [r.state, Number(r.c)]));
+      const activeStates = ['question', 'protocol', 'execute', 'analyze', 'revise'];
+      return {
+        active: activeStates.reduce((sum, s) => sum + (by.get(s) || 0), 0),
+        awaitingApproval: by.get('awaiting_approval') || 0,
+        blocked: by.get('blocked') || 0,
+      };
+    } catch {
+      return { active: 0, awaitingApproval: 0, blocked: 0 };
+    }
   }
 
   /**
@@ -114,6 +139,7 @@ export class HealthController {
     const llmCalls = countOf('llm_call_log');
     const agentRuns = countOf('agent_execution');
     const qualityReports = countOf('quality_report');
+    const cycleStates = this.countCycleStates();
 
     let dbUp = 0;
     let dbLatency = -1;
@@ -140,6 +166,9 @@ export class HealthController {
     put('sciflow_llm_calls_total', 'Number of logged LLM calls', 'counter', [{ value: llmCalls }]);
     put('sciflow_agent_runs_total', 'Number of agent executions', 'counter', [{ value: agentRuns }]);
     put('sciflow_quality_reports_total', 'Number of quality reports', 'counter', [{ value: qualityReports }]);
+    put('sciflow_research_cycles_active', 'Research cycles in an executing state', 'gauge', [{ value: cycleStates.active }]);
+    put('sciflow_research_cycles_awaiting_approval', 'Research cycles waiting for a human approval', 'gauge', [{ value: cycleStates.awaitingApproval }]);
+    put('sciflow_research_cycles_blocked', 'Research cycles blocked by agent error, failure or watchdog', 'gauge', [{ value: cycleStates.blocked }]);
 
     return lines.join('\n') + '\n';
   }
