@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.19.18] - 2026-11-25
+
+### Added
+
+- **真实模型单问题闭环证据**：只给一个研究问题，真实网关连续两轮跑完 PI 协议 → 专家门禁 → 沙箱执行 → Critic → `synthesize`，结论均为 `supported` / confidence 95。cycle5 `230db717-bbd0-42c2-be8c-397775c75a61` 消耗 22,199 tokens，cycle6 `582f9dad-c625-4817-92d3-9b3eb0d3594a` 消耗 16,681 tokens；cycle6 的 σ=0.05 组 r=0.996290，σ=2 组 r=0.279082。
+- **机读证据**：新增 `docs/verification/assets/research-cycle-real-model-2026-11-24.json`，保留 cycle/claim/run 标识与 token 统计，不含凭据。
+- **结构化归一化单测**：覆盖中英文键、`reason(s)`、`confidence_score`、比例置信度、高/中/低语义和数组转字符串。
+
+### Changed
+
+- **结构化输出模型降级链**：`completeStructured` 在主模型重试耗尽后按 `AI_MODEL_FALLBACK` 切换备选模型，与 `complete()` 的降级语义对齐；成功降级以 `caller:fallback` 留痕。
+- **`normalizeStructuredObject` 扩展**：中文/英文语义别名、`把握/确信→confidence`、0–100 schema 下 `0.99→99`、无数字的高/中/低映射 90/50/20。
+
+### Fixed
+
+- **真实模型空响应导致 `blocked agent_error`**：此前结构化调用没有降级链，专家门禁连续空响应三次后整轮停止；现在会重试并切换备选模型，真实试跑已落到 `glm-5.3` 完成审批。
+- **CI 被 runner 的 apt 网络拖死**：移除 `apt-get update && install ffmpeg`，视频抽音轨用例优先解析 `ffmpeg-static`，再回退系统 `ffmpeg`，两者都没有才跳过；不再让包缓存差异决定 CI 成败。
+
+### Refactor
+
+- **知识库命中分抽离**：`scoreLibraryHit` 从 `pipeline.service.ts` 移到 `pipeline-metrics.ts`，service 只保留 import 与调用，纯函数单测增至 11 条。
+
+### Verification
+
+- server 972 passed / 1 skipped（140 files）；web 277 passed（51 files）；`full_regression.py` 237 PASS / 0 FAIL。
+- GitHub Actions `45335712825` 三 job 全绿；CI 中 server 972 passed / 1 skipped、web 277 passed。
+- lint、server typecheck、build 均通过。
+
 ## [1.19.17] - 2026-11-24
 
 ### Added

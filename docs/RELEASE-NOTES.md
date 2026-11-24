@@ -1,34 +1,25 @@
-# SciFlow 1.19.17
+# SciFlow 1.19.18
 
-三张验收票在最终构建上收口：真实第三方调用、完整浏览器旅程、协作边界 / 1 万条搜索 P95 / PWA 旧缓存 / 真实 token。
+这版没有加新入口。重点是把“真实模型能不能自己跑完一轮”和“CI 会不会被 runner 的环境问题拖死”这两件事，从偶然变成可复现。
 
 ## 已做完
 
-- **浏览器全旅程**：扫描件上传 → 真实模型回答（3200 W/(m·K)）→ 保存为干净文档 `4f1d9c7f...` → 导出 PDF（367,596 字节）→ 新建公开分享（评论默认关闭）→ 匿名评论 → 作者删除（软删除）→ 撤销链接。
-- **跨项目会话 guard**：错误项目打开外来 `?session=` 会明确阻止，不再静默新建对话或写错项目。
-- **协作边界**：权限矩阵、快照字段、评论默认关闭与 `status='hidden'` 软删除一致；作者可在弹窗内审核评论。
-- **1 万条搜索 P95**：service 文档 1.26 ms / 全类型 3.90 ms / HTTP 文档 4.44 ms。
-- **PWA 旧缓存**：最终构建上注入 legacy 缓存后执行真实 update/activate，旧缓存被 `cleanupOutdatedCaches` 删除；离线显示重连壳。
-- **真实 token**：单次执行与同窗口 `llm_call_log` 均为 8,158 tokens，API 与 SQLite 交叉一致。
-- **Zotero**：公开库 `475425` 免 Key 真实连接，返回“库内 164 条”，导入 `fetched=10 / added=7 / duplicate=1 / skipped=2`。
-
-## 修复
-
-- 知识库内联 `type=text` 上传不再被 `.pdf` 等扩展名劫持进二进制解析器；`forceKind='text'` 固定调用方声明的纯文本语义。
-- “保存为文档”不再把 `---FOLLOWUPS---` 与追问草稿写进正文；历史会话打开时统一剥离内部标记。
-- 分享评论开关不再沿用上一个目标；按 `targetType + targetId` 命中后才恢复。
-- 飞书 Webhook 不再把 HTTP 200 一律当成功，JSON `code` / `StatusCode` 非 0 会降级为站内失败通知。
-- CI 干净安装补齐 `@nestjs/event-emitter`、`ffprobe-static`、`croner`，并安装 `ffmpeg`；`protobufjs` 的 `allowBuilds` 占位值改为布尔值。
-- `scripts/full_regression.py` 对齐 B6：`project.templates` 改为负向断言，不再要求已删除字段回显。
+- **单问题真实闭环连续两轮成功。** 只输入一个研究问题，真实网关跑完 PI 协议 → 专家门禁 → 沙箱实验 → Critic → `synthesize`，两轮结论都是 `supported` / confidence 95，全程没有人工审批。
+  - cycle5 `230db717-bbd0-42c2-be8c-397775c75a61`：22,199 tokens；σ=0.05 组 r=0.996326，σ=2 组 r=0.293756。
+  - cycle6 `582f9dad-c625-4817-92d3-9b3eb0d3594a`：16,681 tokens；σ=0.05 组 r=0.996290，σ=2 组 r=0.279082。
+- **真实故障路径被写进代码，不再靠提示词祈祷。** 主模型空响应、返回中文键、返回英文同义键、把 confidence 写成“高（约 0.99）”，现在都能归一化；主模型重试耗尽会按 `AI_MODEL_FALLBACK` 切到 `glm-5.3`，不再直接 `blocked agent_error`。
+- **CI 不再安装系统 ffmpeg。** 视频抽音轨用例优先用 `ffmpeg-static`，其次回退系统二进制，两者都没有才跳过；runner 的 `apt-get update` 不再决定三 job 是否全绿。
+- **知识库命中分抽成纯函数。** `scoreLibraryHit` 从 731 行的 `pipeline.service.ts` 移到 `pipeline-metrics.ts`，补了标题全命中、摘要命中、空查询等 11 条单测。
 
 ## 门禁
 
-- CI `Types / Unit / Build`、`E2E + prompt evals`、`Full mock regression` 三 job 全绿。
-- 本地 `pnpm -r test`：server 951 passed / 1 skipped，web 276 passed，desktop 5 passed。
-- `full_regression.py`：222 PASS / 0 FAIL。
-- 最终 web build `2026-11-23T18:37:54.791Z`，PWA 168 条 precache / 8,706.62 KiB。
+- GitHub Actions `45335712825`：Types / Unit / Build、Full mock regression、E2E + prompt evals 三 job 全绿。
+- server 972 passed / 1 skipped（140 files）；web 277 passed（51 files）。
+- `full_regression.py` 237 PASS / 0 FAIL；lint、server typecheck、build 通过。
 
 ## 边界
 
-- 飞书自定义机器人 Webhook 仍缺真实群 URL；应用模式仍缺真实 App ID / App Secret。报告明确标注 blocked，不用 mock 冒充成功。
-- PWA 安装与更新已在桌面 Chromium 验证，未上真实 iOS / Android。
+- 真实网关仍会间歇空响应或超时。产品现在是 fail-closed 到 blocked，不编结果；这不等于“上游永远稳定”。
+- 五个内容社区的发布状态以 `docs/COMMUNITY-LAUNCH-KIT.zh-CN.md` 的记录表为准，未发布的平台不写成已上线。
+- 移动端 PWA 仍只在桌面 Chromium 验证，没有上真实 iOS / Android。
+- 版本继续走 `1.19.x`。现在切 `0.0.x` 会断开已有 tag、Pages 和桌面安装包的发布链；品牌级重启时再统一迁。
