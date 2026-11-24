@@ -32,7 +32,13 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Install media tools
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: |
+          if command -v ffmpeg >/dev/null 2>&1; then
+            echo "ffmpeg already present: $(ffmpeg -version | head -1)"
+          else
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
       - name: Lint
         run: pnpm lint
       - name: Typecheck (server)
@@ -73,7 +79,13 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Install media tools
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: |
+          if command -v ffmpeg >/dev/null 2>&1; then
+            echo "ffmpeg already present: $(ffmpeg -version | head -1)"
+          else
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -133,7 +145,13 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Install media tools
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: |
+          if command -v ffmpeg >/dev/null 2>&1; then
+            echo "ffmpeg already present: $(ffmpeg -version | head -1)"
+          else
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
       - name: Build server
         run: pnpm --filter @sciflow/server build
       - name: Install Playwright Chromium
