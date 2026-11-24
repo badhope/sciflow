@@ -2,7 +2,7 @@
 
 **English** · [简体中文](ARCHITECTURE.zh-CN.md)
 
-SciFlow is a local-first research workbench. The browser UI, the API and the
+SciFlow is an AI-native research assistant. The browser UI, the API and the
 desktop shell run on one machine; the only durable store is a single SQLite
 file. No hosted account, vector database or queue is required.
 

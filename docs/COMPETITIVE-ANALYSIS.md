@@ -7,8 +7,8 @@
 ## 1. Conclusions first
 
 1. **General AI apps are strong at find–read–write, not at finishing research.** OpenAI Deep Research, NotebookLM, Elicit, Consensus and SciSpace mostly stop at retrieval, synthesis and writing/presentation. Experiment design, sandbox execution, critic loops, deterministic quality gates and submission packages are absent or partial.
-2. **Open-source research tools are strong on self-hosting, model choice and ingestion, weak on closed loop, auditability and delivery.** Open Notebook is a knowledge/notebook layer, GPT Researcher is deep reporting, PaperQA2 is literature QA, AI Scientist is a narrow paper generator. None combines local-first, evidence chain, experiment execution, quality gates and submission.
-3. **SciFlow's differentiation is not another paper summariser. It is local-first + auditable evidence chain + multi-round research loop + deterministic quality gates + submission delivery.** The loop already exists in 1.19.17 with real LangGraph and a real Python sandbox; the gaps are reliability, observability and prompt coverage, not missing concepts.
+2. **Open-source research tools are strong on self-hosting, model choice and ingestion, weak on closed loop, auditability and delivery.** Open Notebook is a knowledge/notebook layer, GPT Researcher is deep reporting, PaperQA2 is literature QA, AI Scientist is a narrow paper generator. None combines single-machine data sovereignty, evidence chain, experiment execution, quality gates and submission.
+3. **SciFlow's differentiation is not another paper summariser. It is AI-native + end-to-end loop + auditable evidence chain + multi-round research + deterministic quality gates + submission delivery.** The loop already exists in 1.19.17 with real LangGraph and a real Python sandbox; the gaps are reliability, observability and prompt coverage, not missing concepts.
 4. **“Fully autonomous” must be graded and braked.** Support L2 (human approves protocol) and L3 (AI expert approval + audit). L4 unattended is not a current promise. Without budget gates, stagnation detection, restart recovery and evidence coverage, autonomy only hallucinates faster.
 
 ## 2. Landscape
@@ -59,7 +59,7 @@ Do **not** absorb: general IDE features, coding-specific UI, plugin-market bloat
 | Deterministic quality gates | ● seven dims + objective checks | ◐ citation check | ◐ citation jump | ◐ | ○ | ○ | ○ | ○ | ◐ | ○ |
 | Full manuscript/format | ● longform + export | ◐ report | ○ | ● AI Writer | ◐ study material | ◐ report | ○ | ◐ report | ○ | ● LaTeX template |
 | Submission package/journal match | ● readiness + ZIP + cover letter | ○ | ○ | ◐ format/citation | ○ | ○ | ○ | ○ | ○ | ○ |
-| Local-first/self-host | ● single SQLite/desktop | ○ cloud | ○ cloud | ○ cloud | ○ cloud | ○ cloud | ● Docker | ◐ self-hostable | ● local index | ● local code |
+| Single-machine/self-host | ● single SQLite/desktop | ○ cloud | ○ cloud | ○ cloud | ○ cloud | ○ cloud | ● Docker | ◐ self-hostable | ● local index | ● local code |
 | Model freedom | ● local/remote multi-protocol | ○ | ○ | ○ | ○ | ○ | ● 20+ | ● multi-LLM | ● configurable | ● multi-model |
 | Restart recovery/watchdog | ● new in this stage | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ |
 | Cost/budget control | ● token budget + usage | ◐ subscription quota | ◐ | ◐ | ○ | ◐ | ◐ | ● cost tracking | ◐ | ◐ |

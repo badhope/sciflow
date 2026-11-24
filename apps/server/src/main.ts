@@ -83,7 +83,7 @@ async function bootstrap() {
     app,
     new DocumentBuilder()
       .setTitle('SciFlow API')
-      .setDescription('本地优先科研工作台（单用户）')
+      .setDescription('AI 原生科研助手（单用户）')
       // 版本走 APP_VERSION 单一来源（历史：此处写死 0.8.1，包版本升到 1.x 后 OpenAPI 仍自报 0.8.1）
       .setVersion(APP_VERSION)
       .build(),

@@ -11,13 +11,13 @@ capability claims in `README.md` should always agree with it.
 
 ## Positioning
 
-SciFlow is a **local-first, single-machine research workbench**. The whole data
+SciFlow is an **AI-native, end-to-end automated research assistant**. The whole data
 chain lives in one SQLite file. The user supplies their own model endpoint and
 key; nothing is uploaded to a service we operate.
 
 Design principles that decide scope:
 
-- **Local first.** One SQLite file, no external database, no multi-tenant
+- **Data sovereignty.** One SQLite file, no external database, no multi-tenant
   service, no account system. Keys are encrypted at rest.
 - **Deterministic over probabilistic where it matters.** Quality scores and
   citation audit are rule-based, so the same text always produces the same

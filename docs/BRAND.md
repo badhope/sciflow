@@ -2,7 +2,7 @@
 
 **English** · [简体中文](BRAND.zh-CN.md)
 
-SciFlow should read as a research workbench, not as another AI chat product.
+SciFlow should read as an AI-native research assistant, not as another AI chat product.
 The visual language is quiet, editorial and a little tactile: paper, ink and a
 cinnabar seal.
 

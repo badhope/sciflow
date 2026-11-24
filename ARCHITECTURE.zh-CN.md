@@ -316,7 +316,7 @@ packages/retrieval/  检索层（knowledge.service · embedding.service）——
 
 ## 0. 现状基线（S0 考古结论）
 
-- 意图：本地优先、单机部署的科研 AI 全生命周期工作台（文献→规划→大纲→分章起草→质量门→润色→引用→投稿）。
+- 意图：前沿 AI 原生、端到端自动化、单机部署的科研助手（文献→规划→大纲→分章起草→质量门→润色→引用→投稿）。
 - 现状：顺序流水线已可用且部分工艺良好（密钥加密、Python 沙箱、CSL 引用、断点续跑防覆盖）；但 README/docs 描述的架构（orchestrator/、并行 Research、多 Agent 追踪）未被实现，存在三处幻觉文档、两张从未写入的表、一处自造"伪 MCP"协议。
 - 手搓基建待替换：`ai-transport.service.ts`(362 行 OpenAI 协议手写)、`json-utils.ts`(80 行)、`pipeline-steps.ts`(189 行伪 DAG)、`pipeline.service.ts` 内手写断点续跑/互斥锁/异常哨兵、`mcp.service.ts`(314 行自造 REST 协议)、`cli.ts` 手写参数解析、`knowledge.service.ts:33` 手写分段、`documents.service.ts:128` pdf-parse。
 - 检索层**不是**手搓：FTS5 BM25（`db/database.ts:378`）+ sqlite-vec ANN（:487）+ 本地嵌入 node-llama-cpp（`embedding.service.ts`，bge-small-zh-v1.5）已是原生 SQLite 方案，保留。
@@ -411,7 +411,7 @@ CI 同步：`ci.yml` 增加 lint 步骤、web 测试步骤、`full_regression.py
 | `@citation-js/*` + plugin-ris + csl-register | `documents.service.ts:5-6`、`references.service.ts` 引用渲染/BibTeX·RIS 导入导出 | CSL 生态标准实现；RIS 输出由官方 plugin-ris（0.8.1，core 0.8 系）提供 |
 | `docx`@9.7.2 | `exportDocx`（`documents.service.ts:407`） | 已解决 Word 导出，勿再评估 mammoth/html-docx |
 | `better-sqlite3` + FTS5 + `sqlite-vec` | `db/database.ts:378,487` 混合检索 | 原生 SQLite 能力即最强方案，禁止用 JS 重写 BM25 |
-| `node-llama-cpp`（bge-small-zh-v1.5） | `embedding.service.ts` 本地嵌入 | local-first 语义嵌入已就位，不引 @huggingface/transformers（46MB 重复职能） |
+| `node-llama-cpp`（bge-small-zh-v1.5） | `embedding.service.ts` 本地嵌入 | 本地语义嵌入已就位，不引 @huggingface/transformers（46MB 重复职能） |
 | `@nestjs/jwt` + `bcryptjs` + `@nestjs/throttler` | auth/限流 | 成熟件已在用 |
 | `p-retry` / `p-limit` | transport 重试/并发 | 保留 |
 | `zod`@4.6 | DTO 校验 | 升级为端到端契约（AI schema/MCP schema 共用） |

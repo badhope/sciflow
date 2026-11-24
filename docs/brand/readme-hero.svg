@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" role="img" aria-label="SciFlow — 一条会驳回自己的科研循环">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" role="img" aria-label="SciFlow — 前沿 AI 原生科研助手，一条会驳回自己的科研循环">
   <!-- SciFlow README hero · 朱印 3.0 · 2026-11-25
        纸、墨、朱砂；无多色渐变、无玻璃辉光。 -->
   <rect width="1280" height="420" fill="#0E1B2A"/>
@@ -8,7 +8,7 @@
   </g>
   <circle cx="1120" cy="430" r="280" fill="#BE3B2A" opacity="0.08"/>
 
-  <text x="72" y="62" fill="#8FA6BC" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="12" font-weight="600" letter-spacing="2.4">SCIFLOW / RESEARCH WORKBENCH</text>
+  <text x="72" y="62" fill="#8FA6BC" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="12" font-weight="600" letter-spacing="2.4">SCIFLOW / AI-NATIVE RESEARCH ASSISTANT</text>
 
   <!-- 朱印 -->
   <g transform="translate(72 92)">
@@ -22,15 +22,15 @@
   <text x="190" y="172" fill="#A9BED2" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="17" letter-spacing="0.5">让科研从想法到成文</text>
 
   <text x="72" y="286" fill="#F5F4F0" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="46" font-weight="700" letter-spacing="-1">一条会<tspan fill="#D4674F">驳回</tspan>自己的科研循环</text>
-  <text x="74" y="330" fill="#A9BED2" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="19" letter-spacing="0.4">本地优先 · 确定性质量门 · 引用逐层可溯</text>
+  <text x="74" y="330" fill="#A9BED2" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="19" letter-spacing="0.4">前沿 AI 原生 · 端到端科研链路 · 确定性质量门</text>
 
   <g font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="12" fill="#C7D5E2">
     <rect x="72" y="360" width="132" height="28" rx="14" fill="#142B44" stroke="#2B4761"/>
-    <text x="86" y="379">1 个 SQLite 文件</text>
+    <text x="86" y="379">从问题到投稿包</text>
     <rect x="214" y="360" width="132" height="28" rx="14" fill="#142B44" stroke="#2B4761"/>
-    <text x="228" y="379">0 个托管账号</text>
+    <text x="228" y="379">确定性质量门</text>
     <rect x="356" y="360" width="132" height="28" rx="14" fill="#142B44" stroke="#2B4761"/>
-    <text x="370" y="379">237 项回归通过</text>
+    <text x="370" y="379">237 项回归</text>
   </g>
 
   <!-- 右侧：科研循环 -->
@@ -62,5 +62,5 @@
     </g>
   </g>
 
-  <text x="1208" y="394" fill="#6F8AA3" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="11" text-anchor="end" letter-spacing="1">v1.19.18 · LOCAL FIRST</text>
+  <text x="1208" y="394" fill="#6F8AA3" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="11" text-anchor="end" letter-spacing="1">v1.19.18 · AI-NATIVE</text>
 </svg>

@@ -18,7 +18,7 @@
 
 ### 1.1 Positioning
 
-SciFlow is a **local-first, auditable, end-to-end automated research workbench**: research question → literature evidence → hypothesis and protocol → sandbox experiment → critic loop → deterministic quality gates → submission package. Data stays in one local SQLite file; the model endpoint belongs to the user.
+SciFlow is an **AI-native, auditable, end-to-end automated research assistant**: from one research question to literature evidence, hypothesis and protocol, sandbox experiment, critic loop, deterministic quality gates and a submission package. Data stays in one SQLite file; the model endpoint belongs to the user.
 
 ### 1.2 Release and repository state
 

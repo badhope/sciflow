@@ -1,7 +1,7 @@
 {
-  "name": "SciFlow · 本地优先的 AI 科研工作台",
+  "name": "SciFlow · 前沿 AI 原生科研助手",
   "short_name": "SciFlow",
-  "description": "本地优先的 AI 科研工作台：文献、写作、质量门与投稿包",
+  "description": "前沿 AI 原生科研助手：从研究问题到投稿包，多轮推理、实验、评审与确定性质量门。",
   "start_url": "/#/workspace",
   "scope": "/",
   "display": "standalone",

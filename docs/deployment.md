@@ -2,7 +2,7 @@
 
 **English** · [简体中文](deployment.zh-CN.md)
 
-SciFlow is a single-user, local-first application. One SQLite file holds all
+SciFlow is a single-user, single-machine application. One SQLite file holds all
 data; there is no external database, queue or object store.
 
 ## Ports

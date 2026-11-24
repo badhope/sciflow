@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/brand/readme-hero.svg" alt="SciFlow — a research loop that rejects itself" width="100%">
+  <img src="docs/brand/readme-hero.svg" alt="SciFlow — an AI-native research assistant that runs the full loop" width="100%">
 </p>
 
 <p align="center">
@@ -17,13 +17,13 @@
   <a href="https://github.com/badhope/sciflow/stargazers"><img src="https://img.shields.io/github/stars/badhope/sciflow?style=social" alt="Stars"></a>
 </p>
 
-**A local-first research workbench for literature, protocol, experiment, review, writing and submission.**
+**An AI-native research assistant that takes one research question and runs the full path to a submission package.**
 
-One SQLite file. Your own model endpoint. No hosted account. The model can suggest; the gate decides.
+Protocol, experiment, review, manuscript and submission in one loop. The model can suggest; the gate decides.
 
 ## The loop is the product
 
-A research run is not a single answer. It is a loop with memory, a rejection path and a paper trail.
+A research run is not a single answer. It is an end-to-end loop with memory, a rejection path and a paper trail.
 
 ![The SciFlow research loop](docs/brand/readme-loop.svg)
 
@@ -32,13 +32,14 @@ A research run is not a single answer. It is a loop with memory, a rejection pat
 - **Provenance.** Each `[n]` resolves to a citation row, then to a reference. Ghost anchors, orphans, broken numbering and duplicate DOIs are reported before submission.
 - **A gate, not a guess.** Seven dimensions are scored by deterministic rules with a stable fingerprint. The gate decides pass or fail; the model score is reference only.
 
-## What stays on your machine
+## What the loop delivers
 
-- **Data.** One SQLite file holds projects, conversations, references, experiments and checkpoints. Back it up by copying the file.
-- **Model.** Any OpenAI-compatible endpoint. Keys stay in your environment, not in a hosted account.
-- **Access.** No cloud login. When you leave the desk, the desktop app issues a one-time QR link that opens the same workbench on your phone; the backend stays loopback-only.
+- **A protocol you can run.** Question, scope, hypothesis, success criteria, budget and stop conditions, written before the first experiment.
+- **An experiment with evidence.** A sandbox run with logs and artifacts. A claim without verbatim evidence from the run stays unsupported.
+- **A manuscript that survived review.** A critic and an independent reviewer can send the draft back with reasons; the revision is targeted, not a reroll.
+- **A submission package.** Readiness checks, journal template, cover letter, figures and a deterministic ZIP, ready to hand to the journal.
 
-## Inside the workbench
+## The cockpit
 
 ![SciFlow research cockpit](docs/screenshots/dashboard.png)
 

@@ -10,7 +10,7 @@ products, and the boundary must be explicit enough to test.
 
 ## Product model
 
-SciFlow is a **local-first, single-owner research workbench**. A project belongs to
+SciFlow is a **single-machine, single-owner research assistant**. A project belongs to
 the person who created it. There is no membership model, no organisation account,
 and no shared project database.
 

@@ -7,7 +7,7 @@
 
 
 > 本文基于 `docker-compose.yml`、`Dockerfile`、`apps/server/.env.example` 与代码中 `process.env` 的实际读取整理（HEAD `49bdff0`）。
-> SciFlow 为**单用户本地优先**应用：SQLite 单文件、无外部数据库依赖、无鉴权。
+> SciFlow 为**单用户单机**应用：SQLite 单文件、无外部数据库依赖、无鉴权。
 
 ## 1. 端口与进程一览
 
