@@ -29,7 +29,7 @@ SciFlow 是**本地优先、可审计、端到端自动化的 AI 科研工作台
 | 标签 | `v1.19.18`（annotated `1277112` → `b9e7a05`） | `git show-ref --tags` |
 | 五远端 `main` | 均包含 `b9e7a05` | `git ls-remote` × 5 |
 | CI | run `45443174785` 三 job 全绿（`b9e7a05`） | GitHub Actions |
-| 桌面安装包 | tag `v1.19.18` 已触发 run `45457644913`，构建中 | GitHub Actions |
+| 桌面安装包 | tag `v1.19.18` 触发 run `45457644913`，已成功；Release 资产 `SciFlow-Setup-x64.exe`、`SciFlow-Setup-1.19.18-x64.exe`、`latest.yml` | GitHub Actions |
 | 发布正文 | `docs/RELEASE-NOTES.md`，禁用自动生成，避免重复拼接 | `.github/workflows/desktop-installer.yml` |
 
 ### 1.3 运行时与代码版图

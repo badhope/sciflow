@@ -11,9 +11,17 @@
 - **CI 不再安装系统 ffmpeg。** 视频抽音轨用例优先用 `ffmpeg-static`，其次回退系统二进制，两者都没有才跳过；runner 的 `apt-get update` 不再决定三 job 是否全绿。
 - **知识库命中分抽成纯函数。** `scoreLibraryHit` 从 731 行的 `pipeline.service.ts` 移到 `pipeline-metrics.ts`，补了标题全命中、摘要命中、空查询等 11 条单测。
 
+## 发布资产
+
+- Annotated tag `v1.19.18` 指向 `b9e7a05`，已推 GitCode、GitHub 三个账号、Gitee 五个远端。
+- GitHub Release：<https://github.com/badhope/sciflow/releases/tag/v1.19.18>。
+- `SciFlow-Setup-x64.exe` 与 `SciFlow-Setup-1.19.18-x64.exe` 均为 1,116,919,303 bytes；`latest.yml` 版本 1.19.18，更新清单与安装包同名同 sha512。
+- 安装包由 run `45457644913` 产出；三个 job 全部 success。
+
 ## 门禁
 
-- GitHub Actions `45335712825`：Types / Unit / Build、Full mock regression、E2E + prompt evals 三 job 全绿。
+- 产品提交 `b9e7a05` 的 CI `45443174785`：Types / Unit / Build、E2E + prompt evals、Full mock regression 三 job 全绿。
+- 文档提交 `0c6bc6d` 的 CI `45458131994` 同样三 job 全绿。
 - server 972 passed / 1 skipped（140 files）；web 277 passed（51 files）。
 - `full_regression.py` 237 PASS / 0 FAIL；lint、server typecheck、build 通过。
 

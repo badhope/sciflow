@@ -69,4 +69,4 @@
 | 掘金 | badhope | 2026-11-25 | <https://juejin.cn/post/7711654439552024602> | 已发布 |
 | CSDN | weixin_56622231 | 2026-11-25 | <https://blog.csdn.net/weixin_56622231/article/details/171317980> | 已发布，审核中 |
 | 博客园 | badhope | 2026-11-25 | <https://www.cnblogs.com/badhope/p/23772046/one-sqlite-file-research> | 已发布 |
-| B 站 | 待填 | — | — | 未发布 |
+| B 站 | 待填 | — | — | 未发布：账号未登录，登录接管被跳过；现有 demo 仅 25.84 秒且无音轨 |

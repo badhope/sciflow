@@ -29,7 +29,7 @@ SciFlow is a **local-first, auditable, end-to-end automated research workbench**
 | Tag | `v1.19.18` (annotated `1277112` → `b9e7a05`) | `git show-ref --tags` |
 | Five remote `main` | all contain `b9e7a05` | `git ls-remote` × 5 |
 | CI | run `45443174785`, three jobs green (`b9e7a05`) | GitHub Actions |
-| Desktop installer | tag `v1.19.18` triggered run `45457644913`, building | GitHub Actions |
+| Desktop installer | tag `v1.19.18` triggered run `45457644913`, succeeded; release assets `SciFlow-Setup-x64.exe`, `SciFlow-Setup-1.19.18-x64.exe`, `latest.yml` | GitHub Actions |
 | Release body | `docs/RELEASE-NOTES.md`; `generate_release_notes` disabled | `.github/workflows/desktop-installer.yml` |
 
 ### 1.3 Runtime and code map
