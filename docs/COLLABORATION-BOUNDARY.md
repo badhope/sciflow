@@ -2,7 +2,7 @@
 
 [简体中文](COLLABORATION-BOUNDARY.zh-CN.md) · **English**
 
-Last reviewed: 2026-11-24 · Applies to: **1.19.17**
+Last reviewed: 2026-11-25 · Applies to: **1.19.18**
 
 This document is the single source of truth for what "sharing" means in SciFlow. It
 exists because "public read-only share" and "team collaboration" are different

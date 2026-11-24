@@ -1,6 +1,6 @@
 # SciFlow Project Baseline (Four Modules)
 
-> Baseline anchor: version `v1.19.17`; `main` contains product commit `14ac8b2` (verified 2026-11-24; this baseline update follows as a docs-only commit).
+> Baseline anchor: version `v1.19.18`; `main` contains product commit `b9e7a05` (verified 2026-11-25; this baseline update follows as a docs-only commit).
 > This is the team's single source of truth for product and engineering status, fixed to four modules: **current core state, delivered capabilities, backlog, roadmap**.
 > The document follows `main`: after this file merges, the anchor advances to the merge commit. A capability is never marked delivered without evidence.
 
@@ -11,7 +11,7 @@
 | Single source | Capabilities, versions and test numbers live here; the roadmap page only indexes |
 | Evidence first | “Delivered” must point to code, a test, a CI run, acceptance screenshots, or a release asset |
 | Status vocabulary | `Delivered` / `In progress` / `Backlog` / `Blocked`; no vague “mostly done” |
-| Version anchor | Root `package.json` and `git describe --tags`; currently `1.19.17` / `v1.19.17` |
+| Version anchor | Root `package.json` and `git describe --tags`; currently `1.19.18` / `v1.19.18` |
 | Remote parity | All five Git remotes must share the same `main` commit; community publishing is tracked separately from code mirrors |
 
 ## 1. Current core state
@@ -24,12 +24,12 @@ SciFlow is a **local-first, auditable, end-to-end automated research workbench**
 
 | Item | Value | Evidence |
 | --- | --- | --- |
-| Version | `1.19.17` (root/server/web/desktop) | four `package.json` files |
-| Code HEAD (verified) | `14ac8b2` | `git log -1`; later doc commits do not change product code |
-| Tag | `v1.19.17` (annotated `57340c7` → `d9dc71b`) | `git show-ref --tags` |
-| Five remote `main` | all contain `14ac8b2` | `git ls-remote` × 5 |
-| CI | run `45331303327`, three jobs green (`14ac8b2`) | GitHub Actions |
-| Desktop installer | run `45254121179` success; three GitHub Releases carry four assets | GitHub Releases |
+| Version | `1.19.18` (root/server/web/desktop) | four `package.json` files |
+| Code HEAD (verified) | `b9e7a05` | `git log -1`; later doc commits do not change product code |
+| Tag | `v1.19.18` (annotated `1277112` → `b9e7a05`) | `git show-ref --tags` |
+| Five remote `main` | all contain `b9e7a05` | `git ls-remote` × 5 |
+| CI | run `45443174785`, three jobs green (`b9e7a05`) | GitHub Actions |
+| Desktop installer | tag `v1.19.18` triggered run `45457644913`, building | GitHub Actions |
 | Release body | `docs/RELEASE-NOTES.md`; `generate_release_notes` disabled | `.github/workflows/desktop-installer.yml` |
 
 ### 1.3 Runtime and code map
@@ -241,12 +241,12 @@ React Web UI ──HTTP/SSE──> NestJS API ──> one SQLite file (WAL)
 
 ### M0 Baseline alignment (current)
 
-**Goal**: four-module baseline, five remotes identical, 1.19.17 evidence reproducible.
+**Goal**: four-module baseline, five remotes identical, 1.19.18 evidence reproducible.
 
 **Exit**:
 - This file merged and synced to five remotes;
 - `docs/README` and root README link here;
-- 1.19.17 metrics match the acceptance report.
+- 1.19.18 metrics match the acceptance report.
 
 ### M1 Research-cycle reliability (in progress)
 
