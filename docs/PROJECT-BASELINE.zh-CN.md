@@ -1,6 +1,6 @@
 # SciFlow 项目基线（四模块）
 
-> 基线锚点：版本 `v1.19.17`；`main` = `4b1c404`（2026-11-24 核验）。
+> 基线锚点：版本 `v1.19.17`；`main` 包含产品提交 `14ac8b2`（2026-11-24 核验；本基线更新随后以文档提交落地）。
 > 本文档是团队唯一的产品与工程基准信息源，固定为四个模块：**当前核心状态、已交付功能清单、待开发任务池、迭代规划路线图**。
 > 文档随 `main` 演进：本文件合并后，基线锚点自动推进到合并提交；任何能力声明必须附可复核证据，禁止把计划写成已交付。
 
@@ -25,10 +25,10 @@ SciFlow 是**本地优先、可审计、端到端自动化的 AI 科研工作台
 | 项 | 当前值 | 证据 |
 | --- | --- | --- |
 | 版本 | `1.19.17`（根/server/web/desktop 一致） | 四个 `package.json` |
-| 代码 HEAD（本次验收） | `4b1c404` | `git log -1`；后续文档提交不改变产品代码 |
+| 代码 HEAD（本次验收） | `14ac8b2` | `git log -1`；后续文档提交不改变产品代码 |
 | 标签 | `v1.19.17`（annotated `57340c7` → `d9dc71b`） | `git show-ref --tags` |
-| 五远端 `main` | 均为 `4b1c404` | `git ls-remote` × 5 |
-| CI | run `45329244510` 三 job 全绿（`4b1c404`） | GitHub Actions |
+| 五远端 `main` | 均包含 `14ac8b2` | `git ls-remote` × 5 |
+| CI | run `45331303327` 三 job 全绿（`14ac8b2`） | GitHub Actions |
 | 桌面安装包 | run `45254121179` success；三个 GitHub Release 同步 4 个资产 | GitHub Releases |
 | 发布正文 | `docs/RELEASE-NOTES.md`，禁用自动生成，避免重复拼接 | `.github/workflows/desktop-installer.yml` |
 
