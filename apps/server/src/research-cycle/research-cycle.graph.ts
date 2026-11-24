@@ -148,6 +148,9 @@ export const STAGNATION_LIMIT = 2;
 /** 自动批准协议的最低自主等级（L3 起；L2 默认每轮协议都要人工审批） */
 export const AUTO_APPROVE_LEVEL = 'L3';
 
+/** AI 专家驳回后最多自动重写协议几次（首稿之外）；超过则终止，防止无限改写烧预算 */
+export const GATE_RETRY_LIMIT = 2;
+
 export function buildResearchCycleGraph(
   deps: ResearchCycleGraphDeps,
   options: { checkpointer?: unknown } = {},
@@ -187,6 +190,7 @@ export function buildResearchCycleGraph(
             memory: memory ?? '',
             priorFeedback:
               [
+                s.gateFeedback,
                 s.lastFeedback,
                 attempt > 0
                   ? `上一次输出无法解析（${lastError.slice(0, 160)}）：请压缩每个字段、减少数组条目，确保输出是合法 JSON。`
@@ -247,12 +251,14 @@ export function buildResearchCycleGraph(
         hypothesisStatement: plan.hypothesis.statement,
         predictions: plan.hypothesis.predictions ?? [],
         literature,
+        gateFeedback: '',
+        gateRoute: '',
       };
     })
     .addNode('gate', async (s) => {
       deps.heartbeat?.(s.cycleId, 'gate');
       // plan 失败已给出终止原因：不再进入审批/执行
-      if (s.stopReason) return {};
+      if (s.stopReason) return { gateRoute: 'end' };
       // 预算门禁前移：plan 已可能烧掉超过预算；不能等实验跑完再判预算，否则一次执行就会越界。
       const spentBeforeGate = deps.tokensSpent(s.cycleId);
       if (s.maxTokens > 0 && spentBeforeGate >= s.maxTokens) {
@@ -262,12 +268,13 @@ export function buildResearchCycleGraph(
         });
         return {
           stopReason: 'budget_exceeded',
+          gateRoute: 'end',
           feedback: `计划阶段已消耗 ${spentBeforeGate} tokens，达到预算上限 ${s.maxTokens}，按策略终止，不执行实验。`,
         };
       }
       const protocols = deps.programs.listProtocols(s.hypothesisId);
       const current = protocols.find((p) => p.id === s.protocolId);
-      if (current?.status === 'approved') return {};
+      if (current?.status === 'approved') return { gateRoute: 'execute' };
 
       // 全自动模式：不挂起人工，改由独立 AI 专家审批。
       // 专家失败时 fail-closed（agent_error），绝不因为「没人审」就默认放行。
@@ -285,7 +292,7 @@ export function buildResearchCycleGraph(
           const msg = errorMessage(e, 400);
           deps.logger.error(`[研究循环] AI 专家审批失败，按 blocked 终止：${msg}`);
           deps.notify('gate', { protocolId: s.protocolId, approved: false, by: 'expert', error: msg });
-          return { stopReason: 'agent_error', feedback: `AI 专家审批不可用：${msg}` };
+          return { stopReason: 'agent_error', gateRoute: 'end', feedback: `AI 专家审批不可用：${msg}` };
         }
         if (review.approved) {
           deps.programs.approveProtocol(s.protocolId, `agent:expert(${review.confidence})`);
@@ -296,8 +303,12 @@ export function buildResearchCycleGraph(
             confidence: review.confidence,
             rationale: review.rationale,
           });
-          return {};
+          return { gateRoute: 'execute' };
         }
+        const attempts = Number(s.gateAttempts || 0) + 1;
+        const feedback = `AI 专家驳回（置信度 ${review.confidence}）：${review.rationale}${
+          review.requiredChanges.length ? `；需修改：${review.requiredChanges.join('；')}` : ''
+        }`;
         deps.notify('gate', {
           protocolId: s.protocolId,
           approved: false,
@@ -305,20 +316,31 @@ export function buildResearchCycleGraph(
           confidence: review.confidence,
           rationale: review.rationale,
           requiredChanges: review.requiredChanges,
+          attempt: attempts,
+          willRetry: attempts <= GATE_RETRY_LIMIT,
         });
-        return {
-          stopReason: 'approval_rejected',
-          feedback: `AI 专家驳回（置信度 ${review.confidence}）：${review.rationale}${
-            review.requiredChanges.length ? `；需修改：${review.requiredChanges.join('；')}` : ''
-          }`,
-        };
+        if (attempts <= GATE_RETRY_LIMIT) {
+          // 全自动链路的核心：专家驳回不是终点，而是下一版协议的设计输入。
+          deps.programs.updateCycle(s.cycleId, {
+            state: 'protocol',
+            summary: `AI 专家驳回第 ${attempts} 次，自动修订协议`,
+          });
+          deps.notify('revise', { reason: 'expert_rejected', attempt: attempts, gateAttempts: attempts });
+          return {
+            gateAttempts: attempts,
+            gateFeedback: feedback,
+            lastFeedback: feedback,
+            gateRoute: 'plan',
+          };
+        }
+        return { stopReason: 'approval_rejected', gateRoute: 'end', feedback };
       }
 
       const level = deps.autonomyLevel(s.programId);
       if (level >= AUTO_APPROVE_LEVEL) {
         deps.programs.approveProtocol(s.protocolId, `agent:auto(${level})`);
         deps.notify('gate', { protocolId: s.protocolId, approved: true, by: `auto:${level}` });
-        return {};
+        return { gateRoute: 'execute' };
       }
       // 人工审批：interrupt 挂起（checkpoint 持久化），驾驶舱批准后用 Command({resume}) 续跑。
       // 节点体在 interrupt 之前不得有副作用——恢复时本节点会从头重放。
@@ -333,10 +355,10 @@ export function buildResearchCycleGraph(
       if (decision?.approved) {
         deps.programs.approveProtocol(s.protocolId, 'human');
         deps.notify('gate', { protocolId: s.protocolId, approved: true, by: 'human' });
-        return {};
+        return { gateRoute: 'execute' };
       }
       deps.notify('gate', { protocolId: s.protocolId, approved: false });
-      return { stopReason: 'approval_rejected' };
+      return { stopReason: 'approval_rejected', gateRoute: 'end' };
     })
     .addNode('execute', async (s) => {
       deps.heartbeat?.(s.cycleId, 'execute');
@@ -568,8 +590,9 @@ export function buildResearchCycleGraph(
     })
     .addEdge(START, 'plan')
     .addEdge('plan', 'gate')
-    .addConditionalEdges('gate', (s) => (s.stopReason ? 'end' : 'execute'), {
+    .addConditionalEdges('gate', (s) => (s.stopReason ? 'end' : s.gateRoute === 'plan' ? 'plan' : 'execute'), {
       execute: 'execute',
+      plan: 'plan',
       end: END,
     })
     .addEdge('execute', 'evaluate')

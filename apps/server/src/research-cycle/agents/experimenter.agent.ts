@@ -62,11 +62,13 @@ const EXPERIMENTER_SYSTEM = [
   '3. 必须有确定性输出：固定随机种子，最后 print 出关键统计量（数值而非仅文字描述）。',
   '4. 统计推断请给出样本量、估计量与标准误/置信区间，让评审能判断结论是否成立。',
   '5. 代码要短小、可读、一次运行完成；不要写交互式脚本。',
-  '6. **脚本不超过 30 行**：模型网关对长输出有超时/截断限制，代码太长会整轮失败。优先保留最小可验证闭环。',
-  '7. **必须写成正常的多行 Python**：一行一条语句，不要用分号把多条语句连在一行，也不要把 for/if 写成分号连接的一行（会直接 SyntaxError）。',
-  '8. 输出格式：只给脚本正文。第一行写 import，随后每行一条语句；不要 JSON、不要解释、不要 Markdown 围栏、不要罗列无关模块。',
-  '9. 协议样本量再大，也只跑最小可验证子样本：记录总数不超过 2000 条、单次运行不超过 120 秒；在 goal 里说明这是缩样复验。',
-  '10. 若协议要求人工盲评、真实训练或外部数据，不要照抄：改写为可运行的合成代理实验（确定性生成标签与统计量），并在 goal 首句标注「代理模拟」。',
+  '6. **脚本不超过 120 行**：优先保留协议的核心机制与可核验输出；不要为了缩短而把物理/统计模型替换成通用玩具模板。',
+  '7. **必须实现协议的主体，不得偷换问题**：协议给了自变量、因变量、对照组、样本与分析方法时，脚本必须按同一因果链实现；禁止用「随机误差与不确定性相关性」「通用二分类 AUC」等与协议无关的合成模板充当实验。',
+  '8. **可以缩样但不能改机制**：步数/晶格/重复次数超出沙箱预算时按比例缩小，并在脚本首行注释写明缩放比例；自变量取值、对照组、输出指标必须保留。',
+  '9. **必须写成正常的多行 Python**：一行一条语句，不要用分号把多条语句连在一行，也不要把 for/if 写成分号连接的一行（会直接 SyntaxError）。',
+  '10. 输出格式：只给脚本正文。第一行写 import，随后每行一条语句；不要 JSON、不要解释、不要 Markdown 围栏、不要罗列无关模块。',
+  '11. 协议样本量再大，也只跑最小可验证子样本：记录总数不超过 2000 条、单次运行不超过 120 秒；缩样必须在 goal 与脚本注释里说明。',
+  '12. 若协议要求人工盲评、真实训练或外部数据，不要照抄：改写为可运行的合成代理实验，但代理必须保留协议的自变量/因变量方向与比较结构，并在 goal 首句标注「代理模拟」。',
 ].join('\n');
 
 function designToText(design: ExperimentDesignInput['design']): string {
@@ -88,7 +90,7 @@ export async function designExperiment(
 ): Promise<ExperimentDesign> {
   const predictions = input.predictions?.length ? input.predictions.join('；') : '（未给出预测）';
   const repairBlock = input.previousError
-    ? `\n\n【上一次失败（必须照此修正）】\n${input.previousError.slice(0, 1200)}\n请据此重写脚本：保持多行、每行一条语句、不要用分号连接语句，控制在 30 行以内。`
+    ? `\n\n【上一次失败（必须照此修正）】\n${input.previousError.slice(0, 1200)}\n请据此重写脚本：保持协议的核心机制与变量，多行、每行一条语句、不要用分号连接语句，控制在 120 行以内。`
     : '';
   const messages = [
     { role: 'system' as const, content: EXPERIMENTER_SYSTEM },
@@ -122,7 +124,7 @@ export async function designExperiment(
   if (!code) {
     // 第二次极简提示：去掉长协议，只保留目标与输出约束，降低网关空响应概率。
     const minimal = [
-      { role: 'system' as const, content: '你是Python工程师。只输出可运行的Python 3代码，不要解释、不要Markdown。20-30行，固定随机种子，最后print关键统计量。' },
+      { role: 'system' as const, content: '你是Python工程师。只输出可运行的Python 3代码，不要解释、不要Markdown。最多120行，固定随机种子，必须实现给定目标的核心机制，最后print关键统计量。' },
       {
         role: 'user' as const,
         content: [

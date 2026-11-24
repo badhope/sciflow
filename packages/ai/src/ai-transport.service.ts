@@ -658,6 +658,8 @@ ${augmentation}` };
       '【结构化输出硬约束】',
       '只输出一个合法 JSON 对象，不要 Markdown 标题、解释、前后缀或代码围栏。',
       '所有字段必须严格符合下面的 JSON Schema；无法确定的字段按 schema 的默认值或空数组处理，不要省略必填字段。',
+      '字段名必须与 JSON Schema 的 properties 完全一致（通常是英文键），禁止把键名翻译成中文或改写；字段值可以用中文。',
+      '布尔值必须是 true/false，不要写「是/否」「批准/驳回」这类自然语言值。',
       schemaText ? `JSON Schema：${schemaText}` : '',
     ]
       .filter(Boolean)
@@ -723,7 +725,18 @@ ${augmentation}` };
             return { object: parsed.data as T, usage };
           }
         },
-        { retries: 2, factor: 2, minTimeout: 1000, maxTimeout: 15_000, onFailedAttempt: (err) => { throw err; } },
+        {
+          retries: 2,
+          factor: 2,
+          minTimeout: 1000,
+          maxTimeout: 15_000,
+          // 以前这里 throw err 会直接中止 pRetry，等于“配了重试但从不重试”；
+          // 真实网关偶发空响应时，必须让退避重试真正发生。
+          onFailedAttempt: (err) => {
+            const attempt = (err as { attemptNumber?: number }).attemptNumber ?? 1;
+            this.logger.warn(`结构化输出第 ${attempt} 次失败，准备退避重试：${AiTransportService.describeError(err).slice(0, 160)}`);
+          },
+        },
       ),
     ).then(({ object, usage }) => {
       const tokens = this.usageTokens(usage);

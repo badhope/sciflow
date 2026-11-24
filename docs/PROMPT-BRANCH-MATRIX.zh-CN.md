@@ -19,7 +19,8 @@
 | 人工审批-放行 | `approvalMode=human`，gate interrupt | gate 节点只做审批，不在 interrupt 前产生副作用 | `resume(approved=true)` 后续跑 | `L2 门禁：人工批准后 resume 继续跑完` |
 | 人工审批-驳回 | 同上，`approved=false` | 驳回原因不进入 PI 提示词（本轮直接终止） | `stopReason=approval_rejected`，不执行实验 | `L2 门禁：驳回协议即终止本轮` |
 | AI 专家-放行 | `approvalMode=ai`，autonomy L3+ | 专家：独立判断协议是否可执行、是否越界；fail-closed | 直接进入 execute | `全自动模式：AI 专家批准后直接执行` |
-| AI 专家-驳回 | 专家返回 `approved=false` | 同上；问题含「拒批」的 mock 场景 | `approval_rejected`，不执行实验 | `全自动模式：AI 专家驳回即终止` |
+| AI 专家-驳回后重写 | 专家返回 `approved=false` 且 `gateAttempts≤2` | 驳回理由写入 `gateFeedback`，PI 下一版必须补齐判定标准；最多重写 2 次 | `gateRoute=plan` → 新协议 → 再审批 | `AI 专家首次驳回后自动修订协议，第二次批准继续执行` |
+| AI 专家-连续驳回 | 第 3 次仍 `approved=false` | 重写上限 `GATE_RETRY_LIMIT=2`，防止无限改写烧预算 | `approval_rejected`，不执行实验 | `AI 专家连续驳回，自动重写协议到上限后终止` |
 | AI 专家-不可用 | 专家调用抛错/结构化失败 | 专家提示词失败不得默认放行 | `agent_error` → blocked | `AI 专家不可用时 fail-closed` |
 | 实验成功 | 沙箱返回 `status=ok` 且 stdout 非空 | 实验者：把协议翻译成可执行 Python，必须 print 统计量 | 落 run/completed，进入 evaluate | `结论 supported 时一轮结束` |
 | 实验脚本过短/无 print | 代码 <40 字符或无 `print(` | 实验者修复提示：完整脚本 + 关键统计量 | 首次记 failed，回灌修复一次 | `实验脚本只有 import / 没有 print` |

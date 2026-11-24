@@ -56,7 +56,7 @@ React Web UI ──HTTP/SSE──> NestJS API ──> one SQLite file (WAL)
 
 | Metric | Value | Scope |
 | --- | --- | --- |
-| Server tests | 959 passed / 1 skipped | Latest source gate |
+| Server tests | 960 passed / 1 skipped | Latest source gate |
 | Web tests | 277 passed | same |
 | Desktop tests | 5 passed | same |
 | API regression | 237 PASS / 0 FAIL | `scripts/full_regression.py` (fresh DB + AI_MOCK=1) |
@@ -73,6 +73,7 @@ React Web UI ──HTTP/SSE──> NestJS API ──> one SQLite file (WAL)
 | P0 | Full-auto stress coverage | `full_regression.py` covers API behaviour, not cycle concurrency/approval/budget/stagnation | New `scripts/research_cycle_stress.py` (§3.2) |
 | P1 | Code debt hotspots | `packages/db/src/database.ts` migration logic; long `ResearchCycleService` / `PipelineService` methods; large `WorkspacePage` / `WritingPage` | Refactor backlog (§3.3) |
 | P1 | Vector KB incremental upgrade | sqlite-vec ANN + FTS5 + RRF + MMR already exist; reranker eval, embedding versioning and dimension migration are missing | Incremental, not rebuild |
+| P1 | Real-model long-run stability | The real model produced a domain-specific protocol (0.73 overlap) and triggered an actionable expert rejection; the gateway intermittently returns empty/timeout and can exhaust 3 structured retries | Fixed `pRetry` being short-circuited by `throw err` and tightened JSON key constraints; still need a fallback or local model at the gateway layer |
 | P2 | Feishu connector credentials | No real webhook/app credentials; report marked BLOCKED with handover paths | Wait for user credentials |
 | P2 | Five content communities | Five **Git remotes** are aligned; Zhihu/Juejin/CSDN/Cnblogs/Bilibili need login or API credentials | Never claim published without credentials |
 | P2 | Real mobile PWA | Verified only on desktop Chromium | Add to acceptance |
@@ -179,6 +180,7 @@ React Web UI ──HTTP/SSE──> NestJS API ──> one SQLite file (WAL)
 | R-06 | Real process restart integration | Human-approval pending → kill server → restart → still awaiting → resume completes | **Accepted**: `scripts/research_cycle_restart_test.py` PASS |
 | R-07 | Mid-execution restart recovery | Kill during execute → restart auto-resumes; needs controllable slow mock | **Accepted**: PASS; `runs=1`, replay does not duplicate the run |
 | R-08 | Idempotent and concurrent start | One active cycle per program; duplicate start creates no second cycle | Needs integration test |
+| R-09 | Protocol rewrite after expert rejection | Rejection feeds the PI; at most 2 rewrites; stop only after repeated rejection | **Implemented**: graph tests cover reject-then-approve and reject-to-limit |
 
 ### 3.2 P0 full-auto stress
 

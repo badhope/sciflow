@@ -48,6 +48,12 @@ export const ResearchCycleAnnotation = Annotation.Root({
   runFailed: Annotation<boolean>({ reducer: (_a, b) => b, default: () => false }),
   /** 协议门禁模式：human=人工审批（interrupt）；ai=独立 AI 专家审批（全自动，不挂起） */
   approvalMode: Annotation<'human' | 'ai'>({ reducer: (_a, b) => b, default: () => 'human' }),
+  /** 协议被 AI 专家驳回后的修订次数（不含首稿；用于防止无限重写） */
+  gateAttempts: Annotation<number>({ reducer: (_a, b) => b, default: () => 0 }),
+  /** 协议门禁给出的修订意见（plan 重新设计时读取） */
+  gateFeedback: Annotation<string>({ reducer: (_a, b) => b, default: () => '' }),
+  /** gate 之后的去向：execute | plan | end（由 gate 节点写入，供条件边读取） */
+  gateRoute: Annotation<string>({ reducer: (_a, b) => b, default: () => '' }),
   /** 本轮检索到的文献线索（PI/评审的背景输入；失败时为空数组，不影响循环） */
   literature: Annotation<LiteratureRef[]>({ reducer: (_a, b) => b, default: () => [] }),
   /** 当前结论 id（research_claim） */

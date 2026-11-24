@@ -33,6 +33,8 @@ function makeDeps(overrides: {
   experimentOutput?: string;
   /** 全自动模式下 AI 专家是否批准（默认 true） */
   expertApproved?: boolean;
+  /** 按调用顺序决定 AI 专家是否批准（优先于 expertApproved） */
+  expertApprovals?: boolean[];
   /** 全自动模式下 AI 专家调用是否抛错 */
   expertThrows?: boolean;
   /** 文献检索是否抛错（验证降级） */
@@ -131,14 +133,16 @@ function makeDeps(overrides: {
         };
       },
       expertReview: async () => {
+        const index = rec.expert;
         rec.expert += 1;
         if (overrides.expertThrows) throw new Error('专家模型不可用');
+        const approved = overrides.expertApprovals?.[index] ?? overrides.expertApproved !== false;
         return {
-          approved: overrides.expertApproved !== false,
-          confidence: 82,
-          rationale: '协议可执行、判定标准明确',
-          concerns: [],
-          requiredChanges: [],
+          approved,
+          confidence: approved ? 82 : 30,
+          rationale: approved ? '协议可执行、判定标准明确' : '缺少可推翻假设的判定标准',
+          concerns: approved ? [] : ['未写清何种观察会推翻假设'],
+          requiredChanges: approved ? [] : ['补充 α 的置信区间与平台检验阈值'],
         };
       },
     },
@@ -320,18 +324,33 @@ describe('自主研究循环图', () => {
     expect(result.stopReason).toBe('completed');
   });
 
-  it('全自动模式：AI 专家驳回即终止，不执行实验', async () => {
+  it('全自动模式：AI 专家连续驳回，自动重写协议到上限后终止', async () => {
     const { deps, rec } = makeDeps({ autonomy: 'L2', expertApproved: false });
     const graph = buildResearchCycleGraph(deps, { checkpointer: saver });
     const result: any = await graph.invoke(
       { ...initialState, approvalMode: 'ai' } as never,
       { configurable: { thread_id: 't13' } } as never,
     );
-    expect(rec.expert).toBe(1);
+    expect(rec.expert).toBe(3);
+    expect(rec.plan).toBe(6); // plan 调用 + createHypothesis 各计一次，3 版协议 = 6
     expect(result.stopReason).toBe('approval_rejected');
     expect(String(result.feedback)).toContain('AI 专家驳回');
     expect(rec.experiments).toBe(0);
     expect(rec.approved).toEqual([]);
+  });
+
+  it('全自动模式：AI 专家首次驳回后自动修订协议，第二次批准继续执行', async () => {
+    const { deps, rec } = makeDeps({ autonomy: 'L2', verdicts: ['supported'], expertApprovals: [false, true] });
+    const graph = buildResearchCycleGraph(deps, { checkpointer: saver });
+    const result: any = await graph.invoke(
+      { ...initialState, approvalMode: 'ai' } as never,
+      { configurable: { thread_id: 't13b' } } as never,
+    );
+    expect(rec.expert).toBe(2);
+    expect(rec.plan).toBe(4); // 2 版协议
+    expect(rec.approved).toEqual(['proto-2']);
+    expect(rec.experiments).toBe(1);
+    expect(result.stopReason).toBe('completed');
   });
 
   it('全自动模式：AI 专家不可用时 fail-closed（agent_error），不默认放行', async () => {

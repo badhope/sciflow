@@ -19,7 +19,8 @@
 | Human approve | `approvalMode=human`, gate interrupt | Gate performs approval only; no side effects before interrupt | `resume(approved=true)` continues | `human approve resumes and completes` |
 | Human reject | Same, `approved=false` | Rejection reason not fed back; terminate this cycle | `stopReason=approval_rejected`, no experiment | `human reject stops` |
 | AI expert approve | `approvalMode=ai`, L3+ | Expert independently judges executability/scope; fail-closed | Enters execute | `AI expert approves, no human interrupt` |
-| AI expert reject | Expert returns `approved=false` | Same; mock rejects when the question contains “拒批” | `approval_rejected`, no experiment | `AI expert reject stops` |
+| AI expert reject then rewrite | `approved=false` and `gateAttempts≤2` | Rejection reason becomes `gateFeedback`; PI must close the missing criteria; at most 2 rewrites | `gateRoute=plan` → new protocol → re-review | `AI expert rejects once, protocol is revised, second review approves` |
+| AI expert rejects repeatedly | Third `approved=false` | `GATE_RETRY_LIMIT=2` prevents unbounded rewriting and budget burn | `approval_rejected`, no experiment | `AI expert rejects repeatedly, protocol rewrite hits the limit and stops` |
 | Expert unavailable | Expert throws / structured output fails | Failure must not default to approve | `agent_error` → blocked | `expert unavailable is fail-closed` |
 | Experiment success | Sandbox `status=ok`, non-empty stdout | Experimenter translates protocol to Python and prints statistics | Run completed; enters evaluate | `supported ends in one round` |
 | Script too short / no print | Code <40 chars or no `print(` | Repair prompt: complete script + statistics | First attempt failed; one repair | `import-only script fails and repairs` |

@@ -56,7 +56,7 @@ React Web UI ──HTTP/SSE──> NestJS API ──> 单个 SQLite（WAL）
 
 | 指标 | 实测值 | 口径 |
 | --- | --- | --- |
-| server 单测 | 959 passed / 1 skipped | 最新源码门禁 |
+| server 单测 | 960 passed / 1 skipped | 最新源码门禁 |
 | web 单测 | 277 passed | 同上 |
 | desktop 单测 | 5 passed | 同上 |
 | API 回归 | 237 PASS / 0 FAIL | `scripts/full_regression.py`（全新库 + AI_MOCK=1） |
@@ -73,6 +73,7 @@ React Web UI ──HTTP/SSE──> NestJS API ──> 单个 SQLite（WAL）
 | P0 | 全自动链路压测 | 原 `full_regression.py` 只覆盖 API 行为，没有 cycle 并发/审批/预算/停滞压测 | 本阶段已新增 `scripts/research_cycle_stress.py`，见 §3.2 |
 | P1 | 代码债务热点 | `packages/db/src/database.ts` 迁移仍偏命令式；`ResearchCycleService` / `PipelineService` 有长方法；`WorkspacePage.tsx` / `WritingPage.tsx` 体量大 | 进入重构队列，见 §3.3 |
 | P1 | 向量知识库增量升级 | 已有 sqlite-vec ANN + FTS5 + RRF + MMR，不是空白；缺重排评估、嵌入版本化、维度迁移策略 | 增量升级，不重造 |
+| P1 | 真实模型长链路稳定性 | 真实模型已能产出领域协议（与原问题重合度 0.73）并触发专家可执行驳回；但聚合网关会间歇性返回空响应/超时，单次结构化调用 3 次重试仍可能失败 | 已修 `pRetry` 被 `throw err` 短路的问题、强化 JSON 键约束；网关侧仍需备用模型/本地模型 |
 | P2 | 飞书连接器真实凭据 | 自定义 Webhook / 应用模式均无真实凭据；报告已标 BLOCKED 并给接管路径 | 等用户提供凭据 |
 | P2 | 五个内容社区上线 | 五个 **Git 远端**已对齐，但知乎/掘金/CSDN/博客园/B 站需要登录态或 API 凭据 | 不能冒充已发布；先备发布包 |
 | P2 | 真实移动端 PWA | 只在桌面 Chromium 验证，未上真实 iOS/Android | 列入验收 |
@@ -179,6 +180,7 @@ React Web UI ──HTTP/SSE──> NestJS API ──> 单个 SQLite（WAL）
 | R-06 | 真实进程重启集成验证 | 人工审批挂起 → kill 服务 → 重启 → 仍 awaiting → resume 完成 | **已验收**：`scripts/research_cycle_restart_test.py` PASS |
 | R-07 | 自动执行中重启验证 | 在 execute 中途 kill → 重启自动续跑；需可控慢速 mock | **已验收**：PASS；`runs=1`，execute 重放不重复落库 |
 | R-08 | 幂等与并发启动 | 同一 program 并发 start 只允许一个；重复 start 不产生双 cycle | 待补集成测试 |
+| R-09 | AI 专家驳回后的自动修订 | 驳回理由进入 PI 提示词，最多重写 2 版协议；连续驳回才终止 | **已实现**：图测试覆盖首次驳回后二次批准、连续驳回终止 |
 
 ### 3.2 P0 全自动链路压测
 
@@ -293,5 +295,6 @@ React Web UI ──HTTP/SSE──> NestJS API ──> 单个 SQLite（WAL）
 - 生态审计：`docs/ECOSYSTEM-AUDIT.md`
 - 研究循环压测：`scripts/research_cycle_stress.py`
 - 研究循环真实重启验收：`scripts/research_cycle_restart_test.py`
+- 真实模型试跑记录：`docs/verification/assets/research-cycle-real-model-2026-11-24.md`
 - 研究循环恢复/看门狗：`apps/server/src/research-cycle/research-cycle.service.ts`
 - 研究循环图：`apps/server/src/research-cycle/research-cycle.graph.ts`
