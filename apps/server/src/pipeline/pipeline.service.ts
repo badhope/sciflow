@@ -21,7 +21,7 @@ import { WebSearchService } from '../websearch/websearch.service';
 import { ConfigCenterService } from '../config/config-center.service';
 import { ScholarSearchService, summarizeScholarSources } from '../research/scholar-search.service';
 import { buildWebHits, isWebSearchEnabled } from './pipeline-websearch';
-import { normalizeKnScore } from './pipeline-metrics';
+import { normalizeKnScore, scoreLibraryHit } from './pipeline-metrics';
 import { NoveltyService } from '../research/novelty.service';
 import { envInt } from '../common/env';
 
@@ -558,25 +558,13 @@ export class PipelineService implements OnModuleInit {
     }
   }
 
-  // ─── 辅助方法：跨库检索增强 ────────────────────────────────────
-  private static scoreLibraryHit(query: string, hit: PaperHit): number {
-    const qt = new Set(tokenizeForMatch(query));
-    if (qt.size === 0) return 0.5;
-    const titleT = tokenizeForMatch(hit.title);
-    const abT = tokenizeForMatch(hit.abstract || '');
-    let hitCount = 0, titleHits = 0;
-    for (const t of qt) { if (titleT.includes(t)) { hitCount++; titleHits++; } else if (abT.includes(t)) hitCount++; }
-    const ratio = hitCount / qt.size;
-    return Math.min(1, Math.round((ratio * 0.7 + Math.min(1, titleHits / qt.size) * 0.3) * 100) / 100);
-  }
-
   private static normalizeKnScore(score: number): number {
     return normalizeKnScore(score);
   }
 
   private async crossEnrichResearch(projectId: string, topic: string, plan: ResearchPlan, libraryHits: PaperHit[]): Promise<{ libraryHits: PaperHit[]; knowledgeHits: PaperHit[]; notice: string | null; meta: ResearchMeta }> {
     const queryBag = [topic, ...(plan.searchStrategy?.keywords || [])].filter(Boolean).join(' ');
-    const lib: PaperHit[] = libraryHits.map((h) => ({ ...h, origin: 'library' as const, matchScore: PipelineService.scoreLibraryHit(queryBag, h) }));
+    const lib: PaperHit[] = libraryHits.map((h) => ({ ...h, origin: 'library' as const, matchScore: scoreLibraryHit(queryBag, h) }));
     const knQueries = [topic, ...(plan.searchStrategy?.keywords || [])].filter(Boolean).slice(0, 4);
     const knSeen = new Set<string>();
     const knAll: PaperHit[] = [];

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeKnScore, normalizeAgentDate } from './pipeline-metrics';
+import { normalizeKnScore, normalizeAgentDate, scoreLibraryHit } from './pipeline-metrics';
 
 /**
  * 数据口径修复（v1.0.1）：
@@ -60,5 +60,26 @@ describe('选题重叠度（新颖性预检）', () => {
   it('分词覆盖中英文（中文二元组 + 拉丁词）', () => {
     expect(tokenizeForMatch('graph 图神经网络')).toContain('graph');
     expect(tokenizeForMatch('图神经网络')).toContain('图神');
+  });
+});
+
+describe('本地文献库命中分', () => {
+  it('标题全命中 → 1.0；标题与摘要都无关 → 0', () => {
+    expect(scoreLibraryHit('graph neural network', { title: 'Graph Neural Network for Molecules' })).toBe(1);
+    expect(scoreLibraryHit('graph neural network', { title: 'Soil moisture estimation', abstract: 'A field experiment.' })).toBe(0);
+  });
+
+  it('摘要命中但标题未命中时，分数显著低于标题命中', () => {
+    const abstractOnly = scoreLibraryHit('graph neural network', {
+      title: 'A survey of models',
+      abstract: 'We review graph neural network methods.',
+    });
+    const titleHit = scoreLibraryHit('graph neural network', { title: 'Graph neural network survey' });
+    expect(abstractOnly).toBeGreaterThan(0);
+    expect(abstractOnly).toBeLessThan(titleHit);
+  });
+
+  it('空查询回退 0.5，避免把无关键词请求判成完全不相关', () => {
+    expect(scoreLibraryHit('', { title: 'Anything' })).toBe(0.5);
   });
 });

@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 const expertSchema = z.object({
   approved: z.boolean(),
-  confidence: z.number(),
+  confidence: z.number().int().min(0).max(100),
   rationale: z.string(),
   concerns: z.array(z.string()),
   requiredChanges: z.array(z.string()),
@@ -36,7 +36,14 @@ describe('normalizeStructuredObject', () => {
   });
 
   it('嵌套对象不被顶层 schema 字段裁剪', () => {
-    const raw = { approved: true, confidence: 90, rationale: 'ok', concerns: [], requiredChanges: [], reviewer: { 结论: '通过', score: 80 } };
+    const raw = {
+      approved: true,
+      confidence: 90,
+      rationale: 'ok',
+      concerns: [],
+      requiredChanges: [],
+      reviewer: { 结论: '通过', score: 80 },
+    };
     const normalized = normalizeStructuredObject(raw, '') as Record<string, unknown>;
     expect(normalized.reviewer).toEqual({ 结论: '通过', score: 80 });
   });
@@ -45,5 +52,23 @@ describe('normalizeStructuredObject', () => {
     const raw = { approved: true, confidence: 1, rationale: 'x', concerns: [], requiredChanges: [], 无关字段: 'x' };
     const normalized = normalizeStructuredObject(raw, schemaText) as Record<string, unknown>;
     expect(normalized.无关字段).toBeUndefined();
+  });
+});
+
+describe('真实模型的英文同义键', () => {
+  it('reasons/issues/required_changes 映射到 schema 键，数组理由合并为字符串', () => {
+    const raw = {
+      approved: true,
+      confidence: 0.99,
+      reasons: ['理论相关系数 σ=0.05 时约 0.99', '高噪声组约 0.28'],
+      issues: '仍未写明随机种子',
+      required_changes: ['补充 seed=42'],
+    };
+    const normalized = normalizeStructuredObject(raw, schemaText) as Record<string, unknown>;
+    expect(normalized.rationale).toContain('0.28');
+    expect(normalized.confidence).toBe(99);
+    expect(normalized.concerns).toEqual(['仍未写明随机种子']);
+    expect(normalized.requiredChanges).toEqual(['补充 seed=42']);
+    expect(expertSchema.safeParse(normalized).success).toBe(true);
   });
 });

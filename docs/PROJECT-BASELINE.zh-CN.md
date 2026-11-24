@@ -56,7 +56,7 @@ React Web UI ──HTTP/SSE──> NestJS API ──> 单个 SQLite（WAL）
 
 | 指标 | 实测值 | 口径 |
 | --- | --- | --- |
-| server 单测 | 967 passed / 1 skipped（140 个测试文件） | 最新源码门禁 |
+| server 单测 | 971 passed / 1 skipped（140 个测试文件） | 最新源码门禁 |
 | web 单测 | 277 passed | 同上 |
 | desktop 单测 | 5 passed | 同上 |
 | API 回归 | 237 PASS / 0 FAIL | `scripts/full_regression.py`（全新库 + AI_MOCK=1） |

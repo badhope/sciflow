@@ -14,6 +14,30 @@ export { tokenizeForMatch };
  * v1.0.0 之前这里除以 8，任何 ≥8 分的命中都会被夹到 1.0，跨库匹配度完全失去区分度
  * （且与本地文献库的 0-1 口径不可比）。
  */
+
+/**
+ * 本地文献库命中分（0-1）。
+ *
+ * 口径：查询 token 覆盖率 70% + 标题命中率 30%。标题权重更高，因为摘要里
+ * 出现一个泛词（method、data）不能说明论文就是同题；标题命中才更接近用户意图。
+ */
+export function scoreLibraryHit(query: string, hit: { title: string; abstract?: string | null }): number {
+  const qt = new Set(tokenizeForMatch(query));
+  if (qt.size === 0) return 0.5;
+  const titleT = tokenizeForMatch(hit.title);
+  const abT = tokenizeForMatch(hit.abstract || '');
+  let hitCount = 0;
+  let titleHits = 0;
+  for (const t of qt) {
+    if (titleT.includes(t)) {
+      hitCount += 1;
+      titleHits += 1;
+    } else if (abT.includes(t)) hitCount += 1;
+  }
+  const ratio = hitCount / qt.size;
+  return Math.min(1, Math.round((ratio * 0.7 + Math.min(1, titleHits / qt.size) * 0.3) * 100) / 100);
+}
+
 export function normalizeKnScore(score: number): number {
   if (!Number.isFinite(score)) return 0;
   return Math.min(1, Math.max(0, Math.round((score / 100) * 100) / 100));

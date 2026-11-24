@@ -56,7 +56,7 @@ React Web UI ──HTTP/SSE──> NestJS API ──> one SQLite file (WAL)
 
 | Metric | Value | Scope |
 | --- | --- | --- |
-| Server tests | 967 passed / 1 skipped (140 test files) | Latest source gate |
+| Server tests | 971 passed / 1 skipped (140 test files) | Latest source gate |
 | Web tests | 277 passed | same |
 | Desktop tests | 5 passed | same |
 | API regression | 237 PASS / 0 FAIL | `scripts/full_regression.py` (fresh DB + AI_MOCK=1) |

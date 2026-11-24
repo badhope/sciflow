@@ -12,6 +12,7 @@ SciFlow keeps the research chain on your own machine: one SQLite file, your mode
 ## What it does
 
 - **Research loop with real evidence.** PI, experimenter, critic and independent reviewer are separate agents. Protocols pause for human approval, or for an expert agent in automatic mode. Claims need verbatim evidence from a real run.
+- **Closed loop proven on a real model.** On 2026-11-24 one question ran PI protocol → AI expert gate → sandbox experiment → critic → `synthesize` with `supported`, 22,199 tokens and no human approval; the same run survived empty upstream responses via retries and model fallback. Evidence: [`docs/verification/assets/research-cycle-real-model-2026-11-24.md`](docs/verification/assets/research-cycle-real-model-2026-11-24.md).
 - **Manuscript pipeline.** Topic check, literature survey, outline gate, section drafting, quality review and citation formatting. Every step writes a checkpoint, so a run can resume after a restart.
 - **Quality you can trust.** Seven dimensions are scored by rules with a stable fingerprint. The gate decides pass or fail; the model score is only a reference. A failed draft gets targeted revision, not a reroll.
 - **One inbox for files and search.** Chat attachments and the knowledge base share one extractor for PDF/scan OCR, Office, EPUB, images, audio and video. Cmd+K searches documents, conversations, projects, experiments, references and knowledge in one request.

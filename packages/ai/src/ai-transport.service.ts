@@ -44,9 +44,11 @@ export function normalizeStructuredObject(value: unknown, schemaText = '', depth
   if (!value || typeof value !== 'object') return value;
 
   const props = new Set<string>();
+  let propsDetail: Record<string, { type?: string; maximum?: number; max?: number }> = {};
   try {
-    const schema = JSON.parse(schemaText) as { properties?: Record<string, unknown> };
-    for (const key of Object.keys(schema.properties || {})) props.add(key);
+    const schema = JSON.parse(schemaText) as { properties?: Record<string, { type?: string; maximum?: number; max?: number }> };
+    propsDetail = schema.properties || {};
+    for (const key of Object.keys(propsDetail)) props.add(key);
   } catch {
     // schemaText 不是合法 JSON 时不做目标字段裁剪，仍按别名映射
   }
@@ -70,8 +72,21 @@ export function normalizeStructuredObject(value: unknown, schemaText = '', depth
       修改要求: 'requiredChanges',
       需要修改: 'requiredChanges',
       建议修改: 'requiredChanges',
+      // 真实模型也常给英文同义词而非 schema 键名；只映射语义明确的常见写法。
+      reasons: 'rationale',
+      reason: 'rationale',
+      explanation: 'rationale',
+      justification: 'rationale',
+      confidence_score: 'confidence',
+      isapproved: 'approved',
+      approved_flag: 'approved',
+      issues: 'concerns',
+      risks: 'concerns',
+      required_changes: 'requiredChanges',
+      requested_changes: 'requiredChanges',
     };
     if (exact[key]) return exact[key];
+    if (exact[normalized]) return exact[normalized];
     if (/批准|审批/.test(key)) return 'approved';
     if (/置信|信心/.test(key)) return 'confidence';
     if (/理由|依据|原因/.test(key)) return 'rationale';
@@ -84,14 +99,30 @@ export function normalizeStructuredObject(value: unknown, schemaText = '', depth
   for (const [rawKey, rawValue] of Object.entries(value)) {
     const key = alias(rawKey);
     if (depth === 0 && props.size && !props.has(key)) continue;
+    const targetType = depth === 0 ? propsDetail[key]?.type : undefined;
+    // 目标字段是字符串、模型却给了数组：取并集而不是整段丢弃（真实专家模型常写 reasons: []）。
+    if (targetType === 'string' && Array.isArray(rawValue)) {
+      out[key] = rawValue
+        .map((item) => String(item))
+        .join('\n')
+        .trim();
+      continue;
+    }
     if (key === 'approved' && typeof rawValue === 'string') {
       const text = rawValue.trim().toLowerCase();
       out[key] = /^(true|yes|1|批准|通过|同意|是)$/.test(text);
       continue;
     }
-    if (key === 'confidence' && typeof rawValue === 'string' && rawValue.trim() !== '') {
+    if (key === 'confidence' && (typeof rawValue === 'number' || (typeof rawValue === 'string' && rawValue.trim() !== ''))) {
       const num = Number(rawValue);
-      out[key] = Number.isFinite(num) ? num : rawValue;
+      if (!Number.isFinite(num)) {
+        out[key] = rawValue;
+      } else {
+        // 0-100 的 schema 里模型偶尔返回 0.99 这种「比例」写法；按 1 分制理解会变成 0.99%，
+        // 与它同一段输出里的 true/批准自相矛盾。只在 schema 明确上限 100 时放大。
+        const hundredScale = Number(propsDetail.confidence?.maximum ?? propsDetail.confidence?.max ?? Number.NaN) === 100;
+        out[key] = hundredScale && num > 0 && num <= 1 ? Math.round(num * 100) : num;
+      }
       continue;
     }
     if ((key === 'concerns' || key === 'requiredChanges') && typeof rawValue === 'string') {
