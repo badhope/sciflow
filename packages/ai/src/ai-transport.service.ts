@@ -63,6 +63,10 @@ export function normalizeStructuredObject(value: unknown, schemaText = '', depth
       置信度: 'confidence',
       信心度: 'confidence',
       信心: 'confidence',
+      把握程度: 'confidence',
+      把握: 'confidence',
+      确信度: 'confidence',
+      确信: 'confidence',
       理由: 'rationale',
       依据: 'rationale',
       原因: 'rationale',
@@ -88,7 +92,7 @@ export function normalizeStructuredObject(value: unknown, schemaText = '', depth
     if (exact[key]) return exact[key];
     if (exact[normalized]) return exact[normalized];
     if (/批准|审批/.test(key)) return 'approved';
-    if (/置信|信心/.test(key)) return 'confidence';
+    if (/置信|信心|把握|确信/.test(key)) return 'confidence';
     if (/理由|依据|原因/.test(key)) return 'rationale';
     if (/顾虑|担忧|风险/.test(key)) return 'concerns';
     if (/修改|整改/.test(key)) return 'requiredChanges';
@@ -114,9 +118,13 @@ export function normalizeStructuredObject(value: unknown, schemaText = '', depth
       continue;
     }
     if (key === 'confidence' && (typeof rawValue === 'number' || (typeof rawValue === 'string' && rawValue.trim() !== ''))) {
-      const num = Number(rawValue);
+      const text = String(rawValue).trim();
+      const match = text.match(/-?\d+(?:\.\d+)?/);
+      const num = match ? Number(match[0]) : Number.NaN;
       if (!Number.isFinite(num)) {
-        out[key] = rawValue;
+        // 没有数字时只接受明确的定性档位；其余保持原值，让 schema 报错而不是瞎猜。
+        const label = text.toLowerCase();
+        out[key] = /高|very high|high/.test(label) ? 90 : /中|medium|moderate/.test(label) ? 50 : /低|low/.test(label) ? 20 : rawValue;
       } else {
         // 0-100 的 schema 里模型偶尔返回 0.99 这种「比例」写法；按 1 分制理解会变成 0.99%，
         // 与它同一段输出里的 true/批准自相矛盾。只在 schema 明确上限 100 时放大。

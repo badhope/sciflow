@@ -56,13 +56,14 @@ React Web UI ──HTTP/SSE──> NestJS API ──> one SQLite file (WAL)
 
 | Metric | Value | Scope |
 | --- | --- | --- |
-| Server tests | 971 passed / 1 skipped (140 test files) | Latest source gate |
+| Server tests | 972 passed / 1 skipped (140 test files) | Latest source gate |
 | Web tests | 277 passed | same |
 | Desktop tests | 5 passed | same |
 | API regression | 237 PASS / 0 FAIL | `scripts/full_regression.py` (fresh DB + AI_MOCK=1) |
 | Search P95 | service docs 1.26 ms; all types 3.90 ms; HTTP docs 4.44 ms | 10k rows |
 | Tokens per run | 8,158 | matched against `llm_call_log` |
 | PWA | 168 precache entries / 8,706.62 KiB; real update clears legacy cache | build `2026-11-23T18:37:54.791Z` |
+| Real-model closed loop | one question → PI → expert gate → sandbox → critic → `synthesize`, `supported` twice, 22,199 / 16,681 tokens | cycle `230db717…`; see `docs/verification/assets/research-cycle-real-model-2026-11-24.md` |
 | Real export | PDF 367,596 bytes; share token full journey incl. anonymous comment / soft delete / revoke | F-round browser acceptance |
 
 ### 1.5 Known gaps and blockers

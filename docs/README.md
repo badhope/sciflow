@@ -10,6 +10,7 @@ language switch at the top.
 | [`PROJECT-BASELINE.md`](PROJECT-BASELINE.md) | Single source of truth: current state, shipped inventory, task pool and roadmap | [中文](PROJECT-BASELINE.zh-CN.md) |
 | [`COMPETITIVE-ANALYSIS.md`](COMPETITIVE-ANALYSIS.md) | Competitor matrix, scope boundaries and autonomous-research feasibility | [中文](COMPETITIVE-ANALYSIS.zh-CN.md) |
 | [`PROMPT-BRANCH-MATRIX.md`](PROMPT-BRANCH-MATRIX.md) | Every research-cycle branch: trigger, prompt contract, deterministic behaviour and test | [中文](PROMPT-BRANCH-MATRIX.zh-CN.md) |
+| [`verification/assets/research-cycle-real-model-2026-11-24.md`](verification/assets/research-cycle-real-model-2026-11-24.md) | Real-model closed-loop evidence: protocol, expert gate, sandbox, critic, synthesize, token and failure data | — |
 | [`COMMUNITY-LAUNCH-KIT.zh-CN.md`](COMMUNITY-LAUNCH-KIT.zh-CN.md) | Five-community launch copy, assets, claims and checklist (not published yet) | — |
 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Module boundaries, data flow, storage and contracts | [中文](../ARCHITECTURE.zh-CN.md) |
 | [`CONFIGURATION.md`](CONFIGURATION.md) | Model endpoint, search, auth, agent and environment settings | [中文](CONFIGURATION.zh-CN.md) |

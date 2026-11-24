@@ -71,4 +71,13 @@ describe('真实模型的英文同义键', () => {
     expect(normalized.requiredChanges).toEqual(['补充 seed=42']);
     expect(expertSchema.safeParse(normalized).success).toBe(true);
   });
+
+  it('把握程度 + 括号里的比例：提取数字并按 0-100 放大', () => {
+    const raw = { 批准: true, 把握程度: '高（约 0.99）', 理由: '协议可证伪', 顾虑: [], 修改要求: [] };
+    const normalized = normalizeStructuredObject(raw, schemaText) as Record<string, unknown>;
+    expect(normalized.approved).toBe(true);
+    expect(normalized.confidence).toBe(99);
+    expect(normalized.rationale).toBe('协议可证伪');
+    expect(expertSchema.safeParse(normalized).success).toBe(true);
+  });
 });

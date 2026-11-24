@@ -5,29 +5,30 @@ Environment: isolated copy of the user's configured OpenAI-compatible provider
 real SQLite, real Python sandbox, `AI_MODEL_FALLBACK=glm-5.3`. No mock gateway
 and no generated chat text. Every cycle below is a real HTTP run.
 
-## Final run: initial question → protocol → gate → sandbox → critic → synthesize
+## Final runs: initial question → protocol → gate → sandbox → critic → synthesize
 
-| Item | Value |
-| --- | --- |
-| Cycle | `230db717-bbd0-42c2-be8c-397775c75a61` |
-| Input | one Chinese research question; `approvalMode=ai`; `maxIterations=3` |
-| State | `synthesize`（`completed`，结论 `supported`） |
-| Claim | `49ec28f2-d0a2-4e71-b73e-fe8310b046ce`，confidence 95 |
-| Run | `2fa7c6e2-f71d-4261-8b8a-ced4bf45d1b1`，sandbox `ok:true`，runtime 981 ms |
-| Tokens | 22,199 |
-| Real statistics | σ=0.05 组 r=0.996326，bootstrap 95% CI [0.996004, 0.996677]；σ=2 组 r=0.293756，CI [0.233893, 0.348267] |
+Two consecutive real cycles reached `synthesize` with `supported`:
 
-Event trail (server log):
+| Item | Cycle 5 | Cycle 6 (final build) |
+| --- | --- | --- |
+| Cycle | `230db717-bbd0-42c2-be8c-397775c75a61` | `582f9dad-c625-4817-92d3-9b3eb0d3594a` |
+| State | `synthesize` / `completed` / `supported` | same |
+| Claim | `49ec28f2-d0a2-4e71-b73e-fe8310b046ce`, confidence 95 | `1eb310ef-93ae-46b3-b9c4-9600dc80514b`, confidence 95 |
+| Run | `2fa7c6e2-f71d-4261-8b8a-ced4bf45d1b1`, 981 ms | `271255a1-2783-4a99-b7f9-66b7e18e89c1`, 745 ms |
+| Tokens | 22,199 | 16,681 |
+| Statistics | σ=0.05: r=0.996326, CI [0.996004, 0.996677]; σ=2: r=0.293756, CI [0.233893, 0.348267] | σ=0.05: r=0.996290, CI [0.996266, 0.996313]; σ=2: r=0.279082 |
+| Gate path | primary model 3 attempts (empty + wrong keys) → fallback `glm-5.3` approved | primary model 3 attempts → approved, confidence 99 |
+
+Event trail for cycle 6 (server log):
 
 1. `literature count=4`
-2. `plan` → protocol `05f39146-762c-4596-b674-669e7fb3df54`
-3. Expert gate: the primary model first returned empty bodies, then valid JSON with
-   non-schema keys (`approved/confidence/reasons` and `是否批准/把握程度/理由`);
-   schema validation rejected it. The structured-output fallback then switched to
-   `glm-5.3`, which returned a schema-valid approval (`approved=true`, confidence 90).
-4. `execute` → `ok:true` in 981 ms
+2. `plan` → protocol `c95da094-387d-460c-8fae-36749d85dde1` (5,427 tokens)
+3. Expert gate: primary model returned empty body, then Chinese-key JSON
+   (`批准/把握程度/理由`); key/value normalization and one more retry produced a
+   schema-valid approval (`approved=true`, confidence 99)
+4. `execute` → `ok:true` in 745 ms
 5. `evaluate` → `supported`, confidence 95, `topicAligned=true`
-6. `synthesize` → completed
+6. `synthesize` → completed, 16,681 tokens
 
 ## Earlier runs in the same session
 

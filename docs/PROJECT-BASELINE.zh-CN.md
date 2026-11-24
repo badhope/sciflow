@@ -56,13 +56,14 @@ React Web UI ──HTTP/SSE──> NestJS API ──> 单个 SQLite（WAL）
 
 | 指标 | 实测值 | 口径 |
 | --- | --- | --- |
-| server 单测 | 971 passed / 1 skipped（140 个测试文件） | 最新源码门禁 |
+| server 单测 | 972 passed / 1 skipped（140 个测试文件） | 最新源码门禁 |
 | web 单测 | 277 passed | 同上 |
 | desktop 单测 | 5 passed | 同上 |
 | API 回归 | 237 PASS / 0 FAIL | `scripts/full_regression.py`（全新库 + AI_MOCK=1） |
 | 搜索 P95 | service 文档 1.26 ms；全类型 3.90 ms；HTTP 文档 4.44 ms | 1 万条数据 |
 | 单次执行 token | 8,158 | 同窗口 `llm_call_log` 对账 |
 | PWA | 168 条 precache / 8,706.62 KiB；旧缓存可被真实 update 清理 | 最终 build `2026-11-23T18:37:54.791Z` |
+| 真实模型闭环 | 单问题 → PI → 专家门禁 → 沙箱 → Critic → `synthesize`，连续两轮 `supported`，22,199 / 16,681 tokens | cycle `230db717…`，证据见 `docs/verification/assets/research-cycle-real-model-2026-11-24.md` |
 | 真实导出 | PDF 367,596 字节；分享 token 全链路含匿名评论/软删除/撤销 | F 轮浏览器验收 |
 
 ### 1.5 当前明确缺口与阻塞
