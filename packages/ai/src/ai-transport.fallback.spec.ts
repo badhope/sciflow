@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { z } from 'zod';
 import { AiTransportService } from './ai-transport.service';
 
 /**
@@ -30,7 +31,8 @@ describe('模型降级链（AI_MODEL_FALLBACK）', () => {
     process.env.AI_MODEL_FALLBACK = 'fallback-model';
     const svc = new FallbackTestTransport();
     svc.markConfigured('primary-model');
-    const gen = vi.spyOn(svc as unknown as { generateWithRetry: FallbackTestTransport['generateWithRetry'] }, 'generateWithRetry')
+    const gen = vi
+      .spyOn(svc as unknown as { generateWithRetry: FallbackTestTransport['generateWithRetry'] }, 'generateWithRetry')
       .mockImplementation(async (_m, _o, model: string) => {
         if (model === 'primary-model') throw new Error('primary endpoint down');
         return { text: 'fallback-ok', usage: { inputTokens: 1, outputTokens: 1 } };
@@ -43,7 +45,9 @@ describe('模型降级链（AI_MODEL_FALLBACK）', () => {
     expect(gen.mock.calls.some((c) => c[2] === 'primary-model')).toBe(true);
     expect(gen.mock.calls.some((c) => c[2] === 'fallback-model')).toBe(true);
     // 降级成功即返回：只留 fallback 成功日志（主模型失败不单独留痕，warn 日志可见）
-    expect(log.mock.calls.some((c) => c[0]?.caller === 'general:fallback' && c[0]?.model === 'fallback-model' && c[0]?.success === true)).toBe(true);
+    expect(
+      log.mock.calls.some((c) => c[0]?.caller === 'general:fallback' && c[0]?.model === 'fallback-model' && c[0]?.success === true),
+    ).toBe(true);
     expect(log.mock.calls.every((c) => c[0]?.success === true)).toBe(true);
   });
 
@@ -51,8 +55,9 @@ describe('模型降级链（AI_MODEL_FALLBACK）', () => {
     delete process.env.AI_MODEL_FALLBACK;
     const svc = new FallbackTestTransport();
     svc.markConfigured('primary-model');
-    vi.spyOn(svc as unknown as { generateWithRetry: FallbackTestTransport['generateWithRetry'] }, 'generateWithRetry')
-      .mockRejectedValue(new Error('primary down'));
+    vi.spyOn(svc as unknown as { generateWithRetry: FallbackTestTransport['generateWithRetry'] }, 'generateWithRetry').mockRejectedValue(
+      new Error('primary down'),
+    );
 
     await expect(svc.complete([{ role: 'user', content: 'hi' }], { retries: 0 })).rejects.toThrow(/AI 服务调用失败/);
   });
@@ -61,24 +66,61 @@ describe('模型降级链（AI_MODEL_FALLBACK）', () => {
     process.env.AI_MODEL_FALLBACK = 'fallback-model';
     const svc = new FallbackTestTransport();
     svc.markConfigured('primary-model');
-    vi.spyOn(svc as unknown as { generateWithRetry: FallbackTestTransport['generateWithRetry'] }, 'generateWithRetry')
-      .mockRejectedValue(new Error('everything down'));
+    vi.spyOn(svc as unknown as { generateWithRetry: FallbackTestTransport['generateWithRetry'] }, 'generateWithRetry').mockRejectedValue(
+      new Error('everything down'),
+    );
 
     await expect(svc.complete([{ role: 'user', content: 'hi' }], { retries: 0 })).rejects.toThrow(/AI 服务调用失败/);
+  });
+
+  it('结构化输出主模型空响应 → 降级模型返回合法对象，并以 caller:fallback 留痕', async () => {
+    process.env.AI_MODEL_FALLBACK = 'fallback-model';
+    const svc = new FallbackTestTransport();
+    svc.markConfigured('primary-model');
+    const structured = vi
+      .spyOn(
+        svc as unknown as { generateStructuredWithRetry: FallbackTestTransport['generateStructuredWithRetry'] },
+        'generateStructuredWithRetry',
+      )
+      .mockImplementation(async (_m, _s, _st, _fh, _o, model: string) => {
+        if (model === 'primary-model') throw new Error('Unexpected end of json string at position 0');
+        return { object: { approved: true }, usage: { inputTokens: 1, outputTokens: 1 } };
+      });
+    const log = vi.spyOn(svc as unknown as { logLlmCall: FallbackTestTransport['logLlmCall'] }, 'logLlmCall').mockReturnValue(undefined);
+
+    const out = await svc.completeStructured([{ role: 'user', content: '审批' }], z.object({ approved: z.boolean() }), { retries: 0 });
+
+    expect(out).toEqual({ approved: true });
+    expect(structured.mock.calls.some((c) => c[5] === 'primary-model')).toBe(true);
+    expect(structured.mock.calls.some((c) => c[5] === 'fallback-model')).toBe(true);
+    expect(log.mock.calls.some((c) => c[0]?.caller === 'general:fallback' && c[0]?.success === true)).toBe(true);
+  });
+
+  it('结构化输出降级也失败 → 仍抛出带主模型诊断的 HttpException', async () => {
+    process.env.AI_MODEL_FALLBACK = 'fallback-model';
+    const svc = new FallbackTestTransport();
+    svc.markConfigured('primary-model');
+    vi.spyOn(
+      svc as unknown as { generateStructuredWithRetry: FallbackTestTransport['generateStructuredWithRetry'] },
+      'generateStructuredWithRetry',
+    ).mockRejectedValue(new Error('empty structured response'));
+
+    await expect(
+      svc.completeStructured([{ role: 'user', content: '审批' }], z.object({ approved: z.boolean() }), { retries: 0 }),
+    ).rejects.toThrow(/AI 结构化输出失败/);
   });
 
   it('用户已取消（signal aborted）时不触发降级', async () => {
     process.env.AI_MODEL_FALLBACK = 'fallback-model';
     const svc = new FallbackTestTransport();
     svc.markConfigured('primary-model');
-    const gen = vi.spyOn(svc as unknown as { generateWithRetry: FallbackTestTransport['generateWithRetry'] }, 'generateWithRetry')
+    const gen = vi
+      .spyOn(svc as unknown as { generateWithRetry: FallbackTestTransport['generateWithRetry'] }, 'generateWithRetry')
       .mockRejectedValue(new Error('primary down'));
     const controller = new AbortController();
     controller.abort();
 
-    await expect(
-      svc.complete([{ role: 'user', content: 'hi' }], { retries: 0, signal: controller.signal }),
-    ).rejects.toThrow();
+    await expect(svc.complete([{ role: 'user', content: 'hi' }], { retries: 0, signal: controller.signal })).rejects.toThrow();
     // 只有主模型那一次调用，没有降级重试
     expect(gen.mock.calls.every((c) => c[2] === 'primary-model')).toBe(true);
   });

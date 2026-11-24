@@ -1,6 +1,6 @@
 # SciFlow Project Baseline (Four Modules)
 
-> Baseline anchor: version `v1.19.17`; `main` = `302116c` (verified 2026-11-24).
+> Baseline anchor: version `v1.19.17`; `main` = `36ed87d` (verified 2026-11-24).
 > This is the team's single source of truth for product and engineering status, fixed to four modules: **current core state, delivered capabilities, backlog, roadmap**.
 > The document follows `main`: after this file merges, the anchor advances to the merge commit. A capability is never marked delivered without evidence.
 
@@ -25,10 +25,10 @@ SciFlow is a **local-first, auditable, end-to-end automated research workbench**
 | Item | Value | Evidence |
 | --- | --- | --- |
 | Version | `1.19.17` (root/server/web/desktop) | four `package.json` files |
-| Code HEAD (verified) | `302116c` | `git log -1`; later doc commits do not change product code |
+| Code HEAD (verified) | `36ed87d` | `git log -1`; later doc commits do not change product code |
 | Tag | `v1.19.17` (annotated `57340c7` → `d9dc71b`) | `git show-ref --tags` |
-| Five remote `main` | all `302116c` | `git ls-remote` × 5 |
-| CI | run `45308450654`, three jobs green (`302116c`) | GitHub Actions |
+| Five remote `main` | all `36ed87d` | `git ls-remote` × 5 |
+| CI | run `45319932411`, three jobs green (`36ed87d`) | GitHub Actions |
 | Desktop installer | run `45254121179` success; three GitHub Releases carry four assets | GitHub Releases |
 | Release body | `docs/RELEASE-NOTES.md`; `generate_release_notes` disabled | `.github/workflows/desktop-installer.yml` |
 
@@ -56,7 +56,7 @@ React Web UI ──HTTP/SSE──> NestJS API ──> one SQLite file (WAL)
 
 | Metric | Value | Scope |
 | --- | --- | --- |
-| Server tests | 961 passed / 1 skipped | Latest source gate |
+| Server tests | 967 passed / 1 skipped (140 test files) | Latest source gate |
 | Web tests | 277 passed | same |
 | Desktop tests | 5 passed | same |
 | API regression | 237 PASS / 0 FAIL | `scripts/full_regression.py` (fresh DB + AI_MOCK=1) |

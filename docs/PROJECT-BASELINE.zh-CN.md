@@ -1,6 +1,6 @@
 # SciFlow 项目基线（四模块）
 
-> 基线锚点：版本 `v1.19.17`；`main` = `302116c`（2026-11-24 核验）。
+> 基线锚点：版本 `v1.19.17`；`main` = `36ed87d`（2026-11-24 核验）。
 > 本文档是团队唯一的产品与工程基准信息源，固定为四个模块：**当前核心状态、已交付功能清单、待开发任务池、迭代规划路线图**。
 > 文档随 `main` 演进：本文件合并后，基线锚点自动推进到合并提交；任何能力声明必须附可复核证据，禁止把计划写成已交付。
 
@@ -25,10 +25,10 @@ SciFlow 是**本地优先、可审计、端到端自动化的 AI 科研工作台
 | 项 | 当前值 | 证据 |
 | --- | --- | --- |
 | 版本 | `1.19.17`（根/server/web/desktop 一致） | 四个 `package.json` |
-| 代码 HEAD（本次验收） | `302116c` | `git log -1`；后续文档提交不改变产品代码 |
+| 代码 HEAD（本次验收） | `36ed87d` | `git log -1`；后续文档提交不改变产品代码 |
 | 标签 | `v1.19.17`（annotated `57340c7` → `d9dc71b`） | `git show-ref --tags` |
-| 五远端 `main` | 均为 `302116c` | `git ls-remote` × 5 |
-| CI | run `45308450654` 三 job 全绿（`302116c`） | GitHub Actions |
+| 五远端 `main` | 均为 `36ed87d` | `git ls-remote` × 5 |
+| CI | run `45319932411` 三 job 全绿（`36ed87d`） | GitHub Actions |
 | 桌面安装包 | run `45254121179` success；三个 GitHub Release 同步 4 个资产 | GitHub Releases |
 | 发布正文 | `docs/RELEASE-NOTES.md`，禁用自动生成，避免重复拼接 | `.github/workflows/desktop-installer.yml` |
 
@@ -56,7 +56,7 @@ React Web UI ──HTTP/SSE──> NestJS API ──> 单个 SQLite（WAL）
 
 | 指标 | 实测值 | 口径 |
 | --- | --- | --- |
-| server 单测 | 961 passed / 1 skipped | 最新源码门禁 |
+| server 单测 | 967 passed / 1 skipped（140 个测试文件） | 最新源码门禁 |
 | web 单测 | 277 passed | 同上 |
 | desktop 单测 | 5 passed | 同上 |
 | API 回归 | 237 PASS / 0 FAIL | `scripts/full_regression.py`（全新库 + AI_MOCK=1） |
