@@ -1,0 +1,66 @@
+{
+  "generatedAt": "2026-11-24",
+  "note": "Real model, no mock gateway. Credentials and database removed.",
+  "cycles": [
+    {
+      "cycleId": "230db717-bbd0-42c2-be8c-397775c75a61",
+      "programId": "de2986f8-c904-480a-bae3-fbda43ce81c9",
+      "state": "synthesize",
+      "stopReason": null,
+      "tokensSpent": 22199,
+      "summary": "循环结束：completed（结论 supported）｜实验输出与本轮假设和预期观察一致：σ=0.05 组 bootstrap r 均值=0.996326（无量纲），95% CI=[0.996004, 0.996677]（无量纲），CI 下限 0.996004 > 0.9；σ=2 组 bootstrap r 均值=0.293756（无量纲），95% CI=[0.233893, 0.348267]（无量纲），CI 上限 0.348267 < 0.6；低噪",
+      "claims": [
+        {
+          "id": "49ec28f2-d0a2-4e71-b73e-fe8310b046ce",
+          "status": "supported",
+          "confidence": 95,
+          "statement": "在 y=2x+ε、x~U(0,1)、ε~N(0,σ²) 且 x 与 ε 独立的合成数据中，σ=0.05（y 的单位）组的 Pearson r 的 95% bootstrap CI 下限>0.9，且 σ=2（y 的单位）组的 Pearson r 的 95% bootstrap CI 上限<0.6，并满足低噪声组 r 均值>高噪声组 r 均值；若任一阈值不满足，则假设不成立。"
+        }
+      ],
+      "runs": [
+        {
+          "id": "2fa7c6e2-f71d-4261-8b8a-ced4bf45d1b1",
+          "status": "completed",
+          "runtimeMs": null
+        }
+      ],
+      "protocols": [
+        {
+          "id": "05f39146-762c-4596-b674-669e7fb3df54",
+          "status": "approved",
+          "createdAt": 1795494750048
+        }
+      ]
+    },
+    {
+      "cycleId": "582f9dad-c625-4817-92d3-9b3eb0d3594a",
+      "programId": "de2986f8-c904-480a-bae3-fbda43ce81c9",
+      "state": "synthesize",
+      "stopReason": null,
+      "tokensSpent": 16681,
+      "summary": "循环结束：completed（结论 supported）｜实验输出给出 n=1000 个样本/组、200 次重复、bootstrap B=10000 次重采样。σ=0.05 组 r（无量纲）均值为 0.9962898079，bootstrap 95% percentile CI 为 [0.9962657137, 0.9963132144]，下限 0.9962657137 > 0.9；σ=2.0 组 r（无量纲）均值为 0.2790819942，boots",
+      "claims": [
+        {
+          "id": "1eb310ef-93ae-46b3-b9c4-9600dc80514b",
+          "status": "supported",
+          "confidence": 95,
+          "statement": "在 y=2x+ε、x~U(0,1)、ε~N(0,σ²)、n=1000 的合成数据中，样本 Pearson 相关系数 r 的均值随 σ 从 0.05 增至 2 而下降；σ=0.05 组 r 均值>0.9 且 bootstrap 95% CI 下限>0.9，σ=2 组 r 均值<0.6 且 bootstrap 95% CI 上限<0.6。"
+        }
+      ],
+      "runs": [
+        {
+          "id": "271255a1-2783-4a99-b7f9-66b7e18e89c1",
+          "status": "completed",
+          "runtimeMs": null
+        }
+      ],
+      "protocols": [
+        {
+          "id": "c95da094-387d-460c-8fae-36749d85dde1",
+          "status": "approved",
+          "createdAt": 1795495441591
+        }
+      ]
+    }
+  ]
+}
