@@ -24,7 +24,7 @@
 | AI 专家-不可用 | 专家调用抛错/结构化失败 | 专家提示词失败不得默认放行 | `agent_error` → blocked | `AI 专家不可用时 fail-closed` |
 | 实验成功 | 沙箱返回 `status=ok` 且 stdout 非空 | 实验者：把协议翻译成可执行 Python，必须 print 统计量 | 落 run/completed，进入 evaluate | `结论 supported 时一轮结束` |
 | 实验脚本过短/无 print | 代码 <40 字符或无 `print(` | 实验者修复提示：完整脚本 + 关键统计量 | 首次记 failed，回灌修复一次 | `实验脚本只有 import / 没有 print` |
-| 实验执行失败 | 沙箱 stderr / 超时 / 非 0 | 实验者带 `previousError` 修复一次 | 第二次仍失败 → `runFailed=true`，Critic 按证据不足处理 | graph spec 修复路径；S-02 待补 API 压测 |
+| 实验执行失败 | 沙箱 stderr / 超时 / 非 0 | 实验者带 `previousError` 修复一次 | 第二次仍失败 → `runFailed=true`，Critic 按证据不足处理 | graph spec + S-02 API 级 PASS |
 | 评审 supported | Critic 返回 `verdict=supported` | Critic：quote 必须能在 stdout 找到；不得引用不存在的内容 | 生成 claim + evidence；decide 终止 | `结论 supported`；mock 评审 |
 | 评审 refuted | Critic 返回 `verdict=refuted` | 同上；feedback/revisionHint 必填 | 回边修订；连续同方案同结论触发停滞 | `结论 refuted 回边`；`连续反驳停滞` |
 | 评审 inconclusive | Critic 调用失败/输出不合规 | 不得伪造结论；按证据不足落库 | claim `inconclusive`，进入 decide | `critic.agent.spec.ts`；graph 评审异常用例 |
@@ -49,13 +49,13 @@
 ## 3. 已知缺口
 
 - **真实模型提示词 eval 未覆盖全部分支。** 当前 mock 分支全绿；真实模型只验证过主链（PI/实验者/Critic/专家），拒批、停滞、预算等分支仍以确定性 mock 为主。
-- **S-02 API 级修复路径压测未补。** 图单测覆盖“首轮 SyntaxError → 修复成功”，但没有真实 HTTP + 沙箱的失败注入。
-- **S-04 重启矩阵只覆盖 gate/execute。** plan/evaluate/revise 三个节点的 kill 恢复仍待补。
+- **S-02 已补 API 级压测。** `scripts/research_cycle_edge_test.py` 注入首轮 SyntaxError，真实 HTTP + 沙箱验证 attempt1 fail → attempt2 ok。
+- **S-04 五节点重启矩阵已补齐。** plan/gate/execute/evaluate/revise 全部 PASS；evaluate 重放复用 claim 并重建证据，revise 两轮 claims/runs 各 2 条。
 - **提示词版本没有独立版本号。** 目前随代码走；后续应给 PI/Critic/专家提示词加 `promptVersion`，写入 run manifest，便于复现。
 
 ## 4. 下阶段动作
 
 1. 用真实模型跑「拒批/驳回/预算/停滞」四类分支，记录模型输出与终止原因。
-2. 给 `research-cycle` 加失败注入开关（`MOCK_EXPERIMENT_FAIL_ONCE`），补齐 S-02。
-3. 扩展 restart test 到 plan/evaluate/revise，补齐 S-04。
+2. 保持 `MOCK_EXPERIMENT_SYNTAX_ERROR_ONCE` 仅用于验收，生产默认关闭。
+3. 重启矩阵依赖 `MOCK_PLAN_DELAY_MS` / `MOCK_CRITIC_DELAY_MS` 制造 kill 窗口，生产默认 0。
 4. 提示词版本化：`promptVersion` 进入 run manifest 与质量报告。

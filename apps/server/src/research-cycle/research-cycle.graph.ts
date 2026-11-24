@@ -43,8 +43,10 @@ export interface ResearchCycleGraphDeps {
     createRun(programId: string, input: { cycleId?: string; protocolId?: string; status?: string; summary?: string; manifest?: unknown }): { id: string };
     updateRun(runId: string, patch: { status?: string; manifest?: unknown; summary?: string; experimentId?: string }): void;
     createClaim(programId: string, input: { statement?: string; cycleId?: string; protocolId?: string; confidence?: number; status?: string }): { id: string };
-    updateClaim(claimId: string, patch: { status?: string; confidence?: number }): void;
+    findClaim(programId: string, cycleId: string, protocolId: string): { id: string; statement?: string | null; confidence?: number | null; status?: string | null } | undefined;
+    updateClaim(claimId: string, patch: { status?: string; confidence?: number; statement?: string }): void;
     addEvidence(claimId: string, input: { sourceType?: string; sourceId?: string; quote?: string; stance?: string; strength?: number; verified?: boolean }): { id: string };
+    clearEvidence(claimId: string): void;
   };
   /** 三个角色智能体（LLM；测试可注入桩） */
   agents: {
@@ -516,13 +518,27 @@ export function buildResearchCycleGraph(
           revisionHint: '评审器不可用，下一轮请换更简单、更易验证的方案',
         };
       }
-      const claim = deps.records.createClaim(s.programId, {
-        statement: s.hypothesisStatement,
-        cycleId: s.cycleId,
-        protocolId: s.protocolId,
-        confidence: verdict.confidence,
-        status: verdict.verdict,
-      });
+      // evaluate 在重启后会从 checkpoint 重放；按 cycle + protocol 复用已有 claim，
+      // 并清空旧证据后整组重建，避免「同一轮评审出现两条结论/两组重复证据」。
+      const existingClaim = deps.records.findClaim(s.programId, s.cycleId, s.protocolId);
+      let claim: { id: string };
+      if (existingClaim) {
+        deps.records.clearEvidence(existingClaim.id);
+        deps.records.updateClaim(existingClaim.id, {
+          statement: s.hypothesisStatement,
+          confidence: verdict.confidence,
+          status: verdict.verdict,
+        });
+        claim = existingClaim;
+      } else {
+        claim = deps.records.createClaim(s.programId, {
+          statement: s.hypothesisStatement,
+          cycleId: s.cycleId,
+          protocolId: s.protocolId,
+          confidence: verdict.confidence,
+          status: verdict.verdict,
+        });
+      }
       for (const ev of verdict.evidence ?? []) {
         deps.records.addEvidence(claim.id, {
           sourceType: 'experiment',

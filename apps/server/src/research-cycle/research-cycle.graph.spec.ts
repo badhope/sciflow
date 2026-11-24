@@ -17,6 +17,8 @@ interface Recorder {
   expert: number;
   experiments: number;
   claims: number;
+  claimUpdates: number;
+  evidenceCleared: number;
   events: string[];
   cycleStates: string[];
   approved: string[];
@@ -41,6 +43,8 @@ function makeDeps(overrides: {
   literatureThrows?: boolean;
   /** 计划阶段就已消耗的 token（验证预算门禁前移） */
   planTokens?: number;
+  /** 模拟重启前已落库的 claim（验证 evaluate 重放不重复落库） */
+  priorClaim?: { id: string; statement?: string | null; confidence?: number | null; status?: string | null };
   /** 模拟重启前已落库的 run（验证 execute 重放不重复执行） */
   priorRun?: {
     id: string;
@@ -57,6 +61,8 @@ function makeDeps(overrides: {
     expert: 0,
     experiments: 0,
     claims: 0,
+    claimUpdates: 0,
+    evidenceCleared: 0,
     events: [],
     cycleStates: [],
     approved: [],
@@ -102,8 +108,14 @@ function makeDeps(overrides: {
         rec.claims += 1;
         return { id: `claim-${rec.claims}` };
       },
-      updateClaim: () => undefined,
+      findClaim: () => overrides.priorClaim,
+      updateClaim: () => {
+        rec.claimUpdates += 1;
+      },
       addEvidence: () => ({ id: `ev-${rec.claims}` }),
+      clearEvidence: () => {
+        rec.evidenceCleared += 1;
+      },
     },
     agents: {
       plan: async () => {
@@ -220,6 +232,20 @@ describe('自主研究循环图', () => {
     expect(rec.experiments).toBe(0);
     expect(result.runId).toBe('run-prior');
     expect(result.runOutput).toContain('auroc=');
+    expect(result.stopReason).toBe('completed');
+  });
+
+  it('重启重放 evaluate 时复用已有 claim，不重复落库且证据整组重建', async () => {
+    const { deps, rec } = makeDeps({
+      verdicts: ['supported'],
+      priorClaim: { id: 'claim-prior', statement: '旧假设', confidence: 40, status: 'inconclusive' },
+    });
+    const graph = buildResearchCycleGraph(deps, { checkpointer: saver });
+    const result: any = await graph.invoke(initialState as never, { configurable: { thread_id: 't-claim-reuse' } } as never);
+    expect(rec.claims).toBe(0);
+    expect(result.claimId).toBe('claim-prior');
+    expect(rec.claimUpdates).toBeGreaterThanOrEqual(1);
+    expect(rec.evidenceCleared).toBe(1);
     expect(result.stopReason).toBe('completed');
   });
 

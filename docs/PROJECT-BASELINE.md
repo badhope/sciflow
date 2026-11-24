@@ -56,7 +56,7 @@ React Web UI ──HTTP/SSE──> NestJS API ──> one SQLite file (WAL)
 
 | Metric | Value | Scope |
 | --- | --- | --- |
-| Server tests | 960 passed / 1 skipped | Latest source gate |
+| Server tests | 961 passed / 1 skipped | Latest source gate |
 | Web tests | 277 passed | same |
 | Desktop tests | 5 passed | same |
 | API regression | 237 PASS / 0 FAIL | `scripts/full_regression.py` (fresh DB + AI_MOCK=1) |
@@ -177,9 +177,10 @@ React Web UI ──HTTP/SSE──> NestJS API ──> one SQLite file (WAL)
 | R-03 | Cycle heartbeat watchdog | No heartbeat over threshold → blocked, release lock, close trace; never kill `awaiting_approval` | Implemented + unit tests |
 | R-04 | Manual recovery API + UI | `POST /research-cycles/:id/recover`; blocked panel shows “Resume from checkpoint” | Implemented |
 | R-05 | Budget gate before execution | If plan already exceeded budget, do not run experiment | Implemented + graph test |
-| R-06 | Real process restart integration | Human-approval pending → kill server → restart → still awaiting → resume completes | **Accepted**: `scripts/research_cycle_restart_test.py` PASS |
+| R-06 | Real process restart integration | Human-approval pending → kill server → restart → still awaiting → resume completes | **Accepted**: five-node restart matrix all PASS |
 | R-07 | Mid-execution restart recovery | Kill during execute → restart auto-resumes; needs controllable slow mock | **Accepted**: PASS; `runs=1`, replay does not duplicate the run |
-| R-08 | Idempotent and concurrent start | One active cycle per program; duplicate start creates no second cycle | Needs integration test |
+| R-07b | Plan/evaluate/revise restart | Kill at plan, evaluate or revise; claims, evidence and runs must not duplicate | **Accepted**: matrix PASS; evaluate rebuilds evidence (`evidence=2`), revise ends `claims=2/runs=2` |
+| R-08 | Idempotent and concurrent start | One active cycle per program; duplicate start creates no second cycle | **Accepted**: 8 concurrent → 1×201 / 7×400, cycles=1, active=0 |
 | R-09 | Protocol rewrite after expert rejection | Rejection feeds the PI; at most 2 rewrites; stop only after repeated rejection | **Implemented**: graph tests cover reject-then-approve and reject-to-limit |
 
 ### 3.2 P0 full-auto stress
@@ -187,9 +188,9 @@ React Web UI ──HTTP/SSE──> NestJS API ──> one SQLite file (WAL)
 | ID | Task | Acceptance | Status |
 | --- | --- | --- | --- |
 | S-01 | Stress script | `scripts/research_cycle_stress.py`: concurrency, human approve/reject, expert reject, budget, stagnation | Implemented, 11/11 PASS; latest build 25/25 PASS |
-| S-02 | Repair-path stress | SyntaxError → repair success; repeated failure → blocked/failed | Graph unit covered, API stress missing |
+| S-02 | Repair-path stress | SyntaxError → repair success; repeated failure → blocked/failed | **Accepted**: API-level PASS; attempt1 fail → attempt2 ok, claims=1/runs=1 |
 | S-03 | Soak test | 20–50 cycles, low concurrency, no deadlock / lock leak / DB busy | **Accepted**: 20 autos + 5 edge cases, 25/25 PASS, active=0/blocked=0 at end |
-| S-04 | Restart matrix | Kill at plan/gate/execute/evaluate/revise, verify recovery or blocked | Backlog |
+| S-04 | Restart matrix | Kill at plan/gate/execute/evaluate/revise, verify recovery or blocked | **Accepted**: 5/5 PASS (gate covered by human-approval hang) |
 
 ### 3.3 P1 refactor
 

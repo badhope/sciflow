@@ -24,7 +24,7 @@
 | Expert unavailable | Expert throws / structured output fails | Failure must not default to approve | `agent_error` → blocked | `expert unavailable is fail-closed` |
 | Experiment success | Sandbox `status=ok`, non-empty stdout | Experimenter translates protocol to Python and prints statistics | Run completed; enters evaluate | `supported ends in one round` |
 | Script too short / no print | Code <40 chars or no `print(` | Repair prompt: complete script + statistics | First attempt failed; one repair | `import-only script fails and repairs` |
-| Execution failure | stderr / timeout / non-zero | Experimenter receives `previousError`, repairs once | Second failure → `runFailed=true`; Critic sees insufficient evidence | Graph spec; S-02 API stress pending |
+| Execution failure | stderr / timeout / non-zero | Experimenter receives `previousError`, repairs once | Second failure → `runFailed=true`; Critic sees insufficient evidence | Graph spec + S-02 API-level PASS |
 | Critic supported | `verdict=supported` | Critic quotes must exist in stdout; no invented evidence | Claim + evidence; decide terminates | `supported` case; mock critic |
 | Critic refuted | `verdict=refuted` | Same; feedback/revisionHint required | Revise; repeated design+verdict triggers stagnation | `refuted loop`; `stagnation` |
 | Critic inconclusive | Critic throws / invalid output | Do not invent a verdict | `inconclusive`, then decide | `critic.agent.spec.ts`; graph failure case |
@@ -49,13 +49,13 @@
 ## 3. Known gaps
 
 - **Real-model prompt eval does not cover all branches.** Mock branches are green; real models only verified the main path. Rejection, stagnation and budget branches remain deterministic-mock only.
-- **S-02 API-level repair-path stress is missing.** Graph unit covers “SyntaxError → repair”, but not real HTTP + sandbox failure injection.
-- **S-04 restart matrix only covers gate/execute.** Kill at plan/evaluate/revise remains.
+- **S-02 API-level stress is now covered.** `scripts/research_cycle_edge_test.py` injects a first-attempt SyntaxError and verifies attempt1 fail → attempt2 ok through real HTTP + sandbox.
+- **S-04 now covers all five nodes.** plan/gate/execute/evaluate/revise all PASS; evaluate replay reuses the claim and rebuilds evidence, revise ends with 2 claims / 2 runs.
 - **Prompts have no independent version.** Add `promptVersion` to run manifest for reproducibility.
 
 ## 4. Next actions
 
 1. Run real-model rejection/budget/stagnation branches and record outputs + stop reasons.
-2. Add `MOCK_EXPERIMENT_FAIL_ONCE` failure injection for S-02.
-3. Extend restart test to plan/evaluate/revise for S-04.
+2. Keep `MOCK_EXPERIMENT_SYNTAX_ERROR_ONCE` test-only; it is off in production.
+3. Restart matrix relies on `MOCK_PLAN_DELAY_MS` / `MOCK_CRITIC_DELAY_MS` for kill windows; both default to 0 in production.
 4. Version prompts into run manifests and quality reports.

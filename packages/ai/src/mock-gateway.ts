@@ -103,6 +103,9 @@ interface RouteRule {
   respond: (prompt: string) => string;
 }
 
+/** 集成测试用：首次实验者调用返回语法错误脚本，验证 execute 的自动修复轮。默认关闭。 */
+let experimentSyntaxErrorConsumed = false;
+
 const ROUTE_TABLE: RouteRule[] = [
   // 0) 连接测试
   { matches: (p) => p.includes('请只回复两个字：正常'), respond: () => '正常' },
@@ -227,7 +230,8 @@ const ROUTE_TABLE: RouteRule[] = [
   // 0.99) 研究循环：Critic 评审实验输出（quote 必须能在 mock 脚本 stdout 中找到）
   {
     matches: (p) => p.includes('【实验输出】') && p.includes('【本轮假设】'),
-    respond: (p) => p.includes('拒证') ? j({
+    respond: (p) => ((p.includes('拒证') && !p.includes('单轮拒证')) ||
+      (p.includes('单轮拒证') && !p.includes('【上一轮结论】'))) ? j({
       verdict: 'refuted',
       confidence: 81,
       topicAligned: true,
@@ -253,6 +257,11 @@ const ROUTE_TABLE: RouteRule[] = [
   {
     matches: (p) => p.includes('【待检验假设】') && p.includes('请给出可直接运行的 Python 脚本'),
     respond: () => {
+      // 集成测试用：首次返回语法错误，验证「语法/import 错误回灌实验者修复」链路。
+      if (process.env.MOCK_EXPERIMENT_SYNTAX_ERROR_ONCE === '1' && !experimentSyntaxErrorConsumed) {
+        experimentSyntaxErrorConsumed = true;
+        return 'print("broken"';
+      }
       // 集成测试用：让沙箱执行慢下来，才能可靠地在 execute 中途 kill 进程。
       // 默认 0，不影响正常 mock 压测与真实模型。
       const delayMs = Math.max(0, Math.min(60_000, Number(process.env.MOCK_EXPERIMENT_DELAY_MS || 0) || 0));
@@ -539,6 +548,21 @@ function getLastUserContent(body: any): string {
   return messages.length ? extractMessageText(messages[messages.length - 1]?.content) : '';
 }
 
+/**
+ * 研究循环的按角色人为延迟：只用于重启验收在 plan/evaluate 节点可靠捕获并 kill。
+ * 默认 0，不影响正常 mock 压测与真实模型。
+ */
+function mockRoleDelayMs(prompt: string): number {
+  const clamp = (raw: string | undefined) => Math.max(0, Math.min(60_000, Number(raw || 0) || 0));
+  if (prompt.includes('"questionEcho"') && prompt.includes('【研究问题】')) {
+    return clamp(process.env.MOCK_PLAN_DELAY_MS);
+  }
+  if (prompt.includes('【实验输出】') && prompt.includes('【本轮假设】')) {
+    return clamp(process.env.MOCK_CRITIC_DELAY_MS);
+  }
+  return 0;
+}
+
 const mockHandlers = [
   // GET */models — 模型列表（* 不限路径前缀：ark /api/v3/models、openai /v1/models 都拦）
   http.get('*/models', () => {
@@ -553,6 +577,8 @@ const mockHandlers = [
       parsed = await request.json();
     } catch { /* 空体 */ }
     const content = mockContentFromBody(parsed);
+    const delayMs = mockRoleDelayMs(getLastUserContent(parsed));
+    if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
     if (parsed.stream) {
       // 返回 MSW 原生 Response（ReadableStream body）
       return new HttpResponse(sseStreamBody(content, !!parsed.stream_options?.include_usage), {

@@ -56,7 +56,7 @@ React Web UI ──HTTP/SSE──> NestJS API ──> 单个 SQLite（WAL）
 
 | 指标 | 实测值 | 口径 |
 | --- | --- | --- |
-| server 单测 | 960 passed / 1 skipped | 最新源码门禁 |
+| server 单测 | 961 passed / 1 skipped | 最新源码门禁 |
 | web 单测 | 277 passed | 同上 |
 | desktop 单测 | 5 passed | 同上 |
 | API 回归 | 237 PASS / 0 FAIL | `scripts/full_regression.py`（全新库 + AI_MOCK=1） |
@@ -177,9 +177,10 @@ React Web UI ──HTTP/SSE──> NestJS API ──> 单个 SQLite（WAL）
 | R-03 | cycle 级心跳看门狗 | 超阈值无心跳 → blocked、释放 `running`、轨迹收尾；`awaiting_approval` 永不误杀 | 已实现，单测覆盖 |
 | R-04 | 手动断点恢复 API + UI | `POST /research-cycles/:id/recover`；blocked 面板出现“从断点恢复” | 已实现 |
 | R-05 | 预算门禁前移 | 计划阶段已超预算时，不进入实验执行 | 已实现，图测试覆盖 |
-| R-06 | 真实进程重启集成验证 | 人工审批挂起 → kill 服务 → 重启 → 仍 awaiting → resume 完成 | **已验收**：`scripts/research_cycle_restart_test.py` PASS |
+| R-06 | 真实进程重启集成验证 | 人工审批挂起 → kill 服务 → 重启 → 仍 awaiting → resume 完成 | **已验收**：`scripts/research_cycle_restart_test.py` 五节点矩阵全 PASS |
 | R-07 | 自动执行中重启验证 | 在 execute 中途 kill → 重启自动续跑；需可控慢速 mock | **已验收**：PASS；`runs=1`，execute 重放不重复落库 |
-| R-08 | 幂等与并发启动 | 同一 program 并发 start 只允许一个；重复 start 不产生双 cycle | 待补集成测试 |
+| R-07b | 计划/评审/修订节点重启 | plan / evaluate / revise 中途 kill；重启后 claim/证据/run 不重复 | **已验收**：五节点矩阵 PASS；评审节点重建证据后 `evidence=2`，修订节点 `claims=2/runs=2` |
+| R-08 | 幂等与并发启动 | 同一 program 并发 start 只允许一个；重复 start 不产生双 cycle | **已验收**：8 并发 → 1×201 / 7×400，最终 cycles=1、active=0 |
 | R-09 | AI 专家驳回后的自动修订 | 驳回理由进入 PI 提示词，最多重写 2 版协议；连续驳回才终止 | **已实现**：图测试覆盖首次驳回后二次批准、连续驳回终止 |
 
 ### 3.2 P0 全自动链路压测
@@ -187,9 +188,9 @@ React Web UI ──HTTP/SSE──> NestJS API ──> 单个 SQLite（WAL）
 | ID | 任务 | 验收口径 | 状态 |
 | --- | --- | --- | --- |
 | S-01 | 专项压测脚本 | `scripts/research_cycle_stress.py`，覆盖并发、人工放行/驳回、专家驳回、预算、停滞 | 已实现，11/11 PASS；最新构建 25/25 PASS |
-| S-02 | 失败修复路径压测 | 实验脚本首轮 SyntaxError → 第二轮修复成功；连续失败 → blocked/failed | 图单测覆盖，缺 API 压测 |
+| S-02 | 失败修复路径压测 | 实验脚本首轮 SyntaxError → 第二轮修复成功；连续失败 → blocked/failed | **已验收**：API 级真实进程 PASS；attempt1 fail → attempt2 ok，claims=1/runs=1 |
 | S-03 | 长稳压测 | N=20/50 顺序或低并发，1 小时无卡死、无锁泄漏、无 DB busy | **已验收**：20 并发自动 + 5 边界，25/25 PASS，结束 active=0/blocked=0 |
-| S-04 | 重启压测矩阵 | 分别在 plan/gate/execute/evaluate/revise 五个节点 kill，验证恢复或 blocked | 待开发 |
+| S-04 | 重启压测矩阵 | 分别在 plan/gate/execute/evaluate/revise 五个节点 kill，验证恢复或 blocked | **已验收**：5/5 PASS（gate 由人工审批挂起场景覆盖） |
 
 ### 3.3 P1 代码规范化重构
 

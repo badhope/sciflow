@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
 import {
@@ -94,6 +94,27 @@ export class ResearchRecordsService {
     };
     db.insert(researchClaims).values(row).run();
     return row;
+  }
+
+  /** 按 cycle + protocol 查找已有结论：evaluate 在重启重放时必须复用，不能重复落库。 */
+  findClaim(programId: string, cycleId: string, protocolId: string) {
+    return db
+      .select()
+      .from(researchClaims)
+      .where(
+        and(
+          eq(researchClaims.programId, programId),
+          eq(researchClaims.cycleId, cycleId),
+          eq(researchClaims.protocolId, protocolId),
+        ),
+      )
+      .orderBy(desc(researchClaims.createdAt))
+      .get();
+  }
+
+  /** 清空某条结论的证据，供 evaluate 重放时整组重建，避免证据重复。 */
+  clearEvidence(claimId: string): void {
+    db.delete(researchEvidence).where(eq(researchEvidence.claimId, claimId)).run();
   }
 
   updateClaim(claimId: string, patch: { statement?: string; confidence?: number; status?: string; scope?: string }) {

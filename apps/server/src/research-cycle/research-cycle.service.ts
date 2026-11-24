@@ -76,10 +76,12 @@ export class ResearchCycleService implements OnModuleInit, OnModuleDestroy {
           this.records.updateRun(runId, patch);
         },
         createClaim: (programId, input) => this.records.createClaim(programId, input),
+        findClaim: (programId, cycleId, protocolId) => this.records.findClaim(programId, cycleId, protocolId),
         updateClaim: (claimId, patch) => {
           this.records.updateClaim(claimId, patch);
         },
         addEvidence: (claimId, input) => this.records.addEvidence(claimId, input),
+        clearEvidence: (claimId) => this.records.clearEvidence(claimId),
       },
       agents: {
         // 智能体按需加载：langgraph / 角色 prompt 只在真正跑循环时进内存。
