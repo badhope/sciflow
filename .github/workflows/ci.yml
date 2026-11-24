@@ -32,12 +32,15 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Install media tools
+        timeout-minutes: 10
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           if command -v ffmpeg >/dev/null 2>&1; then
             echo "ffmpeg already present: $(ffmpeg -version | head -1)"
           else
-            sudo apt-get update
-            sudo apt-get install -y ffmpeg
+            sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 update
+            sudo apt-get -o Acquire::ForceIPv4=true install -y --no-install-recommends ffmpeg
           fi
       - name: Lint
         run: pnpm lint
@@ -79,12 +82,15 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Install media tools
+        timeout-minutes: 10
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           if command -v ffmpeg >/dev/null 2>&1; then
             echo "ffmpeg already present: $(ffmpeg -version | head -1)"
           else
-            sudo apt-get update
-            sudo apt-get install -y ffmpeg
+            sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 update
+            sudo apt-get -o Acquire::ForceIPv4=true install -y --no-install-recommends ffmpeg
           fi
       - uses: actions/setup-python@v7
         with:
@@ -145,12 +151,15 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Install media tools
+        timeout-minutes: 10
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           if command -v ffmpeg >/dev/null 2>&1; then
             echo "ffmpeg already present: $(ffmpeg -version | head -1)"
           else
-            sudo apt-get update
-            sudo apt-get install -y ffmpeg
+            sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 update
+            sudo apt-get -o Acquire::ForceIPv4=true install -y --no-install-recommends ffmpeg
           fi
       - name: Build server
         run: pnpm --filter @sciflow/server build
