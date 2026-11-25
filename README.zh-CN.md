@@ -1,5 +1,12 @@
 <p align="center">
-  <img src="docs/brand/readme-hero.svg" alt="SciFlow — 前沿 AI 原生科研助手，一条会驳回自己的科研循环" width="100%">
+  <img src="docs/brand/icon-master.svg" alt="SciFlow" width="96">
+</p>
+
+<h1 align="center">SciFlow</h1>
+
+<p align="center">
+  <strong>前沿 AI 原生科研助手：输入一个研究问题，端到端跑完从协议、实验、评审到投稿包的全链路。</strong><br>
+  协议、实验、评审、稿件与投稿包在同一条回路里。模型可以建议，质量门负责说不。
 </p>
 
 <p align="center">
@@ -17,9 +24,11 @@
   <a href="https://github.com/badhope/sciflow/stargazers"><img src="https://img.shields.io/github/stars/badhope/sciflow?style=social" alt="Stars"></a>
 </p>
 
-**前沿 AI 原生科研助手：输入一个研究问题，端到端跑完从协议、实验、评审到投稿包的全链路。**
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="SciFlow 科研驾驶舱：一个项目、六个阶段，引用与门禁状态在同一屏" width="100%">
+</p>
 
-协议、实验、评审、稿件与投稿包在同一条回路里。模型可以建议，质量门负责说不。
+<p align="center"><em>一个项目、六个阶段，引用与门禁状态在同一屏里。</em></p>
 
 ## 科研是一轮回锋
 
@@ -39,11 +48,9 @@
 - **一篇过得了评审的稿件。** 评审与独立审稿人可以带着理由把稿子退回；改写只改失败的那一段，不重抽整篇。
 - **一个可交付的投稿包。** 就绪检查、期刊模板、Cover Letter、图表与确定性 ZIP，打包完就能交给期刊。
 
-## 界面
-
-![SciFlow 科研驾驶舱](docs/screenshots/dashboard.png)
-
-一个项目、六个阶段，引用与门禁状态在同一屏里。写论文，不必再开第二个应用。
+<p align="center">
+  <img src="docs/brand/readme-hero.svg" alt="SciFlow — 前沿 AI 原生科研助手，一条会驳回自己的科研循环" width="100%">
+</p>
 
 ## 已经验证的
 

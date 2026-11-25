@@ -1,5 +1,12 @@
 <p align="center">
-  <img src="docs/brand/readme-hero.svg" alt="SciFlow — an AI-native research assistant that runs the full loop" width="100%">
+  <img src="docs/brand/icon-master.svg" alt="SciFlow" width="96">
+</p>
+
+<h1 align="center">SciFlow</h1>
+
+<p align="center">
+  <strong>An AI-native research assistant that takes one research question and runs the full path to a submission package.</strong><br>
+  Protocol, experiment, review, manuscript and submission in one loop. The model can suggest; the gate decides.
 </p>
 
 <p align="center">
@@ -17,9 +24,11 @@
   <a href="https://github.com/badhope/sciflow/stargazers"><img src="https://img.shields.io/github/stars/badhope/sciflow?style=social" alt="Stars"></a>
 </p>
 
-**An AI-native research assistant that takes one research question and runs the full path to a submission package.**
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="SciFlow research cockpit: one project, six stages, citations and gate status in one view" width="100%">
+</p>
 
-Protocol, experiment, review, manuscript and submission in one loop. The model can suggest; the gate decides.
+<p align="center"><em>One project, six stages, citations and gate status in one view.</em></p>
 
 ## The loop is the product
 
@@ -39,11 +48,9 @@ A research run is not a single answer. It is an end-to-end loop with memory, a r
 - **A manuscript that survived review.** A critic and an independent reviewer can send the draft back with reasons; the revision is targeted, not a reroll.
 - **A submission package.** Readiness checks, journal template, cover letter, figures and a deterministic ZIP, ready to hand to the journal.
 
-## The cockpit
-
-![SciFlow research cockpit](docs/screenshots/dashboard.png)
-
-One project, six stages, citations and gate status in one view. Writing a paper does not require a second app.
+<p align="center">
+  <img src="docs/brand/readme-hero.svg" alt="SciFlow — an AI-native research assistant that runs the full loop" width="100%">
+</p>
 
 ## What has been measured
 
